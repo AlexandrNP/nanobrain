@@ -1,0 +1,77 @@
+---
+# Default configuration - all variables assigned
+defaults:
+  # Required parameters
+  function: None          # Must be provided, no default
+
+  # Optional parameters with defaults - set for maximum reliability
+  reliability_threshold: 0.0   # Always execute
+  energy_per_execution: 0.0    # No energy cost
+  recovery_rate: 1.0          # Instant energy recovery
+  runnable_types: []          # Accept all types by default
+
+# Metadata and examples
+metadata:
+  description: |
+    Simple executor implementation that runs functions with reliability
+    checks and resource management.
+
+  objective: |
+    To provide a specialized executor for running specific functions with
+    built-in reliability controls and resource management.
+
+  biological_analogy: |
+    Functions like specialized neurons that perform specific operations,
+    similar to orientation-selective cells in the visual cortex.
+
+  validation:
+    required:
+      - function
+    optional:
+      - reliability_threshold
+      - energy_per_execution
+      - recovery_rate
+      - runnable_types
+    constraints:
+      reliability_threshold:
+        type: float
+        min: 0.0
+        max: 1.0
+      energy_per_execution:
+        type: float
+        min: 0.0
+        max: 1.0
+      recovery_rate:
+        type: float
+        min: 0.0
+        max: 1.0
+      runnable_types:
+        type: array
+        items:
+          type: str
+
+examples:
+  - name: "Basic Usage"
+    code: |
+      def process_data(x): return x * 2
+      
+      executor = ConfigLoader.create("ExecutorFunc",
+                                  function=process_data)
+      result = executor.execute(runnable)  # Always executes with default config
+
+  - name: "With Type Checking"
+    code: |
+      executor = ConfigLoader.create("ExecutorFunc",
+                                  function=my_function,
+                                  runnable_types=["DataProcessor", "Transformer"])
+      if executor.can_execute(runnable_type):
+          result = executor.execute(runnable)
+
+  - name: "With Resource Management"
+    code: |
+      executor = ConfigLoader.create("ExecutorFunc",
+                                  function=heavy_computation,
+                                  energy_per_execution=0.2,
+                                  recovery_rate=0.05)
+      result = executor.execute(runnable)
+      executor.recover_energy() 

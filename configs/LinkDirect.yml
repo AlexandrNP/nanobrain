@@ -1,0 +1,81 @@
+---
+# Default configuration - all variables assigned
+defaults:
+  # Required parameters
+  input_data: None        # Must be provided, no default
+  output_data: None      # Must be provided, no default
+
+  # Optional parameters with defaults - set for maximum reliability
+  reliability: 1.0          # Always successful transmission
+  transmission_delay: 0.0   # No delay in transmission
+  adaptability: 0.0         # No automatic adaptation
+  buffer_size: 1            # Minimal buffer (direct transfer)
+  priority_level: 0         # Standard priority
+
+# Metadata and examples
+metadata:
+  description: |
+    Direct link implementation that provides fast, reliable data transfer
+    between components with minimal processing overhead.
+
+  objective: |
+    To provide high-speed, reliable data transfer for scenarios where
+    immediate transmission is more important than adaptive processing.
+
+  biological_analogy: |
+    Functions like fast, direct neural pathways (e.g., reflexes) that
+    provide rapid, reliable signal transmission between components.
+
+  validation:
+    required:
+      - input_data
+      - output_data
+    optional:
+      - reliability
+      - transmission_delay
+      - adaptability
+      - buffer_size
+      - priority_level
+    constraints:
+      reliability:
+        type: float
+        min: 0.0
+        max: 1.0
+      transmission_delay:
+        type: float
+        min: 0.0
+      adaptability:
+        type: float
+        min: 0.0
+        max: 1.0
+      buffer_size:
+        type: int
+        min: 1
+      priority_level:
+        type: int
+        min: 0
+        max: 10
+
+examples:
+  - name: "Basic Usage"
+    code: |
+      direct_link = ConfigLoader.create("LinkDirect",
+                                     input_data=input_unit,
+                                     output_data=output_unit)
+      await direct_link.transfer()  # Always succeeds with default config
+
+  - name: "High Priority"
+    code: |
+      direct_link = ConfigLoader.create("LinkDirect",
+                                     input_data=input_unit,
+                                     output_data=output_unit,
+                                     priority_level=1)
+      await direct_link.transfer()
+
+  - name: "Custom Buffer"
+    code: |
+      direct_link = ConfigLoader.create("LinkDirect",
+                                     input_data=input_unit,
+                                     output_data=output_unit,
+                                     buffer_size=1024)
+      await direct_link.transfer() 

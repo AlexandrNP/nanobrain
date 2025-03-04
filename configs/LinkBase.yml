@@ -1,0 +1,123 @@
+---
+# Default configuration - all variables assigned
+defaults:
+  # Required parameters
+  input_data: None        # Must be provided, no default
+  output_data: None      # Must be provided, no default
+
+  # Optional parameters with defaults - set for maximum reliability
+  reliability: 1.0          # Always successful transmission
+  transmission_delay: 0.0   # No delay in transmission
+  adaptability: 0.0         # No automatic adaptation
+  resource_level: 1.0       # Full resources available
+  recovery_rate: 1.0        # Instant resource recovery
+  connection_strength:      # Maximum strength connection
+    initial_strength: 1.0
+    min_strength: 1.0
+    max_strength: 1.0
+  activation_gate:          # Always allows transmission
+    threshold: 0.0
+    resting_level: 0.0
+    recovery_period: 0.0
+
+# Metadata and examples
+metadata:
+  description: |
+    Base link class that connects components and manages data transfer between them,
+    handling both input processing and output transmission with resource management.
+
+  objective: |
+    To provide reliable and configurable data transfer between components with
+    built-in signal processing, resource management, and adaptive behavior.
+
+  biological_analogy: |
+    Functions like neural processes (dendrites and axons) that handle both
+    input processing and output transmission with resource constraints.
+
+  validation:
+    required:
+      - input_data
+      - output_data
+    optional:
+      - reliability
+      - transmission_delay
+      - adaptability
+      - resource_level
+      - recovery_rate
+      - connection_strength
+      - activation_gate
+    constraints:
+      reliability:
+        type: float
+        min: 0.0
+        max: 1.0
+      transmission_delay:
+        type: float
+        min: 0.0
+      adaptability:
+        type: float
+        min: 0.0
+        max: 1.0
+      resource_level:
+        type: float
+        min: 0.0
+        max: 1.0
+      recovery_rate:
+        type: float
+        min: 0.0
+        max: 1.0
+      connection_strength:
+        type: dict
+        properties:
+          initial_strength:
+            type: float
+            min: 0.0
+            max: 1.0
+          min_strength:
+            type: float
+            min: 0.0
+            max: 1.0
+          max_strength:
+            type: float
+            min: 0.0
+            max: 1.0
+      activation_gate:
+        type: dict
+        properties:
+          threshold:
+            type: float
+            min: 0.0
+            max: 1.0
+          resting_level:
+            type: float
+            min: 0.0
+            max: 1.0
+          recovery_period:
+            type: float
+            min: 0.0
+
+examples:
+  - name: "Basic Usage"
+    code: |
+      link = ConfigLoader.create("LinkBase",
+                              input_data=input_unit,
+                              output_data=output_unit)
+      await link.transfer()  # Always succeeds with default config
+
+  - name: "Custom Reliability"
+    code: |
+      link = ConfigLoader.create("LinkBase",
+                              input_data=input_unit,
+                              output_data=output_unit,
+                              reliability=0.95,
+                              recovery_rate=0.1)
+      await link.transfer()
+
+  - name: "With Signal Processing"
+    code: |
+      link = ConfigLoader.create("LinkBase",
+                              input_data=input_unit,
+                              output_data=output_unit,
+                              connection_strength={"initial_strength": 0.8},
+                              activation_gate={"threshold": 0.3})
+      signal = link.process_signal() 

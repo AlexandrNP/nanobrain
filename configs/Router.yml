@@ -1,0 +1,123 @@
+---
+# Default configuration - all variables assigned
+defaults:
+  # Required parameters
+  executor: None           # Must be provided, no default
+  input_source: None      # Must be provided, no default
+  output_sinks: []        # Must be provided, no default
+
+  # Optional parameters with defaults
+  routing_strategy: "adaptive"  # Default routing strategy
+  fanout_reliability: 1.0     # Reliability factor for multiple outputs
+  learning_rate: 0.00         # How quickly routing weights adapt
+  exploration_rate: 0.0       # Probability of trying new routes
+  load_threshold: 1.0         # Load level that triggers balancing
+  error_threshold: 0.3        # Error rate that triggers circuit breaker
+  recovery_time: 0.0         # Seconds to wait before retrying failed sink
+  resource_threshold: 0.0     # Minimum resource level for transmission
+  state: "INACTIVE"          # Initial component state
+  running: false            # Initial running state
+  adaptability: 0.0         # How easily parameters can be modified
+
+# Metadata and examples
+metadata:
+  description: |
+    Routes data from one input to multiple outputs with adaptive routing strategies
+    and resource management. Implements circuit breaker pattern for fault tolerance.
+
+  objective: |
+    To provide intelligent data routing between components with load balancing,
+    fault tolerance, and adaptive learning capabilities.
+
+  biological_analogy: |
+    Functions like axon terminals that adaptively route signals to multiple targets
+    while managing neurotransmitter resources and synaptic plasticity.
+
+  validation:
+    required:
+      - executor
+      - input_source
+      - output_sinks
+    optional:
+      - routing_strategy
+      - fanout_reliability
+      - learning_rate
+      - exploration_rate
+      - load_threshold
+      - error_threshold
+      - recovery_time
+      - resource_threshold
+      - state
+      - running
+      - adaptability
+    constraints:
+      routing_strategy:
+        type: str
+        enum: ["adaptive", "broadcast", "random", "weighted"]
+      fanout_reliability:
+        type: float
+        min: 0.0
+        max: 1.0
+      learning_rate:
+        type: float
+        min: 0.0
+        max: 1.0
+      exploration_rate:
+        type: float
+        min: 0.0
+        max: 1.0
+      load_threshold:
+        type: float
+        min: 0.0
+        max: 1.0
+      error_threshold:
+        type: float
+        min: 0.0
+        max: 1.0
+      recovery_time:
+        type: float
+        min: 0.0
+      resource_threshold:
+        type: float
+        min: 0.0
+        max: 1.0
+      state:
+        type: str
+        enum: ["INACTIVE", "ACTIVE", "RECOVERING", "BLOCKED", "ENHANCED", "DEGRADED", "CONFIGURING"]
+      running:
+        type: bool
+      adaptability:
+        type: float
+        min: 0.0
+        max: 1.0
+
+examples:
+  - name: "Adaptive Routing"
+    code: |
+      router = ConfigLoader.create("Router",
+                                executor=my_executor,
+                                input_source=source_link,
+                                output_sinks=[sink1, sink2],
+                                routing_strategy="adaptive",
+                                learning_rate=0.05)
+      await router.invoke()
+
+  - name: "Load Balancing"
+    code: |
+      router = ConfigLoader.create("Router",
+                                executor=my_executor,
+                                input_source=source_link,
+                                output_sinks=[sink1, sink2, sink3],
+                                load_threshold=0.8,
+                                resource_threshold=0.2)
+      metrics = router.get_metrics()
+
+  - name: "Fault Tolerant"
+    code: |
+      router = ConfigLoader.create("Router",
+                                executor=my_executor,
+                                input_source=source_link,
+                                output_sinks=sinks,
+                                error_threshold=0.3,
+                                recovery_time=5.0)
+      await router.invoke() 

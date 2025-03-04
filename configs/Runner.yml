@@ -1,0 +1,90 @@
+---
+# Default configuration - all variables assigned
+defaults:
+  # Required parameters
+  executor: None  # Must be provided, no default
+
+  # Optional parameters with defaults
+  activation_threshold: 1.0   # Threshold for activation
+  resting_level: 0.0         # Base activation level
+  recovery_period: 0.0       # Time needed for recovery after activation
+  adaptability: 0.0          # How easily parameters can be modified
+  input_channels: []         # List of input channels
+  output_channels: []        # List of output channels
+  state: "INACTIVE"          # Initial component state
+  running: false            # Initial running state
+
+# Metadata and examples
+metadata:
+  description: |
+    Base class for executable components that can be activated and run
+    by an executor. Manages activation state and execution flow.
+
+  objective: |
+    To provide a standardized way to make components executable while
+    managing their activation state, resource usage, and recovery periods.
+
+  biological_analogy: |
+    Functions like a neuron with activation potential, integrating inputs
+    and firing when conditions are met, followed by a recovery period.
+
+  validation:
+    required:
+      - executor
+    optional:
+      - activation_threshold
+      - resting_level
+      - recovery_period
+      - adaptability
+      - input_channels
+      - output_channels
+      - state
+      - running
+    constraints:
+      activation_threshold:
+        type: float
+        min: 0.0
+        max: 1.0
+      resting_level:
+        type: float
+        min: 0.0
+        max: 1.0
+      recovery_period:
+        type: float
+        min: 0.0
+      adaptability:
+        type: float
+        min: 0.0
+        max: 1.0
+      state:
+        type: str
+        enum: ["INACTIVE", "ACTIVE", "RECOVERING", "BLOCKED", "ENHANCED", "DEGRADED", "CONFIGURING"]
+      running:
+        type: bool
+
+examples:
+  - name: "Basic Usage"
+    code: |
+      runner = ConfigLoader.create("Runner",
+                                executor=my_executor,
+                                activation_threshold=0.7,
+                                recovery_period=1.0)
+      result = await runner.invoke()
+
+  - name: "With Input/Output Channels"
+    code: |
+      runner = ConfigLoader.create("Runner",
+                                executor=my_executor,
+                                input_channels=[channel1, channel2],
+                                output_channels=[output_channel])
+      runner.check_runnable_config()
+      await runner.invoke()
+
+  - name: "Custom Recovery"
+    code: |
+      runner = ConfigLoader.create("Runner",
+                                executor=my_executor,
+                                resting_level=0.1,
+                                recovery_period=2.0)
+      runner.state = ComponentState.ACTIVE
+      await runner.invoke() 
