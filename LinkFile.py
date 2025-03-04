@@ -1,24 +1,23 @@
-from LinkBase import LinkBase
 from enums import DataUnitBase
+from LinkBase import LinkBase
 import asyncio
 
-
-class LinkFile(LinkBase):
+class LinkFile:
     """
     File-based link implementation that transfers data via files.
     
     Biological analogy: Indirect pathway with memory storage.
     Justification: Like how some neural pathways involve intermediary processing
     and temporary storage (e.g., hippocampal memory formation), file links
-    process and store data in an intermediary format.
+    process and store data in files during transmission.
     """
     def __init__(self, input_data: DataUnitBase, output_data: DataUnitBase, 
                  input_folder: str = None, output_folder: str = None, **kwargs):
-        super().__init__(input_data, output_data, **kwargs)
+        self.base_link = LinkBase(input_data, output_data, **kwargs)
         self.input_folder = input_folder
         self.output_folder = output_folder
-        self.reliability = 0.95  # Slightly less reliable than direct
-        self.transmission_delay = 0.2  # Slower than direct
+        self.base_link.reliability = 0.95  # Slightly less reliable than direct
+        self.base_link.transmission_delay = 0.2  # Slower than direct
         self.persistence_factor = 0.8  # Higher permanence of stored data
     
     async def transfer(self):
@@ -31,14 +30,14 @@ class LinkFile(LinkBase):
         file links store data in files during transmission.
         """
         # Simulate transmission delay
-        await asyncio.sleep(self.transmission_delay)
+        await asyncio.sleep(self.base_link.transmission_delay)
         
-        data = self.input.get()
+        data = self.base_link.input.get()
         
         # Enhance data persistence (make it more permanent)
-        if isinstance(self.output, DataUnitBase):
-            self.output.persistence_level = max(
-                self.output.persistence_level,
+        if isinstance(self.base_link.output, DataUnitBase):
+            self.base_link.output.persistence_level = max(
+                self.base_link.output.persistence_level,
                 self.persistence_factor
             )
             
@@ -48,6 +47,41 @@ class LinkFile(LinkBase):
             pass
             
         # Transfer to output
-        self.output.set(data)
+        self.base_link.output.set(data)
         
         return True
+        
+    # Delegate methods to base link
+    def get_config(self, class_dir: str = None) -> dict:
+        return self.base_link.get_config(class_dir)
+    
+    def update_config(self, updates: dict, adaptability_threshold: float = 0.3) -> bool:
+        return self.base_link.update_config(updates, adaptability_threshold)
+        
+    @property
+    def input(self):
+        return self.base_link.input
+        
+    @property
+    def output(self):
+        return self.base_link.output
+        
+    @property
+    def connection_strength(self):
+        return self.base_link.connection_strength
+        
+    @property
+    def adaptability(self):
+        return self.base_link.adaptability
+        
+    @adaptability.setter
+    def adaptability(self, value):
+        self.base_link.adaptability = value
+        
+    @property
+    def reliability(self):
+        return self.base_link.reliability
+        
+    @reliability.setter
+    def reliability(self, value):
+        self.base_link.reliability = value

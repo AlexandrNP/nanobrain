@@ -1,8 +1,9 @@
 from typing import Any, Set
-from mixins import ConfigurableMixin, SystemModulator
+from ConfigManager import ConfigManager
+from regulations import SystemModulator
 
 
-class ExecutorBase(ConfigurableMixin):
+class ExecutorBase:
     """
     Base executor class to execute Runnable objects.
     
@@ -12,7 +13,7 @@ class ExecutorBase(ConfigurableMixin):
     classes control the activation of different types of runnables.
     """
     def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+        self.config_manager = ConfigManager(**kwargs)
         self.runnable_types: Set[str] = set()
         self.energy_level = 1.0  # Metabolic energy available
         self.energy_per_execution = 0.1  # Energy cost per execution
@@ -88,3 +89,11 @@ class ExecutorBase(ConfigurableMixin):
             return modulator_level
         
         return 0.5  # Neutral effect
+        
+    def get_config(self, class_dir: str = None) -> dict:
+        """Delegate to config manager."""
+        return self.config_manager.get_config(class_dir)
+    
+    def update_config(self, updates: dict, adaptability_threshold: float = 0.3) -> bool:
+        """Delegate to config manager."""
+        return self.config_manager.update_config(updates, adaptability_threshold)

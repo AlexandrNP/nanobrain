@@ -1,8 +1,8 @@
 import time
 from typing import Any
-from mixins import ConfigurableMixin, ActivationGate
+from ConfigManager import ConfigManager
 
-class DataUnitBase(ConfigurableMixin):
+class DataUnitBase:
     """
     Abstract base class for data storage and retrieval.
     
@@ -12,10 +12,9 @@ class DataUnitBase(ConfigurableMixin):
     with configurable characteristics.
     """
     def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+        self.config_manager = ConfigManager(**kwargs)
         self.updated = False
         self.data = None
-        self.activation_gate = ActivationGate(threshold=0.5)
         self.last_access_time = 0
         self.decay_rate = 0.01  # Memory decay rate
         self.persistence_level = 0.0  # How permanent the data is (0.0-1.0)
@@ -86,3 +85,11 @@ class DataUnitBase(ConfigurableMixin):
         important data should be actively protected from decay.
         """
         self.persistence_level = min(1.0, self.persistence_level + 0.1)
+        
+    def get_config(self, class_dir: str = None) -> dict:
+        """Delegate to config manager."""
+        return self.config_manager.get_config(class_dir)
+    
+    def update_config(self, updates: dict, adaptability_threshold: float = 0.3) -> bool:
+        """Delegate to config manager."""
+        return self.config_manager.update_config(updates, adaptability_threshold)

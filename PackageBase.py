@@ -1,9 +1,9 @@
-
-from mixins import DirectoryTracerMixin, ConfigurableMixin, RunnableMixin
 from enums import ExecutorBase, ComponentState
+from DirectoryTracer import DirectoryTracer
+from ConfigManager import ConfigManager
+from Runner import Runner
 
-
-class PackageBase(DirectoryTracerMixin, ConfigurableMixin, RunnableMixin):
+class PackageBase:
     """
     Base class for self-contained units with dependencies.
     
@@ -13,7 +13,9 @@ class PackageBase(DirectoryTracerMixin, ConfigurableMixin, RunnableMixin):
     are modular units with defined dependencies and interfaces.
     """
     def __init__(self, executor: ExecutorBase, **kwargs):
-        super().__init__(executor=executor, **kwargs)
+        self.directory_tracer = DirectoryTracer(self.__class__.__module__)
+        self.config_manager = ConfigManager(**kwargs)
+        self.runner = Runner(executor)
         self.dependencies = []
         self.dependency_resolution_state = ComponentState.INACTIVE
     
@@ -37,5 +39,25 @@ class PackageBase(DirectoryTracerMixin, ConfigurableMixin, RunnableMixin):
         to respond to incoming signals, packages must be in the appropriate
         state to be used by other components.
         """
-        return (self.state == ComponentState.INACTIVE or 
-                self.state == ComponentState.ENHANCED) and not self.running
+        return (self.runner.state == ComponentState.INACTIVE or 
+                self.runner.state == ComponentState.ENHANCED) and not self.runner.is_running
+                
+    def get_relative_path(self) -> str:
+        """Delegate to directory tracer."""
+        return self.directory_tracer.get_relative_path()
+    
+    def get_absolute_path(self) -> str:
+        """Delegate to directory tracer."""
+        return self.directory_tracer.get_absolute_path()
+    
+    def get_config(self, class_dir: str = None) -> dict:
+        """Delegate to config manager."""
+        return self.config_manager.get_config(class_dir or self.get_absolute_path())
+    
+    def update_config(self, updates: dict, adaptability_threshold: float = 0.3) -> bool:
+        """Delegate to config manager."""
+        return self.config_manager.update_config(updates, adaptability_threshold)
+    
+    async def invoke(self):
+        """Delegate to runner."""
+        return await self.runner.invoke()

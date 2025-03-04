@@ -1,58 +1,61 @@
+from typing import Any, List
 from TriggerBase import TriggerBase
-from mixins import RunnableMixin
-from enums import DataUnitBase
-from regulations import ConnectionStrength
-from typing import List
+from LinkBase import LinkBase
 
-
-class TriggerAllDataReceived(TriggerBase):
+class TriggerAllDataReceived:
     """
-    Trigger that waits for all input data units to be updated.
+    Trigger that activates when all input data sources have received data.
     
-    Biological analogy: Integrator neuron requiring multiple inputs.
-    Justification: Like how some neurons require multiple strong inputs
-    to reach firing threshold (e.g., in coincidence detection), this trigger
-    requires multiple data sources to be updated before activating.
+    Biological analogy: Integration neuron.
+    Justification: Like how some neurons only fire when receiving input from
+    multiple sources (e.g., coincidence detectors), this trigger only activates
+    when all data sources have provided input.
     """
-    def __init__(self, runnable: RunnableMixin, dendrites: List[DataUnitBase], **kwargs):
-        super().__init__(runnable, **kwargs)
-        self.dendrites = dendrites
-        self.integration_threshold = len(dendrites) * 0.7  # Need 70% of inputs
-        self.weights = [ConnectionStrength() for _ in dendrites]  # Different weights for each input
-    
+    def __init__(self, runnable: Any, input_sources: List[LinkBase], **kwargs):
+        self.base_trigger = TriggerBase(runnable, **kwargs)
+        self.input_sources = input_sources
+        self.required_inputs = len(input_sources)  # Number of inputs needed
+        self.integration_threshold = 1.0  # All inputs must be present
+        
     def check_condition(self, **kwargs) -> bool:
         """
-        Returns True if enough dendrites are updated to cross threshold.
+        Checks if all input sources have received data.
         
-        Biological analogy: Neural integration of multiple inputs.
-        Justification: Like how neurons integrate multiple incoming signals
-        and fire only when their combined strength crosses a threshold,
-        this trigger activates only when enough data sources are updated.
+        Biological analogy: Synaptic integration.
+        Justification: Like how neurons integrate inputs from multiple synapses
+        to determine if firing threshold is reached, this trigger checks if
+        enough inputs are present to initiate execution.
         """
-        # Count updated dendrites, weighted by their importance
-        weighted_sum = sum(self.weights[i].strength for i, dendrite in enumerate(self.dendrites) 
-                           if dendrite.updated)
+        received_count = sum(1 for source in self.input_sources if source.output.get() is not None)
+        return (received_count / self.required_inputs) >= self.integration_threshold
         
-        # Apply activation model
-        signal_strength = weighted_sum / len(self.dendrites)
-        return self.activation_gate.receive_signal(signal_strength)
+    async def monitor(self, **kwargs):
+        """Delegate to base trigger."""
+        return await self.base_trigger.monitor(**kwargs)
+        
+    # Delegate methods to base trigger
+    def get_config(self, class_dir: str = None) -> dict:
+        return self.base_trigger.get_config(class_dir)
     
-    async def reset_dendrites(self):
-        """
-        Resets the updated status of all dendrites.
+    def update_config(self, updates: dict, adaptability_threshold: float = 0.3) -> bool:
+        return self.base_trigger.update_config(updates, adaptability_threshold)
         
-        Biological analogy: Resetting of neural integrator.
-        Justification: After firing, integrator neurons reset their accumulated
-        potential to be ready for the next integration cycle.
-        """
-        for dendrite in self.dendrites:
-            dendrite.updated = False
-            
-        # Apply Hebbian-like learning to adjust weights
-        for i, dendrite in enumerate(self.dendrites):
-            # If this dendrite contributed to activation, strengthen its connection
-            if dendrite.updated:
-                self.weights[i].increase(0.01)
-            else:
-                # Otherwise weaken it slightly
-                self.weights[i].decrease(0.005)
+    @property
+    def sensitivity(self):
+        return self.base_trigger.sensitivity
+        
+    @sensitivity.setter
+    def sensitivity(self, value):
+        self.base_trigger.sensitivity = value
+        
+    @property
+    def adaptation_rate(self):
+        return self.base_trigger.adaptation_rate
+        
+    @adaptation_rate.setter
+    def adaptation_rate(self, value):
+        self.base_trigger.adaptation_rate = value
+        
+    @property
+    def activation_gate(self):
+        return self.base_trigger.activation_gate

@@ -1,10 +1,10 @@
-from enums import ExecutorBase, CircuitBreaker, WorkingMemory
 from typing import List, Any
-from PackageBase import PackageBase
+from enums import ExecutorBase, CircuitBreaker, ComponentState
+from WorkingMemory import WorkingMemory
 from LinkBase import LinkBase
+from PackageBase import PackageBase
 
-
-class Step(PackageBase):
+class Step:
     """
     Represents a step in the workflow.
     
@@ -15,7 +15,7 @@ class Step(PackageBase):
     """
     def __init__(self, executor: ExecutorBase, input_sources: List[LinkBase] = None, 
                  output_sink: LinkBase = None, **kwargs):
-        super().__init__(executor, **kwargs)
+        self.package = PackageBase(executor, **kwargs)
         self.input_sources = input_sources or []
         self.output_sink = output_sink
         self.circuit_breaker = CircuitBreaker()
@@ -90,3 +90,19 @@ class Step(PackageBase):
         that can be accessed by other workflow components.
         """
         return self.result
+        
+    # Delegate methods to package
+    def get_relative_path(self) -> str:
+        return self.package.get_relative_path()
+        
+    def get_absolute_path(self) -> str:
+        return self.package.get_absolute_path()
+        
+    def get_config(self, class_dir: str = None) -> dict:
+        return self.package.get_config(class_dir)
+        
+    def update_config(self, updates: dict, adaptability_threshold: float = 0.3) -> bool:
+        return self.package.update_config(updates, adaptability_threshold)
+        
+    async def invoke(self):
+        return await self.package.invoke()

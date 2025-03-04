@@ -1,9 +1,9 @@
-import random
-from mixins import ConfigurableMixin, RunnableMixin
+from typing import Any
 from enums import ActivationGate
+from ConfigManager import ConfigManager
+import random
 
-
-class TriggerBase(ConfigurableMixin):
+class TriggerBase:
     """
     Base trigger class that checks conditions for execution.
     
@@ -12,9 +12,9 @@ class TriggerBase(ConfigurableMixin):
     initiate processing pathways, triggers detect conditions and initiate
     workflow execution.
     """
-    def __init__(self, runnable: RunnableMixin, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, runnable: Any, **kwargs):
         self.runnable = runnable
+        self.config_manager = ConfigManager(**kwargs)
         self.activation_gate = ActivationGate(threshold=0.3)  # More sensitive than regular components
         self.sensitivity = 0.8  # Sensitivity to stimuli (0.0-1.0)
         self.adaptation_rate = 0.05  # How quickly it adapts to repeated stimuli
@@ -51,3 +51,11 @@ class TriggerBase(ConfigurableMixin):
             self.sensitivity = min(1.0, self.sensitivity + (self.adaptation_rate / 2))
         
         return None
+        
+    def get_config(self, class_dir: str = None) -> dict:
+        """Delegate to config manager."""
+        return self.config_manager.get_config(class_dir)
+    
+    def update_config(self, updates: dict, adaptability_threshold: float = 0.3) -> bool:
+        """Delegate to config manager."""
+        return self.config_manager.update_config(updates, adaptability_threshold)
