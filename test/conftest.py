@@ -8,6 +8,10 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
+# Add src directory to Python path
+src_path = project_root / 'src'
+sys.path.insert(0, str(src_path))
+
 # Set testing environment variable
 os.environ['NANOBRAIN_TESTING'] = '1'
 

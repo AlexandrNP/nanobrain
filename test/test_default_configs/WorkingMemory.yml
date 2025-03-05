@@ -1,0 +1,25 @@
+---
+# Test configuration for WorkingMemory class
+defaults:
+  # Optional parameters with defaults
+  capacity: 7  # Miller's Law: 7±2 items
+
+# Metadata
+metadata:
+  description: |
+    Provides temporary storage for processed information.
+
+  objective: |
+    To provide short-term storage for data being processed across workflow steps.
+
+  biological_analogy: |
+    Functions like working memory in the prefrontal cortex, holding information
+    temporarily for ongoing cognitive operations.
+
+  validation:
+    optional:
+      - capacity
+    constraints:
+      capacity:
+        type: int
+        min: 1 

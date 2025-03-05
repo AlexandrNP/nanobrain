@@ -1,0 +1,37 @@
+---
+# Test configuration for Step class
+defaults:
+  # Required parameters
+  executor: null  # Must be provided at runtime
+
+  # Optional parameters with defaults
+  input_sources: []
+  output_sink: null
+  specialization: 0.0
+  adaptive_network: null
+
+# Metadata
+metadata:
+  description: |
+    Base class for workflow steps that process inputs and produce outputs.
+
+  objective: |
+    To provide a standardized way to process data within a workflow.
+
+  biological_analogy: |
+    Functions like a functional neural circuit that processes specific
+    types of information and passes results to other circuits.
+
+  validation:
+    required:
+      - executor
+    optional:
+      - input_sources
+      - output_sink
+      - specialization
+      - adaptive_network
+    constraints:
+      specialization:
+        type: float
+        min: 0.0
+        max: 1.0 

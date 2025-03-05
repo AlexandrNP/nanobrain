@@ -1,0 +1,43 @@
+---
+# Test configuration for Workflow class
+defaults:
+  # Required parameters
+  executor: null  # Must be provided at runtime
+
+  # Optional parameters with defaults
+  steps: []
+  active_inhibition: {}
+  system_modulators: null
+  network_efficiency: 0.7
+  deadlock_timeout: 30.0
+
+# Metadata
+metadata:
+  description: |
+    Container for multiple steps that can be executed in a coordinated manner.
+
+  objective: |
+    To provide a way to organize and execute multiple processing steps with
+    dependencies and coordination.
+
+  biological_analogy: |
+    Functions like a functional brain network that coordinates the activity
+    of multiple neural circuits to achieve a complex cognitive function.
+
+  validation:
+    required:
+      - executor
+    optional:
+      - steps
+      - active_inhibition
+      - system_modulators
+      - network_efficiency
+      - deadlock_timeout
+    constraints:
+      network_efficiency:
+        type: float
+        min: 0.0
+        max: 1.0
+      deadlock_timeout:
+        type: float
+        min: 0.0 

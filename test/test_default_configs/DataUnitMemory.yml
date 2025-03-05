@@ -1,0 +1,32 @@
+---
+# Test configuration for DataUnitMemory class
+defaults:
+  # Optional parameters with defaults
+  decay_rate: 0.05
+  persistence_level: 0.7
+
+# Metadata
+metadata:
+  description: |
+    RAM-based volatile storage with decay characteristics.
+
+  objective: |
+    To provide temporary storage for data with configurable decay characteristics.
+
+  biological_analogy: |
+    Functions like short-term memory with decay over time, similar to how
+    neural activations fade without reinforcement.
+
+  validation:
+    optional:
+      - decay_rate
+      - persistence_level
+    constraints:
+      decay_rate:
+        type: float
+        min: 0.0
+        max: 1.0
+      persistence_level:
+        type: float
+        min: 0.0
+        max: 1.0 

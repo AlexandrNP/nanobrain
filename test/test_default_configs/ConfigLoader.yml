@@ -1,0 +1,32 @@
+---
+# Test configuration for ConfigLoader class
+defaults:
+  # Optional parameters with defaults
+  memory_capacity: 20
+  learning_rate: 0.1
+
+# Metadata
+metadata:
+  description: |
+    Loads configuration from YAML files and constructs objects.
+
+  objective: |
+    To provide a way to dynamically create and configure objects based on
+    configuration files.
+
+  biological_analogy: |
+    Functions like learning from external information, similar to how the brain
+    forms internal models from external information.
+
+  validation:
+    optional:
+      - memory_capacity
+      - learning_rate
+    constraints:
+      memory_capacity:
+        type: int
+        min: 1
+      learning_rate:
+        type: float
+        min: 0.0
+        max: 1.0 

@@ -1,0 +1,52 @@
+---
+# Test configuration for Agent class
+defaults:
+  # Required parameters
+  executor: null  # Must be provided at runtime
+
+  # Optional parameters with defaults
+  model_name: "gpt-3.5-turbo"
+  model_class: null
+  memory_window_size: 5
+  prompt_file: null
+  prompt_template: null
+  prompt_variables: {}
+  use_shared_context: false
+  shared_context_key: null
+
+# Metadata
+metadata:
+  description: |
+    LLM-powered agent that processes inputs using language models.
+
+  objective: |
+    To provide a way to integrate language model capabilities into the workflow
+    for natural language processing and generation.
+
+  biological_analogy: |
+    Functions like a higher-order cognitive processing area that integrates
+    information from multiple sources and uses past experiences to generate
+    adaptive responses.
+
+  validation:
+    required:
+      - executor
+    optional:
+      - model_name
+      - model_class
+      - memory_window_size
+      - prompt_file
+      - prompt_template
+      - prompt_variables
+      - use_shared_context
+      - shared_context_key
+    constraints:
+      memory_window_size:
+        type: int
+        min: 1
+        max: 100
+      model_name:
+        type: str
+        enum: ["gpt-3.5-turbo", "gpt-4", "gpt-4-turbo", "claude-3-opus", "claude-3-sonnet"]
+      use_shared_context:
+        type: bool 

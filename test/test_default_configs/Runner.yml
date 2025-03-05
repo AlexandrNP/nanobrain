@@ -1,0 +1,53 @@
+---
+# Test configuration for Runner class
+defaults:
+  # Required parameters
+  executor: null  # Must be provided at runtime
+
+  # Optional parameters with defaults
+  activation_threshold: 1.0
+  resting_level: 0.0
+  recovery_period: 1.0
+  adaptability: 0.5
+  input_channels: []
+  output_channels: []
+
+# Metadata
+metadata:
+  description: |
+    Base class for objects that can be executed.
+
+  objective: |
+    To provide a standardized way to make components executable while
+    managing their activation state and execution flow.
+
+  biological_analogy: |
+    Functions like a neuron with activation potential, integrating inputs
+    and firing when conditions are met, followed by a recovery period.
+
+  validation:
+    required:
+      - executor
+    optional:
+      - activation_threshold
+      - resting_level
+      - recovery_period
+      - adaptability
+      - input_channels
+      - output_channels
+    constraints:
+      activation_threshold:
+        type: float
+        min: 0.0
+        max: 1.0
+      resting_level:
+        type: float
+        min: 0.0
+        max: 1.0
+      recovery_period:
+        type: float
+        min: 0.0
+      adaptability:
+        type: float
+        min: 0.0
+        max: 1.0 

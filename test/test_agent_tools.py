@@ -5,20 +5,24 @@ import os
 from pathlib import Path
 from unittest.mock import MagicMock, patch, AsyncMock
 
+# Set testing environment variable
+os.environ['NANOBRAIN_TESTING'] = '1'
+
 # Add project root to Python path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-# Set testing environment variable
-os.environ['NANOBRAIN_TESTING'] = '1'
+# Add src directory to Python path
+src_path = project_root / 'src'
+sys.path.insert(0, str(src_path))
 
-from Agent import Agent
-from Step import Step
-from ExecutorBase import ExecutorBase
-from LinkBase import LinkBase
-from DataUnitBase import DataUnitBase
-from enums import ComponentState
-from mock_langchain import MockOpenAI, MockChatOpenAI, MockPromptTemplate
+from src.Agent import Agent
+from src.Step import Step
+from src.ExecutorBase import ExecutorBase
+from src.LinkBase import LinkBase
+from src.DataUnitBase import DataUnitBase
+from src.enums import ComponentState
+from test.mock_langchain import MockOpenAI, MockChatOpenAI, MockPromptTemplate
 
 class CalculatorStep(Step):
     """

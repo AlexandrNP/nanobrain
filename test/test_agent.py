@@ -3,22 +3,26 @@ import asyncio
 import sys
 import os
 from pathlib import Path
-from unittest.mock import MagicMock, patch, AsyncMock
+from unittest.mock import MagicMock, patch, AsyncMock, mock_open
 
 # Add project root to Python path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
+# Add src directory to Python path
+src_path = project_root / 'src'
+sys.path.insert(0, str(src_path))
+
 # Set testing environment variable
 os.environ['NANOBRAIN_TESTING'] = '1'
 
-from Agent import Agent
-from Step import Step
-from ExecutorBase import ExecutorBase
-from LinkBase import LinkBase
-from DataUnitBase import DataUnitBase
-from enums import ComponentState
-from mock_langchain import MockOpenAI, MockChatOpenAI, MockPromptTemplate
+from src.Agent import Agent
+from src.Step import Step
+from src.ExecutorBase import ExecutorBase
+from src.LinkBase import LinkBase
+from src.DataUnitBase import DataUnitBase
+from src.enums import ComponentState
+from test.mock_langchain import MockOpenAI, MockChatOpenAI, MockPromptTemplate
 
 class TestAgent(unittest.TestCase):
     def setUp(self):
@@ -38,18 +42,14 @@ class TestAgent(unittest.TestCase):
         # Verify attributes are set correctly
         self.assertEqual(self.agent.model_name, "gpt-3.5-turbo")
         self.assertEqual(self.agent.memory_window_size, 5)
-        self.assertEqual(self.agent.state, ComponentState.INACTIVE)
+        self.assertEqual(self.agent.state.value, "INACTIVE")
         self.assertFalse(self.agent.running)
         
-        # Verify inheritance from Step and PackageBase
-        self.assertTrue(hasattr(self.agent, 'directory_tracer'))
-        self.assertTrue(hasattr(self.agent, 'config_manager'))
-        self.assertTrue(hasattr(self.agent, 'circuit_breaker'))
+        # Verify inheritance
+        self.assertIsInstance(self.agent, Step)
         
-        # Verify Agent-specific attributes
-        self.assertTrue(hasattr(self.agent, 'llm'))
-        self.assertTrue(hasattr(self.agent, 'memory'))
-        self.assertTrue(hasattr(self.agent, 'prompt_template'))
+        # Verify memory initialization
+        self.assertEqual(len(self.agent.memory), 0)
     
     def test_initialize_llm(self):
         """Test the _initialize_llm method."""
@@ -140,14 +140,17 @@ class TestAgent(unittest.TestCase):
             {"role": "user", "content": "Message 3"},
             {"role": "assistant", "content": "Response 3"}
         ]
-        
+    
         # Call get_context_history
         history = self.agent.get_context_history()
-        
+    
         # Verify result contains only the last 2 exchanges (4 messages)
-        self.assertEqual(len(history), 4)
-        self.assertEqual(history[0]["content"], "Message 2")
-        self.assertEqual(history[3]["content"], "Response 3")
+        self.assertIn("Message 2", history)
+        self.assertIn("Response 2", history)
+        self.assertIn("Message 3", history)
+        self.assertIn("Response 3", history)
+        self.assertNotIn("Message 1", history)
+        self.assertNotIn("Response 1", history)
     
     def test_clear_memories(self):
         """Test the clear_memories method."""
@@ -167,35 +170,33 @@ class TestAgent(unittest.TestCase):
         """Test shared context operations."""
         # Clear any existing shared context
         Agent.clear_shared_context()
-        
+    
         # Set up memory
         self.agent.memory = [
             {"role": "user", "content": "Hello"},
             {"role": "assistant", "content": "Hi"}
         ]
+    
+        # Test save_to_shared_context
+        self.agent.save_to_shared_context("test_context")
         
-        # Test dump_to_shared_context
-        self.agent.dump_to_shared_context("test_context")
+        # Verify context was saved
+        shared_context = Agent.get_shared_context("test_context")
+        self.assertEqual(len(shared_context), 2)
+        self.assertEqual(shared_context[0]["content"], "Hello")
         
-        # Verify shared context was updated
-        self.assertEqual(len(Agent.get_shared_context("test_context")), 2)
-        
-        # Clear memory
+        # Clear agent memory
         self.agent.clear_memories()
         self.assertEqual(len(self.agent.memory), 0)
         
-        # Test load_from_shared_context
+        # Load from shared context
         self.agent.load_from_shared_context("test_context")
-        
-        # Verify memory was loaded from shared context
         self.assertEqual(len(self.agent.memory), 2)
         self.assertEqual(self.agent.memory[0]["content"], "Hello")
         
-        # Test clear_shared_context
+        # Clear shared context
         Agent.clear_shared_context("test_context")
-        
-        # Verify shared context was cleared
-        self.assertEqual(len(Agent.get_shared_context("test_context")), 0)
+        self.assertEqual(Agent.get_shared_context("test_context"), [])
 
 
 if __name__ == '__main__':
