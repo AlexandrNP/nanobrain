@@ -1,11 +1,21 @@
 import pytest
 import os
 import sys
+import warnings
 from pathlib import Path
 
 # Add project root to Python path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
+
+# Set testing environment variable
+os.environ['NANOBRAIN_TESTING'] = '1'
+
+# Suppress warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="pydantic")
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="langchain")
+warnings.filterwarnings("ignore", message=".*Importing chat models from langchain is deprecated.*")
+warnings.filterwarnings("ignore", message=".*Importing LLMs from langchain is deprecated.*")
 
 # Test configuration
 def pytest_configure(config):

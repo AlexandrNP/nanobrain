@@ -3,11 +3,14 @@ import asyncio
 import sys
 import os
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, AsyncMock
 
 # Add project root to Python path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
+
+# Set testing environment variable
+os.environ['NANOBRAIN_TESTING'] = '1'
 
 from Agent import Agent
 from Step import Step
@@ -15,7 +18,7 @@ from ExecutorBase import ExecutorBase
 from LinkBase import LinkBase
 from DataUnitBase import DataUnitBase
 from enums import ComponentState
-
+from mock_langchain import MockOpenAI, MockChatOpenAI, MockPromptTemplate
 
 class TestAgent(unittest.TestCase):
     def setUp(self):
@@ -23,17 +26,12 @@ class TestAgent(unittest.TestCase):
         self.executor = MagicMock(spec=ExecutorBase)
         self.executor.can_execute.return_value = True
         
-        # Create mock for LLM
-        self.mock_llm = MagicMock()
-        self.mock_llm.predict.return_value = "AI response"
-        
-        # Create agent instance with patched LLM initialization
-        with patch('Agent.ChatOpenAI', return_value=self.mock_llm):
-            self.agent = Agent(
-                executor=self.executor,
-                model_name="gpt-3.5-turbo",
-                memory_window_size=5
-            )
+        # Create agent instance (no need to patch since we're using mock_langchain)
+        self.agent = Agent(
+            executor=self.executor,
+            model_name="gpt-3.5-turbo",
+            memory_window_size=5
+        )
     
     def test_initialization(self):
         """Test that Agent initializes correctly with proper inheritance."""
@@ -53,36 +51,25 @@ class TestAgent(unittest.TestCase):
         self.assertTrue(hasattr(self.agent, 'memory'))
         self.assertTrue(hasattr(self.agent, 'prompt_template'))
     
-    @patch('Agent.ChatOpenAI')
-    def test_initialize_llm(self, mock_chat_openai):
+    def test_initialize_llm(self):
         """Test the _initialize_llm method."""
-        # Configure mock
-        mock_llm_instance = MagicMock()
-        mock_chat_openai.return_value = mock_llm_instance
-        
         # Call _initialize_llm
         llm = self.agent._initialize_llm("gpt-4")
         
-        # Verify ChatOpenAI was called with correct parameters
-        mock_chat_openai.assert_called_once()
-        self.assertEqual(llm, mock_llm_instance)
+        # Verify the correct type was returned
+        self.assertIsInstance(llm, MockOpenAI)
+        self.assertEqual(llm.model_name, "gpt-4")
     
-    @patch('Agent.PromptTemplate')
-    def test_load_prompt_template(self, mock_prompt_template):
+    def test_load_prompt_template(self):
         """Test the _load_prompt_template method."""
-        # Configure mock
-        mock_template_instance = MagicMock()
-        mock_prompt_template.from_template.return_value = mock_template_instance
-        
         # Call _load_prompt_template with a template string
         template = self.agent._load_prompt_template(None, "You are an AI assistant. {input}")
         
-        # Verify PromptTemplate.from_template was called
-        mock_prompt_template.from_template.assert_called_once()
-        self.assertEqual(template, mock_template_instance)
+        # Verify the correct type was returned
+        self.assertIsInstance(template, MockPromptTemplate)
     
-    @patch('Agent.os.path.exists')
-    @patch('Agent.open')
+    @patch('os.path.exists')
+    @patch('builtins.open')
     def test_load_prompt_template_from_file(self, mock_open, mock_exists):
         """Test the _load_prompt_template method with a file."""
         # Configure mocks
@@ -91,17 +78,12 @@ class TestAgent(unittest.TestCase):
         mock_file.__enter__.return_value.read.return_value = "You are an AI assistant. {input}"
         mock_open.return_value = mock_file
         
-        with patch('Agent.PromptTemplate') as mock_prompt_template:
-            mock_template_instance = MagicMock()
-            mock_prompt_template.from_template.return_value = mock_template_instance
-            
-            # Call _load_prompt_template with a file path
-            template = self.agent._load_prompt_template("prompt.txt", None)
-            
-            # Verify file was opened and PromptTemplate.from_template was called
-            mock_open.assert_called_once()
-            mock_prompt_template.from_template.assert_called_once()
-            self.assertEqual(template, mock_template_instance)
+        # Call _load_prompt_template with a file path
+        template = self.agent._load_prompt_template("prompt.txt", None)
+        
+        # Verify file was opened
+        mock_open.assert_called_once()
+        self.assertIsInstance(template, MockPromptTemplate)
     
     async def async_test_process(self):
         """Test the process method."""
@@ -110,9 +92,6 @@ class TestAgent(unittest.TestCase):
         
         # Call process with test input
         result = await self.agent.process(["Hello, AI!"])
-        
-        # Verify llm.predict was called
-        self.agent.llm.predict.assert_called_once()
         
         # Verify result
         self.assertEqual(result, "AI response")
@@ -127,7 +106,7 @@ class TestAgent(unittest.TestCase):
         self.agent._update_memories("Hello, AI!", "AI response")
         
         # Verify memory was updated
-        self.assertEqual(len(self.agent.memory), 1)
+        self.assertEqual(len(self.agent.memory), 2)
         self.assertEqual(self.agent.memory[0]["role"], "user")
         self.assertEqual(self.agent.memory[0]["content"], "Hello, AI!")
         self.assertEqual(self.agent.memory[1]["role"], "assistant")

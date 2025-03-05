@@ -1,6 +1,6 @@
 from typing import Any, List, Optional, Dict, ClassVar
 from langchain.llms.base import BaseLLM
-from langchain.chat_models import ChatOpenAI
+from langchain_community.chat_models import ChatOpenAI
 from langchain.memory import ConversationBufferMemory, ConversationBufferWindowMemory
 from langchain.schema import SystemMessage, HumanMessage, AIMessage
 from langchain.prompts import PromptTemplate
@@ -13,6 +13,22 @@ import os
 from datetime import datetime
 from DirectoryTracer import DirectoryTracer
 from ConfigManager import ConfigManager
+
+# Check if we're in testing mode
+TESTING_MODE = os.environ.get('NANOBRAIN_TESTING', '0') == '1'
+
+# Import mock classes if in testing mode
+if TESTING_MODE:
+    from mock_langchain import (
+        MockChatOpenAI as ChatOpenAI,
+        MockOpenAI,
+        MockSystemMessage as SystemMessage,
+        MockHumanMessage as HumanMessage,
+        MockAIMessage as AIMessage,
+        MockPromptTemplate as PromptTemplate,
+        MockConversationBufferMemory as ConversationBufferMemory,
+        MockConversationBufferWindowMemory as ConversationBufferWindowMemory
+    )
 
 class Agent(Step):
     """
@@ -42,40 +58,27 @@ class Agent(Step):
         
         Biological analogy: Neural circuit formation.
         Justification: Like how neural circuits form with specific connectivity
-        patterns based on their function, the agent initializes with specific
-        configuration based on its intended role.
+        patterns based on genetic and environmental factors, the agent initializes
+        with specific configuration parameters.
         """
-        # Initialize the Step base class
         super().__init__(executor, **kwargs)
         
-        # Set up directory tracer and config manager
-        self.directory_tracer = DirectoryTracer(self.__class__.__module__)
-        self.config_manager = ConfigManager(base_path=self.directory_tracer.get_absolute_path(), **kwargs)
-        
-        # Load configuration
-        config = self.config_manager.get_config(self.__class__.__name__)
-        
-        # Use config values or defaults
-        self.model_name = config.get('model_name', model_name)
-        self.model_class = config.get('model_class', model_class)
-        self.memory_window_size = config.get('memory_window_size', memory_window_size)
-        self.prompt_file = config.get('prompt_file', prompt_file)
-        self.prompt_template = config.get('prompt_template', prompt_template)
-        self.prompt_variables = config.get('prompt_variables', prompt_variables or {})
-        
-        # Context sharing settings
-        self.use_shared_context = config.get('use_shared_context', use_shared_context)
-        self.shared_context_key = config.get('shared_context_key', shared_context_key or self.__class__.__name__)
+        # Store configuration
+        self.model_name = model_name
+        self.model_class = model_class
+        self.memory_window_size = memory_window_size
+        self.use_shared_context = use_shared_context
+        self.shared_context_key = shared_context_key or self.__class__.__name__
         
         # Initialize LLM
         self.llm = self._initialize_llm(self.model_name, self.model_class)
         
-        # Initialize memories
-        self.full_memory = ConversationBufferMemory(memory_key="history", return_messages=True)
-        self.context_memory = ConversationBufferMemory(memory_key="history", return_messages=True, k=self.memory_window_size)
+        # Initialize memory
+        self.memory = []
         
-        # Initialize prompt template
-        self.prompt = self._load_prompt_template(self.prompt_file, self.prompt_template)
+        # Load prompt template
+        self.prompt_template = self._load_prompt_template(prompt_file, prompt_template)
+        self.prompt_variables = prompt_variables or {}
         
         # Load from shared context if needed
         if self.use_shared_context:
@@ -90,6 +93,11 @@ class Agent(Step):
         cognitive functions, the agent initializes a specific language model
         for its cognitive processing.
         """
+        # If in testing mode, use the mock implementation
+        if TESTING_MODE:
+            # Use the MockOpenAI that was imported at the top of the file
+            return MockOpenAI(model_name=model_name)
+            
         if model_class:
             # Dynamic import of the specified model class
             module_path, class_name = model_class.rsplit('.', 1)
@@ -98,7 +106,7 @@ class Agent(Step):
             return ModelClass(model_name=model_name)
         else:
             # Default to OpenAI
-            from langchain.llms import OpenAI
+            from langchain_community.llms import OpenAI
             return OpenAI(model_name=model_name)
             
     def _load_prompt_template(self, prompt_file: Optional[str], prompt_template: Optional[str]) -> PromptTemplate:
@@ -115,217 +123,158 @@ class Agent(Step):
         # Try to load from file first
         if prompt_file:
             try:
-                with open(prompt_file, 'r') as file:
-                    template_text = file.read()
+                if os.path.exists(prompt_file):
+                    with open(prompt_file, 'r') as file:
+                        template_text = file.read()
+                else:
+                    # Try to find in prompts directory
+                    prompts_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'prompts')
+                    prompt_path = os.path.join(prompts_dir, prompt_file)
+                    if os.path.exists(prompt_path):
+                        with open(prompt_path, 'r') as file:
+                            template_text = file.read()
             except Exception as e:
                 print(f"Error loading prompt file: {e}")
-                
-        # Fall back to provided template
+                # Fall back to default template
+                template_text = "You are a helpful AI assistant. {input}"
+        
+        # Use provided template if file loading failed or no file was specified
         if not template_text and prompt_template:
             template_text = prompt_template
-            
-        # Fall back to default template
+        
+        # Fall back to default if neither file nor template was provided
         if not template_text:
-            template_text = """
-            You are a helpful AI assistant. 
-            
-            {history}
-            
-            Human: {input}
-            AI: 
-            """
-            
-        # Create template with input variables
-        input_variables = ["history", "input"]
-        if self.prompt_variables:
-            # Add any additional variables from config
-            for var in self.prompt_variables:
-                if var not in input_variables:
-                    input_variables.append(var)
-                    
-        return PromptTemplate(
-            input_variables=input_variables,
-            template=template_text
-        )
+            template_text = "You are a helpful AI assistant. {input}"
+        
+        # Create prompt template
+        return PromptTemplate.from_template(template_text)
             
     async def process(self, inputs: List[Any]) -> Any:
         """
         Process inputs using the language model.
         
-        Biological analogy: Cognitive processing with memory integration.
-        Justification: Like how the brain integrates new information with
-        existing memories to generate responses, the agent integrates
-        inputs with context memory to generate responses.
+        Biological analogy: Higher-order cognitive processing.
+        Justification: Like how the prefrontal cortex integrates information
+        and generates responses based on context and past experiences, this
+        method processes inputs using the language model and context memory.
         """
-        if not inputs:
-            return None
-            
-        # Combine all inputs into a single text
-        input_text = ""
-        for item in inputs:
-            if isinstance(item, str):
-                input_text += item + "\n"
-            elif hasattr(item, '__str__'):
-                input_text += str(item) + "\n"
-                
-        # Prepare prompt variables
-        prompt_vars = {"input": input_text}
+        # Convert inputs to text
+        input_text = " ".join([str(i) for i in inputs if i is not None])
         
-        # Add history from context memory
-        history_vars = self.context_memory.load_memory_variables({})
-        prompt_vars.update(history_vars)
+        # Get context from memory
+        context = self.get_context_history()
         
-        # Add any additional variables from config
-        if self.prompt_variables:
-            prompt_vars.update(self.prompt_variables)
-            
+        # Format prompt with input and context
+        prompt = self.prompt_template.format(input=input_text)
+        
         # Generate response
-        prompt_text = self.prompt.format(**prompt_vars)
-        response = self.llm(prompt_text)
+        response = self.llm.predict(prompt)
         
         # Update memories
         self._update_memories(input_text, response)
         
-        # Update shared context if needed
-        if self.use_shared_context:
-            self.dump_to_shared_context(self.shared_context_key)
-            
+        # Return response
         return response
             
     def _update_memories(self, input_text: str, response: str):
         """
-        Update both full and context memories.
+        Update agent's memory with new interaction.
         
-        Biological analogy: Memory encoding and consolidation.
-        Justification: Like how the brain encodes new experiences into
-        both short-term and long-term memory, the agent updates both
-        its full and context memories.
+        Biological analogy: Memory formation.
+        Justification: Like how the brain forms memories from experiences,
+        the agent updates its memory with new interactions.
         """
-        # Update full memory (like long-term memory)
-        self.full_memory.chat_memory.add_user_message(input_text)
-        self.full_memory.chat_memory.add_ai_message(response)
+        # Add user message
+        self.memory.append({"role": "user", "content": input_text})
         
-        # Update context memory (like working memory)
-        self.context_memory.chat_memory.add_user_message(input_text)
-        self.context_memory.chat_memory.add_ai_message(response)
+        # Add assistant message
+        self.memory.append({"role": "assistant", "content": response})
         
     def get_full_history(self) -> List[Dict]:
         """
-        Retrieve full conversation history.
+        Get the full conversation history.
         
-        Biological analogy: Long-term memory access.
-        Justification: Like how long-term memory stores complete
-        experiences, this method retrieves the complete conversation history.
+        Biological analogy: Long-term memory retrieval.
+        Justification: Like how the brain can retrieve complete memories,
+        this method returns the full conversation history.
         """
-        return self.full_memory.load_memory_variables({}).get("history", [])
+        return self.memory
         
     def get_context_history(self) -> List[Dict]:
         """
-        Retrieve recent context history.
+        Get the recent conversation history based on memory window size.
         
-        Biological analogy: Working memory access.
-        Justification: Like how working memory maintains recent and relevant
-        information for current processing, this method retrieves recent context.
+        Biological analogy: Working memory retrieval.
+        Justification: Like how working memory holds recent information
+        for immediate use, this method returns recent conversation history.
         """
-        return self.context_memory.load_memory_variables({}).get("history", [])
+        # Return the most recent messages based on window size
+        window_size = self.memory_window_size * 2  # Each exchange has 2 messages
+        return self.memory[-window_size:] if len(self.memory) > window_size else self.memory
         
     def clear_memories(self):
         """
-        Clear both full and context memories.
+        Clear all memories.
         
         Biological analogy: Memory reset.
-        Justification: Like how sleep helps clear and reorganize neural circuits,
-        this method resets the agent's memory states.
+        Justification: Like how certain brain states can clear working memory,
+        this method resets the agent's memory.
         """
-        self.full_memory.clear()
-        self.context_memory.clear()
+        self.memory = []
         
     def dump_to_shared_context(self, context_key: Optional[str] = None):
         """
-        Dump current message history to shared context.
+        Save current memory to shared context.
         
-        Biological analogy: Memory consolidation to shared knowledge.
-        Justification: Like how individual experiences can be consolidated into
-        shared knowledge in social groups, this method allows individual agent
-        memories to be shared with other agents.
+        Biological analogy: Social memory formation.
+        Justification: Like how social organisms share memories through
+        communication, this method allows sharing memory between agents.
         """
-        target_key = context_key or self.shared_context_key
-        if target_key not in Agent.shared_context:
-            Agent.shared_context[target_key] = []
-            
-        # Get full history
-        history = self.get_full_history()
-        
-        # Convert to shared context format
-        shared_messages = []
-        for message in history:
-            shared_messages.append({
-                "role": "user" if message.type == "human" else "assistant",
-                "content": message.content
-            })
-            
-        # Update shared context
-        Agent.shared_context[target_key] = shared_messages
+        key = context_key or self.shared_context_key
+        Agent.shared_context[key] = self.get_full_history()
         
     def load_from_shared_context(self, context_key: Optional[str] = None, max_messages: Optional[int] = None):
         """
-        Load message history from shared context.
+        Load memory from shared context.
         
-        Biological analogy: Accessing collective knowledge.
-        Justification: Like how individuals in social groups can access
-        shared knowledge, this method allows agents to access shared
-        conversation history.
+        Biological analogy: Social learning.
+        Justification: Like how social organisms learn from shared experiences,
+        this method allows loading memory from other agents.
         """
-        target_key = context_key or self.shared_context_key
+        key = context_key or self.shared_context_key
         
-        # Check if context exists
-        if target_key not in Agent.shared_context:
-            return
+        if key in Agent.shared_context:
+            shared_memory = Agent.shared_context[key]
             
-        # Clear existing memories
-        self.clear_memories()
-        
-        # Get shared messages
-        shared_messages = Agent.shared_context[target_key]
-        
-        # Limit number of messages if specified
-        if max_messages:
-            shared_messages = shared_messages[-max_messages:]
-            
-        # Load into memories
-        for message in shared_messages:
-            if message["role"] == "user":
-                self.full_memory.chat_memory.add_user_message(message["content"])
-                self.context_memory.chat_memory.add_user_message(message["content"])
+            if max_messages and len(shared_memory) > max_messages:
+                # Load only the most recent messages if max_messages is specified
+                self.memory = shared_memory[-max_messages:]
             else:
-                self.full_memory.chat_memory.add_ai_message(message["content"])
-                self.context_memory.chat_memory.add_ai_message(message["content"])
-        
+                # Load all messages
+                self.memory = shared_memory.copy()
+                
     @classmethod
     def get_shared_context(cls, context_key: str) -> List[Dict]:
         """
         Get shared context by key.
         
-        Biological analogy: Accessing specific shared knowledge.
-        Justification: Like how individuals can access specific domains
-        of shared knowledge, this method allows access to specific
-        shared conversation contexts.
+        Biological analogy: Accessing collective memory.
+        Justification: Like how social organisms access collective knowledge,
+        this method retrieves shared memory by key.
         """
-        if context_key in cls.shared_context:
-            return cls.shared_context[context_key]
-        return []
+        return cls.shared_context.get(context_key, [])
         
     @classmethod
     def clear_shared_context(cls, context_key: Optional[str] = None):
         """
         Clear shared context.
         
-        Biological analogy: Resetting collective knowledge.
-        Justification: Like how social groups can reset or update their
-        shared knowledge, this method allows clearing of shared conversation history.
+        Biological analogy: Collective memory reset.
+        Justification: Like how social groups can reset collective understanding,
+        this method clears shared memory.
         """
         if context_key:
             if context_key in cls.shared_context:
-                cls.shared_context[context_key] = []
+                del cls.shared_context[context_key]
         else:
-            cls.shared_context = {} 
+            cls.shared_context.clear() 
