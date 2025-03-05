@@ -4,8 +4,9 @@ This module provides mock implementations of LangChain classes to allow testing
 without requiring actual API keys or external services.
 """
 
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union, Callable
 import os
+import re
 
 class MockMessage:
     """Mock implementation of LangChain message classes."""
@@ -22,18 +23,21 @@ class MockMessage:
 
 class MockSystemMessage(MockMessage):
     """Mock implementation of SystemMessage."""
+    
     def __init__(self, content: str):
         super().__init__(content, role="system")
 
 class MockHumanMessage(MockMessage):
     """Mock implementation of HumanMessage."""
+    
     def __init__(self, content: str):
-        super().__init__(content, role="user")
+        super().__init__(content, role="human")
 
 class MockAIMessage(MockMessage):
     """Mock implementation of AIMessage."""
+    
     def __init__(self, content: str):
-        super().__init__(content, role="assistant")
+        super().__init__(content, role="ai")
 
 class MockChatOpenAI:
     """Mock implementation of ChatOpenAI."""
@@ -41,6 +45,7 @@ class MockChatOpenAI:
     def __init__(self, model_name: str = "gpt-3.5-turbo", **kwargs):
         self.model_name = model_name
         self.kwargs = kwargs
+        self.tools = []
         
     def predict(self, text: str, **kwargs) -> str:
         """Return a mock response."""
@@ -49,6 +54,11 @@ class MockChatOpenAI:
     def predict_messages(self, messages: List[MockMessage], **kwargs) -> MockAIMessage:
         """Return a mock response as an AIMessage."""
         return MockAIMessage("Mock response to messages")
+    
+    def bind_tools(self, tools: List[Any]) -> 'MockChatOpenAI':
+        """Bind tools to the model."""
+        self.tools = tools
+        return self
 
 class MockOpenAI:
     """Mock implementation of OpenAI."""
@@ -56,10 +66,16 @@ class MockOpenAI:
     def __init__(self, model_name: str = "text-davinci-003", **kwargs):
         self.model_name = model_name
         self.kwargs = kwargs
+        self.tools = []
         
     def predict(self, text: str, **kwargs) -> str:
         """Return a mock response."""
         return f"Mock response to: {text}"
+    
+    def bind_tools(self, tools: List[Any]) -> 'MockOpenAI':
+        """Bind tools to the model."""
+        self.tools = tools
+        return self
 
 class MockConversationBufferMemory:
     """Mock implementation of ConversationBufferMemory."""
@@ -104,7 +120,7 @@ class MockChatMemory:
         self.messages.append(MockAIMessage(message))
         
     def clear(self) -> None:
-        """Clear memory."""
+        """Clear all messages from memory."""
         self.messages = []
 
 class MockPromptTemplate:
@@ -116,11 +132,57 @@ class MockPromptTemplate:
         self.kwargs = kwargs
         
     @classmethod
-    def from_template(cls, template: str, **kwargs):
-        """Create a prompt template from a template string."""
-        input_variables = [v.strip("{}") for v in template.split("{") if "}" in v]
+    def from_template(cls, template_or_prompt, **kwargs):
+        """Create a prompt template from a template string or PromptTemplate object."""
+        # Check if template is already a PromptTemplate
+        if hasattr(template_or_prompt, 'template') and hasattr(template_or_prompt, 'input_variables'):
+            # If it's a PromptTemplate-like object, extract its template and input_variables
+            template = template_or_prompt.template
+            input_variables = template_or_prompt.input_variables
+            return cls(template=template, input_variables=input_variables, **kwargs)
+        
+        # Otherwise, treat it as a string template
+        template = template_or_prompt
+        # Extract variables from the template string
+        variables = re.findall(r'\{([^{}]*)\}', template)
+        # Remove duplicates and create a list of input variables
+        input_variables = list(set(variables))
         return cls(template=template, input_variables=input_variables, **kwargs)
         
     def format(self, **kwargs) -> str:
         """Format the template with the given values."""
-        return self.template.format(**kwargs) 
+        try:
+            return self.template.format(**kwargs)
+        except KeyError as e:
+            # Handle missing keys by using empty strings
+            missing_key = str(e).strip("'")
+            kwargs[missing_key] = ""
+            return self.format(**kwargs)
+
+class MockBaseTool:
+    """Mock implementation of BaseTool."""
+    
+    def __init__(self, name: str, description: str, func: Callable, **kwargs):
+        self.name = name
+        self.description = description
+        self.func = func
+        self.kwargs = kwargs
+        
+    def __call__(self, *args, **kwargs):
+        """Call the tool function."""
+        return self.func(*args, **kwargs)
+
+def tool(func=None, name=None, description=None, **kwargs):
+    """Mock implementation of the tool decorator."""
+    if func is None:
+        # This is the case when the decorator is called with arguments
+        def decorator(f):
+            tool_name = name or f.__name__
+            tool_description = description or f.__doc__ or ""
+            return MockBaseTool(name=tool_name, description=tool_description, func=f, **kwargs)
+        return decorator
+    else:
+        # This is the case when the decorator is called without arguments
+        tool_name = name or func.__name__
+        tool_description = description or func.__doc__ or ""
+        return MockBaseTool(name=tool_name, description=tool_description, func=func, **kwargs) 
