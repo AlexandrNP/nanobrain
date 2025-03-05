@@ -1,61 +1,71 @@
 import time
-from typing import Any
+from typing import Any, Dict, Optional
+from ConfigManager import ConfigManager
+from DirectoryTracer import DirectoryTracer
+from PackageBase import PackageBase
+from ExecutorBase import ExecutorBase
 
 
-class WorkingMemory:
+class WorkingMemory(PackageBase):
     """
-    Provides temporary storage for processed information.
+    Short-term memory storage with limited capacity.
     
     Biological analogy: Working memory in the prefrontal cortex.
-    Justification: Like how working memory holds information temporarily for
-    ongoing cognitive operations, this class provides short-term storage for
-    data being processed across workflow steps.
+    Justification: Like how working memory has limited capacity and
+    follows recency-based retention, this class implements a capacity-limited
+    storage with LRU (Least Recently Used) eviction policy.
     """
-    def __init__(self, capacity: int = 7):  # Miller's Law: 7±2 items
-        self.items = {}
-        self.capacity = capacity
-        self.access_times = {}  # For LRU replacement
+    def __init__(self, executor: ExecutorBase = None, **kwargs):
+        super().__init__(executor, **kwargs)
+        
+        self.directory_tracer = DirectoryTracer(self.__class__.__module__)
+        self.config_manager = ConfigManager(base_path=self.directory_tracer.get_absolute_path(), **kwargs)
+        
+        # Allow direct override via kwargs, otherwise use config or default
+        self.capacity = kwargs.get('capacity', 
+                                  self.config_manager.get_config(self.__class__.__name__).get('capacity', 7))
+        
+        # Memory storage and access order tracking
+        self._memory: Dict[str, Any] = {}
+        self._access_order: list = []  # Track access order for LRU implementation
     
     def store(self, key: str, value: Any) -> bool:
         """
-        Store an item in working memory.
+        Store a value in working memory.
         
-        Biological analogy: Encoding information in working memory.
-        Justification: Similar to how the brain must selectively encode information
-        with limited capacity, requiring older items to be cleared out.
+        Biological analogy: Encoding information into working memory.
+        Justification: Like how the brain encodes new information into
+        working memory, potentially displacing older items when capacity
+        is reached.
         """
-        # If at capacity, remove least recently used item
-        if len(self.items) >= self.capacity and key not in self.items:
-            self._remove_lru()
-            
-        self.items[key] = value
-        self.access_times[key] = time.time()
+        # If key already exists, update its position in access order
+        if key in self._memory:
+            self._access_order.remove(key)
+        
+        # If at capacity and adding new item, remove least recently used
+        elif len(self._memory) >= self.capacity and key not in self._memory:
+            # Remove the least recently used item (first in access_order)
+            lru_key = self._access_order[0]
+            del self._memory[lru_key]
+            self._access_order.remove(lru_key)
+        
+        # Add/update the item and mark it as most recently used
+        self._memory[key] = value
+        self._access_order.append(key)
         return True
     
-    def retrieve(self, key: str) -> Any:
+    def retrieve(self, key: str) -> Optional[Any]:
         """
-        Retrieve an item from working memory.
+        Retrieve a value from working memory.
         
-        Biological analogy: Retrieval from working memory with rehearsal effect.
-        Justification: Like how retrieving items from working memory strengthens their
-        retention by resetting their decay timers.
+        Biological analogy: Retrieving information from working memory.
+        Justification: Like how retrieving information from working memory
+        makes it more likely to be retained (recency effect), this method
+        updates the item's recency status.
         """
-        if key in self.items:
-            self.access_times[key] = time.time()
-            return self.items[key]
+        if key in self._memory:
+            # Update access order (mark as most recently used)
+            self._access_order.remove(key)
+            self._access_order.append(key)
+            return self._memory[key]
         return None
-    
-    def _remove_lru(self):
-        """
-        Remove least recently used item.
-        
-        Biological analogy: Displacement in limited-capacity memory.
-        Justification: When working memory reaches capacity, the least recently
-        accessed items are most likely to be forgotten.
-        """
-        if not self.access_times:
-            return
-            
-        oldest_key = min(self.access_times, key=self.access_times.get)
-        del self.items[oldest_key]
-        del self.access_times[oldest_key]

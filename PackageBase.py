@@ -1,4 +1,5 @@
-from enums import ExecutorBase, ComponentState
+from enums import ComponentState
+from ExecutorBase import ExecutorBase
 from DirectoryTracer import DirectoryTracer
 from ConfigManager import ConfigManager
 from Runner import Runner
@@ -14,8 +15,8 @@ class PackageBase:
     """
     def __init__(self, executor: ExecutorBase, **kwargs):
         self.directory_tracer = DirectoryTracer(self.__class__.__module__)
-        self.config_manager = ConfigManager(**kwargs)
-        self.runner = Runner(executor)
+        self.config_manager = ConfigManager(base_path=self.directory_tracer.get_absolute_path(), **kwargs)
+        self.runner = Runner(executor, **kwargs)
         self.dependencies = []
         self.dependency_resolution_state = ComponentState.INACTIVE
     
@@ -51,8 +52,16 @@ class PackageBase:
         return self.directory_tracer.get_absolute_path()
     
     def get_config(self, class_dir: str = None) -> dict:
-        """Delegate to config manager."""
-        return self.config_manager.get_config(class_dir or self.get_absolute_path())
+        """
+        Get configuration for this class.
+        
+        Biological analogy: Localized gene expression.
+        Justification: Like how cells use their location to determine which
+        genes to express, components use their location to find appropriate
+        configuration.
+        """
+        # Use the class name for configuration lookup
+        return self.config_manager.get_config(self.__class__.__name__)
     
     def update_config(self, updates: dict, adaptability_threshold: float = 0.3) -> bool:
         """Delegate to config manager."""

@@ -148,3 +148,11 @@ await router.invoke()  # Intelligent routing with reliability
    - Test with various load conditions
    - Monitor system stability and resource usage
    - Use built-in metrics for performance analysis
+
+## Documentation
+
+For detailed technical documentation:
+
+- [UML Diagrams](docs/UML.md) - Comprehensive class diagrams showing framework architecture and relationships
+- Component interaction patterns and data flows are shown in the Framework Organization section above
+- Configuration examples and best practices are provided in the Usage Examples section

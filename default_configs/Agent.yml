@@ -1,0 +1,116 @@
+defaults:
+  model_name: "gpt-3.5-turbo"  # Default LLM model
+  model_class: null  # Use default ChatOpenAI implementation
+  memory_window_size: 5  # Number of recent conversations to keep in context
+  prompt_file: "prompts/templates"  # Python file containing prompt templates
+  prompt_template: "BASE_ASSISTANT"  # Template name in prompt file
+  prompt_variables:  # Variables to fill in the template
+    role_description: "assist users with general tasks while maintaining a helpful and professional demeanor"
+    specific_instructions: "Focus on clear communication and accurate information"
+  context_sensitivity: 0.8  # How much past context influences responses
+  creativity: 0.5  # Balance between deterministic and creative responses
+  response_coherence: 0.7  # How well responses maintain consistency
+  use_shared_context: false  # Whether to use shared context between agents
+  shared_context_key: null  # Key for shared context group (auto-generated if null)
+
+metadata:
+  description: "LLM-powered agent that processes inputs using language models"
+  biological_analogy: "Higher-order cognitive processing area (prefrontal cortex)"
+  justification: >
+    Like how the prefrontal cortex integrates information from multiple sources
+    and uses past experiences to generate adaptive responses, this agent integrates
+    inputs with context memory to generate intelligent responses.
+  objectives:
+    - Process inputs using language models with contextual awareness
+    - Maintain conversation history with both full and working memory
+    - Generate coherent and contextually relevant responses
+    - Adapt behavior based on dynamic prompt templates and configuration
+    - Share and learn from collective agent experiences through shared context
+
+validation:
+  required:
+    - executor  # ExecutorBase instance required
+  optional:
+    - model_name
+    - model_class
+    - memory_window_size
+    - prompt_file
+    - prompt_template
+    - prompt_variables
+    - use_shared_context
+    - shared_context_key
+  constraints:
+    memory_window_size:
+      min: 1
+      max: 10
+      type: int
+    context_sensitivity:
+      min: 0.0
+      max: 1.0
+      type: float
+    creativity:
+      min: 0.0
+      max: 1.0
+      type: float
+    response_coherence:
+      min: 0.0
+      max: 1.0
+      type: float
+    prompt_file:
+      type: str
+    prompt_template:
+      type: str
+    use_shared_context:
+      type: bool
+    shared_context_key:
+      type: str
+      nullable: true
+
+examples:
+  basic:
+    description: "Basic agent with default settings"
+    config:
+      model_name: "gpt-3.5-turbo"
+      prompt_file: "prompts/templates"
+      prompt_template: "BASE_ASSISTANT"
+      prompt_variables:
+        role_description: "assist users with general tasks"
+        specific_instructions: "Maintain a helpful and professional tone"
+      memory_window_size: 5
+      use_shared_context: false
+
+  technical:
+    description: "Technical expert agent with shared context"
+    config:
+      model_name: "gpt-4"
+      prompt_file: "prompts/technical"
+      prompt_template: "EXPERT_TEMPLATE"
+      prompt_variables:
+        expertise_areas: |
+          - Software architecture and design
+          - Performance optimization
+          - Security best practices
+        technical_context: "Enterprise software development environment"
+      context_sensitivity: 1.0
+      creativity: 0.3
+      response_coherence: 0.9
+      use_shared_context: true
+      shared_context_key: "technical_team"
+
+  creative:
+    description: "Creative assistant agent with shared context"
+    config:
+      model_name: "gpt-4"
+      prompt_file: "prompts/creative"
+      prompt_template: "CREATIVE_TEMPLATE"
+      prompt_variables:
+        creative_domains: |
+          - User interface design
+          - Content creation
+          - Visual storytelling
+        creative_context: "Digital media and design projects"
+      context_sensitivity: 0.7
+      creativity: 0.9
+      response_coherence: 0.8
+      use_shared_context: true
+      shared_context_key: "creative_team" 

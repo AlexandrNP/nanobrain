@@ -16,25 +16,36 @@ class ConfigManager(IConfigurable):
     def __init__(self, **kwargs):
         self._config = {}
         self._adaptability = 0.5  # Ability to reconfigure (0.0-1.0)
+        self._base_path = kwargs.get('base_path', '')
         
-    def get_config(self, class_dir: str) -> Dict:
+    def get_config(self, class_name: str) -> Dict:
         """
-        Looks for <class_name>.yml in the specified directory and returns parameter dictionary.
+        Looks for <class_name>.yml in the appropriate directory and returns parameter dictionary.
+        First checks in local 'config' directory relative to base_path, then falls back to 'default_configs'.
         Each parameter is supplemented with the property 'type' that references the class name.
         
         Biological analogy: Cellular response to environmental cues.
         Justification: Like how cells read their environment to determine appropriate
         protein expression, components read configuration files to determine behavior.
         """
-        class_name = self.__class__.__name__
-        config_path = os.path.join(class_dir, f"{class_name}.yml")
+        # First try local config directory if base_path is provided
+        if self._base_path:
+            local_config_dir = os.path.join(os.path.dirname(self._base_path), 'config')
+            local_config_path = os.path.join(local_config_dir, f"{class_name}.yml")
+            
+            if os.path.exists(local_config_path):
+                with open(local_config_path, 'r') as file:
+                    self._config = yaml.safe_load(file)
+                return self._config
         
-        if os.path.exists(config_path):
-            with open(config_path, 'r') as file:
+        # Fall back to default_configs
+        default_config_path = os.path.join('default_configs', f"{class_name}.yml")
+        if os.path.exists(default_config_path):
+            with open(default_config_path, 'r') as file:
                 self._config = yaml.safe_load(file)
             return self._config
-        else:
-            return {}
+            
+        return {}
             
     def update_config(self, updates: Dict, adaptability_threshold: float = 0.3) -> bool:
         """

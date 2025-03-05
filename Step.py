@@ -1,41 +1,55 @@
-from typing import List, Any
-from enums import ExecutorBase, CircuitBreaker, ComponentState
-from WorkingMemory import WorkingMemory
+from typing import Any, List, Optional
+from ExecutorBase import ExecutorBase
 from LinkBase import LinkBase
 from PackageBase import PackageBase
+from interfaces import IRunnable
+from WorkingMemory import WorkingMemory
+from enums import ComponentState
+from concurrency import CircuitBreaker
 
-class Step:
+class Step(PackageBase, IRunnable):
     """
-    Represents a step in the workflow.
+    Base class for workflow steps.
     
-    Biological analogy: Cortical processing area.
-    Justification: Like how specialized cortical areas process specific aspects
-    of information (e.g., visual features in visual cortex), steps process
-    specific aspects of the workflow data.
+    Biological analogy: Functional neural circuit.
+    Justification: Like how functional neural circuits process specific
+    types of information and pass results to other circuits, steps process
+    specific operations and pass results to other steps.
     """
     def __init__(self, executor: ExecutorBase, input_sources: List[LinkBase] = None, 
                  output_sink: LinkBase = None, **kwargs):
-        self.package = PackageBase(executor, **kwargs)
+        # Initialize the base class
+        super().__init__(executor, **kwargs)
+        
+        # Step-specific attributes
         self.input_sources = input_sources or []
         self.output_sink = output_sink
-        self.circuit_breaker = CircuitBreaker()
         self.result = None
-        self.working_memory = WorkingMemory()  # Working memory for computations
-        self.adaptability = 0.5  # Ability to adapt processing (0.0-1.0)
+        self.working_memory = WorkingMemory(**kwargs)
+        self.circuit_breaker = CircuitBreaker()
         self.specialization = 0.0  # How specialized for current task (0.0-1.0)
         self.adaptive_network = None  # Network for adaptive processing
+        self._state = ComponentState.INACTIVE
+        self._running = False
     
     async def execute(self):
         """
-        Executes the step if circuit breaker allows.
+        Execute the step's operation.
         
-        Biological analogy: Activation of a cortical processing area.
-        Justification: Like how cortical areas activate to process specific
-        inputs when not inhibited, steps execute to process workflow data
-        when not blocked by the circuit breaker.
+        Biological analogy: Neural circuit activation.
+        Justification: Like how neural circuits activate to process
+        specific information, steps execute to process specific operations.
         """
+        if self._running:
+            return self.result
+            
+        self._running = True
+        self._state = ComponentState.ACTIVE
+        
         if not self.circuit_breaker.can_execute():
             # Area is inhibited
+            self._state = ComponentState.INACTIVE
+            self._running = False
             return None
             
         try:
@@ -43,7 +57,9 @@ class Step:
             inputs = []
             for source in self.input_sources:
                 await source.transfer()
-                inputs.append(source.output.get())
+                data = source.output.get()
+                if data is not None:
+                    inputs.append(data)
             
             # Process inputs
             self.result = await self.process(inputs)
@@ -54,11 +70,14 @@ class Step:
             # Increase specialization for this type of input
             self.specialization = min(1.0, self.specialization + 0.01)
             
-            # Transfer to output if exists
-            if self.output_sink:
+            # Send result to output sink if available
+            if self.output_sink and self.result is not None:
+                self.output_sink.input.set(self.result)
                 await self.output_sink.transfer()
                 
+            # Record success in circuit breaker
             self.circuit_breaker.record_success()
+            self._state = ComponentState.INACTIVE
             return self.result
             
         except Exception as e:
@@ -67,42 +86,117 @@ class Step:
             # Decrease specialization due to failure
             self.specialization = max(0.0, self.specialization - 0.05)
             
+            self._state = ComponentState.ERROR
             raise e
+            
+        finally:
+            self._running = False
     
     async def process(self, inputs: List[Any]) -> Any:
         """
-        Processes inputs to produce result.
+        Process inputs to produce a result.
         
-        Biological analogy: Specific computation of a cortical area.
-        Justification: Like how different cortical areas perform specific
-        computations on their inputs (e.g., edge detection in V1),
-        step subclasses implement specific processing on workflow data.
+        Biological analogy: Information processing in neural circuits.
+        Justification: Like how neural circuits transform inputs into
+        outputs through specific processing operations, this method
+        transforms input data into output results.
         """
-        raise NotImplementedError("Subclasses must implement process()")
+        # Base implementation just returns the first input
+        return inputs[0] if inputs else None
     
     def get_result(self) -> Any:
         """
-        Returns the result of the step.
+        Get the most recent result.
         
-        Biological analogy: Output of a cortical processing area.
-        Justification: Like how cortical areas produce processed outputs that
-        can be accessed by other brain regions, steps produce processed results
-        that can be accessed by other workflow components.
+        Biological analogy: Neural circuit output.
+        Justification: Like how neural circuits maintain their output
+        state until new processing occurs, steps maintain their result
+        until new execution occurs.
         """
         return self.result
-        
-    # Delegate methods to package
-    def get_relative_path(self) -> str:
-        return self.package.get_relative_path()
-        
-    def get_absolute_path(self) -> str:
-        return self.package.get_absolute_path()
-        
-    def get_config(self, class_dir: str = None) -> dict:
-        return self.package.get_config(class_dir)
-        
-    def update_config(self, updates: dict, adaptability_threshold: float = 0.3) -> bool:
-        return self.package.update_config(updates, adaptability_threshold)
-        
+    
     async def invoke(self):
-        return await self.package.invoke()
+        """
+        Alias for execute to conform to IRunnable interface.
+        
+        Biological analogy: Alternative pathway activation.
+        Justification: Like how neural circuits can be activated through
+        different pathways, steps can be executed through different methods.
+        """
+        return await self.execute()
+    
+    def check_runnable_config(self) -> bool:
+        """
+        Check if the step is properly configured to run.
+        
+        Biological analogy: Neural circuit readiness check.
+        Justification: Like how neural circuits must have proper connections
+        to function, steps must have proper configuration to execute.
+        """
+        return self.executor is not None and self.executor.can_execute(self.__class__.__name__)
+    
+    @property
+    def adaptability(self) -> float:
+        """
+        Get the adaptability level of the step.
+        
+        Biological analogy: Neural plasticity.
+        Justification: Like how neural circuits have varying levels of
+        plasticity for adaptation, steps have varying levels of adaptability.
+        """
+        return self.config_manager.adaptability
+    
+    @adaptability.setter
+    def adaptability(self, value: float):
+        """
+        Set the adaptability level of the step.
+        
+        Biological analogy: Modulation of neural plasticity.
+        Justification: Like how neuromodulators can adjust plasticity levels,
+        this setter adjusts the adaptability of the step.
+        """
+        self.config_manager.adaptability = value
+    
+    @property
+    def state(self):
+        """
+        Get the current state of the step.
+        
+        Biological analogy: Neural circuit state.
+        Justification: Like how neural circuits have different activation states,
+        steps have different operational states.
+        """
+        return self._state
+    
+    @state.setter
+    def state(self, value):
+        """
+        Set the current state of the step.
+        
+        Biological analogy: Neural circuit state transition.
+        Justification: Like how neural circuits transition between states,
+        steps transition between operational states.
+        """
+        self._state = value
+    
+    @property
+    def running(self) -> bool:
+        """
+        Get whether the step is currently running.
+        
+        Biological analogy: Neural circuit activity.
+        Justification: Like how neural circuits can be active or inactive,
+        steps can be running or not running.
+        """
+        return self._running
+    
+    @running.setter
+    def running(self, value: bool):
+        """
+        Set whether the step is currently running.
+        
+        Biological analogy: Neural circuit activation control.
+        Justification: Like how neural circuits can be activated or deactivated,
+        steps can be set to running or not running.
+        """
+        self._running = value

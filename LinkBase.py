@@ -1,104 +1,104 @@
 from typing import Any
-from enums import DataUnitBase
-from regulations import ConnectionStrength, ActivationGate
+from DataUnitBase import DataUnitBase
 from ConfigManager import ConfigManager
+from DirectoryTracer import DirectoryTracer
+from regulations import ConnectionStrength
 import random
 
 class LinkBase:
     """
-    Base link class that connects two steps in the workflow.
+    Base class for connections between data units.
     
-    Biological analogy: Combined dendritic and axonal functionality.
-    Justification: Like how neural processes handle both input processing (dendrites)
-    and output transmission (axons), this class handles both input processing and
-    output transmission.
+    Biological analogy: Synaptic connection between neurons.
+    Justification: Like how synapses connect neurons and transmit signals
+    with varying strengths and reliability, links connect data units and
+    transfer data with configurable characteristics.
     """
     def __init__(self, input_data: DataUnitBase, output_data: DataUnitBase, **kwargs):
+        self.directory_tracer = DirectoryTracer(self.__class__.__module__)
+        self.config_manager = ConfigManager(base_path=self.directory_tracer.get_absolute_path(), **kwargs)
         self.input = input_data
         self.output = output_data
-        self.config_manager = ConfigManager(**kwargs)
-        self.connection_strength = ConnectionStrength()  # Connection strength
-        self.activation_gate = ActivationGate()  # For input processing
-        self.adaptability = 0.5  # How easily the connection changes (0.0-1.0)
-        self.reliability = 0.95  # Probability of successful transmission
-        self.transmission_delay = 0.1  # Base transmission delay
-        self.resource_level = 1.0  # Resource capacity for transmission
-        self.recovery_rate = 0.1  # Rate of resource recovery
+        self.connection_strength = ConnectionStrength()
+        self.reliability = 0.95  # Probability of successful transfer
+        self.adaptability = 0.5  # How quickly connection strength changes
     
     def process_signal(self) -> float:
         """
-        Process input to produce a weighted signal value.
+        Processes the signal passing through the link.
         
-        Biological analogy: Dendritic integration and scaling.
-        Justification: Like how dendrites apply weights to incoming signals before
-        integration at the cell body, this method processes and scales input signals.
+        Biological analogy: Synaptic signal processing.
+        Justification: Like how synapses modify signals based on their
+        strength and recent activity, links process data based on their
+        connection strength and characteristics.
         """
-        # Get raw data
+        # Get input data
         data = self.input.get()
         
-        # Convert to a signal value between 0 and 1
         if data is None:
-            signal = 0.0
-        elif isinstance(data, (int, float)):
-            # Normalize between 0 and 1
-            signal = min(1.0, max(0.0, float(data)))
-        elif isinstance(data, bool):
-            signal = 1.0 if data else 0.0
+            return 0.0
+            
+        # Calculate signal strength based on connection strength
+        # and input data characteristics
+        signal_strength = 0.0
+        
+        if isinstance(data, (int, float)):
+            # For numerical data, use the value directly
+            signal_strength = abs(data) * self.connection_strength.get_value()
+        elif isinstance(data, str):
+            # For string data, use the length
+            signal_strength = min(1.0, len(data) / 100) * self.connection_strength.get_value()
+        elif isinstance(data, (list, dict)):
+            # For collections, use the size
+            signal_strength = min(1.0, len(data) / 10) * self.connection_strength.get_value()
         else:
-            # Complex data type, just indicate presence
-            signal = 1.0 if data else 0.0
-        
-        # Apply connection strength
-        weighted_signal = signal * self.connection_strength.strength
-        
-        # Pass through activation gate
-        self.activation_gate.receive_signal(weighted_signal)
-        
-        return weighted_signal
+            # For other types, use a default value
+            signal_strength = 0.5 * self.connection_strength.get_value()
+            
+        return signal_strength
     
     async def transfer(self):
         """
-        Transfers data from input to output with resource management.
+        Transfers data from input to output.
         
-        Biological analogy: Combined dendritic and axonal transmission.
-        Justification: Like how neural processes handle both input integration
-        and output transmission with resource constraints, this method handles
-        both processing and transmission with resource management.
+        Biological analogy: Synaptic transmission.
+        Justification: Like how synapses transmit signals from pre-synaptic
+        to post-synaptic neurons with varying reliability, links transfer
+        data from input to output units with configurable reliability.
         """
-        # Check reliability and resources
-        if random.random() > self.reliability or self.resource_level < 0.1:
-            # Transmission failed
+        # Get input data
+        data = self.input.get()
+        
+        if data is None:
             return False
             
-        # Process the input signal
-        weighted_signal = self.process_signal()
+        # Check reliability
+        if random.random() > self.reliability:
+            # Transfer failed
+            return False
+            
+        # Transfer data
+        self.output.set(data)
         
-        # Consume resources for transmission
-        self.resource_level = max(0.0, self.resource_level - 0.1)
-        
-        # Send processed data to output
-        self.output.set(weighted_signal if isinstance(self.input.get(), (int, float)) 
-                       else self.input.get())
-        
-        # Apply Hebbian-like learning if transmission successful
-        if weighted_signal > 0:
-            self.connection_strength.increase(0.01 * self.adaptability)
+        # Strengthen connection based on successful transfer
+        self.connection_strength.increase(0.01 * self.adaptability)
         
         return True
     
     def recover(self):
         """
-        Recover transmission resources.
+        Recovers from failed transfers.
         
-        Biological analogy: Neurotransmitter reuptake and synthesis.
-        Justification: Like how neural synapses recover their transmission
-        resources over time, this method restores transmission capacity.
+        Biological analogy: Synaptic recovery.
+        Justification: Like how synapses recover from neurotransmitter
+        depletion, links recover from failed transfers.
         """
-        self.resource_level = min(1.0, self.resource_level + self.recovery_rate)
+        # Increase reliability slightly
+        self.reliability = min(0.99, self.reliability + 0.01)
     
     def get_config(self, class_dir: str = None) -> dict:
-        """Delegate to config manager."""
-        return self.config_manager.get_config(class_dir)
+        """Get configuration for this class."""
+        return self.config_manager.get_config(self.__class__.__name__)
     
     def update_config(self, updates: dict, adaptability_threshold: float = 0.3) -> bool:
         """Delegate to config manager."""

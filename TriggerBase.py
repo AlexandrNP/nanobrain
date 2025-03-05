@@ -1,34 +1,38 @@
 from typing import Any
-from enums import ActivationGate
+from activation import ActivationGate
 from ConfigManager import ConfigManager
 import random
+from DirectoryTracer import DirectoryTracer
 
 class TriggerBase:
     """
-    Base trigger class that checks conditions for execution.
+    Base class for components that detect conditions for activation.
     
-    Biological analogy: Sensory neuron or receptor.
-    Justification: Like how sensory neurons detect environmental changes and
-    initiate processing pathways, triggers detect conditions and initiate
-    workflow execution.
+    Biological analogy: Sensory neuron.
+    Justification: Like how sensory neurons detect specific environmental
+    conditions and convert them to neural signals, triggers detect specific
+    computational conditions and convert them to workflow activations.
     """
     def __init__(self, runnable: Any, **kwargs):
         self.runnable = runnable
-        self.config_manager = ConfigManager(**kwargs)
+        self.directory_tracer = DirectoryTracer(self.__class__.__module__)
+        self.config_manager = ConfigManager(base_path=self.directory_tracer.get_absolute_path(), **kwargs)
         self.activation_gate = ActivationGate(threshold=0.3)  # More sensitive than regular components
-        self.sensitivity = 0.8  # Sensitivity to stimuli (0.0-1.0)
-        self.adaptation_rate = 0.05  # How quickly it adapts to repeated stimuli
+        self.sensitivity = 0.8  # Initial sensitivity to conditions
+        self.adaptation_rate = 0.05  # How quickly sensitivity changes
     
     def check_condition(self, **kwargs) -> bool:
         """
-        Checks if condition is met. To be implemented by subclasses.
+        Checks if the condition for triggering is met.
         
-        Biological analogy: Stimulus detection in sensory receptors.
-        Justification: Like how different sensory receptors detect specific
-        types of stimuli (light, sound, pressure), different trigger
-        subclasses detect specific conditions.
+        Biological analogy: Sensory transduction.
+        Justification: Like how sensory neurons convert specific environmental
+        stimuli into neural signals, this method converts specific computational
+        conditions into boolean signals.
         """
-        raise NotImplementedError("Subclasses must implement check_condition()")
+        # Base implementation always returns False
+        # Subclasses should override this
+        return False
     
     async def monitor(self, **kwargs):
         """
@@ -53,8 +57,8 @@ class TriggerBase:
         return None
         
     def get_config(self, class_dir: str = None) -> dict:
-        """Delegate to config manager."""
-        return self.config_manager.get_config(class_dir)
+        """Get configuration for this class."""
+        return self.config_manager.get_config(self.__class__.__name__)
     
     def update_config(self, updates: dict, adaptability_threshold: float = 0.3) -> bool:
         """Delegate to config manager."""

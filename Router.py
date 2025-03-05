@@ -21,7 +21,7 @@ class Router(IRunnable):
     """
     def __init__(self, executor: ExecutorBase, input_source: LinkBase, 
                  output_sinks: List[LinkBase], **kwargs):
-        self.runner = Runner(executor)
+        self.runner = Runner(executor, **kwargs)
         self.input_source = input_source
         self.output_sinks = output_sinks
         self.fanout_reliability = 0.9  # Reliability decreases with more outputs

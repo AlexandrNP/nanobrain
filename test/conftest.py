@@ -23,3 +23,8 @@ def test_config_path():
 def temp_workspace(tmp_path):
     """Fixture providing a temporary workspace for file operations."""
     return tmp_path 
+
+@pytest.fixture
+def config_dir():
+    """Return path to test config directory."""
+    return os.path.join(os.path.dirname(__file__), 'test_default_configs') 

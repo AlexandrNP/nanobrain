@@ -10,6 +10,7 @@ class ComponentState(Enum):
     ENHANCED = "ENHANCED"       # Enhanced sensitivity/performance
     DEGRADED = "DEGRADED"       # Reduced sensitivity/performance
     CONFIGURING = "CONFIGURING" # Component is being reconfigured
+    ERROR = "ERROR"             # Component encountered an error during execution
 
 
 

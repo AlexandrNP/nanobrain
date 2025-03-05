@@ -1,0 +1,70 @@
+defaults:
+  file_path: null
+  buffer_capacity: 10
+  persistence_level: 0.5
+  decay_rate: 0.05
+  auto_flush: false
+  flush_interval: 300.0
+
+metadata:
+  description: |
+    Implementation of data storage that uses files, providing persistent
+    storage with caching capabilities for efficient access.
+
+  objective: |
+    To provide persistent data storage with a balance between durability
+    and access speed through intelligent caching mechanisms.
+
+  biological_analogy: |
+    Functions like external memory storage (similar to writing), allowing
+    information to persist beyond the limitations of internal memory.
+
+validation:
+  required_fields:
+    - file_path
+  constraints:
+    file_path:
+      type: str
+    buffer_capacity:
+      type: int
+      min: 1
+    persistence_level:
+      type: float
+      min: 0.0
+      max: 1.0
+    decay_rate:
+      type: float
+      min: 0.0
+      max: 1.0
+    auto_flush:
+      type: bool
+    flush_interval:
+      type: float
+      min: 0.0
+
+examples:
+  - name: "Basic Usage"
+    code: |
+      file_unit = ConfigLoader.create("DataUnitFile",
+                                   file_path="data/storage.txt",
+                                   buffer_capacity=10)
+      file_unit.set("persistent data")
+      data = file_unit.get()
+
+  - name: "With Caching"
+    code: |
+      file_unit = ConfigLoader.create("DataUnitFile",
+                                   file_path="data/cache.txt",
+                                   buffer_capacity=100,
+                                   auto_flush=True,
+                                   flush_interval=60.0)
+      file_unit.set("cached data")
+
+  - name: "Persistence Control"
+    code: |
+      file_unit = ConfigLoader.create("DataUnitFile",
+                                   file_path="data/important.txt",
+                                   persistence_level=0.9,
+                                   decay_rate=0.01)
+      file_unit.set("critical data")
+      file_unit.consolidate() 

@@ -1,7 +1,9 @@
-
 import asyncio
 from typing import List, Any
-from enums import ExecutorBase, DeadlockDetector, SystemModulator
+from enums import ComponentState
+from ExecutorBase import ExecutorBase
+from concurrency import DeadlockDetector
+from regulations import SystemModulator
 from Step import Step
 
 
@@ -16,13 +18,19 @@ class Workflow(Step):
     together to accomplish complex processing.
     """
     def __init__(self, executor: ExecutorBase, steps: List[Step] = None, **kwargs):
+        # Initialize the Step base class
         super().__init__(executor, **kwargs)
+        
+        # Workflow-specific attributes
         self.steps = steps or []
         self.deadlock_detector = DeadlockDetector()
         self.step_order = {}  # For hierarchical processing
         self.active_inhibition = {}  # Step ID -> inhibition level
         self.system_modulators = SystemModulator()
         self.network_efficiency = 0.5  # Overall network efficiency (0.0-1.0)
+        
+        # Organize steps into a hierarchy
+        self.organize_hierarchy()
     
     async def execute(self):
         """
@@ -80,6 +88,9 @@ class Workflow(Step):
         
         # Apply homeostatic regulation to system modulators
         self.system_modulators.apply_regulation()
+        
+        # Store the overall result
+        self.result = results
         
         return results
     
@@ -167,14 +178,14 @@ class Workflow(Step):
     
     async def process(self, inputs: List[Any]) -> Any:
         """
-        Process not directly implemented for Workflow.
-        Execution happens through the execute method.
+        Process inputs by executing the workflow.
         
         Biological analogy: Distributed processing in neural networks.
         Justification: Like how complex operations in the brain emerge from
         the interactions of many neurons rather than a single computation,
         workflow processing emerges from the interactions of many steps.
         """
+        # For workflows, we ignore the inputs and just execute the workflow
         return await self.execute()
     
     def organize_hierarchy(self):

@@ -1,5 +1,6 @@
 from typing import Any
 from DataUnitBase import DataUnitBase
+from ConfigManager import ConfigManager
 
 class DataUnitMemory:
     """
@@ -11,9 +12,15 @@ class DataUnitMemory:
     memory with rapid access but limited duration.
     """
     def __init__(self, **kwargs):
+        self.config_manager = ConfigManager(**kwargs)
+        config = self.config_manager.get_config("default_configs")
+        
+        # Initialize base unit with config
         self.base_unit = DataUnitBase(**kwargs)
-        self.base_unit.decay_rate = 0.05  # Faster decay in memory
-        self.base_unit.persistence_level = 0.3  # Lower persistence by default
+        
+        # Set memory-specific parameters from config or defaults
+        self.base_unit.decay_rate = config.get('decay_rate', 0.05)  # Faster decay in memory
+        self.base_unit.persistence_level = config.get('persistence_level', 0.3)  # Lower persistence by default
         
     def get(self) -> Any:
         """

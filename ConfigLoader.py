@@ -1,5 +1,7 @@
 from WorkingMemory import WorkingMemory
 from typing import Dict
+from ConfigManager import ConfigManager
+from DirectoryTracer import DirectoryTracer
 import os
 import yaml
 import asyncio
@@ -15,8 +17,14 @@ class ConfigLoader:
     information, the config loader builds system structures from configuration files.
     """
     def __init__(self):
-        self.working_memory = WorkingMemory(capacity=20)  # Cache for loaded configurations
-        self.learning_rate = 0.1  # How quickly we adapt to new configs
+        self.directory_tracer = DirectoryTracer(self.__class__.__module__)
+        self.config_manager = ConfigManager(base_path=self.directory_tracer.get_absolute_path())
+        config = self.config_manager.get_config(self.__class__.__name__)
+        
+        # Initialize with config values or defaults
+        memory_capacity = config.get('memory_capacity', 20)
+        self.working_memory = WorkingMemory(capacity=memory_capacity)
+        self.learning_rate = config.get('learning_rate', 0.1)
         self.concept_network = {}  # Graph of related concepts
     
     @staticmethod
@@ -65,32 +73,25 @@ class ConfigLoader:
         """
         Constructs objects from configuration.
         
-        Biological analogy: Building neural representations from concepts.
-        Justification: Like how the brain constructs neural representations
-        from perceived concepts, the config loader builds object structures
-        from configuration descriptions.
+        Biological analogy: Building neural representations from sensory input.
+        Justification: Like how the brain constructs internal representations
+        from sensory information, the config loader constructs object structures
+        from configuration data.
         """
-        constructed = {}
+        # Analyze dependencies to determine construction order
+        dependency_levels = self._analyze_dependencies(config)
         
-        # Process objects based on dependencies
-        dependencies = self._analyze_dependencies(config)
+        # Sort items by dependency level
+        sorted_items = sorted(dependency_levels.items(), key=lambda x: x[1])
         
-        # Process in dependency order with parallel construction where possible
-        for level in sorted(set(dependencies.values())):
-            level_items = {k: v for k, v in dependencies.items() if v == level}
-            
-            # Items at same level can be constructed in parallel
-            tasks = []
-            for key in level_items:
-                if key in config:
-                    task = asyncio.create_task(self._construct_single_object(key, config[key], base_path))
-                    tasks.append((key, task))
-            
-            # Wait for all tasks
-            for key, task in tasks:
-                constructed[key] = await task
-        
-        return constructed
+        # Construct objects in order
+        constructed_objects = {}
+        for name, _ in sorted_items:
+            if name in config:
+                constructed_objects[name] = await self._construct_single_object(
+                    name, config[name], base_path)
+                
+        return constructed_objects
     
     async def _construct_single_object(self, name: str, config: Dict, base_path: str):
         """
@@ -120,48 +121,44 @@ class ConfigLoader:
     
     def _analyze_dependencies(self, config: Dict) -> Dict[str, int]:
         """
-        Analyze dependencies between objects.
+        Analyzes dependencies between configuration items.
         
         Biological analogy: Understanding relationships between concepts.
         Justification: Like how the brain analyzes relationships between
-        concepts to understand their hierarchical organization, the config
-        loader analyzes relationships between objects to understand their
-        dependency structure.
+        concepts to understand hierarchical knowledge, the config loader
+        analyzes relationships between configuration items to understand
+        construction order.
         """
-        # Extract dependency information
-        direct_dependencies = {}
-        for name, obj_config in config.items():
-            deps = []
-            
-            # Look for references to other objects
-            for key, value in obj_config.items():
-                if isinstance(value, str) and value in config:
-                    deps.append(value)
-                elif key.endswith('_ref') and value in config:
-                    deps.append(value)
-            
-            direct_dependencies[name] = deps
+        # Initialize all items at level 0
+        levels = {name: 0 for name in config.keys()}
         
-        # Assign dependency levels
-        dependency_levels = {}
+        # Track visited items to detect cycles
+        visited = set()
         
-        def assign_level(item, level=0):
-            if item in dependency_levels:
-                dependency_levels[item] = max(dependency_levels[item], level)
-            else:
-                dependency_levels[item] = level
+        # Process each item
+        for name in config:
+            if name not in visited:
+                assign_level(name)
                 
-            # Process items that depend on this item
-            for dep_name, dep_list in direct_dependencies.items():
-                if item in dep_list:
-                    assign_level(dep_name, level + 1)
-        
-        # Start with items that have no dependencies
-        for name, deps in direct_dependencies.items():
-            if not deps:
-                assign_level(name, 0)
-        
-        return dependency_levels
+        # Helper function to recursively assign levels
+        def assign_level(item, level=0):
+            # Mark as visited
+            visited.add(item)
+            
+            # Get dependencies
+            dependencies = []
+            if item in config and isinstance(config[item], dict):
+                dependencies = config[item].get('dependencies', [])
+                
+            # Process dependencies
+            for dep in dependencies:
+                if dep not in visited:
+                    assign_level(dep, level + 1)
+                    
+            # Set level to max of current and required
+            levels[item] = max(levels.get(item, 0), level)
+            
+        return levels
     
     def _update_concept_network(self, config_path: str, config: Dict):
         """

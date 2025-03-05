@@ -1,6 +1,10 @@
 from typing import Any
-from enums import ExecutorBase, ComponentState, ActivationGate
+from enums import ComponentState
+from ExecutorBase import ExecutorBase
+from activation import ActivationGate
 from interfaces import IRunnable
+from DirectoryTracer import DirectoryTracer
+from ConfigManager import ConfigManager
 import asyncio
 import time
 
@@ -13,15 +17,23 @@ class Runner(IRunnable):
     Justification: Like how neurons can be activated to process and transmit
     signals, runnable components can be executed to process and transmit data.
     """
-    def __init__(self, executor: ExecutorBase):
+    def __init__(self, executor: ExecutorBase, **kwargs):
         self.executor = executor
+        self.directory_tracer = DirectoryTracer(self.__class__.__module__)
+        self.config_manager = ConfigManager(base_path=self.directory_tracer.get_absolute_path(), **kwargs)
+        
+        # Load configuration
+        config = self.config_manager.get_config(self.__class__.__name__)
+        
         self._running = False
         self.activation_gate = ActivationGate()  # Neural membrane analog
-        self.input_channels = []  # Input connections
-        self.output_channels = []  # Output connections
+        self.input_channels = config.get('input_channels', [])  # Input connections
+        self.output_channels = config.get('output_channels', [])  # Output connections
         self._state = ComponentState.INACTIVE
         self.activation_history = []  # Record of activations for plasticity
-        self._adaptability = 0.5  # Default adaptability
+        self._adaptability = config.get('adaptability', 0.5)  # Default adaptability
+        self.activation_threshold = config.get('activation_threshold', 1.0)
+        self.recovery_period = config.get('recovery_period', 1.0)
     
     def check_runnable_config(self) -> bool:
         """
@@ -48,7 +60,7 @@ class Runner(IRunnable):
             return None
         
         # Check activation threshold
-        if not self.activation_gate.receive_signal(1.0):  # Input signal
+        if not self.activation_gate.receive_signal(self.activation_threshold):  # Input signal
             # Below threshold - no activation
             return None
         
@@ -87,7 +99,7 @@ class Runner(IRunnable):
         during which they cannot be activated again, runnables have a recovery
         period after execution.
         """
-        await asyncio.sleep(1.0)  # Recovery period duration
+        await asyncio.sleep(self.recovery_period)  # Recovery period duration
         self.state = ComponentState.INACTIVE
         
         # Recover resources in output channels
@@ -95,12 +107,15 @@ class Runner(IRunnable):
             channel.recover()
             
     def get_config(self, class_dir: str = None) -> dict:
-        """Get configuration from the executor."""
-        return self.executor.get_config(class_dir)
+        """Get configuration using ConfigManager."""
+        class_name = class_dir or self.__class__.__name__
+        return self.config_manager.get_config(class_name)
     
     def update_config(self, updates: dict, adaptability_threshold: float = 0.3) -> bool:
-        """Update configuration through the executor."""
-        return self.executor.update_config(updates, adaptability_threshold)
+        """Update configuration using ConfigManager."""
+        if self._adaptability >= adaptability_threshold:
+            return self.config_manager.update_config(self.__class__.__name__, updates)
+        return False
         
     @property
     def adaptability(self) -> float:

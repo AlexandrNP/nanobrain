@@ -1,6 +1,7 @@
 import time
 from typing import Any
-from DataUnitBase import DataUnitBase
+# Remove the circular import
+# from DataUnitBase import DataUnitBase
 from enums import ComponentState
 
 class ConnectionStrength:
@@ -8,10 +9,9 @@ class ConnectionStrength:
     Models the strength of connections between components.
     
     Biological analogy: Synaptic weights in neural networks.
-    Justification: Like neural synapses that strengthen or weaken based on usage,
-    connections between components should adaptively change in strength based on
-    successful interactions, allowing the system to optimize data flow paths
-    through experience.
+    Justification: Like how synaptic weights determine the strength of
+    connections between neurons, this class models the strength of
+    connections between components.
     """
     def __init__(self, initial_strength: float = 0.5, min_strength: float = 0.0, max_strength: float = 1.0):
         self.strength = initial_strength
@@ -177,64 +177,4 @@ class SystemModulator:
         for name, regulator in self.regulators.items():
             correction = regulator.regulate(self.modulators[name])
             self.modulators[name] = max(0.0, min(1.0, self.modulators[name] + correction))
-
-
-class ActivationGate:
-    """
-    Controls activation threshold and signal propagation.
-    
-    Biological analogy: Neural membrane with threshold potential.
-    Justification: Like how a neuron's membrane determines when it fires based on
-    incoming signals, this class determines when components activate based on inputs.
-    """
-    def __init__(self, threshold: float = 0.7, resting_level: float = 0.0, 
-                 recovery_period: float = 1.0):
-        self.level = resting_level
-        self.threshold = threshold
-        self.resting_level = resting_level
-        self.recovery_period = recovery_period
-        self.last_activation_time = 0
-        self.state = ComponentState.INACTIVE
-    
-    def receive_signal(self, signal_strength: float) -> bool:
-        """
-        Receives an input signal and updates activation level.
-        Returns True if threshold is crossed, False otherwise.
-        
-        Biological analogy: Integration of synaptic potentials at the neural membrane.
-        Justification: Like how a neuron integrates incoming signals and fires when a
-        threshold is reached, components should activate only when input signals are strong enough.
-        """
-        current_time = time.time()
-        
-        # Check if in recovery period
-        if current_time - self.last_activation_time < self.recovery_period:
-            self.state = ComponentState.RECOVERING
-            return False
-            
-        # Update level
-        self.level += signal_strength
-        
-        # Check for activation
-        if self.level >= self.threshold:
-            self.last_activation_time = current_time
-            self.level = self.resting_level
-            self.state = ComponentState.ACTIVE
-            return True
-        
-        self.state = ComponentState.INACTIVE
-        return False
-    
-    def decay(self, amount: float = 0.1):
-        """
-        Gradually return to resting level over time.
-        
-        Biological analogy: Leaky integrate-and-fire neuron model.
-        Justification: Neural membranes naturally leak current, causing the membrane
-        potential to return to its resting state in the absence of stimulation.
-        """
-        if self.level > self.resting_level:
-            self.level = max(self.resting_level, self.level - amount)
-        elif self.level < self.resting_level:
-            self.level = min(self.resting_level, self.level + amount)
 
