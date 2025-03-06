@@ -9,13 +9,17 @@ from unittest.mock import MagicMock, patch, AsyncMock
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from Workflow import Workflow
-from Step import Step
-from ExecutorBase import ExecutorBase
-from LinkBase import LinkBase
-from DataUnitBase import DataUnitBase
-from enums import ComponentState
-from regulations import SystemModulator
+# Add src directory to Python path
+src_path = project_root / 'src'
+sys.path.insert(0, str(src_path))
+
+from src.Workflow import Workflow
+from src.Step import Step
+from src.ExecutorBase import ExecutorBase
+from src.LinkBase import LinkBase
+from src.DataUnitBase import DataUnitBase
+from src.enums import ComponentState
+from src.regulations import SystemModulator
 
 
 class TestWorkflow(unittest.TestCase):
@@ -42,7 +46,7 @@ class TestWorkflow(unittest.TestCase):
         self.step2.adaptability = 0.5
         
         # Create workflow instance with patched SystemModulator
-        with patch('Workflow.SystemModulator') as mock_system_modulator:
+        with patch('src.Workflow.SystemModulator') as mock_system_modulator:
             self.mock_modulator_instance = MagicMock(spec=SystemModulator)
             self.mock_modulator_instance.get_modulator.return_value = 0.5
             mock_system_modulator.return_value = self.mock_modulator_instance

@@ -142,13 +142,12 @@ class NanoBrainBuilder:
             executor=self.executor,
             # Use a default OpenAI model for the agent
             model_name="gpt-4",
-            # Specify model parameters
-            parameters={
-                "temperature": 0.2
-            },
-            # Set memories
-            memories={
-                "workflow_context": {}
+            # Set memory window size
+            memory_window_size=5,
+            # Set prompt variables
+            prompt_variables={
+                "role_description": "assist with building NanoBrain workflows",
+                "specific_instructions": "Focus on creating well-structured workflows and steps"
             }
         )
         

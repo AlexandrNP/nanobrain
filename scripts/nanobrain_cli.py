@@ -68,55 +68,39 @@ def build_workflow(args):
             if args.verbose:
                 print("Could not import setup_paths module.")
         
-        # Import the builder
-        from builder.NanoBrainBuilder import NanoBrainBuilder
+        # Instead of trying to import the builder directly, use the run_builder.py script
+        builder_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "run_builder.py")
+        print(f"Builder script path: {builder_script}")
+        print(f"Builder script exists: {os.path.exists(builder_script)}")
         
-        # Check if we should load an existing session
-        if args.load_session:
-            try:
-                with open(args.load_session, 'rb') as f:
-                    builder = pickle.load(f)
-                print(f"Loaded session from {args.load_session}")
-            except Exception as e:
-                print(f"Error loading session: {e}")
-                print("Starting a new session instead.")
-                builder = NanoBrainBuilder()
+        if not os.path.exists(builder_script):
+            print(f"Error: Builder script not found at {builder_script}")
+            sys.exit(1)
+            
+        # Construct the command to run the builder script
+        cmd = [sys.executable, builder_script]
+        
+        # If no command is provided, show the help for the run_builder.py script
+        if not args.subcommand:
+            cmd.append("--help")
         else:
-            # Create a new builder
-            builder = NanoBrainBuilder()
+            # Add the appropriate subcommand based on the user's request
+            cmd.append(args.subcommand)
+            
+            # Add any additional arguments
+            if args.args:
+                cmd.extend(args.args)
+            
+        # Run the builder script
+        print(f"Running builder command: {' '.join(cmd)}")
+        result = subprocess.run(cmd, check=False)
         
-        # Start the builder
-        if args.headless:
-            # Run in non-interactive mode
-            print("Running in non-interactive mode...")
-            # TODO: Implement non-interactive mode
-        else:
-            # Run in interactive mode
-            import asyncio
-            asyncio.run(builder.main())
-        
-        # Save the session if requested
-        if args.save_session:
-            try:
-                with open(args.save_session, 'wb') as f:
-                    pickle.dump(builder, f)
-                print(f"Session saved to {args.save_session}")
-            except Exception as e:
-                print(f"Error saving session: {e}")
-    except ImportError as e:
-        print(f"Import error: {e}")
-        print("The builder module could not be found. Make sure it's installed and in your Python path.")
-        print(f"Current Python path includes: {sys.path}")
-        
-        # Try to help diagnose the issue
-        builder_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "builder")
-        print(f"Builder directory exists: {os.path.exists(builder_dir)}")
-        init_file = os.path.join(builder_dir, "__init__.py")
-        print(f"Builder __init__.py exists: {os.path.exists(init_file)}")
-        builder_file = os.path.join(builder_dir, "NanoBrainBuilder.py")
-        print(f"NanoBrainBuilder.py exists: {os.path.exists(builder_file)}")
-        
-        sys.exit(1)
+        if result.returncode != 0:
+            print(f"Builder command failed with exit code {result.returncode}")
+            print("Available commands:")
+            subprocess.run([sys.executable, builder_script, "--help"])
+            sys.exit(result.returncode)
+            
     except Exception as e:
         print(f"Error starting builder: {e}")
         import traceback
@@ -244,6 +228,8 @@ def main():
     
     # Build command
     build_parser = subparsers.add_parser('builder', help='Start the interactive workflow builder')
+    build_parser.add_argument('subcommand', nargs='?', help='Builder command (e.g., create-workflow, create-step)')
+    build_parser.add_argument('args', nargs='*', help='Additional arguments for the builder command')
     build_parser.add_argument('--headless', action='store_true', help='Run in non-interactive mode')
     build_parser.add_argument('--load-session', type=str, help='Load a saved builder session')
     build_parser.add_argument('--save-session', type=str, help='Save the builder session to a file')
@@ -283,6 +269,17 @@ def main():
     # If no command is specified, show help
     if not args.command:
         show_help(args)
+        return
+    
+    # If the command is 'builder' and no subcommand is specified, show the builder help
+    if args.command == 'builder' and not hasattr(args, 'subcommand') or (hasattr(args, 'subcommand') and args.subcommand is None):
+        # Run the builder script with --help
+        builder_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "run_builder.py")
+        if os.path.exists(builder_script):
+            print("Available builder commands:")
+            subprocess.run([sys.executable, builder_script, "--help"])
+        else:
+            print(f"Error: Builder script not found at {builder_script}")
         return
     
     # Execute the selected command

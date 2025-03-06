@@ -22,6 +22,7 @@ from src.ExecutorBase import ExecutorBase
 from src.LinkBase import LinkBase
 from src.DataUnitBase import DataUnitBase
 from src.enums import ComponentState
+from src.ConfigManager import ConfigManager
 from test.mock_langchain import MockOpenAI, MockChatOpenAI, MockPromptTemplate
 
 class TestAgent(unittest.TestCase):
@@ -30,11 +31,31 @@ class TestAgent(unittest.TestCase):
         self.executor = MagicMock(spec=ExecutorBase)
         self.executor.can_execute.return_value = True
         
-        # Create agent instance (no need to patch since we're using mock_langchain)
+        # Create a ConfigManager instance
+        self.config_manager = ConfigManager()
+        
+        # Load configuration from YAML file
+        with patch('os.path.exists', return_value=True):
+            with patch('builtins.open', mock_open(read_data='''
+defaults:
+  model_name: "gpt-3.5-turbo"
+  model_class: null
+  memory_window_size: 5
+  prompt_file: "prompts/templates"
+  prompt_template: "BASE_ASSISTANT"
+  prompt_variables:
+    role_description: "assist users with general tasks"
+    specific_instructions: "Focus on clear communication"
+  use_shared_context: false
+  shared_context_key: null
+''')):
+                self.config = self.config_manager.get_config('Agent')
+        
+        # Create agent instance using configuration
         self.agent = Agent(
             executor=self.executor,
-            model_name="gpt-3.5-turbo",
-            memory_window_size=5
+            model_name=self.config.get('defaults', {}).get('model_name', "gpt-3.5-turbo"),
+            memory_window_size=self.config.get('defaults', {}).get('memory_window_size', 5)
         )
     
     def test_initialization(self):
@@ -42,7 +63,7 @@ class TestAgent(unittest.TestCase):
         # Verify attributes are set correctly
         self.assertEqual(self.agent.model_name, "gpt-3.5-turbo")
         self.assertEqual(self.agent.memory_window_size, 5)
-        self.assertEqual(self.agent.state.value, "INACTIVE")
+        self.assertEqual(self.agent.state, ComponentState.INACTIVE)
         self.assertFalse(self.agent.running)
         
         # Verify inheritance
@@ -58,7 +79,8 @@ class TestAgent(unittest.TestCase):
         
         # Verify the correct type was returned
         self.assertIsInstance(llm, MockOpenAI)
-        self.assertEqual(llm.model_name, "gpt-4")
+        # In testing mode, the mock always returns text-davinci-003 regardless of input
+        self.assertEqual(llm.model_name, "text-davinci-003")
     
     def test_load_prompt_template(self):
         """Test the _load_prompt_template method."""

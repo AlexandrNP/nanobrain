@@ -9,12 +9,16 @@ from unittest.mock import MagicMock, patch
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from Step import Step
-from ExecutorBase import ExecutorBase
-from LinkBase import LinkBase
-from DataUnitBase import DataUnitBase
-from enums import ComponentState
-from concurrency import CircuitBreaker
+# Add src directory to Python path
+src_path = project_root / 'src'
+sys.path.insert(0, str(src_path))
+
+from src.Step import Step
+from src.ExecutorBase import ExecutorBase
+from src.LinkBase import LinkBase
+from src.DataUnitBase import DataUnitBase
+from src.enums import ComponentState
+from src.concurrency import CircuitBreaker
 
 
 class TestStep(unittest.TestCase):
@@ -40,7 +44,7 @@ class TestStep(unittest.TestCase):
         self.mock_circuit_breaker.can_execute.return_value = True
         
         # Create step instance with patched CircuitBreaker
-        with patch('Step.CircuitBreaker', return_value=self.mock_circuit_breaker):
+        with patch('src.Step.CircuitBreaker', return_value=self.mock_circuit_breaker):
             self.step = Step(
                 executor=self.executor,
                 input_sources=[self.input_link],
