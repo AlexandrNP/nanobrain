@@ -1,7 +1,7 @@
 import os
 import yaml
 from typing import Dict
-from interfaces import IConfigurable
+from src.interfaces import IConfigurable
 
 
 class ConfigManager(IConfigurable):

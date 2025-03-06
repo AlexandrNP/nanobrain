@@ -108,7 +108,7 @@ def manage_config(args):
     print("Configuration management completed!")
 
 
-def show_help(args):
+def show_help(args, parser):
     """Show help information."""
     parser.print_help()
 
@@ -155,7 +155,7 @@ def main():
     
     # Help command
     help_parser = subparsers.add_parser("help", help="Show help information")
-    help_parser.set_defaults(func=show_help)
+    help_parser.set_defaults(func=lambda args: show_help(args, parser))
     
     # Parse arguments
     args = parser.parse_args()

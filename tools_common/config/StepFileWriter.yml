@@ -1,0 +1,45 @@
+defaults:
+  backup_enabled: true  # Whether to create backups by default
+  backup_extension: ".bak"  # Extension to use for backup files
+  create_directories: true  # Whether to create parent directories if they don't exist
+
+metadata:
+  description: "Tool for creating or modifying files with provided content"
+  biological_analogy: "Fine motor control for writing"
+  justification: >
+    Like how fine motor control allows for precise writing movements,
+    this tool allows for precise file writing operations.
+  objectives:
+    - Create new files with specified content
+    - Modify existing files with new content
+    - Create backups of modified files
+    - Create specialized files like Python modules and YAML configurations
+
+validation:
+  required:
+    - executor  # ExecutorBase instance required
+  optional:
+    - backup_enabled
+    - backup_extension
+    - create_directories
+  constraints:
+    backup_enabled:
+      type: bool
+    backup_extension:
+      type: str
+    create_directories:
+      type: bool
+
+examples:
+  basic:
+    description: "Basic file writer with default settings"
+    config:
+      backup_enabled: true
+      backup_extension: ".bak"
+      create_directories: true
+
+  no_backups:
+    description: "File writer without backup functionality"
+    config:
+      backup_enabled: false
+      create_directories: true 

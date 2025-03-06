@@ -1,0 +1,63 @@
+defaults:
+  model_name: "gpt-3.5-turbo"  # Default LLM model
+  model_class: null  # Use default ChatOpenAI implementation
+  memory_window_size: 10  # Number of recent conversations to keep in context
+  prompt_template: "You are an AI assistant focused on creating and managing NanoBrain workflow structures. Your task is to help the user build workflows, steps, and links according to their requirements. You have access to various tools to help with this process."
+  use_shared_context: true  # Use shared context between agents
+  shared_context_key: "workflow_builder"  # Key for shared context group
+  tools_config_path: "builder/config/tools.yml"  # Path to tools configuration
+
+metadata:
+  description: "AI assistant for creating and managing NanoBrain workflow structures"
+  biological_analogy: "Prefrontal cortex with planning capabilities"
+  justification: >
+    Like how the prefrontal cortex plans and organizes complex behaviors,
+    this agent plans and organizes the creation of workflows.
+  objectives:
+    - Create and manage NanoBrain workflow structures
+    - Assist users in building steps, workflows, and links
+    - Provide guidance on best practices for NanoBrain development
+    - Maintain context awareness of the current workflow state
+
+validation:
+  required:
+    - executor  # ExecutorBase instance required
+    - input_storage  # DataStorageBase instance required
+  optional:
+    - model_name
+    - model_class
+    - memory_window_size
+    - prompt_template
+    - use_shared_context
+    - shared_context_key
+    - tools_config_path
+  constraints:
+    memory_window_size:
+      min: 5
+      max: 50
+      type: int
+    use_shared_context:
+      type: bool
+    shared_context_key:
+      type: str
+      nullable: true
+    tools_config_path:
+      type: str
+
+examples:
+  basic:
+    description: "Basic workflow builder with default settings"
+    config:
+      model_name: "gpt-3.5-turbo"
+      memory_window_size: 10
+      use_shared_context: true
+      shared_context_key: "workflow_builder"
+
+  advanced:
+    description: "Advanced workflow builder with GPT-4"
+    config:
+      model_name: "gpt-4"
+      memory_window_size: 20
+      use_shared_context: true
+      shared_context_key: "workflow_builder"
+      prompt_template: "You are an expert AI assistant specialized in creating and managing NanoBrain workflow structures. Your task is to help the user build sophisticated workflows, steps, and links according to their requirements. You have access to various tools to help with this process." 

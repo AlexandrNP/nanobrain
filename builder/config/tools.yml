@@ -1,0 +1,36 @@
+tools:
+  - name: GitInitTool
+    class: tools_common.StepGitInit.StepGitInit
+    description: Initializes a git repository with a given name in the specified folder.
+    
+  - name: GitExcludeTool
+    class: tools_common.StepGitExclude.StepGitExclude
+    description: Excludes directory and all files in it from the current git repository.
+    
+  - name: DependencySearchTool
+    class: tools_common.StepDependencySearch.StepDependencySearch
+    description: Searches for dependencies in Python files and saves them to requirements.txt.
+    
+  - name: PlannerTool
+    class: tools_common.StepPlanner.StepPlanner
+    description: Plans the implementation of a new step or workflow.
+    
+  - name: FileWriterTool
+    class: tools_common.StepFileWriter.StepFileWriter
+    description: Creates or modifies a file with the provided content.
+    
+  - name: CoderTool
+    class: tools_common.StepCoder.StepCoder
+    description: Generates software code based on requirements.
+    
+  - name: ContextSearchTool
+    class: tools_common.StepContextSearch.StepContextSearch
+    description: Searches the surrounding context for relevant information.
+    
+  - name: WebSearchTool
+    class: tools_common.StepWebSearch.StepWebSearch
+    description: Searches the web for information about APIs and best practices.
+    
+  - name: ContextArchiverTool
+    class: tools_common.StepContextArchiver.StepContextArchiver
+    description: Archives and summarizes old messages. 

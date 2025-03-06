@@ -1,0 +1,58 @@
+defaults:
+  model_name: "gpt-4"  # Prefer GPT-4 for planning
+  model_class: null  # Default model class
+  temperature: 0.3  # Balanced for creativity and focus
+  detail_level: "high"  # Level of detail in planning
+
+metadata:
+  description: "Tool for planning the implementation of a new step or workflow"
+  biological_analogy: "Prefrontal planning networks"
+  justification: >
+    Like how prefrontal networks plan complex actions by breaking them down into steps,
+    this tool plans implementations by breaking them down into manageable components.
+  objectives:
+    - Create detailed implementation plans for new steps and workflows
+    - Analyze requirements to identify components and relationships
+    - Identify potential challenges and mitigation strategies
+    - Develop testing approaches for implementations
+
+validation:
+  required:
+    - executor  # ExecutorBase instance required
+  optional:
+    - model_name
+    - model_class
+    - temperature
+    - detail_level
+  constraints:
+    model_name:
+      type: str
+    temperature:
+      min: 0.0
+      max: 1.0
+      type: float
+    detail_level:
+      enum: ["low", "medium", "high"]
+      type: str
+
+examples:
+  basic:
+    description: "Basic planner with high detail"
+    config:
+      model_name: "gpt-4"
+      temperature: 0.3
+      detail_level: "high"
+
+  overview:
+    description: "Low-detail overview planner"
+    config:
+      model_name: "gpt-3.5-turbo"
+      temperature: 0.4
+      detail_level: "low"
+
+  balanced:
+    description: "Balanced medium-detail planner"
+    config:
+      model_name: "gpt-4"
+      temperature: 0.5
+      detail_level: "medium" 

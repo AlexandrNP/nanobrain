@@ -1,0 +1,64 @@
+defaults:
+  search_engine: "duckduckgo"  # Default search engine
+  num_results: 5  # Number of results to return
+  timeout: 10  # Timeout in seconds
+  api_key: null  # API key for search engines that require it
+
+metadata:
+  description: "Tool for searching the web for information about APIs and best practices"
+  biological_analogy: "External information gathering"
+  justification: >
+    Like how humans seek external information to supplement their knowledge,
+    this tool searches the web for additional information.
+  objectives:
+    - Search for information about APIs and best practices
+    - Support multiple search engines (DuckDuckGo, Google, Bing)
+    - Extract relevant snippets from search results
+    - Provide convenience methods for common search types
+
+validation:
+  required:
+    - executor  # ExecutorBase instance required
+  optional:
+    - search_engine
+    - num_results
+    - timeout
+    - api_key
+  constraints:
+    search_engine:
+      enum: ["duckduckgo", "google", "bing"]
+      type: str
+    num_results:
+      min: 1
+      max: 20
+      type: int
+    timeout:
+      min: 1
+      max: 60
+      type: int
+    api_key:
+      type: str
+      nullable: true
+
+examples:
+  basic:
+    description: "Basic web search with DuckDuckGo"
+    config:
+      search_engine: "duckduckgo"
+      num_results: 5
+      timeout: 10
+
+  google_search:
+    description: "Web search using Google Custom Search API"
+    config:
+      search_engine: "google"
+      num_results: 10
+      timeout: 15
+      api_key: "YOUR_GOOGLE_API_KEY"
+
+  quick_search:
+    description: "Quick web search with fewer results"
+    config:
+      search_engine: "duckduckgo"
+      num_results: 2
+      timeout: 5 

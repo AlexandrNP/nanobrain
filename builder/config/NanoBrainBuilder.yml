@@ -1,0 +1,47 @@
+defaults:
+  agent_config_path: "builder/config/AgentWorkflowBuilder.yml"  # Path to agent configuration
+  session_save_path: "nanobrain_session.pkl"  # Default path for saving sessions
+  auto_save: false  # Whether to automatically save sessions
+
+metadata:
+  description: "Workflow for building NanoBrain workflows interactively"
+  biological_analogy: "Meta-cognitive system"
+  justification: >
+    Like how meta-cognitive systems monitor and control cognitive processes,
+    this workflow monitors and controls the process of building other workflows.
+  objectives:
+    - Provide an interactive environment for building NanoBrain workflows
+    - Manage the creation of steps, workflows, and links
+    - Track active workflows and repositories
+    - Facilitate communication between the user and the AI assistant
+
+validation:
+  required:
+    - executor  # ExecutorBase instance required
+  optional:
+    - steps
+    - agent_config_path
+    - session_save_path
+    - auto_save
+  constraints:
+    agent_config_path:
+      type: str
+    session_save_path:
+      type: str
+    auto_save:
+      type: bool
+
+examples:
+  basic:
+    description: "Basic workflow builder with default settings"
+    config:
+      agent_config_path: "builder/config/AgentWorkflowBuilder.yml"
+      session_save_path: "nanobrain_session.pkl"
+      auto_save: false
+
+  auto_save:
+    description: "Workflow builder with auto-save enabled"
+    config:
+      agent_config_path: "builder/config/AgentWorkflowBuilder.yml"
+      session_save_path: "nanobrain_session.pkl"
+      auto_save: true 

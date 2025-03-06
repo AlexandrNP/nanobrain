@@ -1,7 +1,7 @@
 from typing import Any, Set
-from ConfigManager import ConfigManager
-from regulations import SystemModulator
-from DirectoryTracer import DirectoryTracer
+from src.ConfigManager import ConfigManager
+from src.regulations import SystemModulator
+from src.DirectoryTracer import DirectoryTracer
 
 
 class ExecutorBase:

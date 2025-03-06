@@ -1,0 +1,33 @@
+defaults:
+  default_branch: "main"  # Default branch name for new repositories
+
+metadata:
+  description: "Tool for initializing a git repository"
+  biological_analogy: "Motor cortex for tool manipulation"
+  justification: >
+    Like how the motor cortex controls precise tool use,
+    this step controls the precise initialization of git repositories.
+  objectives:
+    - Initialize a git repository in a specified directory
+    - Configure the repository with appropriate settings
+    - Create initial files like .gitignore and README.md
+
+validation:
+  required:
+    - executor  # ExecutorBase instance required
+  optional:
+    - default_branch
+  constraints:
+    default_branch:
+      type: str
+
+examples:
+  basic:
+    description: "Basic git initialization with default settings"
+    config:
+      default_branch: "main"
+
+  custom_branch:
+    description: "Git initialization with a custom default branch"
+    config:
+      default_branch: "master" 

@@ -1,0 +1,71 @@
+defaults:
+  top_results: 5  # Number of top results to return
+  min_similarity: 0.3  # Minimum similarity threshold
+  search_documentation: true  # Whether to search documentation
+  search_workflow: true  # Whether to search workflow context
+  search_chat_history: true  # Whether to search chat history
+
+metadata:
+  description: "Tool for searching the surrounding context for relevant information"
+  biological_analogy: "Associative memory retrieval"
+  justification: >
+    Like how associative memory retrieves related information based on cues,
+    this tool searches context for relevant information based on search terms.
+  objectives:
+    - Find relevant information across different context areas
+    - Extract snippets that match search queries
+    - Calculate relevance of information to queries
+    - Provide convenience methods for searching specific areas
+
+validation:
+  required:
+    - executor  # ExecutorBase instance required
+  optional:
+    - top_results
+    - min_similarity
+    - search_documentation
+    - search_workflow
+    - search_chat_history
+  constraints:
+    top_results:
+      min: 1
+      max: 20
+      type: int
+    min_similarity:
+      min: 0.0
+      max: 1.0
+      type: float
+    search_documentation:
+      type: bool
+    search_workflow:
+      type: bool
+    search_chat_history:
+      type: bool
+
+examples:
+  basic:
+    description: "Basic context search with default settings"
+    config:
+      top_results: 5
+      min_similarity: 0.3
+      search_documentation: true
+      search_workflow: true
+      search_chat_history: true
+
+  documentation_only:
+    description: "Search only documentation context"
+    config:
+      top_results: 10
+      min_similarity: 0.2
+      search_documentation: true
+      search_workflow: false
+      search_chat_history: false
+
+  strict_matching:
+    description: "Strict matching for more precise results"
+    config:
+      top_results: 3
+      min_similarity: 0.7
+      search_documentation: true
+      search_workflow: true
+      search_chat_history: true 

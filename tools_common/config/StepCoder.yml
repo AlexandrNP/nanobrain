@@ -1,0 +1,59 @@
+defaults:
+  model_name: "gpt-3.5-turbo"  # Default model to use
+  model_class: null  # Default model class
+  temperature: 0.2  # Lower temperature for more focused code generation
+  max_tokens: 4000  # Maximum tokens to generate
+
+metadata:
+  description: "Tool for generating software code based on requirements"
+  biological_analogy: "Language generation areas of the brain"
+  justification: >
+    Like how language areas generate coherent sentences based on concepts,
+    this tool generates coherent code based on requirements.
+  objectives:
+    - Generate clean, well-documented code from requirements
+    - Create specialized code structures like classes and functions
+    - Refactor existing code to improve quality or add features
+    - Help implement complex functionality with proper error handling
+
+validation:
+  required:
+    - executor  # ExecutorBase instance required
+  optional:
+    - model_name
+    - model_class
+    - temperature
+    - max_tokens
+  constraints:
+    model_name:
+      type: str
+    temperature:
+      min: 0.0
+      max: 1.0
+      type: float
+    max_tokens:
+      min: 100
+      max: 16000
+      type: int
+
+examples:
+  basic:
+    description: "Basic code generation with default settings"
+    config:
+      model_name: "gpt-3.5-turbo"
+      temperature: 0.2
+      max_tokens: 4000
+
+  creative:
+    description: "More creative code generation"
+    config:
+      model_name: "gpt-3.5-turbo"
+      temperature: 0.7
+      max_tokens: 4000
+
+  advanced:
+    description: "Advanced code generation with GPT-4"
+    config:
+      model_name: "gpt-4"
+      temperature: 0.2
+      max_tokens: 8000 

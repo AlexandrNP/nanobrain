@@ -1,6 +1,6 @@
 import time
 from typing import List
-from enums import ComponentState
+from src.enums import ComponentState
 
 
 class InhibitorySignal:

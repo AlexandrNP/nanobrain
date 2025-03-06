@@ -1,10 +1,10 @@
 import asyncio
 from typing import List, Any
-from enums import ComponentState
-from ExecutorBase import ExecutorBase
-from concurrency import DeadlockDetector
-from regulations import SystemModulator
-from Step import Step
+from src.enums import ComponentState
+from src.ExecutorBase import ExecutorBase
+from src.concurrency import DeadlockDetector
+from src.regulations import SystemModulator
+from src.Step import Step
 
 
 class Workflow(Step):
