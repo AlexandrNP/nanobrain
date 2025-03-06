@@ -1,7 +1,17 @@
 import os
+import sys
 import yaml
 from typing import Dict
-from src.interfaces import IConfigurable
+
+# Ensure the project root is in the path
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Now we can import from interfaces
+try:
+    from src.interfaces import IConfigurable
+except ImportError:
+    # Fall back to relative import
+    from .interfaces import IConfigurable
 
 
 class ConfigManager(IConfigurable):

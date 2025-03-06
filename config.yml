@@ -1,0 +1,20 @@
+api_keys:
+  anthropic: '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'
+  google: ''
+  huggingface: ''
+  mistral: ''
+  openai: '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'
+development:
+  debug: false
+  verbose: false
+framework:
+  enable_telemetry: false
+  log_level: INFO
+  temp_dir: .nanobrain_temp
+models:
+  default: gpt-4o
+  default_parameters:
+    max_tokens: 8000
+    temperature: 0.7
+    top_p: 1.0
+  use_mock_in_testing: true

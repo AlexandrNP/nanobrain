@@ -100,67 +100,76 @@ class Agent(Step):
     
     def _initialize_llm(self, model_name: str, model_class: Optional[str] = None) -> Union[BaseLLM, 'BaseChatModel']:
         """
-        Initialize the language model.
+        Initialize the language model based on the specified model name and class.
         
-        Biological analogy: Specialized neural circuit development.
-        Justification: Like how specialized neural circuits develop for specific
-        cognitive functions, the agent initializes a specific language model
-        for its cognitive processing.
+        Args:
+            model_name: Name of the model to use (e.g., "gpt-3.5-turbo", "claude-2")
+            model_class: Optional class name to use (e.g., "ChatOpenAI", "ChatAnthropic")
+            
+        Returns:
+            An instance of the language model
         """
-        # If in testing mode, use the mock implementation
+        # If we're in testing mode, use mock models
         if TESTING_MODE:
-            # Use the MockOpenAI that was imported at the top of the file
-            return MockOpenAI(model_name=model_name)
-            
-        if model_class:
-            # If model_class is an instance, use it directly
-            if not isinstance(model_class, str):
-                # Check if it's already an instance of BaseLLM or BaseChatModel
-                from langchain_core.language_models.chat_models import BaseChatModel
-                if isinstance(model_class, (BaseLLM, BaseChatModel)):
-                    return model_class
-                else:
-                    raise ValueError(f"Provided model_class must be a string path or an instance of BaseLLM or BaseChatModel, got {type(model_class)}")
-            
-            # Dynamic import of the specified model class
-            module_path, class_name = model_class.rsplit('.', 1)
-            module = importlib.import_module(module_path)
-            ModelClass = getattr(module, class_name)
-            
-            # Check if it's a chat model or a completion model
-            from langchain_core.language_models.chat_models import BaseChatModel
-            if issubclass(ModelClass, BaseChatModel):
-                return ModelClass(model_name=model_name)
-            elif issubclass(ModelClass, BaseLLM):
-                return ModelClass(model_name=model_name)
+            if model_class == "OpenAI" or (model_class is None and not model_name.startswith("claude")):
+                return MockOpenAI()
             else:
-                raise ValueError(f"Model class {model_class} must be a subclass of BaseLLM or BaseChatModel")
+                return MockChatOpenAI()
+        
+        # Try to get the global configuration
+        try:
+            from src.GlobalConfig import GlobalConfig
+            global_config = GlobalConfig()
+        except ImportError:
+            global_config = None
+        
+        # Determine the model provider based on the model name
+        if model_name.startswith("gpt"):
+            provider = "openai"
+            if model_class is None:
+                model_class = "ChatOpenAI"
+        elif model_name.startswith("claude"):
+            provider = "anthropic"
+            if model_class is None:
+                model_class = "ChatAnthropic"
+        elif model_name.startswith("gemini"):
+            provider = "google"
+            if model_class is None:
+                model_class = "ChatGoogleGenerativeAI"
+        elif model_name.startswith("mistral"):
+            provider = "mistral"
+            if model_class is None:
+                model_class = "ChatMistralAI"
         else:
-            # Determine provider based on model_name prefix
-            if model_name.startswith(("gpt-", "text-davinci")):
-                # OpenAI models
-                from langchain_community.chat_models import ChatOpenAI
-                return ChatOpenAI(model_name=model_name)
-            elif model_name.startswith(("claude-")):
-                # Anthropic models
-                from langchain_community.chat_models import ChatAnthropic
-                return ChatAnthropic(model_name=model_name)
-            elif model_name.startswith(("gemini-")):
-                # Google models
-                from langchain_community.chat_models import ChatGoogleGenerativeAI
-                return ChatGoogleGenerativeAI(model_name=model_name)
-            elif model_name.startswith(("llama-")):
-                # Meta/Llama models
-                from langchain_community.llms import LlamaCpp
-                return LlamaCpp(model_path=model_name)
-            elif model_name.startswith(("mistral-")):
-                # Mistral models
-                from langchain_community.chat_models import ChatMistralAI
-                return ChatMistralAI(model_name=model_name)
-            else:
-                # Default to OpenAI for unknown prefixes
-                from langchain_community.chat_models import ChatOpenAI
-                return ChatOpenAI(model_name=model_name)
+            provider = "openai"  # Default to OpenAI
+            if model_class is None:
+                model_class = "ChatOpenAI"
+        
+        # Get API key from global configuration if available
+        api_key = None
+        if global_config:
+            api_key = global_config.get_api_key(provider)
+        
+        # Handle different model classes
+        if model_class == "OpenAI":
+            from langchain.llms import OpenAI
+            return OpenAI(model_name=model_name, openai_api_key=api_key)
+        elif model_class == "ChatOpenAI":
+            from langchain.chat_models import ChatOpenAI
+            return ChatOpenAI(model_name=model_name, openai_api_key=api_key)
+        elif model_class == "ChatAnthropic":
+            from langchain.chat_models import ChatAnthropic
+            return ChatAnthropic(model_name=model_name, anthropic_api_key=api_key)
+        elif model_class == "ChatGoogleGenerativeAI":
+            from langchain.chat_models import ChatGoogleGenerativeAI
+            return ChatGoogleGenerativeAI(model=model_name, google_api_key=api_key)
+        elif model_class == "ChatMistralAI":
+            from langchain.chat_models import ChatMistralAI
+            return ChatMistralAI(model=model_name, mistral_api_key=api_key)
+        else:
+            # Default to ChatOpenAI
+            from langchain.chat_models import ChatOpenAI
+            return ChatOpenAI(model_name=model_name, openai_api_key=api_key)
     
     def _load_prompt_template(self, prompt_file: Optional[str], prompt_template: Optional[str]) -> PromptTemplate:
         """

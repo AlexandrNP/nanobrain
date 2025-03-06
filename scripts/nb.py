@@ -6,10 +6,10 @@ This script provides a command-line interface for the NanoBrain framework,
 allowing users to create, configure, and run NanoBrain components from the command line.
 
 Usage:
-    nb [command] [options]
+    nanobrain [command] [options]
 
 Commands:
-    build           Start the interactive workflow builder
+    builder         Start the interactive workflow builder
     build-docs      Build documentation from source code and configuration files
     create          Create a new NanoBrain component
     run             Run a NanoBrain workflow
@@ -24,148 +24,176 @@ import subprocess
 import pickle
 from pathlib import Path
 
-# Get the project root directory
-PROJECT_ROOT = Path(__file__).parent.parent.absolute()
+# Debug print
+print(f"Script path: {__file__}")
+print(f"Script directory: {os.path.dirname(os.path.abspath(__file__))}")
+print(f"Current working directory: {os.getcwd()}")
+print(f"Initial sys.path: {sys.path}")
 
+# Set up the Python import paths
+script_dir = os.path.dirname(os.path.abspath(__file__))
+# Add the script directory to path to find setup_paths module
+sys.path.insert(0, script_dir)
+
+try:
+    import setup_paths
+    print("Successfully imported setup_paths")
+except ImportError as e:
+    print(f"Warning: Could not import setup_paths module: {e}")
+    # Fall back to manually setting up paths
+    PROJECT_ROOT = script_dir
+    sys.path.insert(0, PROJECT_ROOT)
+    os.environ["PYTHONPATH"] = PROJECT_ROOT
+
+# Debug print
+print(f"Updated sys.path: {sys.path}")
+print(f"PYTHONPATH: {os.environ.get('PYTHONPATH', 'Not set')}")
+
+# Debug print for modules
+print("\nChecking loaded modules:")
+for name, module in sorted(sys.modules.items()):
+    if hasattr(module, '__file__') and module.__file__:
+        print(f"  {name}: {module.__file__}")
+    else:
+        print(f"  {name}: (built-in)")
+
+# Debug print for argparse
+def debug_main():
+    """Debug version of main to understand what's happening."""
+    print("Entering debug_main()")
+    parser = argparse.ArgumentParser(
+        description="NanoBrain Command Line Interface",
+        usage="nanobrain [command] [options]"
+    )
+    
+    # Add version information
+    parser.add_argument('--version', action='version', version='NanoBrain CLI v0.1.0')
+    
+    # Create subparsers for each command
+    subparsers = parser.add_subparsers(dest='command', help='Command to execute')
+    
+    # Build command
+    build_parser = subparsers.add_parser('builder', help='Start the interactive workflow builder')
+    build_parser.add_argument('--headless', action='store_true', help='Run in non-interactive mode')
+    build_parser.add_argument('--load-session', type=str, help='Load a saved builder session')
+    build_parser.add_argument('--save-session', type=str, help='Save the builder session to a file')
+    build_parser.add_argument('--verbose', action='store_true', help='Enable verbose output')
+    
+    # Parse arguments
+    print(f"sys.argv: {sys.argv}")
+    args = parser.parse_args()
+    print(f"Parsed args: {args}")
+    
+    # Print help and exit
+    parser.print_help()
+    return
 
 def build_workflow(args):
     """Start the interactive workflow builder."""
     print("Starting NanoBrain workflow builder...")
     
-    # Import here to avoid circular imports
-    from builder.NanoBrainBuilder import NanoBrainBuilder
-    
-    # Check if we should load an existing session
-    if args.load_session:
-        try:
-            with open(args.load_session, 'rb') as f:
-                builder = pickle.load(f)
-            print(f"Loaded session from {args.load_session}")
-        except Exception as e:
-            print(f"Error loading session: {e}")
-            print("Starting a new session instead.")
-            builder = NanoBrainBuilder()
-    else:
-        # Create a new NanoBrainBuilder instance
-        builder = NanoBrainBuilder()
-    
-    # Start the interactive session
     try:
-        builder.start()
-    except KeyboardInterrupt:
-        print("\nWorkflow builder session interrupted.")
+        # Print path information for debugging
+        if args.verbose:
+            print(f"Python path: {sys.path}")
+            print(f"Current directory: {os.getcwd()}")
+            print(f"PYTHONPATH: {os.environ.get('PYTHONPATH', 'Not set')}")
+            
+        # Try to import the setup_paths module to ensure paths are set up correctly
+        try:
+            import setup_paths
+            if args.verbose:
+                setup_paths.verify_paths()
+        except ImportError:
+            if args.verbose:
+                print("Could not import setup_paths module.")
         
-        # Ask if the user wants to save the session
-        if args.auto_save or input("Save session? (y/n): ").lower() == 'y':
-            session_file = args.save_session or 'nanobrain_session.pkl'
-            with open(session_file, 'wb') as f:
-                pickle.dump(builder, f)
-            print(f"Session saved to {session_file}")
+        # Import the builder
+        from builder.NanoBrainBuilder import NanoBrainBuilder
+        
+        # Check if we should load an existing session
+        if args.load_session:
+            try:
+                with open(args.load_session, 'rb') as f:
+                    builder = pickle.load(f)
+                print(f"Loaded session from {args.load_session}")
+            except Exception as e:
+                print(f"Error loading session: {e}")
+                print("Starting a new session instead.")
+                builder = NanoBrainBuilder()
+        else:
+            # Create a new builder
+            builder = NanoBrainBuilder()
+        
+        # Start the builder
+        if args.headless:
+            # Run in non-interactive mode
+            print("Running in non-interactive mode...")
+            # TODO: Implement non-interactive mode
+        else:
+            # Run in interactive mode
+            import asyncio
+            asyncio.run(builder.main())
+        
+        # Save the session if requested
+        if args.save_session:
+            try:
+                with open(args.save_session, 'wb') as f:
+                    pickle.dump(builder, f)
+                print(f"Session saved to {args.save_session}")
+            except Exception as e:
+                print(f"Error saving session: {e}")
+    except ImportError as e:
+        print(f"Import error: {e}")
+        print("The builder module could not be found. Make sure it's installed and in your Python path.")
+        print(f"Current Python path includes: {sys.path}")
+        
+        # Try to help diagnose the issue
+        builder_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "builder")
+        print(f"Builder directory exists: {os.path.exists(builder_dir)}")
+        init_file = os.path.join(builder_dir, "__init__.py")
+        print(f"Builder __init__.py exists: {os.path.exists(init_file)}")
+        builder_file = os.path.join(builder_dir, "NanoBrainBuilder.py")
+        print(f"NanoBrainBuilder.py exists: {os.path.exists(builder_file)}")
+        
+        sys.exit(1)
+    except Exception as e:
+        print(f"Error starting builder: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
 
 
 def build_docs(args):
     """Build documentation from source code and configuration files."""
     print("Building documentation...")
-    script_path = os.path.join(PROJECT_ROOT, "scripts", "build_docs.sh")
-    subprocess.run(["bash", script_path], check=True)
-    print("Documentation built successfully!")
+    # TODO: Implement this function
 
 
 def create_component(args):
     """Create a new NanoBrain component."""
-    component_type = args.type
-    component_name = args.name
-    
-    print(f"Creating new {component_type}: {component_name}...")
-    # TODO: Implement component creation logic
-    print(f"{component_type} '{component_name}' created successfully!")
+    print(f"Creating new {args.type} component...")
+    # TODO: Implement this function
 
 
 def run_workflow(args):
     """Run a NanoBrain workflow."""
-    workflow_file = args.file
-    
-    print(f"Running workflow from {workflow_file}...")
-    # TODO: Implement workflow execution logic
-    print("Workflow execution completed!")
+    print(f"Running workflow from {args.file}...")
+    # TODO: Implement this function
 
 
 def manage_config(args):
     """Manage NanoBrain configurations."""
-    action = args.action
-    config_file = args.file
-    
-    if action == "show":
-        print(f"Showing configuration from {config_file}...")
-        # TODO: Implement configuration display logic
-    elif action == "edit":
-        print(f"Editing configuration {config_file}...")
-        # TODO: Implement configuration editing logic
-    elif action == "validate":
-        print(f"Validating configuration {config_file}...")
-        # TODO: Implement configuration validation logic
-    
-    print("Configuration management completed!")
+    print("Managing configurations...")
+    # TODO: Implement this function
 
 
-def show_help(args, parser):
+def show_help(args):
     """Show help information."""
-    parser.print_help()
-
-
-def main():
-    """Main entry point for the CLI."""
-    parser = argparse.ArgumentParser(
-        description="NanoBrain Command Line Interface",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=__doc__.split("Usage:")[1]
-    )
-    
-    subparsers = parser.add_subparsers(dest="command", help="Command to execute")
-    
-    # Build workflow command
-    build_parser = subparsers.add_parser("build", help="Start the interactive workflow builder")
-    build_parser.add_argument("--load-session", help="Load an existing session from a file")
-    build_parser.add_argument("--save-session", help="Save the session to a file when exiting")
-    build_parser.add_argument("--auto-save", action="store_true", help="Automatically save the session when exiting")
-    build_parser.set_defaults(func=build_workflow)
-    
-    # Build docs command
-    docs_parser = subparsers.add_parser("build-docs", help="Build documentation")
-    docs_parser.set_defaults(func=build_docs)
-    
-    # Create component command
-    create_parser = subparsers.add_parser("create", help="Create a new component")
-    create_parser.add_argument("type", choices=["agent", "step", "workflow", "executor", "link", "dataunit"],
-                              help="Type of component to create")
-    create_parser.add_argument("name", help="Name of the component")
-    create_parser.set_defaults(func=create_component)
-    
-    # Run workflow command
-    run_parser = subparsers.add_parser("run", help="Run a workflow")
-    run_parser.add_argument("file", help="Workflow file to run")
-    run_parser.set_defaults(func=run_workflow)
-    
-    # Config management command
-    config_parser = subparsers.add_parser("config", help="Manage configurations")
-    config_parser.add_argument("action", choices=["show", "edit", "validate"],
-                              help="Action to perform on the configuration")
-    config_parser.add_argument("file", help="Configuration file to manage")
-    config_parser.set_defaults(func=manage_config)
-    
-    # Help command
-    help_parser = subparsers.add_parser("help", help="Show help information")
-    help_parser.set_defaults(func=lambda args: show_help(args, parser))
-    
-    # Parse arguments
-    args = parser.parse_args()
-    
-    # Execute the appropriate function
-    if hasattr(args, "func"):
-        args.func(args)
-    else:
-        parser.print_help()
+    print(__doc__)
+    print("For more information, use: nanobrain [command] --help")
 
 
 if __name__ == "__main__":
-    main() 
+    # Use debug_main instead of main for debugging
+    debug_main() 

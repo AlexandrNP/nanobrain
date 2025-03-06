@@ -184,3 +184,61 @@ The framework includes robust integration with various Language Model providers:
 - **Mistral**: Mistral models
 
 The Agent class can work with both chat-based models (BaseChatModel) and completion-based models (BaseLLM), automatically detecting the appropriate model type and using the correct API for each.
+
+## Configuration System
+
+The NanoBrain framework includes a global configuration system that manages API keys, model defaults, and other framework-wide settings.
+
+### Setting Up API Keys
+
+To use external language models, you'll need to set up API keys for the providers you want to use. The framework provides a convenient script to help you set up your API keys:
+
+```bash
+./setup_api_keys.py
+```
+
+This script will guide you through the process of obtaining and configuring API keys for various LLM providers.
+
+### Configuration File
+
+The global configuration is stored in a YAML file (`config.yml`) in the project root directory. You can also manage the configuration using the command-line interface:
+
+```bash
+# List all configuration settings
+./nanobrain config list
+
+# Edit a specific configuration setting
+./nanobrain config edit --key api_keys.openai --value your_api_key
+
+# Open the configuration file in your default editor
+./nanobrain config edit
+
+# Reset the configuration to defaults
+./nanobrain config reset
+```
+
+### Environment Variables
+
+You can also set configuration values using environment variables. The naming convention is `NANOBRAIN_SECTION_KEY`, for example:
+
+```bash
+# Set the OpenAI API key
+export NANOBRAIN_API_KEYS_OPENAI=your_api_key
+
+# Set the default model
+export NANOBRAIN_MODELS_DEFAULT=gpt-4
+
+# Enable debug mode
+export NANOBRAIN_DEVELOPMENT_DEBUG=true
+```
+
+Environment variables take precedence over values in the configuration file.
+
+### Testing Mode
+
+When running in testing mode (with the `NANOBRAIN_TESTING=1` environment variable), the framework will use mock implementations of language models and other external dependencies. This allows you to run tests without needing actual API keys.
+
+```bash
+# Run in testing mode
+NANOBRAIN_TESTING=1 ./nanobrain builder
+```

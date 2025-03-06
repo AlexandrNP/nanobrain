@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from interfaces import IDirectoryTracer
+from src.interfaces import IDirectoryTracer
 
 
 class DirectoryTracer(IDirectoryTracer):

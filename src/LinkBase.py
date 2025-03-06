@@ -1,8 +1,8 @@
 from typing import Any
-from DataUnitBase import DataUnitBase
-from ConfigManager import ConfigManager
-from DirectoryTracer import DirectoryTracer
-from regulations import ConnectionStrength
+from src.DataUnitBase import DataUnitBase
+from src.ConfigManager import ConfigManager
+from src.DirectoryTracer import DirectoryTracer
+from src.regulations import ConnectionStrength
 import random
 
 class LinkBase:

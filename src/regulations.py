@@ -2,7 +2,7 @@ import time
 from typing import Any
 # Remove the circular import
 # from DataUnitBase import DataUnitBase
-from enums import ComponentState
+from src.enums import ComponentState
 
 class ConnectionStrength:
     """

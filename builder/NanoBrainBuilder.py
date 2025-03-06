@@ -138,11 +138,12 @@ class NanoBrainBuilder:
         
         # Initialize the Agent
         self.agent = Agent(
+            # Pass the executor
+            executor=self.executor,
             # Use a default OpenAI model for the agent
-            llm_class="OpenAI",
+            model_name="gpt-4",
             # Specify model parameters
             parameters={
-                "model": "gpt-4",
                 "temperature": 0.2
             },
             # Set memories
