@@ -154,5 +154,33 @@ await router.invoke()  # Intelligent routing with reliability
 For detailed technical documentation:
 
 - [UML Diagrams](docs/UML.md) - Comprehensive class diagrams showing framework architecture and relationships
-- Component interaction patterns and data flows are shown in the Framework Organization section above
-- Configuration examples and best practices are provided in the Usage Examples section
+- [Framework Overview](docs/framework_overview.md) - High-level overview of the framework architecture and principles
+- [Auto-generated Documentation](docs/auto_generated/index.md) - Detailed documentation for each class, generated from source code and configuration files
+- [Tool Calling Documentation](docs/tool_calling.md) - Guide to using the tool calling capabilities
+
+### Documentation Builder
+
+The framework includes a documentation builder that automatically generates documentation from:
+1. Python docstrings in source files
+2. YAML configuration files
+3. Class and function signatures
+
+To build the documentation, run:
+
+```bash
+./scripts/build_docs.sh
+```
+
+The generated documentation will be available in the `docs/auto_generated` directory.
+
+## LLM Integration
+
+The framework includes robust integration with various Language Model providers:
+
+- **OpenAI**: GPT models (gpt-3.5-turbo, gpt-4, etc.)
+- **Anthropic**: Claude models (claude-2, etc.)
+- **Google**: Gemini models
+- **Meta/Llama**: Llama models
+- **Mistral**: Mistral models
+
+The Agent class can work with both chat-based models (BaseChatModel) and completion-based models (BaseLLM), automatically detecting the appropriate model type and using the correct API for each.

@@ -1,5 +1,6 @@
 from typing import Any, List, Optional, Dict, ClassVar, Callable, Tuple, Union
 from langchain.llms.base import BaseLLM
+from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_community.chat_models import ChatOpenAI
 from langchain.memory import ConversationBufferMemory, ConversationBufferWindowMemory
 from langchain.schema import SystemMessage, HumanMessage, AIMessage
@@ -97,7 +98,7 @@ class Agent(Step):
         if self.tools:
             self._register_tools(self.tools)
     
-    def _initialize_llm(self, model_name: str, model_class: Optional[str] = None) -> BaseLLM:
+    def _initialize_llm(self, model_name: str, model_class: Optional[str] = None) -> Union[BaseLLM, 'BaseChatModel']:
         """
         Initialize the language model.
         
@@ -112,15 +113,54 @@ class Agent(Step):
             return MockOpenAI(model_name=model_name)
             
         if model_class:
+            # If model_class is an instance, use it directly
+            if not isinstance(model_class, str):
+                # Check if it's already an instance of BaseLLM or BaseChatModel
+                from langchain_core.language_models.chat_models import BaseChatModel
+                if isinstance(model_class, (BaseLLM, BaseChatModel)):
+                    return model_class
+                else:
+                    raise ValueError(f"Provided model_class must be a string path or an instance of BaseLLM or BaseChatModel, got {type(model_class)}")
+            
             # Dynamic import of the specified model class
             module_path, class_name = model_class.rsplit('.', 1)
             module = importlib.import_module(module_path)
             ModelClass = getattr(module, class_name)
-            return ModelClass(model_name=model_name)
+            
+            # Check if it's a chat model or a completion model
+            from langchain_core.language_models.chat_models import BaseChatModel
+            if issubclass(ModelClass, BaseChatModel):
+                return ModelClass(model_name=model_name)
+            elif issubclass(ModelClass, BaseLLM):
+                return ModelClass(model_name=model_name)
+            else:
+                raise ValueError(f"Model class {model_class} must be a subclass of BaseLLM or BaseChatModel")
         else:
-            # Default to OpenAI
-            from langchain_community.llms import OpenAI
-            return OpenAI(model_name=model_name)
+            # Determine provider based on model_name prefix
+            if model_name.startswith(("gpt-", "text-davinci")):
+                # OpenAI models
+                from langchain_community.chat_models import ChatOpenAI
+                return ChatOpenAI(model_name=model_name)
+            elif model_name.startswith(("claude-")):
+                # Anthropic models
+                from langchain_community.chat_models import ChatAnthropic
+                return ChatAnthropic(model_name=model_name)
+            elif model_name.startswith(("gemini-")):
+                # Google models
+                from langchain_community.chat_models import ChatGoogleGenerativeAI
+                return ChatGoogleGenerativeAI(model_name=model_name)
+            elif model_name.startswith(("llama-")):
+                # Meta/Llama models
+                from langchain_community.llms import LlamaCpp
+                return LlamaCpp(model_path=model_name)
+            elif model_name.startswith(("mistral-")):
+                # Mistral models
+                from langchain_community.chat_models import ChatMistralAI
+                return ChatMistralAI(model_name=model_name)
+            else:
+                # Default to OpenAI for unknown prefixes
+                from langchain_community.chat_models import ChatOpenAI
+                return ChatOpenAI(model_name=model_name)
     
     def _load_prompt_template(self, prompt_file: Optional[str], prompt_template: Optional[str]) -> PromptTemplate:
         """
@@ -177,8 +217,19 @@ class Agent(Step):
         
         formatted_prompt = self.prompt_template.format(**prompt_vars)
         
-        # Process with LLM
-        response = self.llm.predict(formatted_prompt)
+        # Process with LLM based on its type
+        from langchain_core.language_models.chat_models import BaseChatModel
+        if isinstance(self.llm, BaseChatModel):
+            # For chat models, create a chat template
+            from langchain.schema import SystemMessage, HumanMessage
+            system_template = "You are an AI assistant designed to {role_description}. {specific_instructions}"
+            system_message = SystemMessage(content=system_template.format(**self.prompt_variables))
+            human_message = HumanMessage(content=f"Context: {context}\n\nUser input: {input_text}")
+            messages = [system_message, human_message]
+            response = self.llm.predict_messages(messages).content
+        else:
+            # For completion models, use the formatted prompt directly
+            response = self.llm.predict(formatted_prompt)
         
         # Update memory with this interaction
         self._update_memories(input_text, response)
@@ -400,8 +451,19 @@ class Agent(Step):
                 input=input_text
             )
             
-            # Process with LLM
-            response = self.llm.predict(formatted_prompt)
+            # Process with LLM based on its type
+            from langchain_core.language_models.chat_models import BaseChatModel
+            if isinstance(self.llm, BaseChatModel):
+                # For chat models, create a chat template
+                from langchain.schema import SystemMessage, HumanMessage
+                system_template = "You are an AI assistant with access to tools. {specific_instructions}"
+                system_message = SystemMessage(content=system_template.format(**self.prompt_variables))
+                human_message = HumanMessage(content=formatted_prompt)
+                messages = [system_message, human_message]
+                response = self.llm.predict_messages(messages).content
+            else:
+                # For completion models, use the formatted prompt directly
+                response = self.llm.predict(formatted_prompt)
             
             # Parse tool call from response
             tool_call = parse_tool_call(response)
@@ -457,10 +519,22 @@ class Agent(Step):
                 **self.prompt_variables
             }
             
-            formatted_prompt = self.prompt_template.format(**prompt_vars)
-            
-            # Process with LLM that has tools bound to it
-            response = self.llm.predict(formatted_prompt)
+            # Process with LLM based on its type
+            from langchain_core.language_models.chat_models import BaseChatModel
+            if isinstance(self.llm, BaseChatModel):
+                # For chat models, create a chat template with tools
+                from langchain.schema import SystemMessage, HumanMessage
+                system_template = "You are an AI assistant designed to {role_description}. {specific_instructions}"
+                system_message = SystemMessage(content=system_template.format(**self.prompt_variables))
+                human_message = HumanMessage(content=f"Context: {context}\n\nUser input: {input_text}")
+                messages = [system_message, human_message]
+                
+                # Use the chat model with tools
+                response = self.llm.predict_messages(messages, tools=self.langchain_tools).content
+            else:
+                # For completion models, use the formatted prompt
+                formatted_prompt = self.prompt_template.format(**prompt_vars)
+                response = self.llm.predict(formatted_prompt)
             
             # Update memory with this interaction
             self._update_memories(input_text, response)

@@ -1,5 +1,5 @@
 from typing import Any
-from activation import ActivationGate
+from ActivationGate import ActivationGate
 from ConfigManager import ConfigManager
 import random
 from DirectoryTracer import DirectoryTracer

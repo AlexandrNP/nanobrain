@@ -2,7 +2,7 @@ import time
 from typing import Any
 from ConfigManager import ConfigManager
 from DirectoryTracer import DirectoryTracer
-from activation import ActivationGate
+from ActivationGate import ActivationGate
 
 class DataUnitBase:
     """

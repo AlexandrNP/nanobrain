@@ -1,0 +1,79 @@
+defaults:
+  max_history_size: 10  # Maximum number of query-response pairs to store in history
+  persistence_level: 0.7  # How persistent the storage is (0.0-1.0)
+  retrieval_speed: 0.8  # How quickly data can be retrieved (0.0-1.0)
+  storage_capacity: 1.0  # Relative capacity of the storage (0.0-1.0)
+  auto_monitor: true  # Whether to automatically start monitoring for triggers
+
+metadata:
+  description: "Base class for data storage operations that respond to triggers"
+  biological_analogy: "Memory system with retrieval mechanism"
+  justification: >
+    Like how memory systems in the brain store information and retrieve it in response
+    to specific cues, this class stores data and produces output in response to
+    trigger conditions.
+  objectives:
+    - Store and retrieve data based on trigger conditions
+    - Maintain a history of query-response interactions
+    - Provide a flexible base for different types of data storage mechanisms
+    - Connect input and output data units through a processing pipeline
+
+validation:
+  required:
+    - executor  # ExecutorBase instance required
+    - input_unit  # DataUnitBase instance required
+    - output_unit  # DataUnitBase instance required
+    - trigger  # TriggerBase instance required
+  optional:
+    - max_history_size
+    - persistence_level
+    - retrieval_speed
+    - storage_capacity
+    - auto_monitor
+  constraints:
+    max_history_size:
+      min: 1
+      max: 100
+      type: int
+    persistence_level:
+      min: 0.0
+      max: 1.0
+      type: float
+    retrieval_speed:
+      min: 0.0
+      max: 1.0
+      type: float
+    storage_capacity:
+      min: 0.0
+      max: 1.0
+      type: float
+    auto_monitor:
+      type: bool
+
+examples:
+  basic:
+    description: "Basic data storage with default settings"
+    config:
+      max_history_size: 10
+      persistence_level: 0.7
+      retrieval_speed: 0.8
+      storage_capacity: 1.0
+      auto_monitor: true
+
+  high_capacity:
+    description: "High-capacity data storage with increased history size"
+    config:
+      max_history_size: 50
+      persistence_level: 0.9
+      retrieval_speed: 0.6
+      storage_capacity: 1.0
+      auto_monitor: true
+
+  fast_retrieval:
+    description: "Fast-retrieval data storage optimized for speed"
+    config:
+      max_history_size: 5
+      persistence_level: 0.5
+      retrieval_speed: 1.0
+      storage_capacity: 0.7
+      auto_monitor: true 
