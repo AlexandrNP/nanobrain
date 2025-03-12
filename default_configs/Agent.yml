@@ -1,18 +1,20 @@
 defaults:
+  # Required parameters
+  executor: "ExecutorFunc"  # Default executor class
+
+  # Optional parameters with defaults
   model_name: "gpt-3.5-turbo"  # Default LLM model
   model_class: null  # Use default ChatOpenAI implementation
   memory_window_size: 5  # Number of recent conversations to keep in context
-  prompt_file: "prompts/templates"  # Python file containing prompt templates
-  prompt_template: "BASE_ASSISTANT"  # Template name in prompt file
-  prompt_variables:  # Variables to fill in the template
-    role_description: "assist users with general tasks while maintaining a helpful and professional demeanor"
-    specific_instructions: "Focus on clear communication and accurate information"
+  prompt_file: null
+  prompt_template: null
+  prompt_variables: {}
   context_sensitivity: 0.8  # How much past context influences responses
   creativity: 0.5  # Balance between deterministic and creative responses
   response_coherence: 0.7  # How well responses maintain consistency
   use_shared_context: false  # Whether to use shared context between agents
   shared_context_key: null  # Key for shared context group (auto-generated if null)
-  tools_config_path: "default_configs/AgentTools.yml"  # Path to tools configuration
+  tools_config_path: null
   use_buffer_window_memory: true  # Whether to use ConversationBufferWindowMemory
   memory_key: "chat_history"  # Key for storing conversation history in prompt context
 
@@ -83,9 +85,8 @@ examples:
   basic:
     description: "Basic agent with default settings"
     config:
+      executor: "ExecutorFunc"
       model_name: "gpt-3.5-turbo"
-      prompt_file: "prompts/templates"
-      prompt_template: "BASE_ASSISTANT"
       prompt_variables:
         role_description: "assist users with general tasks"
         specific_instructions: "Maintain a helpful and professional tone"

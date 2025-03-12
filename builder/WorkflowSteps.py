@@ -21,6 +21,7 @@ from builder.AgentWorkflowBuilder import AgentWorkflowBuilder
 from src.DataStorageCommandLine import DataStorageCommandLine
 from src.LinkDirect import LinkDirect
 from src.TriggerDataChanged import TriggerDataChanged
+from src.DataUnitBase import DataUnitBase
 
 
 def camel_case(s: str) -> str:
@@ -275,27 +276,48 @@ class CreateStep:
             # Create instances using ConfigManager
             config_manager = ConfigManager()
             
-            # Create AgentWorkflowBuilder instance
-            agent_builder = config_manager.create_instance("AgentWorkflowBuilder")
+            # Create AgentWorkflowBuilder instance - let ConfigManager handle all configuration
+            agent_builder = config_manager.create_instance("AgentWorkflowBuilder", 
+                executor=builder.executor,
+                # Only pass minimal context-specific overrides
+                prompt_variables={
+                    "role_description": f"create code for {step_class_name}",
+                    "specific_instructions": f"Create a step class named {step_class_name}"
+                }
+            )
             
-            # Create DataStorageCommandLine instance
+            # Create DataStorageCommandLine instance - let ConfigManager handle all configuration
             command_line = config_manager.create_instance("DataStorageCommandLine", 
                 executor=builder.executor,
+                # Only pass minimal context-specific overrides
                 prompt=f"{step_class_name}> ",
                 welcome_message=f"Starting interactive code writing phase for {step_class_name}.",
                 goodbye_message="Step creation completed.",
                 exit_command="finish"
             )
             
-            # Create TriggerDataChanged instance
-            trigger = config_manager.create_instance("TriggerDataChanged")
+            # Create DataUnitBase instances for input and output
+            input_data = DataUnitBase()
+            output_data = DataUnitBase()
             
-            # Create LinkDirect instance
+            # Create Step instances for source and sink
+            source_step = Step(executor=builder.executor, output=output_data)
+            sink_step = Step(executor=builder.executor)
+            sink_step.register_input_source("link_id", output_data)
+            
+            # Create LinkDirect instance - let ConfigManager handle all configuration
             link = config_manager.create_instance("LinkDirect",
-                command_line=command_line,
-                agent_builder=agent_builder,
-                trigger=trigger
+                source_step=source_step,
+                sink_step=sink_step
             )
+            
+            # Create TriggerDataChanged instance - let ConfigManager handle all configuration
+            trigger = config_manager.create_instance("TriggerDataChanged", 
+                runnable=link
+            )
+            
+            # Update the link with the trigger
+            link.trigger = trigger
             
             # Start monitoring for input
             await link.start_monitoring()

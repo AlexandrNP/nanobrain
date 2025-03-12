@@ -189,7 +189,7 @@ async def create_workflow(name, username=None):
             
         from builder.NanoBrainBuilder import NanoBrainBuilder
         builder = NanoBrainBuilder()
-        result = await builder.create_workflow(name)
+        result = builder.create_workflow(name)
         return result
     except Exception as e:
         return handle_error(e, "Failed to create workflow")

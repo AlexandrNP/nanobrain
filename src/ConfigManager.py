@@ -99,19 +99,65 @@ class ConfigManager(IConfigurable):
         # Get configuration for the class
         config = self.get_config(class_name)
         
-        # Extract defaults from config
-        defaults = config.get('defaults', {})
-        
-        # Update with provided kwargs
-        params = {**defaults, **kwargs}
-        
-        # Get the class
+        # Load the class if not already cached
         cls = self._get_class(class_name)
         if not cls:
-            raise ImportError(f"Could not find class '{class_name}'")
+            raise ImportError(f"Could not load class {class_name}")
+            
+        # Merge config with kwargs, with kwargs taking precedence
+        merged_config = {**config, **kwargs}
         
-        # Create and return the instance
-        return cls(**params)
+        # Special case for Agent class - remove prompt_template if it's not a string
+        if class_name == "Agent" and "prompt_template" in merged_config:
+            prompt_template = merged_config.get("prompt_template")
+            if not isinstance(prompt_template, str) and prompt_template is not None:
+                del merged_config["prompt_template"]
+        
+        # Handle executor if specified as string (class name)
+        if "executor" in merged_config and isinstance(merged_config["executor"], str):
+            executor_class_name = merged_config["executor"]
+            # Create executor instance if it's not already a class instance
+            if executor_class_name:
+                try:
+                    # Use ExecutorFunc as default if not specified
+                    if executor_class_name.lower() == "none" or executor_class_name.lower() == "null":
+                        executor_class_name = "ExecutorFunc"
+                    
+                    # Create executor instance using factory method (recursive call)
+                    merged_config["executor"] = self.create_instance(executor_class_name)
+                except Exception as e:
+                    print(f"Warning: Could not create executor instance of type {executor_class_name}: {str(e)}")
+                    # Fall back to ExecutorFunc
+                    from src.ExecutorFunc import ExecutorFunc
+                    merged_config["executor"] = ExecutorFunc()
+        
+        # Ensure executor is provided for Runnable classes if needed
+        if "executor" not in merged_config:
+            # Try to determine if this class requires an executor
+            try:
+                if cls.__name__ in ["Agent", "Step", "Workflow", "Runner", "Router"]:
+                    # These classes typically need an executor
+                    from src.ExecutorFunc import ExecutorFunc
+                    merged_config["executor"] = ExecutorFunc()
+            except Exception:
+                # Ignore errors, just don't add an executor
+                pass
+                
+        # Create instance with merged configuration
+        try:
+            # If the class accepts a config_manager parameter, pass self
+            if 'config_manager' in inspect.signature(cls.__init__).parameters:
+                merged_config['config_manager'] = self
+            
+            instance = cls(**merged_config)
+            
+            # If instance is configurable, update its config
+            if isinstance(instance, IConfigurable):
+                instance.update_config(merged_config)
+                
+            return instance
+        except Exception as e:
+            raise TypeError(f"Could not create instance of {class_name}: {str(e)}")
     
     def _get_class(self, class_name: str) -> Optional[Type]:
         """

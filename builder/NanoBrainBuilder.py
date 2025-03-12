@@ -1,9 +1,16 @@
+#!/usr/bin/env python3
+"""
+NanoBrainBuilder - Core builder for NanoBrain workflows.
+"""
+
 from typing import List, Dict, Any, Optional
 import os
 import asyncio
 from pathlib import Path
 import argparse
 import importlib.util
+import yaml
+import traceback
 
 from src.Workflow import Workflow
 from src.ExecutorBase import ExecutorBase
@@ -17,6 +24,11 @@ from tools_common import StepFileWriter, StepPlanner, StepCoder, StepGitInit, St
 
 # Import the AgentWorkflowBuilder (will be created next)
 from builder.AgentWorkflowBuilder import AgentWorkflowBuilder
+
+# Import the ConfigManager
+from src.ConfigManager import ConfigManager
+from src.ExecutorFunc import ExecutorFunc
+from src.GlobalConfig import GlobalConfig
 
 
 class CommandLineTrigger(TriggerBase):
@@ -124,91 +136,49 @@ class NanoBrainBuilder:
     Justification: Like how the prefrontal cortex handles planning and
     decision-making, the NanoBrainBuilder plans and constructs workflows.
     """
-    def __init__(self, executor: Optional[ExecutorBase] = None):
+    def __init__(self, config_path: Optional[str] = None):
         """
-        Initialize the builder.
+        Initialize the NanoBrainBuilder.
         
         Args:
-            executor: ExecutorBase instance for running steps (optional)
+            config_path: Path to the configuration file (optional)
         """
-        # Create an executor if none is provided
-        if executor is None:
-            executor = ExecutorBase()
-            
-        self.executor = executor
-        
-        # Initialize the ConfigManager
-        from src.ConfigManager import ConfigManager
+        # Initialize the ConfigManager first
         self.config_manager = ConfigManager()
         
-        # Load configuration for NanoBrainBuilder
+        # Initialize the executor using ConfigManager
+        self.executor = self.config_manager.create_instance("ExecutorFunc")
+        
+        # Get configuration from ConfigManager - NO MANUAL CONFIGURATION
         self.config = self.config_manager.get_config("NanoBrainBuilder")
         
-        # Initialize the Agent using ConfigLoader
-        self._workflows_dir = self.config.get('defaults', {}).get('workflows_dir', 'workflows')
-        
-        # Create workflows directory if it doesn't exist
-        if not os.path.exists(self._workflows_dir):
-            os.makedirs(self._workflows_dir, exist_ok=True)
-            
-        self._init_agent()
-        
-        # Initialize the workflow stack
+        # Set up internal state - use values from config
+        self.workflows_dir = self.config.get('workflows_dir', 'workflows')
+        self.current_workflow = None
         self._workflow_stack = []
         
-        # Add tools to the agent
-        # self._init_tools()
+        # Create workflows directory if it doesn't exist
+        if not os.path.exists(self.workflows_dir):
+            os.makedirs(self.workflows_dir)
+        
+        # Initialize the agent using ConfigManager
+        self._init_agent()
+        
+        # Initialize the tools using ConfigManager
+        self._init_tools()
     
     def _init_agent(self):
         """Initialize the agent from configuration."""
-        from src.Agent import Agent
-        
-        # Get agent configuration path from NanoBrainBuilder config
-        agent_config_path = self.config.get('defaults', {}).get('agent_config_path', 'builder/config/AgentWorkflowBuilder.yml')
-        
-        # Load agent configuration
-        agent_config = self.config_manager.get_config("AgentWorkflowBuilder")
-        
-        # Extract agent configuration parameters
-        agent_defaults = agent_config.get('defaults', {})
-        
-        # Initialize the Agent with configuration
-        self.agent = Agent(
-            # Pass the executor
-            executor=self.executor,
-            # Use model name from config or default
-            model_name=agent_defaults.get('model_name', 'gpt-3.5-turbo'),
-            # Use model class from config or default
-            model_class=agent_defaults.get('model_class'),
-            # Set memory window size from config or default
-            memory_window_size=agent_defaults.get('memory_window_size', 10),
-            # Set prompt template from config or default
-            prompt_template=agent_defaults.get('prompt_template'),
-            # Set prompt variables from config or default
-            prompt_variables=agent_defaults.get('prompt_variables', {
-                "role_description": "assist with building NanoBrain workflows",
-                "specific_instructions": "Focus on creating well-structured workflows and steps"
-            }),
-            # Set shared context settings from config or default
-            use_shared_context=agent_defaults.get('use_shared_context', True),
-            shared_context_key=agent_defaults.get('shared_context_key', 'workflow_builder')
-        )
+        # Simply use the config_manager to create the Agent instance
+        # This will properly load all config from Agent.yml without manual overrides
+        # Make sure to explicitly pass the executor which is required
+        self.agent = self.config_manager.create_instance("Agent", executor=self.executor)
     
     def _init_tools(self):
         """Initialize the tools for the agent from configuration."""
         import traceback
         
-        # Get tools list from configuration
-        tools_list = self.config.get('defaults', {}).get('tools', [
-            'StepFileWriter',
-            'StepPlanner',
-            'StepCoder',
-            'StepGitInit',
-            'StepContextSearch',
-            'StepWebSearch'
-        ])
-        
-        # Import tools dynamically
+        # Import tool classes dynamically as needed
         from tools_common import (
             StepFileWriter, StepPlanner, StepCoder, 
             StepGitInit, StepContextSearch, StepWebSearch
@@ -224,12 +194,21 @@ class NanoBrainBuilder:
             'StepWebSearch': StepWebSearch
         }
         
+        # Let ConfigManager get the list of tools from config files
+        tools_config = self.config_manager.get_config("NanoBrainBuilder")
+        tools_list = tools_config.get('tools', [])
+        
         # Create and add tools
         for tool_name in tools_list:
             if tool_name in tool_classes:
                 try:
-                    # Create tool instance
-                    tool_instance = tool_classes[tool_name](self.executor)
+                    # Create tool instance using ConfigManager
+                    tool_instance = self.config_manager.create_instance(tool_name, executor=self.executor)
+                    
+                    # If ConfigManager couldn't create it (no config), fall back to direct instantiation
+                    if tool_instance is None and tool_name in tool_classes:
+                        tool_instance = tool_classes[tool_name](self.executor)
+                        
                     # Add tool to agent
                     self.agent.add_tool(tool_instance)
                     print(f"Successfully added tool: {tool_name}")
@@ -308,19 +287,51 @@ class NanoBrainBuilder:
         
         return self._workflow_stack.pop()
     
-    async def create_workflow(self, workflow_name: str, base_dir: Optional[str] = None) -> Dict[str, Any]:
+    def create_workflow(self, workflow_name: str) -> Dict[str, Any]:
         """
         Create a new workflow.
         
         Args:
             workflow_name: Name of the workflow to create
-            base_dir: Base directory for the workflow (optional)
             
         Returns:
             Dictionary with the result of the operation
         """
-        from builder.WorkflowSteps import CreateWorkflow
-        return await CreateWorkflow.execute(self, workflow_name, base_dir=base_dir)
+        # Check if workflow already exists
+        if workflow_name in self.get_workflows():
+            return {
+                "success": False,
+                "error": f"Workflow '{workflow_name}' already exists."
+            }
+            
+        # Create workflow directory
+        workflow_path = os.path.join(self.workflows_dir, workflow_name)
+        try:
+            os.makedirs(workflow_path, exist_ok=True)
+            os.makedirs(os.path.join(workflow_path, 'config'), exist_ok=True)
+            
+            # Create initial workflow.yml
+            workflow_config = {
+                "name": workflow_name,
+                "description": f"Workflow {workflow_name}",
+                "steps": []
+            }
+            
+            with open(os.path.join(workflow_path, 'config', 'workflow.yml'), 'w') as f:
+                yaml.dump(workflow_config, f, default_flow_style=False)
+                
+            # Set as current workflow
+            self.current_workflow = workflow_name
+                
+            return {
+                "success": True,
+                "message": f"Workflow '{workflow_name}' created successfully."
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"Failed to create workflow: {str(e)}"
+            }
     
     async def create_step(self, step_name: str, base_class: str = "Step", description: str = None) -> Dict[str, Any]:
         """
@@ -414,7 +425,7 @@ class NanoBrainBuilder:
             workflow_name = args[0]
             username = args[1] if len(args) > 1 else None
             
-            return await self.create_workflow(workflow_name, username)
+            return await self.create_workflow(workflow_name)
         
         elif command == "create-step":
             if len(args) < 1:
@@ -530,7 +541,7 @@ class NanoBrainBuilder:
         
         # Process the command
         if args.command == "create-workflow":
-            result = await builder.create_workflow(args.name, args.username)
+            result = await builder.create_workflow(args.name)
         elif args.command == "create-step":
             result = await builder.create_step(args.name, args.base_class, args.description)
         elif args.command == "test-step":
@@ -559,11 +570,22 @@ class NanoBrainBuilder:
         Returns:
             List of workflow names
         """
-        if not os.path.exists(self._workflows_dir):
+        if not os.path.exists(self.workflows_dir):
             return []
             
-        return [d for d in os.listdir(self._workflows_dir) 
-                if os.path.isdir(os.path.join(self._workflows_dir, d))]
+        return [d for d in os.listdir(self.workflows_dir) 
+                if os.path.isdir(os.path.join(self.workflows_dir, d))]
+
+    def get_workflows(self) -> List[str]:
+        """
+        Get all available workflows.
+        
+        This is an alias for list_workflows() for API consistency.
+        
+        Returns:
+            List of workflow names
+        """
+        return self.list_workflows()
                 
     def get_workflow_path(self, workflow_name: str) -> Optional[str]:
         """
@@ -575,7 +597,7 @@ class NanoBrainBuilder:
         Returns:
             Full path to the workflow directory or None if not found
         """
-        workflow_path = os.path.join(self._workflows_dir, workflow_name)
+        workflow_path = os.path.join(self.workflows_dir, workflow_name)
         return workflow_path if os.path.exists(workflow_path) else None
 
 

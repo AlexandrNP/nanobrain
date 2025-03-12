@@ -1,4 +1,4 @@
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Dict
 from src.ExecutorBase import ExecutorBase
 from src.LinkBase import LinkBase
 from src.PackageBase import PackageBase
@@ -7,6 +7,7 @@ from src.WorkingMemory import WorkingMemory
 from src.enums import ComponentState
 from src.concurrency import CircuitBreaker
 from src.DataUnitBase import DataUnitBase
+from src.TriggerAllDataReceived import TriggerAllDataReceived
 
 class Step(PackageBase, IRunnable):
     """
@@ -17,14 +18,15 @@ class Step(PackageBase, IRunnable):
     types of information and pass results to other circuits, steps process
     specific operations and pass results to other steps.
     """
-    def __init__(self, executor: ExecutorBase, input_sources: List[LinkBase] = None, 
-                 output_sink: LinkBase = None, **kwargs):
+    def __init__(self, executor: ExecutorBase, 
+                 input_sources: Dict[str, DataUnitBase] = None, 
+                 output: DataUnitBase = None, **kwargs):
         # Initialize the base class
         super().__init__(executor, **kwargs)
         
         # Step-specific attributes
-        self.input_sources = input_sources or []
-        self.output_sink = output_sink
+        self.input_sources = input_sources or {}
+        self.output = output
         self.result = None
         self.working_memory = WorkingMemory(**kwargs)
         self.circuit_breaker = CircuitBreaker()
@@ -32,6 +34,36 @@ class Step(PackageBase, IRunnable):
         self.adaptive_network = None  # Network for adaptive processing
         self._state = ComponentState.INACTIVE
         self._running = False
+        
+        # Create TriggerAllDataReceived for input synchronization
+        self.trigger = TriggerAllDataReceived(self)
+        
+    def register_input_source(self, link_id: str, data_unit: DataUnitBase):
+        """
+        Register a new input source data unit with a specific ID.
+        
+        Biological analogy: Synaptic connection formation.
+        Justification: Like how neurons form new synaptic connections,
+        steps can register new input sources.
+        
+        Args:
+            link_id: The identifier for this input source
+            data_unit: The data unit that will provide input
+        """
+        self.input_sources[link_id] = data_unit
+            
+    def register_output(self, data_unit: DataUnitBase):
+        """
+        Register an output data unit.
+        
+        Biological analogy: Axon terminal formation.
+        Justification: Like how neurons form axon terminals to connect
+        with target neurons, steps can register output data units.
+        
+        Args:
+            data_unit: The data unit that will receive output
+        """
+        self.output = data_unit
     
     async def execute(self):
         """
@@ -54,13 +86,18 @@ class Step(PackageBase, IRunnable):
             return None
             
         try:
+            # Wait for trigger condition (all inputs received)
+            if self.trigger and not await self.trigger.monitor():
+                self._state = ComponentState.WAITING
+                self._running = False
+                return None
+            
             # Collect inputs from all sources
-            inputs = []
-            for source in self.input_sources:
-                await source.transfer()
-                data = source.output.get()
+            inputs = {}
+            for link_id, data_unit in self.input_sources.items():
+                data = data_unit.get()
                 if data is not None:
-                    inputs.append(data)
+                    inputs[link_id] = data
             
             # Process inputs
             self.result = await self.process(inputs)
@@ -71,10 +108,9 @@ class Step(PackageBase, IRunnable):
             # Increase specialization for this type of input
             self.specialization = min(1.0, self.specialization + 0.01)
             
-            # Send result to output sink if available
-            if self.output_sink and self.result is not None:
-                self.output_sink.input.set(self.result)
-                await self.output_sink.transfer()
+            # Send result to output if available
+            if self.output and self.result is not None:
+                self.output.set(self.result)
                 
             # Record success in circuit breaker
             self.circuit_breaker.record_success()
@@ -93,7 +129,7 @@ class Step(PackageBase, IRunnable):
         finally:
             self._running = False
     
-    async def process(self, inputs: List[Any]) -> Any:
+    async def process(self, inputs: Dict[str, Any]) -> Any:
         """
         Process inputs to produce a result.
         
@@ -101,9 +137,15 @@ class Step(PackageBase, IRunnable):
         Justification: Like how neural circuits transform inputs into
         outputs through specific processing operations, this method
         transforms input data into output results.
+        
+        Args:
+            inputs: A dictionary mapping link IDs to input data
+            
+        Returns:
+            The processed result
         """
-        # Base implementation just returns the first input
-        return inputs[0] if inputs else None
+        # Base implementation just returns the first input value if available
+        return next(iter(inputs.values())) if inputs else None
     
     def get_result(self) -> Any:
         """

@@ -1,0 +1,37 @@
+defaults:
+  # Required parameters
+  runnable: null  # Must be provided at runtime
+  
+  # Optional parameters with defaults
+  sensitivity: 0.8  # Sensitivity to data changes
+  activation_threshold: 0.5  # Threshold for activation
+  monitoring_interval: 0.1  # Interval for checking condition in seconds
+
+# Metadata
+metadata:
+  description: "Trigger that activates when input data changes"
+  biological_analogy: "Change detection neurons"
+  justification: >
+    Like how certain neurons in the visual system respond specifically to changes
+    in the environment, this trigger responds to changes in data.
+  objectives:
+    - Detect changes in input data
+    - Activate runnable when data changes
+    - Control sensitivity to changes
+    - Manage monitoring of data sources
+
+validation:
+  required:
+    - runnable  # Object to run when triggered
+  optional:
+    - sensitivity
+    - activation_threshold
+    - monitoring_interval
+
+examples:
+  basic:
+    description: "Basic data change trigger"
+    config:
+      sensitivity: 0.8
+      activation_threshold: 0.5
+      monitoring_interval: 0.1 

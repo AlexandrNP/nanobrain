@@ -1,4 +1,7 @@
 defaults:
+  # Required parameters
+  executor: "ExecutorFunc"  # Default executor class
+  
   model_name: "gpt-3.5-turbo"  # Default LLM model
   model_class: null  # Use default ChatOpenAI implementation
   memory_window_size: 10  # Number of recent conversations to keep in context
@@ -51,6 +54,7 @@ examples:
   basic:
     description: "Basic workflow builder with default settings"
     config:
+      executor: "ExecutorFunc"
       model_name: "gpt-3.5-turbo"
       memory_window_size: 10
       use_shared_context: true
@@ -62,6 +66,7 @@ examples:
   advanced:
     description: "Advanced workflow builder with GPT-4"
     config:
+      executor: "ExecutorParallel"
       model_name: "gpt-4"
       memory_window_size: 20
       use_shared_context: true

@@ -210,23 +210,34 @@ class Agent(Step):
             from langchain.chat_models import ChatOpenAI
             return ChatOpenAI(model_name=model_name, openai_api_key=api_key)
     
-    def _load_prompt_template(self, prompt_file: Optional[str], prompt_template: Optional[str]) -> PromptTemplate:
+    def _load_prompt_template(self, prompt_file=None, prompt_template=None):
         """
-        Load a prompt template from a file or use a provided template.
+        Load the prompt template from a file or string.
         
-        Biological analogy: Loading cognitive schemas.
-        Justification: Like how the brain loads cognitive schemas for different
-        contexts, the agent loads prompt templates for different interaction types.
+        Biological analogy: Reading neuronal activation patterns.
+        Justification: Like how neurons follow specific activation patterns,
+        this method loads specific prompt patterns to guide agent behavior.
         """
+        from langchain_core.prompts import PromptTemplate
+        
+        # Base assistant template as fallback
+        BASE_ASSISTANT = """You are a helpful AI assistant. 
+        
+        Current conversation:
+        {chat_history}
+        
+        User: {input}
+        AI: """
+        
+        # If prompt_template is already a PromptTemplate, return it directly
+        if isinstance(prompt_template, PromptTemplate):
+            return prompt_template
+            
+        # Load from file if specified
         if prompt_file:
             try:
-                # Try to load from the specified path
                 if os.path.exists(prompt_file):
                     with open(prompt_file, 'r') as f:
-                        template_content = f.read()
-                # If not found, try to load from a prompts directory
-                elif os.path.exists(f"prompts/{prompt_file}"):
-                    with open(f"prompts/{prompt_file}", 'r') as f:
                         template_content = f.read()
                 else:
                     # Default to a basic template if file not found

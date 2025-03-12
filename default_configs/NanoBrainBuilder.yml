@@ -1,70 +1,62 @@
 defaults:
-  agent_config_path: "builder/config/AgentWorkflowBuilder.yml"  # Path to agent configuration
-  session_save_path: "nanobrain_session.pkl"  # Default path for saving sessions
-  auto_save: false  # Whether to automatically save sessions
-  tools:  # List of tools to initialize
-    - StepFileWriter
-    - StepPlanner
-    - StepCoder
-    - StepGitInit
-    - StepContextSearch
-    - StepWebSearch
+  # Required parameters
+  executor: "ExecutorFunc"  # Default executor class
+  
+  # Optional parameters with defaults
+  config_path: "config.yml"  # Path to global configuration
+  workflows_dir: "workflows"  # Directory for storing workflows
+  interactive: true  # Whether to run in interactive mode
+  
+  # Tools configuration
+  tools:
+    - "StepFileWriter"
+    - "StepPlanner"
+    - "StepCoder"
+    - "StepGitInit"
+    - "StepContextSearch" 
+    - "StepWebSearch"
 
+# Metadata
 metadata:
-  description: "NanoBrain Builder for constructing workflows and steps"
-  biological_analogy: "Brain's prefrontal cortex executive function"
+  description: "NanoBrain workflow builder with interactive CLI interface"
+  biological_analogy: "Prefrontal cortex for planning and organization"
   justification: >
-    Like how the prefrontal cortex handles planning and
-    decision-making, the NanoBrainBuilder plans and constructs workflows.
+    Like the prefrontal cortex orchestrates complex behaviors and planning,
+    the NanoBrainBuilder orchestrates the creation and management of workflows.
   objectives:
-    - Provide an interface for building NanoBrain workflows
-    - Manage the creation of steps, workflows, and links
-    - Track active workflows and repositories
-    - Facilitate communication between the user and the AI assistant
+    - Create and manage workflows interactively
+    - Provide tools for building, testing, and saving steps
+    - Offer a user-friendly interface for workflow creation
+    - Load configuration dynamically from YAML files
 
 validation:
   required:
-    - executor  # ExecutorBase instance required
+    - executor  # ExecutorBase instance required 
   optional:
-    - agent_config_path
-    - session_save_path
-    - auto_save
+    - config_path
+    - workflows_dir
+    - interactive
     - tools
   constraints:
-    agent_config_path:
-      type: str
-    session_save_path:
-      type: str
-    auto_save:
-      type: bool
     tools:
       type: list
+    config_path:
+      type: str
+    workflows_dir:
+      type: str
+    interactive:
+      type: bool
 
 examples:
   basic:
-    description: "Basic NanoBrainBuilder with default settings"
+    description: "Basic builder configuration"
     config:
-      agent_config_path: "builder/config/AgentWorkflowBuilder.yml"
-      session_save_path: "nanobrain_session.pkl"
-      auto_save: false
+      executor: "ExecutorFunc"
+      config_path: "config.yml"
+      workflows_dir: "workflows"
+      interactive: true
       tools:
-        - StepFileWriter
-        - StepPlanner
-        - StepCoder
-        - StepGitInit
-        - StepContextSearch
-        - StepWebSearch
-
-  auto_save:
-    description: "NanoBrainBuilder with auto-save enabled"
-    config:
-      agent_config_path: "builder/config/AgentWorkflowBuilder.yml"
-      session_save_path: "nanobrain_session.pkl"
-      auto_save: true
-      tools:
-        - StepFileWriter
-        - StepPlanner
-        - StepCoder
-        - StepGitInit
-        - StepContextSearch
-        - StepWebSearch 
+        - "StepFileWriter"
+        - "StepPlanner"
+        - "StepCoder"
+        - "StepGitInit" 

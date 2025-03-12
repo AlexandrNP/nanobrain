@@ -22,15 +22,71 @@ class Workflow(Step):
         super().__init__(executor, **kwargs)
         
         # Workflow-specific attributes
-        self.steps = steps or []
+        self.steps = []
+        self.links = []
         self.deadlock_detector = DeadlockDetector()
         self.step_order = {}  # For hierarchical processing
         self.active_inhibition = {}  # Step ID -> inhibition level
         self.system_modulators = SystemModulator()
         self.network_efficiency = 0.5  # Overall network efficiency (0.0-1.0)
         
+        # Create steps from configuration if provided
+        if 'steps_config' in kwargs:
+            self.create_steps_from_config(kwargs['steps_config'])
+        elif steps:
+            self.steps = steps
+            
+        # Create links from configuration if provided
+        if 'links_config' in kwargs:
+            self.create_links_from_config(kwargs['links_config'])
+            
         # Organize steps into a hierarchy
         self.organize_hierarchy()
+    
+    def create_steps_from_config(self, steps_config: List[dict]):
+        """
+        Create steps from configuration dictionaries.
+        
+        Biological analogy: Cell differentiation from genetic instructions.
+        Justification: Like how cells differentiate into specific types based on
+        genetic and environmental factors, steps are created with specific
+        configurations for their roles.
+        """
+        for step_config in steps_config:
+            step_class = step_config.pop('class')
+            step = self.config_manager.create_instance(step_class, executor=self.executor, **step_config)
+            self.steps.append(step)
+            
+    def create_links_from_config(self, links_config: List[dict]):
+        """
+        Create links between steps from configuration.
+        
+        Biological analogy: Synapse formation between neurons.
+        Justification: Like how neurons form specific connections based on
+        molecular signals, links are created between steps based on configuration.
+        """
+        for link_config in links_config:
+            # Get source and target steps
+            source_idx = link_config.pop('source_step')
+            target_idx = link_config.pop('target_step')
+            
+            if 0 <= source_idx < len(self.steps) and 0 <= target_idx < len(self.steps):
+                source_step = self.steps[source_idx]
+                target_step = self.steps[target_idx]
+                
+                # Create link using configuration
+                link_class = link_config.pop('class', 'LinkDirect')
+                link = self.config_manager.create_instance(
+                    link_class,
+                    input_data=source_step.output,
+                    output_data=target_step.input,
+                    **link_config
+                )
+                
+                # Register link with steps
+                source_step.register_output_sink(link)
+                target_step.register_input_source(link)
+                self.links.append(link)
     
     async def execute(self):
         """

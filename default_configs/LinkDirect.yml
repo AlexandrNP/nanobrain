@@ -2,80 +2,54 @@
 # Default configuration - all variables assigned
 defaults:
   # Required parameters
-  input_data: None        # Must be provided, no default
-  output_data: None      # Must be provided, no default
+  input_data: null  # Must be provided at runtime
+  output_data: null  # Must be provided at runtime
+  
+  # Optional parameters with defaults
+  reliability: 0.95  # High reliability by default
+  connection_strength: 0.8  # Strong connection by default
+  signal_decay: 0.1  # Low signal decay by default
+  trigger: null  # Will use internal trigger if not provided
+  auto_transfer: true  # Automatically transfer data when input changes
 
-  # Optional parameters with defaults - set for maximum reliability
-  reliability: 1.0          # Always successful transmission
-  transmission_delay: 0.0   # No delay in transmission
-  adaptability: 0.0         # No automatic adaptation
-  buffer_size: 1            # Minimal buffer (direct transfer)
-  priority_level: 0         # Standard priority
-
-# Metadata and examples
+# Metadata
 metadata:
-  description: |
-    Direct link implementation that provides fast, reliable data transfer
-    between components with minimal processing overhead.
+  description: "Direct link between data units with high reliability"
+  biological_analogy: "Myelinated axon connection"
+  justification: >
+    Like how myelinated axons provide fast, reliable signal transmission
+    between neurons, LinkDirect provides fast, reliable data transfer
+    between components.
+  objectives:
+    - Transfer data directly from source to target
+    - Maintain high reliability and minimal loss
+    - Support automatic data transfer on changes
+    - Adapt connection strength based on usage
 
-  objective: |
-    To provide high-speed, reliable data transfer for scenarios where
-    immediate transmission is more important than adaptive processing.
-
-  biological_analogy: |
-    Functions like fast, direct neural pathways (e.g., reflexes) that
-    provide rapid, reliable signal transmission between components.
-
-  validation:
-    required:
-      - input_data
-      - output_data
-    optional:
-      - reliability
-      - transmission_delay
-      - adaptability
-      - buffer_size
-      - priority_level
-    constraints:
-      reliability:
-        type: float
-        min: 0.0
-        max: 1.0
-      transmission_delay:
-        type: float
-        min: 0.0
-      adaptability:
-        type: float
-        min: 0.0
-        max: 1.0
-      buffer_size:
-        type: int
-        min: 1
-      priority_level:
-        type: int
-        min: 0
-        max: 10
+validation:
+  required:
+    - input_data  # Source data unit
+    - output_data  # Target data unit
+  optional:
+    - reliability
+    - connection_strength
+    - signal_decay
+    - trigger
+    - auto_transfer
 
 examples:
-  - name: "Basic Usage"
-    code: |
-      direct_link = ConfigLoader.create("LinkDirect",
-                                     input_data=input_unit,
-                                     output_data=output_unit)
-      await direct_link.transfer()  # Always succeeds with default config
+  basic:
+    description: "Basic direct link with default settings"
+    config:
+      reliability: 0.95
+      connection_strength: 0.8
+      signal_decay: 0.1
+      auto_transfer: true
 
-  - name: "High Priority"
-    code: |
-      direct_link = ConfigLoader.create("LinkDirect",
-                                     input_data=input_unit,
-                                     output_data=output_unit,
-                                     priority_level=1)
-      await direct_link.transfer()
-
-  - name: "Custom Buffer"
-    code: |
-      direct_link = ConfigLoader.create("LinkDirect",
-                                     input_data=input_unit,
-                                     output_data=output_unit,
-                                     buffer_size=1024)
-      await direct_link.transfer() 
+  manual:
+    description: "Manual direct link without auto transfer"
+    config:
+      reliability: 0.99
+      connection_strength: 0.9
+      signal_decay: 0.05
+      auto_transfer: false 

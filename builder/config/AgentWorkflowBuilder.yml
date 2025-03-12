@@ -6,6 +6,7 @@ defaults:
   use_shared_context: true  # Use shared context between agents
   shared_context_key: "workflow_builder"  # Key for shared context group
   tools_config_path: "builder/config/tools.yml"  # Path to tools configuration
+  executor: ExecutorFunc
 
 metadata:
   description: "AI assistant for creating and managing NanoBrain workflow structures"

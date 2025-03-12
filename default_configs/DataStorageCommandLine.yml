@@ -1,0 +1,59 @@
+defaults:
+  # Required parameters
+  executor: "ExecutorFunc"  # Default executor class
+  
+  # Optional parameters with defaults
+  prompt: "command> "
+  welcome_message: "Welcome to the command line interface."
+  goodbye_message: "Goodbye!"
+  exit_command: "exit"
+  history_size: 50
+  input_unit: null  # Will be created if not provided
+  output_unit: null  # Will be created if not provided
+  trigger: null  # Will be created if not provided
+
+# Metadata
+metadata:
+  description: "Command line interface for entering and receiving data"
+  biological_analogy: "Sensory processing and motor output areas"
+  justification: >
+    Like how sensory areas process input and motor areas produce output,
+    this class processes command line input and produces command line output.
+  objectives:
+    - Process user input from command line
+    - Display output to command line
+    - Maintain history of commands
+    - Support interactive workflows
+
+validation:
+  required:
+    - executor  # ExecutorBase instance required
+  optional:
+    - prompt
+    - welcome_message
+    - goodbye_message
+    - exit_command
+    - history_size
+    - input_unit
+    - output_unit
+    - trigger
+
+examples:
+  basic:
+    description: "Basic command line interface"
+    config:
+      executor: "ExecutorFunc"
+      prompt: "command> "
+      welcome_message: "Welcome to the command line interface."
+      goodbye_message: "Goodbye!"
+      exit_command: "exit"
+
+  custom:
+    description: "Custom command line interface"
+    config:
+      executor: "ExecutorFunc"
+      prompt: "custom> "
+      welcome_message: "Welcome to the custom command line interface."
+      goodbye_message: "Thank you for using the custom command line interface!"
+      exit_command: "quit"
+      history_size: 100 
