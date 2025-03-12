@@ -80,8 +80,10 @@ class MockOpenAI:
 class MockConversationBufferMemory:
     """Mock implementation of ConversationBufferMemory."""
     
-    def __init__(self, **kwargs):
+    def __init__(self, memory_key: str = "history", return_messages: bool = False, **kwargs):
         self.chat_memory = MockChatMemory()
+        self.memory_key = memory_key
+        self.return_messages = return_messages
         self.kwargs = kwargs
         
     def save_context(self, inputs: Dict[str, Any], outputs: Dict[str, Any]) -> None:
@@ -89,21 +91,57 @@ class MockConversationBufferMemory:
         self.chat_memory.add_user_message(inputs.get("input", ""))
         self.chat_memory.add_ai_message(outputs.get("output", ""))
         
-    def load_memory_variables(self, **kwargs) -> Dict[str, Any]:
+    def load_memory_variables(self, input_values: Dict[str, Any] = None) -> Dict[str, Any]:
         """Load memory variables."""
-        return {"history": self.chat_memory.messages}
+        if input_values is None:
+            input_values = {}
+            
+        if self.return_messages:
+            return {self.memory_key: self.chat_memory.messages}
+        else:
+            # Convert messages to string format
+            result = ""
+            for message in self.chat_memory.messages:
+                if isinstance(message, MockHumanMessage):
+                    result += f"Human: {message.content}\n"
+                elif isinstance(message, MockAIMessage):
+                    result += f"AI: {message.content}\n"
+                elif isinstance(message, MockSystemMessage):
+                    result += f"System: {message.content}\n"
+            return {self.memory_key: result.strip()}
+            
+    def clear(self) -> None:
+        """Clear memory."""
+        self.chat_memory.clear()
 
 class MockConversationBufferWindowMemory(MockConversationBufferMemory):
     """Mock implementation of ConversationBufferWindowMemory."""
     
-    def __init__(self, k: int = 5, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, k: int = 5, memory_key: str = "history", return_messages: bool = False, **kwargs):
+        super().__init__(memory_key=memory_key, return_messages=return_messages, **kwargs)
         self.k = k
         
-    def load_memory_variables(self, **kwargs) -> Dict[str, Any]:
+    def load_memory_variables(self, input_values: Dict[str, Any] = None) -> Dict[str, Any]:
         """Load memory variables with window."""
+        if input_values is None:
+            input_values = {}
+            
+        # Get the last k exchanges (k * 2 messages)
         messages = self.chat_memory.messages[-self.k*2:] if len(self.chat_memory.messages) > self.k*2 else self.chat_memory.messages
-        return {"history": messages}
+        
+        if self.return_messages:
+            return {self.memory_key: messages}
+        else:
+            # Convert messages to string format
+            result = ""
+            for message in messages:
+                if isinstance(message, MockHumanMessage):
+                    result += f"Human: {message.content}\n"
+                elif isinstance(message, MockAIMessage):
+                    result += f"AI: {message.content}\n"
+                elif isinstance(message, MockSystemMessage):
+                    result += f"System: {message.content}\n"
+            return {self.memory_key: result.strip()}
 
 class MockChatMemory:
     """Mock implementation of ChatMemory."""
@@ -167,10 +205,51 @@ class MockBaseTool:
         self.description = description
         self.func = func
         self.kwargs = kwargs
+        self.return_direct = kwargs.get('return_direct', False)
+        self.args_schema = kwargs.get('args_schema', None)
+        self.coroutine = None  # For async compatibility
         
     def __call__(self, *args, **kwargs):
         """Call the tool function."""
         return self.func(*args, **kwargs)
+    
+    def invoke(self, input_data, **kwargs):
+        """Invoke the tool with the given input."""
+        if isinstance(input_data, dict):
+            return self.func(**input_data)
+        return self.func(input_data)
+    
+    async def ainvoke(self, input_data, **kwargs):
+        """Invoke the tool asynchronously."""
+        # For simplicity, we just call the sync version
+        return self.invoke(input_data, **kwargs)
+    
+    def run(self, *args, **kwargs):
+        """Run the tool."""
+        return self.func(*args, **kwargs)
+    
+    async def arun(self, *args, **kwargs):
+        """Run the tool asynchronously."""
+        return self.run(*args, **kwargs)
+        
+    @property
+    def args(self):
+        """Get the arguments schema."""
+        if self.args_schema:
+            return self.args_schema
+        # Try to infer from function signature
+        import inspect
+        sig = inspect.signature(self.func)
+        args = {}
+        for name, param in sig.parameters.items():
+            if name == 'self' or name == 'kwargs':
+                continue
+            param_type = param.annotation if param.annotation != inspect.Parameter.empty else 'string'
+            args[name] = {
+                'type': str(param_type).replace("<class '", "").replace("'>", ""),
+                'title': name.replace('_', ' ').title()
+            }
+        return args
 
 def tool(func=None, name=None, description=None, **kwargs):
     """Mock implementation of the tool decorator."""

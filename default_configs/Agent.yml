@@ -12,6 +12,9 @@ defaults:
   response_coherence: 0.7  # How well responses maintain consistency
   use_shared_context: false  # Whether to use shared context between agents
   shared_context_key: null  # Key for shared context group (auto-generated if null)
+  tools_config_path: "default_configs/AgentTools.yml"  # Path to tools configuration
+  use_buffer_window_memory: true  # Whether to use ConversationBufferWindowMemory
+  memory_key: "chat_history"  # Key for storing conversation history in prompt context
 
 metadata:
   description: "LLM-powered agent that processes inputs using language models"
@@ -39,6 +42,9 @@ validation:
     - prompt_variables
     - use_shared_context
     - shared_context_key
+    - tools_config_path
+    - use_buffer_window_memory
+    - memory_key
   constraints:
     memory_window_size:
       min: 1
@@ -65,6 +71,13 @@ validation:
     shared_context_key:
       type: str
       nullable: true
+    tools_config_path:
+      type: str
+      nullable: true
+    use_buffer_window_memory:
+      type: bool
+    memory_key:
+      type: str
 
 examples:
   basic:
@@ -96,6 +109,7 @@ examples:
       response_coherence: 0.9
       use_shared_context: true
       shared_context_key: "technical_team"
+      tools_config_path: "default_configs/AgentTools.yml"
 
   creative:
     description: "Creative assistant agent with shared context"

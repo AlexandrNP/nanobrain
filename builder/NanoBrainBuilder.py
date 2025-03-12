@@ -3,6 +3,7 @@ import os
 import asyncio
 from pathlib import Path
 import argparse
+import importlib.util
 
 from src.Workflow import Workflow
 from src.ExecutorBase import ExecutorBase
@@ -136,44 +137,108 @@ class NanoBrainBuilder:
             
         self.executor = executor
         
-        # Initialize the Agent
-        self.agent = Agent(
-            # Pass the executor
-            executor=self.executor,
-            # Use a default OpenAI model for the agent
-            model_name="gpt-4",
-            # Set memory window size
-            memory_window_size=5,
-            # Set prompt variables
-            prompt_variables={
-                "role_description": "assist with building NanoBrain workflows",
-                "specific_instructions": "Focus on creating well-structured workflows and steps"
-            }
-        )
+        # Initialize the ConfigManager
+        from src.ConfigManager import ConfigManager
+        self.config_manager = ConfigManager()
+        
+        # Load configuration for NanoBrainBuilder
+        self.config = self.config_manager.get_config("NanoBrainBuilder")
+        
+        # Initialize the Agent using ConfigLoader
+        self._workflows_dir = self.config.get('defaults', {}).get('workflows_dir', 'workflows')
+        
+        # Create workflows directory if it doesn't exist
+        if not os.path.exists(self._workflows_dir):
+            os.makedirs(self._workflows_dir, exist_ok=True)
+            
+        self._init_agent()
         
         # Initialize the workflow stack
         self._workflow_stack = []
         
         # Add tools to the agent
-        self._init_tools()
+        # self._init_tools()
+    
+    def _init_agent(self):
+        """Initialize the agent from configuration."""
+        from src.Agent import Agent
+        
+        # Get agent configuration path from NanoBrainBuilder config
+        agent_config_path = self.config.get('defaults', {}).get('agent_config_path', 'builder/config/AgentWorkflowBuilder.yml')
+        
+        # Load agent configuration
+        agent_config = self.config_manager.get_config("AgentWorkflowBuilder")
+        
+        # Extract agent configuration parameters
+        agent_defaults = agent_config.get('defaults', {})
+        
+        # Initialize the Agent with configuration
+        self.agent = Agent(
+            # Pass the executor
+            executor=self.executor,
+            # Use model name from config or default
+            model_name=agent_defaults.get('model_name', 'gpt-3.5-turbo'),
+            # Use model class from config or default
+            model_class=agent_defaults.get('model_class'),
+            # Set memory window size from config or default
+            memory_window_size=agent_defaults.get('memory_window_size', 10),
+            # Set prompt template from config or default
+            prompt_template=agent_defaults.get('prompt_template'),
+            # Set prompt variables from config or default
+            prompt_variables=agent_defaults.get('prompt_variables', {
+                "role_description": "assist with building NanoBrain workflows",
+                "specific_instructions": "Focus on creating well-structured workflows and steps"
+            }),
+            # Set shared context settings from config or default
+            use_shared_context=agent_defaults.get('use_shared_context', True),
+            shared_context_key=agent_defaults.get('shared_context_key', 'workflow_builder')
+        )
     
     def _init_tools(self):
-        """Initialize the tools for the agent."""
-        # Create tools
-        file_writer = StepFileWriter(self.executor)
-        planner = StepPlanner(self.executor)
-        coder = StepCoder(self.executor)
-        git_init = StepGitInit(self.executor)
-        context_search = StepContextSearch(self.executor)
-        web_search = StepWebSearch(self.executor)
+        """Initialize the tools for the agent from configuration."""
+        import traceback
         
-        # Add tools to the agent
-        self.agent.add_tool(file_writer)
-        self.agent.add_tool(planner)
-        self.agent.add_tool(coder)
-        self.agent.add_tool(git_init)
-        self.agent.add_tool(context_search)
-        self.agent.add_tool(web_search)
+        # Get tools list from configuration
+        tools_list = self.config.get('defaults', {}).get('tools', [
+            'StepFileWriter',
+            'StepPlanner',
+            'StepCoder',
+            'StepGitInit',
+            'StepContextSearch',
+            'StepWebSearch'
+        ])
+        
+        # Import tools dynamically
+        from tools_common import (
+            StepFileWriter, StepPlanner, StepCoder, 
+            StepGitInit, StepContextSearch, StepWebSearch
+        )
+        
+        # Map tool names to classes
+        tool_classes = {
+            'StepFileWriter': StepFileWriter,
+            'StepPlanner': StepPlanner,
+            'StepCoder': StepCoder,
+            'StepGitInit': StepGitInit,
+            'StepContextSearch': StepContextSearch,
+            'StepWebSearch': StepWebSearch
+        }
+        
+        # Create and add tools
+        for tool_name in tools_list:
+            if tool_name in tool_classes:
+                try:
+                    # Create tool instance
+                    tool_instance = tool_classes[tool_name](self.executor)
+                    # Add tool to agent
+                    self.agent.add_tool(tool_instance)
+                    print(f"Successfully added tool: {tool_name}")
+                except Exception as e:
+                    print(f"Error creating tool {tool_name}: {type(e).__name__} - {str(e)}")
+                    print("\nStack trace:")
+                    traceback.print_exc()
+            else:
+                print(f"Warning: Tool '{tool_name}' not found in available tools.")
     
     def get_current_workflow(self) -> Optional[str]:
         """
@@ -184,8 +249,43 @@ class NanoBrainBuilder:
         """
         if not self._workflow_stack:
             return None
-        
         return self._workflow_stack[-1]
+
+    def get_current_workflow_object(self) -> Optional[Workflow]:
+        """
+        Get the current workflow object.
+        
+        Returns:
+            The current workflow object or None if no workflow is active
+        """
+        workflow_path = self.get_current_workflow()
+        if not workflow_path:
+            return None
+            
+        try:
+            # Get the workflow class name from the path
+            workflow_name = os.path.basename(workflow_path)
+            workflow_class_name = ''.join(word.capitalize() for word in workflow_name.split('_'))
+            
+            # Import the workflow module
+            spec = importlib.util.spec_from_file_location(
+                workflow_class_name,
+                os.path.join(workflow_path, 'src', f'{workflow_class_name}.py')
+            )
+            if spec is None or spec.loader is None:
+                return None
+                
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            
+            # Get the workflow class
+            workflow_class = getattr(module, workflow_class_name)
+            
+            # Create and return the workflow instance
+            return workflow_class(executor=self.executor)
+        except Exception as e:
+            print(f"Error getting workflow object: {e}")
+            return None
     
     def push_workflow(self, workflow_path: str):
         """
@@ -208,20 +308,19 @@ class NanoBrainBuilder:
         
         return self._workflow_stack.pop()
     
-    async def create_workflow(self, workflow_name: str, username: Optional[str] = None) -> Dict[str, Any]:
+    async def create_workflow(self, workflow_name: str, base_dir: Optional[str] = None) -> Dict[str, Any]:
         """
         Create a new workflow.
         
         Args:
             workflow_name: Name of the workflow to create
-            username: Username for the git repository (optional)
-        
+            base_dir: Base directory for the workflow (optional)
+            
         Returns:
             Dictionary with the result of the operation
         """
-        from builder.WorkflowSteps import CreateWorkflowStep
-        
-        return await CreateWorkflowStep.execute(self, workflow_name, username)
+        from builder.WorkflowSteps import CreateWorkflow
+        return await CreateWorkflow.execute(self, workflow_name, base_dir=base_dir)
     
     async def create_step(self, step_name: str, base_class: str = "Step", description: str = None) -> Dict[str, Any]:
         """
@@ -235,9 +334,9 @@ class NanoBrainBuilder:
         Returns:
             Dictionary with the result of the operation
         """
-        from builder.WorkflowSteps import CreateStepStep
+        from builder.WorkflowSteps import CreateStep
         
-        return await CreateStepStep.execute(self, step_name, base_class, description)
+        return await CreateStep.execute(self, step_name, base_class, description)
     
     async def test_step(self, step_name: str) -> Dict[str, Any]:
         """
@@ -452,6 +551,32 @@ class NanoBrainBuilder:
             print(result.get("message", "Command executed successfully"))
         else:
             print(f"Error: {result.get('error', 'Unknown error')}")
+
+    def list_workflows(self) -> List[str]:
+        """
+        List all available workflows.
+        
+        Returns:
+            List of workflow names
+        """
+        if not os.path.exists(self._workflows_dir):
+            return []
+            
+        return [d for d in os.listdir(self._workflows_dir) 
+                if os.path.isdir(os.path.join(self._workflows_dir, d))]
+                
+    def get_workflow_path(self, workflow_name: str) -> Optional[str]:
+        """
+        Get the full path to a workflow.
+        
+        Args:
+            workflow_name: Name of the workflow
+            
+        Returns:
+            Full path to the workflow directory or None if not found
+        """
+        workflow_path = os.path.join(self._workflows_dir, workflow_name)
+        return workflow_path if os.path.exists(workflow_path) else None
 
 
 if __name__ == "__main__":

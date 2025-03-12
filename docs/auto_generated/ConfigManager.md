@@ -1,6 +1,6 @@
 # ConfigManager
 
-Handles configuration via YAML files.
+Handles configuration via YAML files and creates class instances.
 
 Biological analogy: Epigenetic mechanisms that control gene expression.
 Justification: Like how epigenetic modifications determine which genes are expressed
@@ -34,6 +34,33 @@ Updates configuration if adaptability threshold is met.
 Biological analogy: Cellular plasticity - ability to change in response to stimuli.
 Justification: Components with higher adaptability should be more responsive to
 configuration changes, similar to how more plastic neural circuits adapt more readily.
+
+### create_instance
+
+```python
+def create_instance(self, class_name: str, **kwargs) -> Any
+```
+
+Factory method that creates an instance of the specified class using configuration.
+First looks for a config file, then loads the class from a .py file with the same name,
+and finally creates an instance with the config parameters.
+
+Biological analogy: Protein synthesis from genetic instructions.
+Justification: Like how cells synthesize proteins based on DNA templates modified
+by epigenetic factors, this method creates objects based on class definitions
+modified by configuration parameters.
+
+Args:
+    class_name: Name of the class to instantiate
+    **kwargs: Additional parameters to override config values
+    
+Returns:
+    An instance of the specified class
+    
+Raises:
+    ImportError: If the class module cannot be found
+    AttributeError: If the class cannot be found in the module
+    TypeError: If the class cannot be instantiated with the given parameters
 
 ### adaptability
 

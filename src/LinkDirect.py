@@ -1,5 +1,7 @@
-from enums import DataUnitBase
-from LinkBase import LinkBase
+from typing import Optional
+from src.DataUnitBase import DataUnitBase
+from src.LinkBase import LinkBase
+from src.TriggerBase import TriggerBase
 import asyncio
 
 class LinkDirect:
@@ -10,8 +12,8 @@ class LinkDirect:
     Justification: Like how some neural pathways offer rapid, direct transmission
     (e.g., reflexes), direct links provide immediate data transfer between components.
     """
-    def __init__(self, input_data: DataUnitBase, output_data: DataUnitBase, **kwargs):
-        self.base_link = LinkBase(input_data, output_data, **kwargs)
+    def __init__(self, input_data: DataUnitBase, output_data: DataUnitBase, trigger: Optional[TriggerBase] = None, **kwargs):
+        self.base_link = LinkBase(input_data, output_data, trigger, **kwargs)
         self.base_link.reliability = 0.98  # Higher reliability than average
         self.base_link.transmission_delay = 0.01  # Fast transmission
     
@@ -28,6 +30,16 @@ class LinkDirect:
         await asyncio.sleep(self.base_link.transmission_delay)
         
         return await self.base_link.transfer()
+        
+    async def start_monitoring(self):
+        """
+        Start monitoring the trigger condition.
+        
+        Biological analogy: Synaptic vigilance.
+        Justification: Like how synapses remain vigilant for signals,
+        links monitor for conditions to trigger transfer.
+        """
+        return await self.base_link.start_monitoring()
         
     # Delegate methods to base link
     def get_config(self, class_dir: str = None) -> dict:
@@ -63,3 +75,13 @@ class LinkDirect:
     @reliability.setter
     def reliability(self, value):
         self.base_link.reliability = value
+        
+    @property
+    def trigger(self):
+        return self.base_link.trigger
+        
+    @trigger.setter
+    def trigger(self, value):
+        self.base_link.trigger = value
+        if self.base_link.trigger:
+            self.base_link.trigger.runnable = self.base_link

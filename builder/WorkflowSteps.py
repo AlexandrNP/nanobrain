@@ -10,11 +10,17 @@ import re
 import shutil
 import asyncio
 import subprocess
+import importlib.util
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Union, Tuple
 
 from src.Step import Step
 from src.ExecutorBase import ExecutorBase
+from src.ConfigManager import ConfigManager
+from builder.AgentWorkflowBuilder import AgentWorkflowBuilder
+from src.DataStorageCommandLine import DataStorageCommandLine
+from src.LinkDirect import LinkDirect
+from src.TriggerDataChanged import TriggerDataChanged
 
 
 def camel_case(s: str) -> str:
@@ -26,7 +32,7 @@ def camel_case(s: str) -> str:
     return s
 
 
-class CreateWorkflowStep:
+class CreateWorkflow:
     """
     Create a new workflow.
     
@@ -34,20 +40,29 @@ class CreateWorkflowStep:
     NanoBrainBuilder. It also initializes a git repository for the workflow.
     """
     @staticmethod
-    async def execute(builder, workflow_name: str, username: Optional[str] = None) -> Dict[str, Any]:
+    async def execute(builder, workflow_name: str, base_dir: Optional[str] = None) -> Dict[str, Any]:
         """
         Execute the create workflow step.
         
         Args:
             builder: The NanoBrainBuilder instance
             workflow_name: Name of the workflow to create
-            username: Username for the git repository (optional)
+            base_dir: Base directory for the workflow (optional)
         
         Returns:
             Dictionary with the result of the operation
         """
+        # Get the workflows directory from config
+        workflows_dir = builder.config.get('defaults', {}).get('workflows_dir', 'workflows')
+        
+        # Create the workflows directory if it doesn't exist
+        if not os.path.exists(workflows_dir):
+            os.makedirs(workflows_dir, exist_ok=True)
+        
         # Create the workflow directory
-        workflow_path = os.path.join(os.getcwd(), workflow_name)
+        if base_dir is None:
+            base_dir = workflows_dir
+        workflow_path = os.path.join(base_dir, workflow_name)
         
         # Check if the directory already exists
         if os.path.exists(workflow_path):
@@ -67,8 +82,9 @@ class CreateWorkflowStep:
             git_init_tool = next((tool for tool in builder.agent.tools if tool.__class__.__name__ == 'StepGitInit'), None)
             
             if git_init_tool:
-                repo_name = f"{username}_{workflow_name}" if username else workflow_name
-                git_result = await git_init_tool.process([workflow_path, repo_name, username])
+                # Get author name from config
+                author_name = builder.config.get('defaults', {}).get('author_name', 'NanoBrain Developer')
+                git_result = await git_init_tool.process([workflow_path, workflow_name, author_name])
                 
                 if not git_result.get('success', False):
                     return {
@@ -81,11 +97,19 @@ class CreateWorkflowStep:
             
             if file_writer_tool:
                 # Create README.md
-                readme_content = f"# {workflow_name}\n\nA NanoBrain workflow created with the NanoBrain builder tool.\n"
+                readme_content = f"""# {workflow_name}
+
+A NanoBrain workflow created with the NanoBrain builder tool.
+
+## Author
+{builder.config.get('defaults', {}).get('author_name', 'NanoBrain Developer')}
+"""
                 await file_writer_tool.create_file(os.path.join(workflow_path, 'README.md'), readme_content)
                 
-                # Create main workflow file
+                # Format workflow name in CamelCase
                 workflow_class_name = camel_case(workflow_name)
+                
+                # Create main workflow file
                 workflow_content = f"""from typing import List, Dict, Any, Optional
 from src.Workflow import Workflow
 from src.ExecutorBase import ExecutorBase
@@ -112,7 +136,8 @@ class {workflow_class_name}(Workflow):
         # {workflow_class_name}-specific attributes
         # Add your attributes here
 """
-                await file_writer_tool.create_file(os.path.join(workflow_path, 'src', f'{workflow_class_name}.py'), workflow_content)
+                workflow_file_path = os.path.join(workflow_path, 'src', f'{workflow_class_name}.py')
+                await file_writer_tool.create_file(workflow_file_path, workflow_content)
                 
                 # Create a default configuration file
                 config_content = f"""defaults:
@@ -126,6 +151,7 @@ metadata:
     this workflow coordinates multiple steps to achieve its objectives.
   objectives:
     # Add your workflow objectives here
+  author: "{builder.config.get('defaults', {}).get('author_name', 'NanoBrain Developer')}"
 
 validation:
   required:
@@ -167,7 +193,7 @@ if __name__ == '__main__':
 """
                 await file_writer_tool.create_file(os.path.join(workflow_path, 'test', f'test_{workflow_class_name}.py'), test_content)
             
-            # Push the workflow onto the stack
+            # Add workflow to builder's workflow stack
             builder.push_workflow(workflow_path)
             
             # Update the agent's workflow context
@@ -190,12 +216,13 @@ if __name__ == '__main__':
             }
 
 
-class CreateStepStep:
+class CreateStep:
     """
     Create a new step.
     
     This step creates a new folder for the step with a Python file for the step
-    class and a default configuration file.
+    class and a default configuration file. It starts an interactive code writing
+    phase using AgentWorkflowBuilder and DataStorageCommandLine.
     """
     @staticmethod
     async def execute(builder, step_name: str, base_class: str = "Step", description: str = None) -> Dict[str, Any]:
@@ -219,11 +246,19 @@ class CreateStepStep:
                 "error": "No active workflow. Create or activate a workflow first."
             }
         
+        # Ensure description is a string
+        if description is not None:
+            if hasattr(description, 'template'):
+                description = description.template
+            description = str(description)
+        else:
+            description = f"A custom step for {step_name}"
+        
         # Format the step name in CamelCase
         step_class_name = f"Step{camel_case(step_name)}"
         
         # Create the step directory
-        step_dir = os.path.join(workflow_path, 'src', step_class_name)
+        step_dir = os.path.join(workflow_path, step_class_name)
         
         # Check if the directory already exists
         if os.path.exists(step_dir):
@@ -236,111 +271,75 @@ class CreateStepStep:
             # Create the directory
             os.makedirs(step_dir, exist_ok=True)
             os.makedirs(os.path.join(step_dir, 'config'), exist_ok=True)
+           
+            # Create instances using ConfigManager
+            config_manager = ConfigManager()
             
-            # Use the planner to create a plan for the step
-            planner_tool = next((tool for tool in builder.agent.tools if tool.__class__.__name__ == 'StepPlanner'), None)
+            # Create AgentWorkflowBuilder instance
+            agent_builder = config_manager.create_instance("AgentWorkflowBuilder")
             
-            if planner_tool and description:
-                # Generate a plan for the step
-                plan_result = await planner_tool.plan_step(step_class_name, description, base_class)
-                
-                if not plan_result.get('success', False):
-                    return {
-                        "success": False,
-                        "error": f"Failed to generate plan for step: {plan_result.get('error', 'Unknown error')}"
-                    }
-                
-                # Include the plan in the step file
-                plan = plan_result.get('plan', '')
-            else:
-                plan = ""
+            # Create DataStorageCommandLine instance
+            command_line = config_manager.create_instance("DataStorageCommandLine", 
+                executor=builder.executor,
+                prompt=f"{step_class_name}> ",
+                welcome_message=f"Starting interactive code writing phase for {step_class_name}.",
+                goodbye_message="Step creation completed.",
+                exit_command="finish"
+            )
             
-            # Create the step file
+            # Create TriggerDataChanged instance
+            trigger = config_manager.create_instance("TriggerDataChanged")
+            
+            # Create LinkDirect instance
+            link = config_manager.create_instance("LinkDirect",
+                command_line=command_line,
+                agent_builder=agent_builder,
+                trigger=trigger
+            )
+            
+            # Start monitoring for input
+            await link.start_monitoring()
+            
+            # Display initial menu
+            menu = """
+Available commands:
+1. link <source_step> <target_step> - Link this step to another step
+2. finish - End step creation and save
+3. help - Show this menu
+"""
+            print(menu)
+            
+            # Start the command line monitoring
+            await command_line.start_monitoring()
+            
+            # After monitoring stops, save all files and update configuration
             file_writer_tool = next((tool for tool in builder.agent.tools if tool.__class__.__name__ == 'StepFileWriter'), None)
             
             if file_writer_tool:
-                # Create the step file
-                step_content = f"""from typing import List, Dict, Any, Optional
-from src.{base_class} import {base_class}
-from src.ExecutorBase import ExecutorBase
-
-class {step_class_name}({base_class}):
-    \"\"\"
-    {description or f"{step_name} step."}
-    
-    Biological analogy: Specialized neural circuit.
-    Justification: Like how specialized neural circuits process specific
-    types of information, this step performs specialized processing for
-    {step_name.lower()}.
-    \"\"\"
-    def __init__(self, executor: ExecutorBase, **kwargs):
-        super().__init__(executor, **kwargs)
-        
-        # {step_class_name}-specific attributes
-        # Add your attributes here
-    
-    async def process(self, inputs: List[Any]) -> Any:
-        \"\"\"
-        Process the inputs and produce output.
-        
-        Args:
-            inputs: List of input data
-            
-        Returns:
-            Processed output
-        \"\"\"
-        # Implementation goes here
-        return None
-"""
+                # Create the step class file
+                step_content = agent_builder.get_generated_code()
                 await file_writer_tool.create_file(os.path.join(step_dir, f'{step_class_name}.py'), step_content)
                 
-                # Create a default configuration file
-                config_content = f"""defaults:
-  # Add your default configuration parameters here
+                # Create __init__.py
+                init_content = f"""from .{step_class_name} import {step_class_name}
 
-metadata:
-  description: "{description or f"{step_name} step."}"
-  biological_analogy: "Specialized neural circuit"
-  justification: >
-    Like how specialized neural circuits process specific types of information,
-    this step performs specialized processing for {step_name.lower()}.
-  objectives:
-    # Add your step objectives here
-
-validation:
-  required:
-    - executor  # ExecutorBase instance required
-  optional:
-    # Add your optional parameters here
-  constraints:
-    # Add your parameter constraints here
-
-examples:
-  basic:
-    description: "Basic usage example"
-    config:
-      # Add example configuration here
-"""
-                await file_writer_tool.create_file(os.path.join(step_dir, 'config', f'{step_class_name}.yml'), config_content)
-                
-                # Create an __init__.py file
-                init_content = f"""\"\"\"
-{step_class_name} module.
-
-This module contains the {step_class_name} class for {step_name.lower()} processing.
-\"\"\"
-
-from .{step_class_name} import {step_class_name}
+__all__ = ['{step_class_name}']
 """
                 await file_writer_tool.create_file(os.path.join(step_dir, '__init__.py'), init_content)
+                
+                # Create configuration file
+                config_content = agent_builder.get_generated_config()
+                await file_writer_tool.create_file(os.path.join(step_dir, 'config', f'{step_class_name}.yml'), config_content)
+                
+                # Create test file
+                test_content = agent_builder.get_generated_tests()
+                await file_writer_tool.create_file(os.path.join(workflow_path, 'test', f'test_{step_class_name}.py'), test_content)
             
-            # Update the agent's workflow context
-            builder.agent.update_workflow_context(workflow_path)
-            
+            # Return success
             return {
                 "success": True,
                 "message": f"Created step {step_class_name} at {step_dir}",
-                "step_path": step_dir,
+                "step_dir": step_dir,
                 "step_class_name": step_class_name
             }
             

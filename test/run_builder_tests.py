@@ -9,6 +9,7 @@ import os
 import sys
 import unittest
 from unittest.mock import patch, MagicMock
+import types
 
 # Add the parent directory to the path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -26,8 +27,8 @@ from test.mock_agent import Agent
 from test.mock_executor import MockExecutorBase, MockConfigManager, MockSystemModulator, MockDirectoryTracer
 from test.mock_builder import (
     NanoBrainBuilder,
-    CreateWorkflowStep,
-    CreateStepStep,
+    CreateWorkflow,
+    CreateStep,
     TestStepStep,
     SaveStepStep,
     LinkStepsStep,
@@ -77,9 +78,9 @@ def setup_mocks():
     sys.modules['builder'] = builder_mock
     
     # Mock the builder.WorkflowSteps module
-    workflow_steps_mock = MagicMock()
-    workflow_steps_mock.CreateWorkflowStep = CreateWorkflowStep
-    workflow_steps_mock.CreateStepStep = CreateStepStep
+    workflow_steps_mock = types.ModuleType('builder.WorkflowSteps')
+    workflow_steps_mock.CreateWorkflow = CreateWorkflow
+    workflow_steps_mock.CreateStep = CreateStep
     workflow_steps_mock.TestStepStep = TestStepStep
     workflow_steps_mock.SaveStepStep = SaveStepStep
     workflow_steps_mock.LinkStepsStep = LinkStepsStep

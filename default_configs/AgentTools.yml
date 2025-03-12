@@ -1,0 +1,24 @@
+tools:
+  - name: FileWriterTool
+    class: tools_common.StepFileWriter.StepFileWriter
+    description: Creates or modifies a file with the provided content.
+    
+  - name: PlannerTool
+    class: tools_common.StepPlanner.StepPlanner
+    description: Plans the implementation of a new step or workflow.
+    
+  - name: CoderTool
+    class: tools_common.StepCoder.StepCoder
+    description: Generates software code based on requirements.
+    
+  - name: GitInitTool
+    class: tools_common.StepGitInit.StepGitInit
+    description: Initializes a git repository with a given name in the specified folder.
+    
+  - name: ContextSearchTool
+    class: tools_common.StepContextSearch.StepContextSearch
+    description: Searches the surrounding context for relevant information.
+    
+  - name: WebSearchTool
+    class: tools_common.StepWebSearch.StepWebSearch
+    description: Searches the web for information about APIs and best practices. 

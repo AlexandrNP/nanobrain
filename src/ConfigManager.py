@@ -1,7 +1,9 @@
 import os
 import sys
 import yaml
-from typing import Dict
+import importlib
+import inspect
+from typing import Dict, Any, Type, Optional
 
 # Ensure the project root is in the path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -16,7 +18,7 @@ except ImportError:
 
 class ConfigManager(IConfigurable):
     """
-    Handles configuration via YAML files.
+    Handles configuration via YAML files and creates class instances.
     
     Biological analogy: Epigenetic mechanisms that control gene expression.
     Justification: Like how epigenetic modifications determine which genes are expressed
@@ -27,6 +29,7 @@ class ConfigManager(IConfigurable):
         self._config = {}
         self._adaptability = 0.5  # Ability to reconfigure (0.0-1.0)
         self._base_path = kwargs.get('base_path', '')
+        self._class_cache = {}  # Cache for loaded classes
         
     def get_config(self, class_name: str) -> Dict:
         """
@@ -69,6 +72,92 @@ class ConfigManager(IConfigurable):
             self._config.update(updates)
             return True
         return False
+    
+    def create_instance(self, class_name: str, **kwargs) -> Any:
+        """
+        Factory method that creates an instance of the specified class using configuration.
+        First looks for a config file, then loads the class from a .py file with the same name,
+        and finally creates an instance with the config parameters.
+        
+        Biological analogy: Protein synthesis from genetic instructions.
+        Justification: Like how cells synthesize proteins based on DNA templates modified
+        by epigenetic factors, this method creates objects based on class definitions
+        modified by configuration parameters.
+        
+        Args:
+            class_name: Name of the class to instantiate
+            **kwargs: Additional parameters to override config values
+            
+        Returns:
+            An instance of the specified class
+            
+        Raises:
+            ImportError: If the class module cannot be found
+            AttributeError: If the class cannot be found in the module
+            TypeError: If the class cannot be instantiated with the given parameters
+        """
+        # Get configuration for the class
+        config = self.get_config(class_name)
+        
+        # Extract defaults from config
+        defaults = config.get('defaults', {})
+        
+        # Update with provided kwargs
+        params = {**defaults, **kwargs}
+        
+        # Get the class
+        cls = self._get_class(class_name)
+        if not cls:
+            raise ImportError(f"Could not find class '{class_name}'")
+        
+        # Create and return the instance
+        return cls(**params)
+    
+    def _get_class(self, class_name: str) -> Optional[Type]:
+        """
+        Get the class object for a given class name.
+        First checks cache, then tries to import from src/, builder/, and tools_common/ directories.
+        
+        Args:
+            class_name: Name of the class to find
+            
+        Returns:
+            The class object or None if not found
+        """
+        # Check cache first
+        if class_name in self._class_cache:
+            return self._class_cache[class_name]
+        
+        # List of possible module paths to try
+        module_paths = [
+            f"src.{class_name}",
+            f"builder.{class_name}",
+            f"tools_common.{class_name}",
+            class_name  # Try direct import
+        ]
+        
+        # Try each module path
+        for module_path in module_paths:
+            try:
+                # Try to import the module
+                module = importlib.import_module(module_path)
+                
+                # Look for the class in the module
+                if hasattr(module, class_name):
+                    # Get the class
+                    cls = getattr(module, class_name)
+                    
+                    # Verify it's a class
+                    if inspect.isclass(cls):
+                        # Cache the class
+                        self._class_cache[class_name] = cls
+                        return cls
+            except ImportError:
+                # Try the next path
+                continue
+        
+        # If we get here, we couldn't find the class
+        return None
         
     @property
     def adaptability(self) -> float:

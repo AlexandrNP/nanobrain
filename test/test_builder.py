@@ -8,19 +8,20 @@ import shutil
 import unittest
 import asyncio
 from unittest.mock import patch, MagicMock
+import types
 
 # Add the parent directory to the path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # Import mocked classes before patching
 from test.mock_builder import (
-    CreateWorkflowStep, 
-    CreateStepStep, 
-    TestStepStep, 
-    SaveStepStep, 
-    LinkStepsStep, 
-    SaveWorkflowStep, 
-    NanoBrainBuilder
+    NanoBrainBuilder,
+    CreateWorkflow,
+    CreateStep,
+    TestStepStep,
+    SaveStepStep,
+    LinkStepsStep,
+    SaveWorkflowStep
 )
 from test.mock_agent import Agent
 from test.mock_executor import MockExecutorBase
@@ -36,8 +37,8 @@ from test.mock_tools import (
 
 # Create the patches
 sys.modules['builder.WorkflowSteps'] = MagicMock()
-sys.modules['builder.WorkflowSteps'].CreateWorkflowStep = CreateWorkflowStep
-sys.modules['builder.WorkflowSteps'].CreateStepStep = CreateStepStep
+sys.modules['builder.WorkflowSteps'].CreateWorkflow = CreateWorkflow
+sys.modules['builder.WorkflowSteps'].CreateStep = CreateStep
 sys.modules['builder.WorkflowSteps'].TestStepStep = TestStepStep
 sys.modules['builder.WorkflowSteps'].SaveStepStep = SaveStepStep
 sys.modules['builder.WorkflowSteps'].LinkStepsStep = LinkStepsStep

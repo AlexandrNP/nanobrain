@@ -2,17 +2,22 @@ defaults:
   agent_config_path: "builder/config/AgentWorkflowBuilder.yml"  # Path to agent configuration
   session_save_path: "nanobrain_session.pkl"  # Default path for saving sessions
   auto_save: false  # Whether to automatically save sessions
-  workflows_dir: "workflows"  # Default directory for storing workflows
-  author_name: "NanoBrain Developer"  # Default author name for workflows
+  tools:  # List of tools to initialize
+    - StepFileWriter
+    - StepPlanner
+    - StepCoder
+    - StepGitInit
+    - StepContextSearch
+    - StepWebSearch
 
 metadata:
-  description: "Workflow for building NanoBrain workflows interactively"
-  biological_analogy: "Meta-cognitive system"
+  description: "NanoBrain Builder for constructing workflows and steps"
+  biological_analogy: "Brain's prefrontal cortex executive function"
   justification: >
-    Like how meta-cognitive systems monitor and control cognitive processes,
-    this workflow monitors and controls the process of building other workflows.
+    Like how the prefrontal cortex handles planning and
+    decision-making, the NanoBrainBuilder plans and constructs workflows.
   objectives:
-    - Provide an interactive environment for building NanoBrain workflows
+    - Provide an interface for building NanoBrain workflows
     - Manage the creation of steps, workflows, and links
     - Track active workflows and repositories
     - Facilitate communication between the user and the AI assistant
@@ -21,10 +26,10 @@ validation:
   required:
     - executor  # ExecutorBase instance required
   optional:
-    - steps
     - agent_config_path
     - session_save_path
     - auto_save
+    - tools
   constraints:
     agent_config_path:
       type: str
@@ -32,18 +37,34 @@ validation:
       type: str
     auto_save:
       type: bool
+    tools:
+      type: list
 
 examples:
   basic:
-    description: "Basic workflow builder with default settings"
+    description: "Basic NanoBrainBuilder with default settings"
     config:
       agent_config_path: "builder/config/AgentWorkflowBuilder.yml"
       session_save_path: "nanobrain_session.pkl"
       auto_save: false
+      tools:
+        - StepFileWriter
+        - StepPlanner
+        - StepCoder
+        - StepGitInit
+        - StepContextSearch
+        - StepWebSearch
 
   auto_save:
-    description: "Workflow builder with auto-save enabled"
+    description: "NanoBrainBuilder with auto-save enabled"
     config:
       agent_config_path: "builder/config/AgentWorkflowBuilder.yml"
       session_save_path: "nanobrain_session.pkl"
-      auto_save: true 
+      auto_save: true
+      tools:
+        - StepFileWriter
+        - StepPlanner
+        - StepCoder
+        - StepGitInit
+        - StepContextSearch
+        - StepWebSearch 

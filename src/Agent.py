@@ -1,7 +1,7 @@
 from typing import Any, List, Optional, Dict, ClassVar, Callable, Tuple, Union
 from langchain.llms.base import BaseLLM
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_community.chat_models import ChatOpenAI
+from langchain_openai import ChatOpenAI
 from langchain.memory import ConversationBufferMemory, ConversationBufferWindowMemory
 from langchain.schema import SystemMessage, HumanMessage, AIMessage
 from langchain.prompts import PromptTemplate
@@ -57,6 +57,9 @@ class Agent(Step):
                  shared_context_key: Optional[str] = None,
                  tools: Optional[List[Step]] = None,
                  use_custom_tool_prompt: bool = False,
+                 tools_config_path: Optional[str] = None,
+                 use_buffer_window_memory: bool = True,
+                 memory_key: str = "chat_history",
                  **kwargs):
         """
         Initialize the agent with LLM configuration.
@@ -65,6 +68,23 @@ class Agent(Step):
         Justification: Like how neural circuits form with specific connectivity
         patterns based on genetic and environmental factors, the agent initializes
         with specific configuration parameters.
+        
+        Args:
+            executor: ExecutorBase instance for running steps
+            model_name: Name of the LLM model to use
+            model_class: Optional class name for the LLM model
+            memory_window_size: Number of recent conversations to keep in context
+            prompt_file: Path to file containing prompt template
+            prompt_template: String containing prompt template
+            prompt_variables: Variables to fill in the prompt template
+            use_shared_context: Whether to use shared context between agents
+            shared_context_key: Key for shared context group
+            tools: Optional list of Step objects to use as tools
+            use_custom_tool_prompt: Whether to use a custom prompt for tool calling
+            tools_config_path: Path to YAML file with tool configurations
+            use_buffer_window_memory: Whether to use ConversationBufferWindowMemory (True) or ConversationBufferMemory (False)
+            memory_key: The key to use for the memory in the prompt template
+            **kwargs: Additional keyword arguments
         """
         super().__init__(executor, **kwargs)
         
@@ -75,12 +95,27 @@ class Agent(Step):
         self.use_shared_context = use_shared_context
         self.shared_context_key = shared_context_key or self.__class__.__name__
         self.use_custom_tool_prompt = use_custom_tool_prompt
+        self.tools_config_path = tools_config_path
+        self.memory_key = memory_key
         
         # Initialize LLM
         self.llm = self._initialize_llm(self.model_name, self.model_class)
         
-        # Initialize memory
+        # Initialize memory (both internal storage and Langchain memory)
         self.memory = []
+        
+        # Set up Langchain memory
+        if use_buffer_window_memory:
+            self.langchain_memory = ConversationBufferWindowMemory(
+                k=self.memory_window_size,
+                memory_key=self.memory_key,
+                return_messages=True
+            )
+        else:
+            self.langchain_memory = ConversationBufferMemory(
+                memory_key=self.memory_key,
+                return_messages=True
+            )
         
         # Load prompt template
         self.prompt_template = self._load_prompt_template(prompt_file, prompt_template)
@@ -93,6 +128,10 @@ class Agent(Step):
         # Store tools
         self.tools = tools or []
         self.langchain_tools = []
+        
+        # Register tools from config if provided
+        if self.tools_config_path:
+            self._load_tools_from_config()
         
         # Register tools if provided
         if self.tools:
@@ -155,16 +194,16 @@ class Agent(Step):
             from langchain.llms import OpenAI
             return OpenAI(model_name=model_name, openai_api_key=api_key)
         elif model_class == "ChatOpenAI":
-            from langchain.chat_models import ChatOpenAI
+            from langchain_openai import ChatOpenAI
             return ChatOpenAI(model_name=model_name, openai_api_key=api_key)
         elif model_class == "ChatAnthropic":
-            from langchain.chat_models import ChatAnthropic
+            from langchain_anthropic import ChatAnthropic
             return ChatAnthropic(model_name=model_name, anthropic_api_key=api_key)
         elif model_class == "ChatGoogleGenerativeAI":
-            from langchain.chat_models import ChatGoogleGenerativeAI
+            from langchain_google_genai import ChatGoogleGenerativeAI
             return ChatGoogleGenerativeAI(model=model_name, google_api_key=api_key)
         elif model_class == "ChatMistralAI":
-            from langchain.chat_models import ChatMistralAI
+            from langchain_mistralai import ChatMistralAI
             return ChatMistralAI(model=model_name, mistral_api_key=api_key)
         else:
             # Default to ChatOpenAI
@@ -224,6 +263,11 @@ class Agent(Step):
             **self.prompt_variables
         }
         
+        # Add chat history from langchain memory
+        memory_dict = self.langchain_memory.load_memory_variables({})
+        if self.memory_key in memory_dict:
+            prompt_vars[self.memory_key] = memory_dict[self.memory_key]
+        
         formatted_prompt = self.prompt_template.format(**prompt_vars)
         
         # Process with LLM based on its type
@@ -242,6 +286,9 @@ class Agent(Step):
         
         # Update memory with this interaction
         self._update_memories(input_text, response)
+        
+        # Update langchain memory
+        self.langchain_memory.save_context({"input": input_text}, {"output": response})
         
         return response
     
@@ -280,6 +327,20 @@ class Agent(Step):
         working memory for immediate use, this method retrieves recent
         conversation history for context.
         """
+        # Try to get context from langchain memory first
+        try:
+            memory_dict = self.langchain_memory.load_memory_variables({})
+            if self.memory_key in memory_dict and memory_dict[self.memory_key]:
+                # Format langchain messages to string
+                context_str = ""
+                for message in memory_dict[self.memory_key]:
+                    role = "User" if isinstance(message, HumanMessage) else "Assistant"
+                    context_str += f"{role}: {message.content}\n"
+                return context_str
+        except Exception as e:
+            # Fall back to internal memory if there's an issue with langchain memory
+            pass
+        
         # Get the most recent interactions based on memory_window_size
         recent_memory = self.memory[-2*self.memory_window_size:] if len(self.memory) > 2*self.memory_window_size else self.memory
         
@@ -299,6 +360,9 @@ class Agent(Step):
         memory for new tasks, this method clears the agent's memory.
         """
         self.memory = []
+        
+        # Clear langchain memory as well
+        self.langchain_memory.clear()
         
         # If using shared context, clear it too
         if self.use_shared_context:
@@ -324,7 +388,20 @@ class Agent(Step):
         this method loads memory from a shared context.
         """
         if context_key in Agent.shared_context:
+            # Clear existing memory first
+            self.memory = []
+            self.langchain_memory.clear()
+            
+            # Load shared context
             self.memory = Agent.shared_context[context_key].copy()
+            
+            # Rebuild langchain memory from shared context
+            self.langchain_memory.clear()
+            for i in range(0, len(self.memory), 2):
+                if i+1 < len(self.memory):  # Make sure we have both user and assistant messages
+                    user_message = self.memory[i]["content"]
+                    assistant_message = self.memory[i+1]["content"]
+                    self.langchain_memory.save_context({"input": user_message}, {"output": assistant_message})
     
     def _register_tools(self, tools: List[Step]):
         """
@@ -356,6 +433,8 @@ class Agent(Step):
         to facilitate their use, this method creates a tool representation
         from a Step object.
         """
+        import traceback
+        
         # Skip if the step doesn't have a process method
         if not hasattr(step, 'process') or not callable(step.process):
             return None
@@ -390,17 +469,29 @@ class Agent(Step):
             # Create a tool from the function
             if TESTING_MODE:
                 # In testing mode, use the mock implementation
-                from test.mock_langchain import tool
-                step_tool = tool(name=step.__class__.__name__, description=doc)(sync_tool_func)
+                from test.mock_langchain import MockBaseTool
+                # Create a tool directly instead of using the decorator
+                step_tool = MockBaseTool(
+                    name=step.__class__.__name__,
+                    description=doc,
+                    func=sync_tool_func
+                )
             else:
                 # In production mode, use the real implementation
-                from langchain_core.tools import tool
-                step_tool = tool(name=step.__class__.__name__, description=doc)(sync_tool_func)
+                from langchain_core.tools import Tool
+                # Create a Tool instance directly
+                step_tool = Tool(
+                    name=step.__class__.__name__,
+                    description=doc,
+                    func=sync_tool_func
+                )
             
             return step_tool
             
         except Exception as e:
-            print(f"Error creating tool from step {step.__class__.__name__}: {e}")
+            print(f"Error creating tool from step {step.__class__.__name__}: {type(e).__name__} - {str(e)}")
+            print("\nStack trace:")
+            traceback.print_exc()
             return None
     
     def add_tool(self, step: Step):
@@ -598,4 +689,111 @@ class Agent(Step):
             if context_key in cls.shared_context:
                 del cls.shared_context[context_key]
         else:
-            cls.shared_context.clear() 
+            cls.shared_context.clear()
+
+    def update_workflow_context(self, workflow_path: str):
+        """
+        Update the agent's context with information about the current workflow.
+        
+        Biological analogy: Contextual awareness in the prefrontal cortex.
+        Justification: Like how the prefrontal cortex maintains awareness of the
+        current task context, this method updates the agent's context with
+        information about the current workflow.
+        
+        Args:
+            workflow_path: Path to the current workflow file
+        """
+        # Store the workflow path in the agent's context
+        if not hasattr(self, 'workflow_context'):
+            self.workflow_context = {}
+        
+        self.workflow_context = {
+            "path": workflow_path,
+            "updated_at": datetime.now().isoformat()
+        }
+        
+        # Add a message to the agent's memory about the workflow context
+        workflow_name = os.path.basename(workflow_path).replace('.pkl', '')
+        self._update_memories(
+            f"Working on workflow: {workflow_name}",
+            f"I'll help you with the workflow '{workflow_name}'. What would you like to do with this workflow?"
+        )
+
+    def _load_tools_from_config(self):
+        """
+        Load tools from the YAML configuration file specified by tools_config_path.
+        
+        Biological analogy: Tool discovery through exploration.
+        Justification: Like how organisms discover tools in their environment through
+        exploration, this method discovers tools through configuration exploration.
+        """
+        if not self.tools_config_path:
+            return
+            
+        try:
+            # Check if the file exists
+            if not os.path.exists(self.tools_config_path):
+                print(f"Tools config file not found: {self.tools_config_path}")
+                return
+                
+            # Load the YAML file
+            with open(self.tools_config_path, 'r') as file:
+                tools_config = yaml.safe_load(file)
+                
+            # Check if 'tools' key exists
+            if 'tools' not in tools_config:
+                print(f"No 'tools' key found in config: {self.tools_config_path}")
+                return
+                
+            # Create tool instances
+            for tool_config in tools_config['tools']:
+                tool_instance = self._create_tool_instance(tool_config)
+                if tool_instance:
+                    self.tools.append(tool_instance)
+                    
+        except Exception as e:
+            print(f"Error loading tools from config: {str(e)}")
+            import traceback
+            traceback.print_exc()
+    
+    def _create_tool_instance(self, tool_config: Dict) -> Optional[Step]:
+        """
+        Create a tool instance from the tool configuration.
+        
+        Biological analogy: Tool crafting from raw materials.
+        Justification: Like how early humans crafted tools from raw materials based
+        on mental templates, this method creates tool instances from configuration.
+        
+        Args:
+            tool_config: Dictionary containing tool configuration
+            
+        Returns:
+            Instance of the specified tool class or None if creation fails
+        """
+        try:
+            # Get the class path and name
+            class_path = tool_config.get('class')
+            if not class_path:
+                print(f"No class specified in tool config: {tool_config}")
+                return None
+                
+            # Split into module path and class name
+            module_path, class_name = class_path.rsplit('.', 1)
+            
+            # Import the module
+            module = importlib.import_module(module_path)
+            
+            # Get the class
+            cls = getattr(module, class_name)
+            
+            # Create the instance with the same executor used by this Agent
+            instance = cls(executor=self.runner.executor)
+            
+            print(f"Successfully created tool instance: {instance.__class__.__name__}")
+            return instance
+            
+        except Exception as e:
+            print(f"Error creating tool instance: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return None 

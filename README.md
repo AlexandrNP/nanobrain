@@ -185,6 +185,86 @@ The framework includes robust integration with various Language Model providers:
 
 The Agent class can work with both chat-based models (BaseChatModel) and completion-based models (BaseLLM), automatically detecting the appropriate model type and using the correct API for each.
 
+## Memory Management
+
+The NanoBrain framework provides comprehensive memory management for conversation context:
+
+### Agent Memory System
+
+The `Agent` class includes an advanced memory system that leverages both internal storage and Langchain's memory mechanisms:
+
+- **Langchain Memory Integration**: 
+  - Uses `ConversationBufferMemory` for unlimited history storage
+  - Uses `ConversationBufferWindowMemory` for windowed history (configurable size)
+  - Supports memory retrieval in both string and message formats
+
+- **Memory Configuration**:
+  ```python
+  agent = Agent(
+      executor=my_executor,
+      use_buffer_window_memory=True,  # Use windowed memory (default)
+      memory_window_size=5,           # Number of recent interactions to keep
+      memory_key="chat_history"       # Key for accessing memory in prompt templates
+  )
+  ```
+
+- **Memory Sharing**:
+  - Agents can share memory contexts using the shared context mechanism
+  - Support for team-based memory sharing where multiple agents can share experiences
+  ```python
+  agent1 = Agent(
+      executor=my_executor,
+      use_shared_context=True,
+      shared_context_key="team_memory"
+  )
+  
+  agent2 = Agent(
+      executor=my_executor,
+      use_shared_context=True,
+      shared_context_key="team_memory"
+  )
+  
+  # Memory from agent1's interactions can be accessed by agent2
+  ```
+
+- **Memory Operations**:
+  - `get_full_history()`: Retrieve complete conversation history
+  - `get_context_history()`: Get recent conversation context based on window size
+  - `clear_memories()`: Reset all memories
+  - `save_to_shared_context()`: Share memories with other agents
+  - `load_from_shared_context()`: Load shared memories from other agents
+
+### Working Memory
+
+In addition to conversation memory, the framework provides a `WorkingMemory` class that functions like a biological working memory:
+
+- **Key Features**:
+  - Limited capacity with LRU (Least Recently Used) replacement policy
+  - Automatic retrieval of frequently used items
+  - Decay characteristics to model cognitive limitations
+
+Example usage:
+```python
+from src.WorkingMemory import WorkingMemory
+
+# Create working memory with capacity of 5 items
+memory = WorkingMemory(capacity=5)
+
+# Store and retrieve items
+memory.store("concept1", "This is an important concept")
+retrieved = memory.retrieve("concept1")  # "This is an important concept"
+
+# When capacity is exceeded, least recently used items are removed
+for i in range(10):
+    memory.store(f"item{i}", f"Value {i}")
+    
+# item0-item4 have been removed, only item5-item9 remain
+```
+
+For detailed examples and usage patterns, see the example scripts:
+- `examples/agent_memory_example.py`: Demonstrates Agent's conversation memory
+- `examples/working_memory_example.py`: Shows WorkingMemory usage patterns
+
 ## Configuration System
 
 The NanoBrain framework includes a global configuration system that manages API keys, model defaults, and other framework-wide settings.

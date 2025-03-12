@@ -1,9 +1,9 @@
 import time
-from typing import Any, Dict, Optional
-from ConfigManager import ConfigManager
-from DirectoryTracer import DirectoryTracer
-from PackageBase import PackageBase
-from ExecutorBase import ExecutorBase
+from typing import Dict, Any, Optional
+from src.ConfigManager import ConfigManager
+from src.DirectoryTracer import DirectoryTracer
+from src.PackageBase import PackageBase
+from src.ExecutorBase import ExecutorBase
 
 
 class WorkingMemory(PackageBase):

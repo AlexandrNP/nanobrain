@@ -70,9 +70,6 @@ def build_workflow(args):
         
         # Instead of trying to import the builder directly, use the run_builder.py script
         builder_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "run_builder.py")
-        print(f"Builder script path: {builder_script}")
-        print(f"Builder script exists: {os.path.exists(builder_script)}")
-        
         if not os.path.exists(builder_script):
             print(f"Error: Builder script not found at {builder_script}")
             sys.exit(1)
@@ -80,20 +77,71 @@ def build_workflow(args):
         # Construct the command to run the builder script
         cmd = [sys.executable, builder_script]
         
-        # If no command is provided, show the help for the run_builder.py script
-        if not args.subcommand:
-            cmd.append("--help")
-        else:
-            # Add the appropriate subcommand based on the user's request
-            cmd.append(args.subcommand)
+        # Set environment variables
+        env = os.environ.copy()
+        
+        # Set debug mode if verbose is enabled
+        if args.verbose:
+            env["NANOBRAIN_DEBUG"] = "1"
+            
+        # Set debug mode if debug is enabled
+        if args.debug:
+            env["NANOBRAIN_DEBUG"] = "1"
+            
+        # If a subcommand is provided, pass it as a command-line argument
+        if args.subcommand:
+            cmd.extend(["--command", args.subcommand])
             
             # Add any additional arguments
             if args.args:
-                cmd.extend(args.args)
+                for arg in args.args:
+                    if arg.startswith("--"):
+                        # Handle flags
+                        cmd.append(arg)
+                    elif '=' in arg:
+                        # Handle key-value pairs
+                        key, value = arg.split('=', 1)
+                        if key.startswith("--"):
+                            cmd.extend([key, value])
+                        else:
+                            cmd.extend([f"--{key}", value])
+                    else:
+                        # Handle positional arguments
+                        if args.subcommand == "create-workflow":
+                            cmd.extend(["--name", arg])
+                        elif args.subcommand == "create-step":
+                            cmd.extend(["--name", arg])
+                        elif args.subcommand == "test-step":
+                            cmd.extend(["--name", arg])
+                        elif args.subcommand == "save-step":
+                            cmd.extend(["--name", arg])
+                        elif args.subcommand == "link-steps":
+                            if len(cmd) > 3 and cmd[-2] == "--source":
+                                cmd.extend(["--target", arg])
+                            else:
+                                cmd.extend(["--source", arg])
+                        else:
+                            cmd.extend([f"--{arg}"])
+        
+        # Run in headless mode if specified
+        if args.headless:
+            cmd.extend(["--headless"])
+            
+        # Add verbose flag if specified
+        if args.verbose:
+            cmd.extend(["--verbose"])
+            
+        # Add debug flag if specified
+        if args.verbose:
+            cmd.extend(["--debug"])
+            
+        # Add debug flag if specified
+        if args.debug:
+            cmd.extend(["--debug"])
             
         # Run the builder script
         print(f"Running builder command: {' '.join(cmd)}")
-        result = subprocess.run(cmd, check=False)
+        result = subprocess.run(cmd, env=env, check=False)
         
         if result.returncode != 0:
             print(f"Builder command failed with exit code {result.returncode}")
@@ -114,10 +162,6 @@ def build_docs(args):
     # TODO: Implement this function
 
 
-def create_component(args):
-    """Create a new NanoBrain component."""
-    print(f"Creating new {args.type} component...")
-    # TODO: Implement this function
 
 
 def run_workflow(args):
@@ -234,6 +278,7 @@ def main():
     build_parser.add_argument('--load-session', type=str, help='Load a saved builder session')
     build_parser.add_argument('--save-session', type=str, help='Save the builder session to a file')
     build_parser.add_argument('--verbose', action='store_true', help='Enable verbose output')
+    build_parser.add_argument('--debug', action='store_true', help='Enable debug mode with detailed error messages')
     build_parser.set_defaults(func=build_workflow)
     
     # Build-docs command
@@ -242,10 +287,10 @@ def main():
     docs_parser.set_defaults(func=build_docs)
     
     # Create command
-    create_parser = subparsers.add_parser('create', help='Create a new component')
-    create_parser.add_argument('type', choices=['step', 'agent', 'workflow'], help='Type of component to create')
-    create_parser.add_argument('name', help='Name of the component')
-    create_parser.set_defaults(func=create_component)
+    #create_parser = subparsers.add_parser('create', help='Create a new component')
+    #create_parser.add_argument('type', choices=['step', 'agent', 'workflow'], help='Type of component to create')
+    #create_parser.add_argument('name', help='Name of the component')
+    #create_parser.set_defaults(func=create_component)
     
     # Run command
     run_parser = subparsers.add_parser('run', help='Run a workflow')
@@ -273,11 +318,10 @@ def main():
     
     # If the command is 'builder' and no subcommand is specified, show the builder help
     if args.command == 'builder' and not hasattr(args, 'subcommand') or (hasattr(args, 'subcommand') and args.subcommand is None):
-        # Run the builder script with --help
+        # Run the builder script without any arguments to start the interactive mode
         builder_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "run_builder.py")
         if os.path.exists(builder_script):
-            print("Available builder commands:")
-            subprocess.run([sys.executable, builder_script, "--help"])
+            subprocess.run([sys.executable, builder_script])
         else:
             print(f"Error: Builder script not found at {builder_script}")
         return

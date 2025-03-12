@@ -1,9 +1,12 @@
-from typing import Any
+from typing import Any, Optional
 from src.DataUnitBase import DataUnitBase
 from src.ConfigManager import ConfigManager
 from src.DirectoryTracer import DirectoryTracer
 from src.regulations import ConnectionStrength
+from src.ActivationGate import ActivationGate
+from src.TriggerBase import TriggerBase
 import random
+import asyncio
 
 class LinkBase:
     """
@@ -14,7 +17,11 @@ class LinkBase:
     with varying strengths and reliability, links connect data units and
     transfer data with configurable characteristics.
     """
-    def __init__(self, input_data: DataUnitBase, output_data: DataUnitBase, **kwargs):
+    def __init__(self, 
+                 input_data: DataUnitBase, 
+                 output_data: DataUnitBase, 
+                 trigger: Optional[TriggerBase] = None,
+                 **kwargs):
         self.directory_tracer = DirectoryTracer(self.__class__.__module__)
         self.config_manager = ConfigManager(base_path=self.directory_tracer.get_absolute_path(), **kwargs)
         self.input = input_data
@@ -22,6 +29,13 @@ class LinkBase:
         self.connection_strength = ConnectionStrength()
         self.reliability = 0.95  # Probability of successful transfer
         self.adaptability = 0.5  # How quickly connection strength changes
+        self.activation_gate = ActivationGate()
+        
+        # Add trigger attribute
+        self.trigger = trigger
+        if self.trigger:
+            # Point the trigger's runnable to this link for automatic transfer
+            self.trigger.runnable = self
     
     def process_signal(self) -> float:
         """
@@ -95,6 +109,40 @@ class LinkBase:
         """
         # Increase reliability slightly
         self.reliability = min(0.99, self.reliability + 0.01)
+    
+    async def start_monitoring(self):
+        """
+        Start monitoring the trigger condition to initiate automatic data transfer.
+        
+        Biological analogy: Continuous neurotransmitter release monitoring.
+        Justification: Like how pre-synaptic neurons continuously monitor for 
+        signals that would trigger neurotransmitter release, links continuously 
+        monitor for conditions that would trigger data transfer.
+        """
+        if not self.trigger:
+            return False
+            
+        # Start the monitoring loop in a background task
+        asyncio.create_task(self._monitoring_loop())
+        return True
+    
+    async def _monitoring_loop(self):
+        """
+        Continuously monitor the trigger condition and transfer data when triggered.
+        
+        Biological analogy: Synaptic vigilance.
+        Justification: Like how synapses remain vigilant for incoming signals to
+        initiate neurotransmitter release, this loop continuously checks for
+        trigger conditions to initiate data transfer.
+        """
+        while self.trigger:
+            # Check trigger condition
+            if await self.trigger.monitor():
+                # If triggered, transfer data
+                await self.transfer()
+            
+            # Pause to prevent high CPU usage
+            await asyncio.sleep(0.1)
     
     def get_config(self, class_dir: str = None) -> dict:
         """Get configuration for this class."""

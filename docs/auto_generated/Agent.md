@@ -33,6 +33,7 @@ Like how the prefrontal cortex integrates information from multiple sources and 
 ```yaml
 context_sensitivity: 0.8
 creativity: 0.5
+memory_key: chat_history
 memory_window_size: 5
 model_class: null
 model_name: gpt-3.5-turbo
@@ -44,6 +45,8 @@ prompt_variables:
   specific_instructions: Focus on clear communication and accurate information
 response_coherence: 0.7
 shared_context_key: null
+tools_config_path: default_configs/AgentTools.yml
+use_buffer_window_memory: true
 use_shared_context: false
 ```
 
@@ -63,6 +66,9 @@ use_shared_context: false
 - `prompt_variables`
 - `use_shared_context`
 - `shared_context_key`
+- `tools_config_path`
+- `use_buffer_window_memory`
+- `memory_key`
 
 ### Parameter Constraints
 
@@ -107,6 +113,19 @@ use_shared_context: false
 - type: `str`
 - nullable: `True`
 
+#### `tools_config_path`
+
+- type: `str`
+- nullable: `True`
+
+#### `use_buffer_window_memory`
+
+- type: `bool`
+
+#### `memory_key`
+
+- type: `str`
+
 ## Usage Examples
 
 ### Basic
@@ -145,6 +164,7 @@ prompt_variables:
   technical_context: Enterprise software development environment
 response_coherence: 0.9
 shared_context_key: technical_team
+tools_config_path: default_configs/AgentTools.yml
 use_shared_context: true
 ```
 
@@ -177,7 +197,7 @@ use_shared_context: true
 ### Constructor
 
 ```python
-def __init__(self, executor: ExecutorBase, model_name: str, model_class: Optional[str], memory_window_size: int, prompt_file: str, prompt_template: str, prompt_variables: Optional[Dict], use_shared_context: bool, shared_context_key: Optional[str], tools: Optional[List[Step]], use_custom_tool_prompt: bool, **kwargs)
+def __init__(self, executor: ExecutorBase, model_name: str, model_class: Optional[str], memory_window_size: int, prompt_file: str, prompt_template: str, prompt_variables: Optional[Dict], use_shared_context: bool, shared_context_key: Optional[str], tools: Optional[List[Step]], use_custom_tool_prompt: bool, tools_config_path: Optional[str], use_buffer_window_memory: bool, memory_key: str, **kwargs)
 ```
 
 Initialize the agent with LLM configuration.
@@ -186,6 +206,23 @@ Biological analogy: Neural circuit formation.
 Justification: Like how neural circuits form with specific connectivity
 patterns based on genetic and environmental factors, the agent initializes
 with specific configuration parameters.
+
+Args:
+    executor: ExecutorBase instance for running steps
+    model_name: Name of the LLM model to use
+    model_class: Optional class name for the LLM model
+    memory_window_size: Number of recent conversations to keep in context
+    prompt_file: Path to file containing prompt template
+    prompt_template: String containing prompt template
+    prompt_variables: Variables to fill in the prompt template
+    use_shared_context: Whether to use shared context between agents
+    shared_context_key: Key for shared context group
+    tools: Optional list of Step objects to use as tools
+    use_custom_tool_prompt: Whether to use a custom prompt for tool calling
+    tools_config_path: Path to YAML file with tool configurations
+    use_buffer_window_memory: Whether to use ConversationBufferWindowMemory (True) or ConversationBufferMemory (False)
+    memory_key: The key to use for the memory in the prompt template
+    **kwargs: Additional keyword arguments
 
 ### get_full_history
 
@@ -295,4 +332,20 @@ Clear shared context.
 Biological analogy: Collective memory reset.
 Justification: Like how social groups can reset collective understanding,
 this method clears shared memory.
+
+### update_workflow_context
+
+```python
+def update_workflow_context(self, workflow_path: str)
+```
+
+Update the agent's context with information about the current workflow.
+
+Biological analogy: Contextual awareness in the prefrontal cortex.
+Justification: Like how the prefrontal cortex maintains awareness of the
+current task context, this method updates the agent's context with
+information about the current workflow.
+
+Args:
+    workflow_path: Path to the current workflow file
 

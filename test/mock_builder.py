@@ -5,6 +5,7 @@ Mock builder module for testing.
 import os
 import sys
 from typing import List, Dict, Any, Optional
+from unittest.mock import MagicMock
 
 from test.mock_agent import Agent
 from test.mock_executor import MockExecutorBase
@@ -18,20 +19,22 @@ from test.mock_tools import (
 )
 
 
-class CreateWorkflowStep:
-    """Mock CreateWorkflowStep for testing."""
+class CreateWorkflow:
+    """Mock CreateWorkflow for testing."""
+    
     @staticmethod
-    async def execute(builder, workflow_name: str, username: Optional[str] = None) -> Dict[str, Any]:
+    async def execute(builder, workflow_name: str, base_dir: Optional[str] = None) -> Dict[str, Any]:
         """Mock execute method."""
         return {
             "success": True,
             "message": f"Created workflow {workflow_name}",
-            "workflow_path": os.path.join(os.getcwd(), workflow_name)
+            "workflow_path": f"/mock/path/{workflow_name}",
+            "workflow": MagicMock()
         }
 
 
-class CreateStepStep:
-    """Mock CreateStepStep for testing."""
+class CreateStep:
+    """Mock CreateStep for testing."""
     @staticmethod
     async def execute(builder, step_name: str, base_class: str = "Step", description: str = None) -> Dict[str, Any]:
         """Mock execute method."""
@@ -142,13 +145,13 @@ class NanoBrainBuilder:
         
         return self._workflow_stack.pop()
     
-    async def create_workflow(self, workflow_name: str, username: Optional[str] = None) -> Dict[str, Any]:
-        """Create a new workflow."""
-        return await CreateWorkflowStep.execute(self, workflow_name, username)
+    async def create_workflow(self, workflow_name: str, base_dir: Optional[str] = None) -> Dict[str, Any]:
+        """Mock create_workflow method."""
+        return await CreateWorkflow.execute(self, workflow_name, base_dir=base_dir)
     
     async def create_step(self, step_name: str, base_class: str = "Step", description: str = None) -> Dict[str, Any]:
         """Create a new step."""
-        return await CreateStepStep.execute(self, step_name, base_class, description)
+        return await CreateStep.execute(self, step_name, base_class, description)
     
     async def test_step(self, step_name: str) -> Dict[str, Any]:
         """Test a step."""
