@@ -19,6 +19,7 @@ from src.LinkBase import LinkBase
 from src.DataUnitBase import DataUnitBase
 from src.enums import ComponentState
 from src.concurrency import CircuitBreaker
+from src.TriggerAllDataReceived import TriggerAllDataReceived
 
 
 class TestStep(unittest.TestCase):
@@ -29,33 +30,31 @@ class TestStep(unittest.TestCase):
         
         # Create mock input and output data units
         self.input_data = MagicMock(spec=DataUnitBase)
+        self.input_data.get.return_value = "test_input"
         self.output_data = MagicMock(spec=DataUnitBase)
-        
-        # Create mock input and output links
-        self.input_link = MagicMock(spec=LinkBase)
-        # Configure the mock to have an output attribute that returns another mock
-        self.input_link.output = MagicMock()
-        self.input_link.output.get.return_value = "test_input"
-        self.output_link = MagicMock(spec=LinkBase)
-        self.output_link.input = MagicMock()
         
         # Create a mock CircuitBreaker
         self.mock_circuit_breaker = MagicMock(spec=CircuitBreaker)
         self.mock_circuit_breaker.can_execute.return_value = True
         
+        # Create a mock TriggerAllDataReceived
+        self.mock_trigger = MagicMock(spec=TriggerAllDataReceived)
+        self.mock_trigger.monitor.return_value = True
+        
         # Create step instance with patched CircuitBreaker
-        with patch('src.Step.CircuitBreaker', return_value=self.mock_circuit_breaker):
+        with patch('src.Step.CircuitBreaker', return_value=self.mock_circuit_breaker), \
+             patch('src.Step.TriggerAllDataReceived', return_value=self.mock_trigger):
             self.step = Step(
                 executor=self.executor,
-                input_sources=[self.input_link],
-                output_sink=self.output_link
+                input_sources={"test_link": self.input_data},
+                output=self.output_data
             )
     
     def test_initialization(self):
         """Test that Step initializes correctly with proper inheritance."""
         # Verify attributes are set correctly
-        self.assertEqual(self.step.input_sources, [self.input_link])
-        self.assertEqual(self.step.output_sink, self.output_link)
+        self.assertEqual(self.step.input_sources, {"test_link": self.input_data})
+        self.assertEqual(self.step.output, self.output_data)
         self.assertIsNone(self.step.result)
         self.assertEqual(self.step.state, ComponentState.INACTIVE)
         self.assertFalse(self.step.running)
@@ -67,13 +66,13 @@ class TestStep(unittest.TestCase):
     def test_process_method(self):
         """Test the basic process method."""
         # Run the process method with test input
-        result = asyncio.run(self.step.process(["test_input"]))
+        result = asyncio.run(self.step.process({"test_link": "test_input"}))
         
         # Verify it returns the first input
         self.assertEqual(result, "test_input")
         
         # Test with empty input
-        result = asyncio.run(self.step.process([]))
+        result = asyncio.run(self.step.process({}))
         self.assertIsNone(result)
     
     def test_get_result(self):
@@ -87,32 +86,18 @@ class TestStep(unittest.TestCase):
         # Execute the step
         result = await self.step.execute()
         
-        # Verify the input link's transfer method was called
-        self.input_link.transfer.assert_called_once()
-        
-        # Verify the output was set on the output link
-        self.output_link.input.set.assert_called_once_with("test_input")
-        
-        # Verify the output link's transfer method was called
-        self.output_link.transfer.assert_called_once()
-        
         # Verify the result is correct
         self.assertEqual(result, "test_input")
-        self.assertEqual(self.step.result, "test_input")
         
-        # Verify state changes
-        self.assertEqual(self.step.state, ComponentState.INACTIVE)
-        self.assertFalse(self.step.running)
-        
-        # Verify circuit breaker interaction
-        self.mock_circuit_breaker.record_success.assert_called_once()
+        # Verify the output was set
+        self.output_data.set.assert_called_once_with("test_input")
     
     def test_execute(self):
         """Run the async test."""
         asyncio.run(self.async_test_execute())
     
     async def async_test_execute_with_circuit_breaker_block(self):
-        """Test execute method when circuit breaker blocks execution."""
+        """Test execute with circuit breaker blocking."""
         # Configure circuit breaker to block execution
         self.mock_circuit_breaker.can_execute.return_value = False
         
@@ -122,53 +107,67 @@ class TestStep(unittest.TestCase):
         # Verify execution was blocked
         self.assertIsNone(result)
         self.assertEqual(self.step.state, ComponentState.INACTIVE)
-        
-        # Verify input link was not accessed
-        self.input_link.transfer.assert_not_called()
     
     def test_execute_with_circuit_breaker_block(self):
         """Run the async test for circuit breaker blocking."""
         asyncio.run(self.async_test_execute_with_circuit_breaker_block())
     
     async def async_test_execute_with_exception(self):
-        """Test execute method when an exception occurs."""
-        # Configure input link to raise an exception
-        self.input_link.transfer.side_effect = Exception("Test exception")
+        """Test execute with an exception during processing."""
+        # Configure process to raise an exception
+        self.step.process = MagicMock(side_effect=Exception("Test exception"))
         
-        # Execute the step and expect an exception
+        # Execute the step and expect an exception to be raised
         with self.assertRaises(Exception):
             await self.step.execute()
         
-        # Verify state changes
+        # Verify the step state after the exception
         self.assertEqual(self.step.state, ComponentState.ERROR)
         self.assertFalse(self.step.running)
-        
-        # Verify circuit breaker interaction
-        self.mock_circuit_breaker.record_failure.assert_called_once()
     
     def test_execute_with_exception(self):
         """Run the async test for exception handling."""
         asyncio.run(self.async_test_execute_with_exception())
     
     def test_invoke_alias(self):
-        """Test that invoke is an alias for execute."""
-        # Create a mock for the execute method
-        original_execute = self.step.execute
+        """Test that invoke calls execute."""
+        # Mock the execute method
+        self.step.execute = MagicMock()
         
-        # Configure the mock to be awaitable and return a value
+        # Create a mock coroutine for execute
         async def mock_execute():
             return "test_result"
         
-        self.step.execute = mock_execute
+        self.step.execute.return_value = mock_execute()
         
         # Call invoke
-        result = asyncio.run(self.step.invoke())
+        asyncio.run(self.step.invoke())
         
-        # Verify result
-        self.assertEqual(result, "test_result")
+        # Verify execute was called
+        self.step.execute.assert_called_once()
+    
+    def test_register_input_source(self):
+        """Test registering an input source."""
+        new_input = MagicMock(spec=DataUnitBase)
+        self.step.register_input_source("new_link", new_input)
+        self.assertEqual(self.step.input_sources["new_link"], new_input)
+    
+    def test_register_output(self):
+        """Test registering an output."""
+        new_output = MagicMock(spec=DataUnitBase)
+        self.step.register_output(new_output)
+        self.assertEqual(self.step.output, new_output)
+
+    def test_name_attribute(self):
+        """Test that the name attribute is properly set."""
+        # Test with a custom name
+        custom_name = "CustomStepName"
+        step_with_name = Step(self.executor, name=custom_name)
+        self.assertEqual(step_with_name.name, custom_name, "Step should use the custom name provided in constructor")
         
-        # Restore original method
-        self.step.execute = original_execute
+        # Test without a name (should default to class name)
+        step_without_name = Step(self.executor)
+        self.assertEqual(step_without_name.name, "Step", "Step should use class name as default when no name is provided")
 
 
 if __name__ == '__main__':

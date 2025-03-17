@@ -9,6 +9,37 @@ specific operations and pass results to other steps.
 
 ## Methods
 
+### register_input_source
+
+```python
+def register_input_source(self, link_id: str, data_unit: DataUnitBase)
+```
+
+Register a new input source data unit with a specific ID.
+
+Biological analogy: Synaptic connection formation.
+Justification: Like how neurons form new synaptic connections,
+steps can register new input sources.
+
+Args:
+    link_id: The identifier for this input source
+    data_unit: The data unit that will provide input
+
+### register_output
+
+```python
+def register_output(self, data_unit: DataUnitBase)
+```
+
+Register an output data unit.
+
+Biological analogy: Axon terminal formation.
+Justification: Like how neurons form axon terminals to connect
+with target neurons, steps can register output data units.
+
+Args:
+    data_unit: The data unit that will receive output
+
 ### get_result
 
 ```python

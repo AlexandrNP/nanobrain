@@ -1,4 +1,5 @@
 defaults:
+  class: "src.DataStorageCommandLine.DataStorageCommandLine"
   # Required parameters
   executor: "ExecutorFunc"  # Default executor class
   
@@ -27,6 +28,7 @@ metadata:
 
 validation:
   required:
+    - class  # Class path required
     - executor  # ExecutorBase instance required
   optional:
     - prompt
@@ -37,6 +39,9 @@ validation:
     - input_unit
     - output_unit
     - trigger
+  constraints:
+    class:
+      type: str
 
 examples:
   basic:

@@ -189,7 +189,7 @@ async def create_workflow(name, username=None):
             
         from builder.NanoBrainBuilder import NanoBrainBuilder
         builder = NanoBrainBuilder()
-        result = builder.create_workflow(name)
+        result = await builder.create_workflow(name)
         return result
     except Exception as e:
         return handle_error(e, "Failed to create workflow")
@@ -206,6 +206,8 @@ async def create_step(name, workflow=None):
             if not workflow_path:
                 return {"success": False, "error": f"Workflow '{workflow}' not found"}
             builder.push_workflow(workflow_path)
+            # Print confirmation message to make it clear to the user
+            print(ensure_string(PROMPTS['info'], message=f"Set '{workflow}' as the current workflow"))
         
         # Ensure description is a string
         description = "A custom step"

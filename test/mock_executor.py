@@ -12,9 +12,9 @@ class MockExecutorBase:
         """Initialize the MockExecutorBase."""
         self.runnable_types = set(["Step", "Workflow", "Agent"])
         self.energy_level = 1.0
-        self.config_manager = MockConfigManager()
-        self.system_modulator = MockSystemModulator()
         self.directory_tracer = MockDirectoryTracer()
+        self.config_manager = MockConfigManager(base_path=self.directory_tracer.get_absolute_path())
+        self.system_modulator = MockSystemModulator()
     
     def can_execute(self, runnable_type: str) -> bool:
         """Check if this executor can execute the specified runnable type."""
@@ -48,6 +48,7 @@ class MockConfigManager:
     def __init__(self, **kwargs):
         """Initialize the MockConfigManager."""
         self._adaptability = 0.5
+        self.base_path = kwargs.get('base_path')
     
     def get_config(self, class_name: str) -> dict:
         """Get the configuration for a class."""

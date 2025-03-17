@@ -5,7 +5,7 @@ Mock builder module for testing.
 import os
 import sys
 from typing import List, Dict, Any, Optional
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, AsyncMock
 
 from test.mock_agent import Agent
 from test.mock_executor import MockExecutorBase
@@ -150,24 +150,51 @@ class NanoBrainBuilder:
         return await CreateWorkflow.execute(self, workflow_name, base_dir=base_dir)
     
     async def create_step(self, step_name: str, base_class: str = "Step", description: str = None) -> Dict[str, Any]:
-        """Create a new step."""
-        return await CreateStep.execute(self, step_name, base_class, description)
-    
+        """Mock implementation of create_step."""
+        step_class_name = f"Step{step_name.capitalize()}"
+        return {
+            "success": True,
+            "message": f"Created step {step_class_name}",
+            "step_path": os.path.join(os.getcwd(), "test_workflow", "src", step_class_name),
+            "step_class_name": step_class_name
+        }
+        
     async def test_step(self, step_name: str) -> Dict[str, Any]:
-        """Test a step."""
-        return await TestStepStep.execute(self, step_name)
+        """
+        Mock implementation of test_step.
+        """
+        return {
+            "success": True,
+            "message": f"Tested step {step_name}"
+        }
     
     async def save_step(self, step_name: str) -> Dict[str, Any]:
-        """Save a step."""
-        return await SaveStepStep.execute(self, step_name)
+        """
+        Mock implementation of save_step.
+        """
+        return {
+            "success": True,
+            "message": f"Saved step {step_name}"
+        }
     
     async def link_steps(self, source_step: str, target_step: str, link_type: str = "LinkDirect") -> Dict[str, Any]:
-        """Link steps together."""
-        return await LinkStepsStep.execute(self, source_step, target_step, link_type)
+        """
+        Mock implementation of link_steps.
+        """
+        return {
+            "success": True,
+            "message": f"Linked {source_step} to {target_step}",
+            "link_file": os.path.join(os.getcwd(), "test_workflow", "src", f"{source_step.capitalize()}To{target_step.capitalize()}Link.py")
+        }
     
     async def save_workflow(self) -> Dict[str, Any]:
-        """Save a workflow."""
-        return await SaveWorkflowStep.execute(self)
+        """
+        Mock implementation of save_workflow.
+        """
+        return {
+            "success": True,
+            "message": "Saved workflow"
+        }
     
     async def process_command(self, command: str, args: List[str]) -> Dict[str, Any]:
         """Process a command."""

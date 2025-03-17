@@ -18,10 +18,21 @@ class LinkFile(LinkBase):
                  sink_step: Any,
                  link_id: str = None,
                  input_folder: str = None, 
-                 output_folder: str = None, 
+                 output_folder: str = None,
+                 trigger_type: str = "data_changed",
+                 trigger: Optional[TriggerBase] = None,
+                 auto_setup_trigger: bool = True,
                  **kwargs):
         # Initialize the base class with source and sink steps
-        super().__init__(source_step, sink_step, link_id, **kwargs)
+        super().__init__(
+            source_step, 
+            sink_step, 
+            link_id, 
+            trigger_type=trigger_type,
+            trigger=trigger,
+            auto_setup_trigger=auto_setup_trigger,
+            **kwargs
+        )
         self.input_folder = input_folder
         self.output_folder = output_folder
         self.reliability = 0.95  # Slightly less reliable than direct

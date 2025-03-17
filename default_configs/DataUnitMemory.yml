@@ -1,7 +1,8 @@
 defaults:
-  decay_rate: 0.05
-  persistence_level: 0.3
-  consolidation_rate: 0.05
+  class: "src.DataUnitMemory.DataUnitMemory"
+  decay_rate: 0.0
+  persistence_level: 1.0
+  consolidation_rate: 0.0
   capacity: 100
 
 metadata:
@@ -18,8 +19,11 @@ metadata:
     through persistent activity patterns with rapid access but limited duration.
 
 validation:
-  required_fields: []
+  required_fields:
+    - class
   constraints:
+    class:
+      type: str
     decay_rate:
       type: float
       min: 0.0

@@ -10,6 +10,31 @@ together to accomplish complex processing.
 
 ## Methods
 
+### create_steps_from_config
+
+```python
+def create_steps_from_config(self, steps_config: List[dict])
+```
+
+Create steps from configuration dictionaries.
+
+Biological analogy: Cell differentiation from genetic instructions.
+Justification: Like how cells differentiate into specific types based on
+genetic and environmental factors, steps are created with specific
+configurations for their roles.
+
+### create_links_from_config
+
+```python
+def create_links_from_config(self, links_config: List[dict])
+```
+
+Create links between steps from configuration.
+
+Biological analogy: Synapse formation between neurons.
+Justification: Like how neurons form specific connections based on
+molecular signals, links are created between steps based on configuration.
+
 ### apply_modulator_effects
 
 ```python

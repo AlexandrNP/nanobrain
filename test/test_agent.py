@@ -31,8 +31,9 @@ class TestAgent(unittest.TestCase):
         self.executor = MagicMock(spec=ExecutorBase)
         self.executor.can_execute.return_value = True
         
-        # Create a ConfigManager instance
-        self.config_manager = ConfigManager()
+        # Create a ConfigManager instance with the test directory as the base path
+        test_dir = os.path.dirname(os.path.abspath(__file__))
+        self.config_manager = ConfigManager(base_path=test_dir)
         
         # Load configuration from YAML file
         with patch('os.path.exists', return_value=True):

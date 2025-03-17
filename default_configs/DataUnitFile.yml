@@ -1,4 +1,5 @@
 defaults:
+  class: "src.DataUnitFile.DataUnitFile"
   file_path: null
   buffer_capacity: 10
   persistence_level: 0.5
@@ -21,8 +22,11 @@ metadata:
 
 validation:
   required_fields:
+    - class
     - file_path
   constraints:
+    class:
+      type: str
     file_path:
       type: str
     buffer_capacity:

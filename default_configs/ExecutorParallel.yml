@@ -1,6 +1,9 @@
 ---
 # Default configuration - all variables assigned
 defaults:
+  # Class specification
+  class: "src.ExecutorParallel.ExecutorParallel"
+  
   # Required parameters
   max_workers: 1          # Must be provided, minimum 1
 
@@ -28,6 +31,7 @@ metadata:
 
   validation:
     required:
+      - class  # Python class to instantiate
       - max_workers
     optional:
       - queue_size
@@ -37,6 +41,8 @@ metadata:
       - reliability_threshold
       - runnable_types
     constraints:
+      class:
+        type: str
       max_workers:
         type: int
         min: 1

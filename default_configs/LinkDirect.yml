@@ -1,16 +1,17 @@
 ---
 # Default configuration - all variables assigned
 defaults:
+  class: "src.LinkDirect.LinkDirect"
   # Required parameters
-  input_data: null  # Must be provided at runtime
-  output_data: null  # Must be provided at runtime
+  input_data: None  # Must be provided at runtime
+  output_data: None  # Must be provided at runtime
   
   # Optional parameters with defaults
-  reliability: 0.95  # High reliability by default
-  connection_strength: 0.8  # Strong connection by default
-  signal_decay: 0.1  # Low signal decay by default
-  trigger: null  # Will use internal trigger if not provided
-  auto_transfer: true  # Automatically transfer data when input changes
+  reliability: 1.0  # High reliability by default
+  connection_strength: 1.0  # Strong connection by default
+  signal_decay: 0.0  # Low signal decay by default
+  trigger: None  # Will use internal trigger if not provided
+  auto_transfer: True  # Automatically transfer data when input changes
 
 # Metadata
 metadata:
@@ -28,6 +29,7 @@ metadata:
 
 validation:
   required:
+    - class  # Class path
     - input_data  # Source data unit
     - output_data  # Target data unit
   optional:
@@ -36,6 +38,9 @@ validation:
     - signal_decay
     - trigger
     - auto_transfer
+  constraints:
+    class:
+      type: str
 
 examples:
   basic:

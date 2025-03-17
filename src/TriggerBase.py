@@ -4,8 +4,9 @@ from src.ActivationGate import ActivationGate
 from src.ConfigManager import ConfigManager
 from src.DirectoryTracer import DirectoryTracer
 from src.enums import ComponentState
+from abc import ABC, abstractmethod
 
-class TriggerBase:
+class TriggerBase(ABC):
     """
     Base class for components that detect conditions for activation.
     
@@ -15,13 +16,24 @@ class TriggerBase:
     computational conditions and convert them to workflow activations.
     """
     def __init__(self, runnable: Any, **kwargs):
-        self.runnable = runnable
+        self._runnable = runnable
         self.directory_tracer = DirectoryTracer(self.__class__.__module__)
         self.config_manager = ConfigManager(base_path=self.directory_tracer.get_absolute_path(), **kwargs)
         self.activation_gate = ActivationGate(threshold=0.3)  # More sensitive than regular components
         self.sensitivity = 0.8  # Initial sensitivity to conditions
         self.adaptation_rate = 0.05  # How quickly sensitivity changes
     
+    @property
+    def runnable(self):
+        """Get the runnable object."""
+        return self._runnable
+        
+    @runnable.setter
+    def runnable(self, value):
+        """Set the runnable object."""
+        self._runnable = value
+    
+    @abstractmethod 
     def check_condition(self, **kwargs) -> bool:
         """
         Checks if the condition for triggering is met.
@@ -33,9 +45,23 @@ class TriggerBase:
         """
         # Base implementation always returns False
         # Subclasses should override this
-        return False
+        pass
     
     async def monitor(self, **kwargs):
+        """
+        Monitors for condition and triggers runnable when met.
+        
+        Biological analogy: Sensory transduction and adaptation.
+        Justification: Like how sensory neurons convert environmental stimuli
+        into neural signals but adapt to persistent stimuli, triggers convert
+        conditions into workflow activations but adapt to repeated occurrences.
+        """
+        if self.check_condition(**kwargs):
+            return await self.runnable.invoke()
+        else:
+            return None
+
+    async def sensitive_monitor(self, **kwargs):
         """
         Monitors for condition and triggers runnable when met.
         

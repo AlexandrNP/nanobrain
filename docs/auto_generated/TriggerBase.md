@@ -9,6 +9,14 @@ computational conditions and convert them to workflow activations.
 
 ## Methods
 
+### runnable
+
+```python
+def runnable(self, value)
+```
+
+Set the runnable object.
+
 ### check_condition
 
 ```python

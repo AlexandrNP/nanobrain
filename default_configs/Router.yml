@@ -1,6 +1,7 @@
 ---
 # Default configuration - all variables assigned
 defaults:
+  class: "src.Router.Router"
   # Required parameters
   executor: None           # Must be provided, no default
   input_source: None      # Must be provided, no default
@@ -35,6 +36,7 @@ metadata:
 
   validation:
     required:
+      - class
       - executor
       - input_source
       - output_sinks
@@ -51,6 +53,8 @@ metadata:
       - running
       - adaptability
     constraints:
+      class:
+        type: str
       routing_strategy:
         type: str
         enum: ["adaptive", "broadcast", "random", "weighted"]

@@ -16,6 +16,7 @@ This documentation is automatically generated from source code and configuration
 - [DataUnitBase](DataUnitBase.md)
 - [DataUnitFile](DataUnitFile.md)
 - [DataUnitMemory](DataUnitMemory.md)
+- [DataUnitString](DataUnitString.md)
 - [DeadlockDetector](DeadlockDetector.md)
 - [DirectoryTracer](DirectoryTracer.md)
 - [ExecutorBase](ExecutorBase.md)

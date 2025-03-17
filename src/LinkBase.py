@@ -5,7 +5,7 @@ from src.DirectoryTracer import DirectoryTracer
 from src.regulations import ConnectionStrength
 from src.ActivationGate import ActivationGate
 from src.TriggerBase import TriggerBase
-from src.TriggerDataChanged import TriggerDataChanged
+# Remove direct imports of specific trigger classes
 import random
 import asyncio
 
@@ -22,6 +22,9 @@ class LinkBase:
                  source_step: Any,  # Should be Step but would create circular import
                  sink_step: Any,    # Should be Step but would create circular import
                  link_id: str = None,
+                 trigger_type: str = "data_changed",
+                 trigger: Optional[TriggerBase] = None,
+                 auto_setup_trigger: bool = True,
                  **kwargs):
         self.directory_tracer = DirectoryTracer(self.__class__.__module__)
         self.config_manager = ConfigManager(base_path=self.directory_tracer.get_absolute_path(), **kwargs)
@@ -30,6 +33,10 @@ class LinkBase:
         self.source_step = source_step
         self.sink_step = sink_step
         self.link_id = link_id or f"link_{id(self)}"
+        
+        # Debug mode - accept both 'debug' and 'debug_mode' parameters
+        self._debug_mode = kwargs.get('debug_mode', kwargs.get('debug', False))
+        self.debug_mode = self._debug_mode  # Add a public attribute for compatibility
         
         # Verify steps have output and input_sources
         if not hasattr(source_step, 'output') or source_step.output is None:
@@ -43,21 +50,55 @@ class LinkBase:
         
         # Configure transfer characteristics
         self.connection_strength = ConnectionStrength()
-        self.reliability = 0.95  # Probability of successful transfer
-        self.adaptability = 0.5  # How quickly connection strength changes
+        self.reliability = kwargs.get('reliability', 0.95)  # Probability of successful transfer
+        self.adaptability = kwargs.get('adaptability', 0.5)  # How quickly connection strength changes
         self.activation_gate = ActivationGate()
         
-        # Create a trigger for data changes in the source output
-        self.trigger = TriggerDataChanged(self)
-        self.trigger.runnable = self
+        # Set up trigger
+        self._trigger_type = trigger_type
+        self.trigger = trigger  # Allow passing a pre-configured trigger
+        
+        # Set up trigger if auto_setup_trigger is True and no trigger was provided
+        if auto_setup_trigger and self.trigger is None:
+            self._setup_trigger(**kwargs)
+        
+        # Last transferred data for comparison
+        self._last_transferred_data = None
             
         # Track if this link is being monitored
         self._monitoring = False
         # Track if data has been transferred
         self._data_transferred = False
         
-        # Start monitoring for data changes
-        asyncio.create_task(self.start_monitoring())
+        # Start monitoring for data changes if we have a trigger
+        if self.trigger is not None:
+            asyncio.create_task(self.start_monitoring())
+    
+    def _setup_trigger(self, **kwargs):
+        """
+        Set up the trigger for this link.
+        
+        Args:
+            **kwargs: Additional arguments to pass to the trigger constructor.
+        """
+        # Import specific trigger classes here to avoid circular imports
+        from src.TriggerDataUpdated import TriggerDataUpdated
+        from src.TriggerDataHashChanged import TriggerDataHashChanged
+        
+        if self._trigger_type == "data_changed":
+            # Use TriggerDataUpdated for DataUnitBase classes with 'updated' flag
+            self.trigger = TriggerDataUpdated(source_step=self.source_step, runnable=self, **kwargs)
+        elif self._trigger_type == "data_hash_changed":
+            # Use TriggerDataHashChanged for monitoring based on data hash
+            self.trigger = TriggerDataHashChanged(source_step=self.source_step, runnable=self, **kwargs) 
+        else:
+            # Default to TriggerDataUpdated
+            if self._debug_mode:
+                print(f"LinkBase: Unknown trigger type '{self._trigger_type}', using TriggerDataUpdated")
+            self.trigger = TriggerDataUpdated(source_step=self.source_step, runnable=self, **kwargs)
+        
+        if self._debug_mode:
+            print(f"LinkBase: Created trigger of type {self.trigger.__class__.__name__}")
     
     def process_signal(self) -> float:
         """
@@ -120,6 +161,15 @@ class LinkBase:
             # Get data from source output
             data = self.source_step.output.get()
             
+            # Skip if the data is the same as the last transferred data
+            if data == self._last_transferred_data:
+                if self._debug_mode:
+                    print("LinkBase: Data unchanged, skipping transfer")
+                return False
+                
+            # Store the current data as the last transferred data
+            self._last_transferred_data = data
+            
             # If data exists, transfer it to sink input
             if data is not None:
                 # The data is already accessible to the sink step via the registered data unit
@@ -130,7 +180,18 @@ class LinkBase:
                 self.connection_strength.strengthen(self.adaptability)
                 
                 # Trigger the sink step to process the new data
-                asyncio.create_task(self.sink_step.execute())
+                try:
+                    # If the sink step has process method, execute it directly 
+                    if hasattr(self.sink_step, 'process'):
+                        if isinstance(data, str):
+                            asyncio.create_task(self.sink_step.process([data]))
+                        else:
+                            asyncio.create_task(self.sink_step.process([data]))
+                    else:
+                        # Otherwise use the general execute method
+                        asyncio.create_task(self.sink_step.execute())
+                except Exception as e:
+                    print(f"Error in transfer execution: {e}")
                 
                 return True
         else:
@@ -160,7 +221,7 @@ class LinkBase:
         Justification: Like how synapses remain vigilant for signals,
         links monitor for conditions to trigger transfer.
         """
-        if self._monitoring:
+        if self._monitoring or self.trigger is None:
             return
             
         self._monitoring = True
@@ -173,14 +234,26 @@ class LinkBase:
         Internal method to continuously monitor for trigger condition.
         """
         # Continuously monitor for trigger condition
-        while self._monitoring:
-            # Wait for the trigger condition
-            if await self.trigger.monitor():
-                # Transfer data when trigger condition is met
-                await self.transfer()
+        while self._monitoring and self.trigger is not None:
+            try:
+                # Check if the trigger is the enhanced TriggerDataUpdated with wait_for_data_change method
+                if hasattr(self.trigger, 'wait_for_data_change'):
+                    # Use the more efficient wait_for_data_change method
+                    data_changed = await self.trigger.wait_for_data_change(timeout=0.5)
+                    if data_changed:
+                        # Transfer data when trigger condition is met
+                        await self.transfer()
+                else:
+                    # Wait for the trigger condition the traditional way
+                    if await self.trigger.monitor():
+                        # Transfer data when trigger condition is met
+                        await self.transfer()
                 
-            # Brief pause to prevent CPU overuse
-            await asyncio.sleep(0.01)
+                # Brief pause to prevent CPU overuse
+                await asyncio.sleep(0.01)
+            except Exception as e:
+                print(f"Error in monitor loop: {e}")
+                await asyncio.sleep(0.1)  # Longer pause after error
             
     async def stop_monitoring(self):
         """
@@ -220,3 +293,11 @@ class LinkBase:
     def update_config(self, updates: dict, adaptability_threshold: float = 0.3) -> bool:
         """Delegate to config manager."""
         return self.config_manager.update_config(updates, adaptability_threshold)
+
+    def start_monitoring_sync(self):
+        """
+        Start monitoring for data changes synchronously (non-awaitable version).
+        
+        This method is used when we need to start monitoring from a non-async context.
+        """
+        asyncio.create_task(self.start_monitoring())

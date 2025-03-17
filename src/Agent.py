@@ -117,6 +117,7 @@ class Agent(Step):
                 return_messages=True
             )
         
+        #breakpoint()
         # Load prompt template
         self.prompt_template = self._load_prompt_template(prompt_file, prompt_template)
         self.prompt_variables = prompt_variables or {}
@@ -150,17 +151,26 @@ class Agent(Step):
         """
         # If we're in testing mode, use mock models
         if TESTING_MODE:
-            if model_class == "OpenAI" or (model_class is None and not model_name.startswith("claude")):
+            is_claude = model_name is not None and model_name.startswith("claude")
+            if model_class == "OpenAI" or (model_class is None and not is_claude):
                 return MockOpenAI()
             else:
                 return MockChatOpenAI()
         
         # Try to get the global configuration
         try:
-            from src.GlobalConfig import GlobalConfig
-            global_config = GlobalConfig()
-        except ImportError:
+            global_config = GlobalConfig.get_instance()
+        except Exception as e:
+            # Log the error but proceed with defaults
+            if hasattr(self, '_debug_mode') and self._debug_mode:
+                print(f"Error getting global config: {e}")
             global_config = None
+        
+        # Default model name if None
+        if model_name is None:
+            model_name = "gpt-3.5-turbo"
+            if hasattr(self, '_debug_mode') and self._debug_mode:
+                print(f"Model name is None, defaulting to {model_name}")
         
         # Determine the model provider based on the model name
         if model_name.startswith("gpt"):
@@ -218,8 +228,6 @@ class Agent(Step):
         Justification: Like how neurons follow specific activation patterns,
         this method loads specific prompt patterns to guide agent behavior.
         """
-        from langchain_core.prompts import PromptTemplate
-        
         # Base assistant template as fallback
         BASE_ASSISTANT = """You are a helpful AI assistant. 
         
@@ -250,6 +258,7 @@ class Agent(Step):
         else:
             template_content = BASE_ASSISTANT
             
+        # Use the appropriate PromptTemplate class based on testing mode
         return PromptTemplate.from_template(template_content)
     
     async def process(self, inputs: List[Any]) -> Any:
@@ -290,7 +299,8 @@ class Agent(Step):
             system_message = SystemMessage(content=system_template.format(**self.prompt_variables))
             human_message = HumanMessage(content=f"Context: {context}\n\nUser input: {input_text}")
             messages = [system_message, human_message]
-            response = self.llm.predict_messages(messages).content
+            response = self.llm.invoke(messages).content
+            #breakpoint()
         else:
             # For completion models, use the formatted prompt directly
             response = self.llm.predict(formatted_prompt)
@@ -424,8 +434,12 @@ class Agent(Step):
         Step objects as tools for the agent's cognitive processing.
         """
         self.langchain_tools = []
-        
+        from langchain_core.tools import Tool
+
         for step in tools:
+            if type(step) == Tool:
+                self.langchain_tools.append(step)
+                continue
             # Create a tool from the Step object
             step_tool = self._create_tool_from_step(step)
             if step_tool:
@@ -497,6 +511,7 @@ class Agent(Step):
                     func=sync_tool_func
                 )
             
+            #breakpoint()
             return step_tool
             
         except Exception as e:
@@ -744,8 +759,15 @@ class Agent(Step):
         try:
             # Check if the file exists
             if not os.path.exists(self.tools_config_path):
-                print(f"Tools config file not found: {self.tools_config_path}")
-                return
+                print(f"Tools config file not found in: {self.tools_config_path}")
+                config_path = os.path.join(self.directory_tracer.get_current_directory(), "config", self.tools_config_path)
+                print(f"Looking for tools config in: {config_path}")
+                if os.path.exists(config_path):
+                    self.tools_config_path = config_path
+                    print(f"Found tools config in: {config_path}")
+                else:
+                    print(f"Tools config file not found: {config_path}")
+                    return
                 
             # Load the YAML file
             with open(self.tools_config_path, 'r') as file:

@@ -19,7 +19,7 @@ sys.path.insert(0, str(project_root))
 from src.DataUnitBase import DataUnitBase
 from src.LinkDirect import LinkDirect
 from src.LinkFile import LinkFile
-from src.TriggerDataChanged import TriggerDataChanged
+from src.TriggerDataUpdated import TriggerDataUpdated
 from src.TriggerStart import TriggerStart
 
 
@@ -49,7 +49,7 @@ async def example_reactive_link():
     destination = SimpleDataUnit(name="Destination")
     
     # Create a trigger that activates when data changes
-    trigger = TriggerDataChanged()
+    trigger = TriggerDataUpdated()
     
     # Create a direct link with the trigger
     link = LinkDirect(input_data=source, output_data=destination, trigger=trigger)
@@ -84,7 +84,7 @@ async def example_multiple_links():
     destination = SimpleDataUnit(name="Destination")
     
     # Create triggers
-    trigger1 = TriggerDataChanged()  # Reacts to data changes
+    trigger1 = TriggerDataUpdated()  # Reacts to data changes
     trigger2 = TriggerStart()  # Always activates (like a continuous connection)
     
     # Create links

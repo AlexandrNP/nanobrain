@@ -1,3 +1,6 @@
+defaults:
+  class: "src.AgentTools.AgentTools"
+
 tools:
   - name: FileWriterTool
     class: tools_common.StepFileWriter.StepFileWriter
@@ -21,4 +24,11 @@ tools:
     
   - name: WebSearchTool
     class: tools_common.StepWebSearch.StepWebSearch
-    description: Searches the web for information about APIs and best practices. 
+    description: Searches the web for information about APIs and best practices.
+
+validation:
+  required:
+    - class
+  constraints:
+    class:
+      type: str 

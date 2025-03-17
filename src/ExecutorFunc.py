@@ -1,6 +1,7 @@
 import random
+import asyncio
 from typing import Any, Callable
-from ExecutorBase import ExecutorBase
+from src.ExecutorBase import ExecutorBase
 
 class ExecutorFunc:
     """
@@ -52,6 +53,26 @@ class ExecutorFunc:
                 raise e
         
         return None
+    
+    async def execute_async(self, runnable: Any) -> Any:
+        """
+        Async wrapper for the execute method.
+        
+        This method allows the executor to be used in async contexts.
+        
+        Biological analogy: Neural adaptation to different signaling speeds.
+        Justification: Like how neurons can adapt to different signaling speeds
+        in various brain regions, this method adapts the execution to async contexts.
+        
+        Args:
+            runnable: The input to process
+            
+        Returns:
+            The result of execution
+        """
+        # Use run_in_executor to run the synchronous execute method in a thread pool
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.execute, runnable)
         
     # Delegate methods to base executor
     def can_execute(self, runnable_type: str) -> bool:

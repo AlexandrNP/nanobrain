@@ -19,6 +19,63 @@ class ConnectionStrength:
         self.max_strength = max_strength
         self.history = [(time.time(), initial_strength)]
     
+    def get_value(self) -> float:
+        """
+        Get the current connection strength value.
+        
+        Biological analogy: Synaptic efficiency measurement.
+        Justification: Like how the efficacy of a synapse can be measured,
+        this method provides the current strength of the connection.
+        
+        Returns:
+            The current connection strength as a float between min_strength and max_strength
+        """
+        return self.strength
+    
+    @property
+    def value(self) -> float:
+        """
+        Property that returns the current connection strength.
+        
+        This provides an alternative way to access the strength value.
+        
+        Returns:
+            The current connection strength as a float
+        """
+        return self.strength
+    
+    def strengthen(self, adaptability: float = 0.1) -> float:
+        """
+        Strengthen the connection based on successful activity.
+        
+        Biological analogy: Long-Term Potentiation (LTP).
+        Justification: Like how successful synaptic transmission strengthens
+        neural connections, this method increases connection strength.
+        
+        Args:
+            adaptability: Rate of adaptation (0.0-1.0)
+            
+        Returns:
+            The updated connection strength
+        """
+        return self.increase(adaptability)
+    
+    def weaken(self, adaptability: float = 0.1) -> float:
+        """
+        Weaken the connection based on failed activity.
+        
+        Biological analogy: Long-Term Depression (LTD).
+        Justification: Like how failed synaptic transmission weakens
+        neural connections, this method decreases connection strength.
+        
+        Args:
+            adaptability: Rate of adaptation (0.0-1.0)
+            
+        Returns:
+            The updated connection strength
+        """
+        return self.decrease(adaptability)
+    
     def increase(self, amount: float = 0.1) -> float:
         """
         Increase connection strength.

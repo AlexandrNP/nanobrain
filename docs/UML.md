@@ -12,18 +12,23 @@ graph TD
     Prompts[prompts/]
     Docs[docs/]
     DefaultConfigs[default_configs/]
+    Builder[builder/]
     
     Root --> Src
     Root --> Test
     Root --> Prompts
     Root --> Docs
     Root --> DefaultConfigs
+    Root --> Builder
     
     Src --> CoreClasses["Core Classes<br>(ConfigManager, DirectoryTracer, etc.)"]
     Src --> DataClasses["Data Classes<br>(DataUnitBase, DataUnitMemory, etc.)"]
     Src --> LinkClasses["Link Classes<br>(LinkBase, LinkDirect, etc.)"]
     Src --> ExecutionClasses["Execution Classes<br>(Runner, Router, etc.)"]
     Src --> AgentClasses["Agent Classes<br>(Agent, Step, Workflow, etc.)"]
+    
+    Builder --> BuilderClasses["Builder Classes<br>(AgentWorkflowBuilder, WorkflowSteps, etc.)"]
+    Builder --> BuilderConfig["Builder Config<br>(config/)"]
     
     Test --> TestFiles["Test Files<br>(test_agent.py, test_workflow.py, etc.)"]
     Test --> MockFiles["Mock Files<br>(mock_langchain.py)"]
@@ -108,6 +113,14 @@ classDiagram
         +consolidate()
     }
     
+    class DataUnitString["DataUnitString<br><i>Language processing memory</i>"] {
+        -_value: str
+        -_hash: str
+        +get() : str
+        +set(value: str)
+        +_compute_hash(value: str) : str
+    }
+    
     class WorkingMemory["WorkingMemory<br><i>Short-term synaptic memory</i>"] {
         -items: dict
         -capacity: int
@@ -147,6 +160,7 @@ classDiagram
 
     DataUnitMemory --|> DataUnitBase
     DataUnitFile --|> DataUnitBase
+    DataUnitString --|> DataUnitBase
     DataUnitFile --> WorkingMemory : uses
     DataStorageBase --|> Step
     DataStorageBase --> DataUnitBase : uses
@@ -387,7 +401,94 @@ classDiagram
     BaseChatModel <-- LLMProviders : implements
 ```
 
-## 7. Testing Structure
+## 7. Builder Components
+```mermaid
+classDiagram
+    class Agent["Agent<br><i>Higher-order cognitive processing</i>"] {
+        -llm: Union[BaseLLM, BaseChatModel]
+        -memory: List[Dict]
+        -prompt_template: PromptTemplate
+        -memory_window_size: int
+        -tools: List[Step]
+        +process(inputs: List[Any]) : Any
+    }
+    
+    class DataUnitBase["DataUnitBase<br><i>Neural memory engram</i>"] {
+        <<abstract>>
+        -data: Any
+        -decay_rate: float
+        -persistence_level: float
+        +get() : Any
+        +set(data: Any)
+    }
+    
+    class DataUnitString["DataUnitString<br><i>Language processing memory</i>"] {
+        -_value: str
+        -_hash: str
+        +get() : str
+        +set(value: str)
+    }
+    
+    class InputWrapper["InputWrapper<br><i>Dendritic spine</i>"] {
+        -output: DataUnitBase
+    }
+    
+    class AgentWorkflowBuilder["AgentWorkflowBuilder<br><i>Neural circuit formation</i>"] {
+        -input: DataUnitString
+        -output: DataUnitString
+        -input_wrapper: InputWrapper
+        -current_agent: Agent
+        -workflows: List[Workflow]
+        -current_workflow: Workflow
+        -generated_code: str
+        -generated_config: str
+        -generated_tests: str
+        +get() : Any
+        +set(data: Any) : bool
+        +process(inputs: List[Any]) : Any
+        +create_agent(model: str, use_code_writer: bool) : Agent
+        +create_workflow(name: str) : Workflow
+        +get_generated_code() : str
+        +get_generated_config() : str
+        +get_generated_tests() : str
+    }
+    
+    class WorkflowSteps["WorkflowSteps<br><i>Neural development stages</i>"] {
+        +CreateWorkflow
+        +CreateStep
+        +TestStepStep
+        +SaveStepStep
+        +LinkStepsStep
+        +SaveWorkflowStep
+    }
+    
+    class NanoBrainBuilder["NanoBrainBuilder<br><i>Neural development controller</i>"] {
+        -agent: AgentWorkflowBuilder
+        -workflow_stack: List[str]
+        -config: Dict
+        +create_workflow(name: str) : Dict
+        +create_step(name: str) : Dict
+        +test_step(name: str) : Dict
+        +save_step(name: str) : Dict
+        +link_steps(source: str, target: str) : Dict
+        +save_workflow() : Dict
+        +push_workflow(path: str)
+        +pop_workflow() : str
+        +get_current_workflow() : str
+    }
+
+    AgentWorkflowBuilder --|> Agent
+    AgentWorkflowBuilder o-- DataUnitString : has input
+    AgentWorkflowBuilder o-- DataUnitString : has output
+    AgentWorkflowBuilder o-- InputWrapper : has
+    AgentWorkflowBuilder o-- Agent : has current_agent
+    DataUnitString --|> DataUnitBase
+    InputWrapper o-- DataUnitBase : wraps
+    NanoBrainBuilder o-- AgentWorkflowBuilder : has
+    NanoBrainBuilder --> WorkflowSteps : uses
+```
+
+## 8. Testing Structure
 ```mermaid
 classDiagram
     class TestAgent["TestAgent<br><i>Agent test suite</i>"] {
@@ -420,6 +521,17 @@ classDiagram
         +test_execute_tool_directly()
     }
     
+    class TestAgentWorkflowBuilder["TestAgentWorkflowBuilder<br><i>Builder test suite</i>"] {
+        +setUp()
+        +test_initialization()
+        +test_create_agent()
+        +test_create_workflow()
+        +test_process()
+        +test_get_generated_code()
+        +test_get_generated_config()
+        +test_get_generated_tests()
+    }
+    
     class MockLangchain["MockLangchain<br><i>LangChain mock implementations</i>"] {
         +MockChatOpenAI
         +MockOpenAI
@@ -436,6 +548,7 @@ classDiagram
     TestAgent --> MockLangchain : uses
     TestAgentTools --> MockLangchain : uses
     TestAgentCustomToolPrompt --> MockLangchain : uses
+    TestAgentWorkflowBuilder --> MockLangchain : uses
 ```
 
 ## Legend
@@ -444,14 +557,16 @@ The diagrams use standard UML notation:
 - Inheritance: Solid arrow with triangle (--|>)
 - Implementation: Dashed arrow with triangle (..|>)
 - Composition/Usage: Solid arrow with diamond (-->)
+- Aggregation: Open diamond (o--)
 - Abstract classes: Marked with <<abstract>>
 - Interfaces: Marked with <<interface>>
 - Biological analogies: Shown in italic text below class names
 
 ## Notes
 
-1. The project is now organized into three main directories:
+1. The project is now organized into four main directories:
    - `src/`: Contains all source code files
+   - `builder/`: Contains builder-related components
    - `test/`: Contains all test files and mock implementations
    - `prompts/`: Contains prompt templates and tool calling prompts
 
@@ -463,4 +578,8 @@ The diagrams use standard UML notation:
 
 5. The Agent class now includes tool calling capabilities, allowing it to use other Step objects as tools to perform specific tasks.
 
-6. The Agent class supports multiple LLM providers (OpenAI, Anthropic, Google, Meta/Llama, Mistral) and can work with both chat-based models (BaseChatModel) and completion-based models (BaseLLM). 
+6. The Agent class supports multiple LLM providers (OpenAI, Anthropic, Google, Meta/Llama, Mistral) and can work with both chat-based models (BaseChatModel) and completion-based models (BaseLLM).
+
+7. The AgentWorkflowBuilder class now uses aggregation instead of inheritance for its relationship with DataUnitBase, with input and output DataUnitString attributes.
+
+8. The AgentWorkflowBuilder holds a fixed instance of current_agent that is responsible for writing code based on queries from the input data unit, with results streamed to the output data unit. 

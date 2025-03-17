@@ -9,6 +9,26 @@ behavior without changing the underlying code.
 
 ## Methods
 
+### ensure_config_file_exists
+
+```python
+def ensure_config_file_exists(self, class_name: str) -> str
+```
+
+Checks if a configuration file exists at the current workflow level.
+If not, copies it from the default configurations.
+
+Biological analogy: Gene duplication and adaptation.
+Justification: Like how organisms duplicate genes to adapt to new environments,
+this function copies default configurations to the current workflow level
+to allow for local adaptation.
+
+Args:
+    class_name: Name of the class whose configuration to ensure
+    
+Returns:
+    Path to the configuration file (either existing or newly created)
+
 ### get_config
 
 ```python
@@ -38,7 +58,7 @@ configuration changes, similar to how more plastic neural circuits adapt more re
 ### create_instance
 
 ```python
-def create_instance(self, class_name: str, **kwargs) -> Any
+def create_instance(self, class_name: str, configuration_name: Optional[str], **kwargs) -> Any
 ```
 
 Factory method that creates an instance of the specified class using configuration.

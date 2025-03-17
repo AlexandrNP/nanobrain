@@ -22,7 +22,9 @@ class TestConfigManager(unittest.TestCase):
     
     def setUp(self):
         """Set up test fixtures."""
-        self.config_manager = ConfigManager()
+        # Use the test directory as the base path
+        test_dir = os.path.dirname(os.path.abspath(__file__))
+        self.config_manager = ConfigManager(base_path=test_dir)
     
     def test_get_config_default(self):
         """Test getting config from default configs."""
@@ -89,9 +91,11 @@ class TestConfigManager(unittest.TestCase):
         # Create a test ExecutorBase class
         class TestExecutorBase:
             def __init__(self, **kwargs):
-                self.energy_per_execution = kwargs.get('energy_per_execution', 0.1)
-                self.recovery_rate = kwargs.get('recovery_rate', 0.05)
-                self.energy_level = kwargs.get('energy_level', 1.0)
+                self.debug_mode = kwargs.get('debug_mode', False)
+                self.name = kwargs.get('name', "TestExecutor")
+                self.energy_per_execution = kwargs.get('energy_per_execution', 0.2)
+                self.recovery_rate = kwargs.get('recovery_rate', 0.1)
+                self.energy_level = kwargs.get('energy_level', 0.8)
         
         # Mock the get_config method
         config = {

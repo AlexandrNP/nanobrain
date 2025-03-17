@@ -1,6 +1,7 @@
 ---
 # Default configuration - all variables assigned
 defaults:
+  class: "src.LinkBase.LinkBase"
   # Required parameters
   input_data: None        # Must be provided, no default
   output_data: None      # Must be provided, no default
@@ -36,6 +37,7 @@ metadata:
 
   validation:
     required:
+      - class
       - input_data
       - output_data
     optional:
@@ -47,6 +49,8 @@ metadata:
       - connection_strength
       - activation_gate
     constraints:
+      class:
+        type: str
       reliability:
         type: float
         min: 0.0

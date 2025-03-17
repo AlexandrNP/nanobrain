@@ -33,19 +33,17 @@ Like how the prefrontal cortex integrates information from multiple sources and 
 ```yaml
 context_sensitivity: 0.8
 creativity: 0.5
+executor: ExecutorFunc
 memory_key: chat_history
 memory_window_size: 5
 model_class: null
 model_name: gpt-3.5-turbo
-prompt_file: prompts/templates
-prompt_template: BASE_ASSISTANT
-prompt_variables:
-  role_description: assist users with general tasks while maintaining a helpful and
-    professional demeanor
-  specific_instructions: Focus on clear communication and accurate information
+prompt_file: null
+prompt_template: null
+prompt_variables: {}
 response_coherence: 0.7
 shared_context_key: null
-tools_config_path: default_configs/AgentTools.yml
+tools_config_path: null
 use_buffer_window_memory: true
 use_shared_context: false
 ```
@@ -133,10 +131,9 @@ use_shared_context: false
 Basic agent with default settings
 
 ```yaml
+executor: ExecutorFunc
 memory_window_size: 5
 model_name: gpt-3.5-turbo
-prompt_file: prompts/templates
-prompt_template: BASE_ASSISTANT
 prompt_variables:
   role_description: assist users with general tasks
   specific_instructions: Maintain a helpful and professional tone

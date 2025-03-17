@@ -32,8 +32,9 @@ async def main():
     print("ConfigManager Factory Demo")
     print("-------------------------")
     
-    # Create a ConfigManager instance
-    config_manager = ConfigManager()
+    # Create a ConfigManager instance with the current directory as the base path
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    config_manager = ConfigManager(base_path=current_dir)
     
     try:
         # Create an ExecutorBase instance

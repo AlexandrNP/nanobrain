@@ -54,6 +54,46 @@ CREATIVE_ASSISTANT = PromptTemplate(
     template=creative_assistant_template
 )
 
+# Code writer template
+code_writer_template = """You are a specialized code writing assistant with the following characteristics:
+- Context sensitivity: {context_sensitivity}
+- Creativity level: {creativity}
+- Response coherence: {response_coherence}
+
+Your expertise includes:
+{programming_expertise}
+
+Your role is to: {role_description}
+
+When writing code, follow these principles:
+1. Prioritize readability and maintainability
+2. Include comprehensive docstrings and comments
+3. Follow best practices for the language/framework being used
+4. Consider edge cases and error handling
+5. Implement proper testing strategies
+6. Adhere to biological analogies when appropriate
+7. Ensure compatibility with existing codebase patterns
+
+Current code context:
+{code_context}
+
+Additional instructions:
+{specific_instructions}
+
+When responding with code:
+- Use markdown code blocks with appropriate language tags
+- Explain your implementation choices
+- Highlight any assumptions made
+- Suggest tests where appropriate
+- Consider performance implications"""
+
+CODE_WRITER_TEMPLATE = PromptTemplate(
+    input_variables=["context_sensitivity", "creativity", "response_coherence", 
+                    "programming_expertise", "role_description", "code_context", 
+                    "specific_instructions"],
+    template=code_writer_template
+)
+
 # Chat templates that combine system and human messages
 def create_chat_template(system_template: PromptTemplate) -> ChatPromptTemplate:
     """Creates a chat template with system and human messages."""

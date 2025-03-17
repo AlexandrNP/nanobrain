@@ -9,277 +9,367 @@ import asyncio
 import sys
 import os
 from datetime import datetime
+import traceback
+"""
+DataStorageCommandLine Module
+
+This module provides a command-line interface for data storage and interaction.
+"""
+
+from typing import Any, List, Optional, Dict, Union, Callable
+import asyncio
+import sys
+import os
+from datetime import datetime
+import traceback
+import time
+import copy
 
 from src.DataStorageBase import DataStorageBase
 from src.ExecutorBase import ExecutorBase
 from src.DataUnitBase import DataUnitBase
 from src.TriggerBase import TriggerBase
 from src.enums import ComponentState
+from src.Step import Step
 
 
-class DataStorageCommandLine(DataStorageBase):
+class DataStorageCommandLine(Step):
     """
-    Data storage for command line input and output.
+    Command line interface for data storage and retrieval.
     
-    Biological analogy: Sensory processing and motor output areas.
-    Justification: Like how sensory areas process input and motor areas
-    produce output, this class processes command line input and produces
-    command line output.
+    Biological analogy: Sensory input system.
+    Justification: Like how sensory systems gather external information and pass it to
+    the brain for processing, the command line gathers user input and passes it to
+    the system for processing.
     """
     
-    def __init__(self, 
-                 executor: ExecutorBase,
-                 prompt: str = "nb> ",
-                 exit_command: str = "exit",
-                 welcome_message: Optional[str] = None,
-                 goodbye_message: Optional[str] = None,
-                 supported_commands: Optional[Dict[str, str]] = None,
-                 command_handlers: Optional[Dict[str, Callable]] = None,
-                 **kwargs):
+    def __init__(self, name="CommandLine", history_size=20, **kwargs):
         """
-        Initialize the CommandLineStorage.
+        Initialize the command line interface.
         
         Args:
-            executor: The executor responsible for running this step
-            prompt: The prompt to display for user input
-            exit_command: The command to exit the input loop
-            welcome_message: Optional welcome message to display when starting
-            goodbye_message: Optional goodbye message to display when exiting
-            supported_commands: Dictionary of supported commands and their descriptions
-            command_handlers: Dictionary of command handlers
-            **kwargs: Additional keyword arguments
+            name: Name of the interface
+            history_size: Maximum number of history entries to keep
         """
-        # Initialize with base Step class instead of DataStorageBase
-        # to avoid the trigger.runnable = self assignment
-        from src.Step import Step
-        Step.__init__(self, executor, **kwargs)
+        super().__init__(name=name, **kwargs)
+        self.history: List[Dict[str, str]] = []  # Store interaction history
+        self.history_size = history_size  # Maximum size of history
+        self.prompt = kwargs.get('prompt', '> ')  # Prompt for user input
+        self.welcome_message = kwargs.get('welcome_message', 'Welcome to the command line interface.')
+        self.goodbye_message = kwargs.get('goodbye_message', 'Goodbye!')
+        self.exit_command = kwargs.get('exit_command', 'exit')
+        self._monitoring = False
+        self._monitor_task = None
+        self.agent_builder = None  # Direct reference to agent builder if available
+        self._debug_mode = kwargs.get('debug', False)  # Enable debug output
         
-        # Initialize attributes that would normally be set by DataStorageBase
-        self.input = None
-        self.output = None
-        self.trigger = None
-        self.last_query = None
-        self.last_response = None
-        self.processing_history = []
-        self.max_history_size = kwargs.get('max_history_size', 10)
-        
-        # Command line specific attributes
-        self.prompt = prompt
-        self.exit_command = exit_command
-        self.welcome_message = welcome_message or "Welcome to NanoBrain Command Line Interface. Type 'exit' to quit."
-        self.goodbye_message = goodbye_message or "Thank you for using NanoBrain. Goodbye!"
-        self.running = False
-        self.last_input = None
-        self.last_output = None
-        
-        # Command handling
-        self.supported_commands = supported_commands or {}
-        self.command_handlers = command_handlers or {}
-        
-        # Add help command by default
-        self.supported_commands["help"] = "Display this help message"
-        self.command_handlers["help"] = self._display_help
-        
-        # Add exit command
-        self.supported_commands[self.exit_command] = "Exit the current session"
-    
-    async def _process_query(self, query: Any) -> Any:
+    def _force_output_change(self, data):
         """
-        Process the command line input.
+        Force an output change to ensure it's detected by triggers.
+        
+        Biological analogy: Neurotransmitter release.
+        Justification: Like how neurons forcefully release neurotransmitters
+        to ensure signal transmission, this method forcefully updates the output
+        to ensure the change is detected.
         
         Args:
-            query: The user input from command line
+            data: The data to set as output
             
         Returns:
-            The processed response
+            True if successful, False otherwise
         """
-        # Store the input
-        self.last_input = query
+        if not hasattr(self, 'output') or not self.output:
+            if self._debug_mode:
+                print("DataStorageCommandLine: No output to update")
+            return False
+            
+        # Create a deep copy to ensure it's seen as a new object
+        copied_data = copy.deepcopy(data)
         
-        # Process the input
-        response = await self._handle_command(query)
+        # Force update with a new object instance
+        self.output.set(copied_data)
         
-        # Store the output
-        self.last_output = response
+        if self._debug_mode:
+            print(f"DataStorageCommandLine: Forced output change to: {copied_data}")
+            
+        # If we have a direct reference to agent_builder, trigger it directly too
+        if self.agent_builder and hasattr(self.agent_builder, 'process'):
+            if self._debug_mode:
+                print("DataStorageCommandLine: Also triggering agent_builder directly")
+            asyncio.create_task(self.agent_builder.process([copied_data]))
+            
+        return True
         
-        # Display the response
-        self.display_response(response)
-        
-        return response
-    
-    async def _handle_command(self, command: str) -> Any:
+    async def process(self, inputs=None):
         """
-        Handle a command from the user.
+        Process input data and produce output.
+        
+        Biological analogy: Memory retrieval and encoding.
+        Justification: Like how the brain retrieves stored information and encodes
+        new information, this method retrieves input data and encodes output data.
         
         Args:
-            command: The command to handle
+            inputs: Input data to process
             
         Returns:
-            The response to the command
+            Processed data
         """
-        if not command:
+        if not inputs:
+            if self._debug_mode:
+                print("DataStorageCommandLine: No inputs to process")
             return None
             
-        # Parse the command
-        parts = command.strip().split()
-        cmd = parts[0].lower()
-        args = parts[1:]
+        # Extract query from inputs
+        query = None
+        if isinstance(inputs, list) and len(inputs) > 0:
+            query = inputs[0]
+        elif isinstance(inputs, dict) and 'query' in inputs:
+            query = inputs['query']
+        elif isinstance(inputs, str):
+            query = inputs
+            
+        # Check if query is provided
+        if not query:
+            if self._debug_mode:
+                print("DataStorageCommandLine: No query provided")
+            return None
+            
+        # Process the query
+        response = self._process_query(query)
         
-        # Check if it's a supported command
-        if cmd in self.command_handlers:
-            # Call the handler with arguments
-            handler = self.command_handlers[cmd]
-            if asyncio.iscoroutinefunction(handler):
-                return await handler(*args)
-            return handler(*args)
+        # Update history with query and response
+        self._add_to_history(query, response)
         
-        # If no specific handler, treat as general input
-        return command
-    
-    def _display_help(self, *args) -> str:
-        """Display help information about supported commands."""
-        help_text = "Available commands:\n"
-        for cmd, desc in self.supported_commands.items():
-            help_text += f"  {cmd} - {desc}\n"
-        return help_text
-    
-    def display_response(self, response: Any):
+        # Use the force_output_change method to ensure change detection
+        if response is not None:
+            self._force_output_change(response)
+        
+        return response
+        
+    def _process_query(self, query: str) -> str:
         """
-        Display the response to the command line.
+        Process a query string.
+        
+        Biological analogy: Language processing.
+        Justification: Like how the brain processes language input to extract meaning,
+        this method processes query strings to determine the response.
         
         Args:
-            response: The response to display
+            query: Query string to process
+            
+        Returns:
+            Response string
         """
-        if response:
-            print(f"{response}")
-    
-    async def _get_user_input(self) -> str:
+        # Check for specific command pattern: <class_name>><instructions>
+        import re
+        class_pattern = re.match(r'<([A-Za-z0-9_]+)>>(.+)', query)
+        if class_pattern:
+            class_name = class_pattern.group(1)
+            instructions = class_pattern.group(2).strip()
+            
+            if self._debug_mode:
+                print(f"DataStorageCommandLine: Detected class-specific command pattern")
+                print(f"  Class: {class_name}")
+                print(f"  Instructions: {instructions}")
+                
+            # Format a prompt specifically for generating class code
+            return f"Generate a class named {class_name} with the following requirements:\n{instructions}"
+            
+        # In the simple implementation, just return the query
+        return query
+        
+    def _add_to_history(self, query: str, response: str) -> None:
         """
-        Get input from the command line asynchronously.
+        Add a query-response pair to history.
+        
+        Biological analogy: Memory formation.
+        Justification: Like how the brain forms memories by encoding and storing experiences,
+        this method stores interaction history for later retrieval.
+        
+        Args:
+            query: Query string
+            response: Response string
+        """
+        self.history.append({
+            'query': query,
+            'response': response,
+            'timestamp': time.time()
+        })
+        
+        # Keep history size limited
+        if len(self.history) > self.history_size:
+            self.history = self.history[-self.history_size:]
+            
+    def get_history(self) -> List[Dict[str, Union[str, float]]]:
+        """
+        Get interaction history.
+        
+        Biological analogy: Memory retrieval.
+        Justification: Like how the brain retrieves stored memories,
+        this method retrieves stored interaction history.
         
         Returns:
-            The user input as a string
+            List of history entries
         """
-        # Create a future to hold the result
-        loop = asyncio.get_event_loop()
-        future = loop.create_future()
+        return self.history
         
-        # Run the blocking input call in a separate thread
-        def _get_input():
-            try:
-                result = input(self.prompt)
-                loop.call_soon_threadsafe(future.set_result, result)
-            except (EOFError, KeyboardInterrupt) as e:
-                loop.call_soon_threadsafe(future.set_exception, e)
-        
-        # Run the input function in a thread
-        await loop.run_in_executor(None, _get_input)
-        
-        # Wait for the result
-        return await future
-    
-    async def start_monitoring(self):
+    async def start_monitoring(self) -> None:
         """
         Start monitoring for user input.
         
-        This method runs an infinite loop that waits for user input
-        and processes it until the exit command is received.
+        Biological analogy: Sensory attention.
+        Justification: Like how sensory systems attend to external stimuli,
+        this method attends to user input.
         """
-        # Set the state to active
-        self._state = ComponentState.ACTIVE
-        self.running = True
+        if self._monitoring:
+            return  # Already monitoring
+            
+        self._monitoring = True
         
-        # Display welcome message
-        if self.welcome_message:
-            print(self.welcome_message)
+        # Show welcome message
+        print(self.welcome_message)
         
-        # Display help by default
-        print(self._display_help())
+        # Show instructions for the user
+        print("\n💡 You are now in an interactive step creation session.")
+        print("💡 Describe what you want this step to do, and I'll create the code for you.")
+        print("💡 You can use the following commands:")
+        print("   - Type 'help' to see available commands")
+        print("   - Type 'finish' when you're done creating the step")
+        print("   - Type 'link <source_step> <target_step>' to link steps")
+        print("   - Any other input will be used to enhance the step's code\n")
         
-        # Main input loop
-        while self.running:
-            try:
-                # Wait for user input
-                user_input = await self._get_user_input()
+        # Show data flow information if debug mode is enabled
+        if self._debug_mode:
+            print("\nData Flow Information:")
+            print("1. User input -> DataStorageCommandLine.process")
+            print("2. DataStorageCommandLine.process -> _force_output_change")
+            print("3. _force_output_change -> output.set")
+            print("4. TriggerDataUpdated detects output change")
+            print("5. TriggerDataUpdated -> LinkDirect.transfer")
+            print("6. LinkDirect.transfer -> AgentWorkflowBuilder.process")
+            
+            # Show connection information
+            if hasattr(self, 'agent_builder') and self.agent_builder:
+                print("\nDirect Connection: CommandLine -> AgentBuilder (backup path)")
+            else:
+                print("\nNo direct connection. Using Link/Trigger mechanism only.")
                 
-                # Check if it's the exit command
-                if user_input.lower() == self.exit_command.lower():
-                    self.running = False
-                    if self.goodbye_message:
-                        print(self.goodbye_message)
+            # Show output information
+            if hasattr(self, 'output') and self.output:
+                print(f"Output Data Unit: {self.output.__class__.__name__}")
+            else:
+                print("No output data unit configured.")
+        
+        try:
+            # Loop to get user input
+            while self._monitoring:
+                # Show prompt and get input
+                sys.stdout.write(self.prompt)
+                sys.stdout.flush()
+                
+                # Get user input
+                try:
+                    user_input = await asyncio.get_event_loop().run_in_executor(None, input)
+                except EOFError:
+                    # Handle Ctrl+D
+                    print("\nEOF detected. Exiting.")
+                    break
+                except KeyboardInterrupt:
+                    # Handle Ctrl+C
+                    print("\nInterrupt detected. Exiting.")
                     break
                 
-                # Process the input
-                await self.process([user_input])
-                
-            except asyncio.CancelledError:
-                self.running = False
-                break
-            except (EOFError, KeyboardInterrupt):
-                print("\nOperation cancelled by user.")
-                self.running = False
-                if self.goodbye_message:
+                # Check for exit command
+                if user_input.strip().lower() == self.exit_command:
                     print(self.goodbye_message)
-                break
-            except Exception as e:
-                print(f"Error processing input: {e}")
-                # Continue the loop despite errors
-    
-    async def stop_monitoring(self):
+                    break
+                
+                try:
+                    # Handle special commands directly here to avoid async issues
+                    if user_input.strip().lower() == "finish":
+                        # Handle finish command
+                        print("✅ Finishing step creation...")
+                        
+                        # Stop monitoring to exit the loop
+                        self._monitoring = False
+                        response = "Step creation completed."
+                        self._add_to_history(user_input, response)
+                        self._force_output_change(response)
+                        break
+                    elif user_input.strip().lower() == "help":
+                        # Handle help command
+                        help_text = """
+Available commands:
+1. link <source_step> <target_step> [link_type] - Link this step to another step
+2. finish - End step creation and save
+3. help - Show this menu
+
+Other inputs will be used to enhance the step's code. Examples:
+- "Add a method to process JSON data"
+- "Implement error handling for network requests"
+- "The step should validate input parameters"
+"""
+                        print(help_text)
+                        
+                        self._add_to_history(user_input, help_text)
+                        self._force_output_change(help_text)
+                        continue
+                    elif user_input.strip().lower().startswith("link "):
+                        # Handle link command: link <source_step> <target_step>
+                        parts = user_input.strip().split()
+                        if len(parts) >= 3:
+                            source_step = parts[1]
+                            target_step = parts[2]
+                            link_type = parts[3] if len(parts) > 3 else "LinkDirect"
+                            
+                            print(f"🔗 Linking steps: {source_step} -> {target_step} using {link_type}...")
+                            
+                            response = f"Linking steps: {source_step} -> {target_step} using {link_type}"
+                            self._add_to_history(user_input, response)
+                            self._force_output_change(response)
+                            continue
+                    
+                    # For all other inputs, use the process method
+                    print("⚙️ Processing your input and updating the step code...")
+                    result = await self.process(user_input)
+                    
+                    if result:
+                        print(f"\n✅ Code updated based on your input. Keep adding more details or type 'finish' when done.")
+                    else:
+                        print(f"\n⚠️ No changes were made. Please provide more specific instructions.")
+                    
+                    if self._debug_mode:
+                        print(f"Process result: {result}")
+                        
+                        # Check if output was updated
+                        if hasattr(self, 'output') and self.output:
+                            print(f"Current output value: {self.output.get()}")
+                    
+                except asyncio.CancelledError:
+                    # Handle cancellation
+                    break
+                except Exception as e:
+                    # Handle other exceptions
+                    print(f"❌ Error processing input: {e}")
+                    traceback.print_exc()
+        
+        except asyncio.CancelledError:
+            # Task was cancelled
+            pass
+        finally:
+            # Clean up
+            self._monitoring = False
+            print("\n✅ Step creation session ended. Files will be saved.")
+            
+    def stop_monitoring(self) -> None:
         """
         Stop monitoring for user input.
+        
+        Biological analogy: Sensory inhibition.
+        Justification: Like how sensory systems can inhibit attention to stimuli,
+        this method stops attending to user input.
         """
-        # Set the state to inactive
-        self._state = ComponentState.INACTIVE
-        self.running = False
-    
-    def _update_history(self, query: Any, response: Any) -> None:
-        """
-        Update the processing history.
-        
-        Args:
-            query: The processed query
-            response: The generated response
-        """
-        # Add to history
-        self.processing_history.append({
-            'query': query,
-            'response': response,
-            'timestamp': datetime.now().isoformat()
-        })
-        
-        # Trim history if it exceeds max size
-        if len(self.processing_history) > self.max_history_size:
-            self.processing_history = self.processing_history[-self.max_history_size:]
-            
-    async def process(self, inputs: List[Any]) -> Any:
-        """
-        Process the input data and produce output.
-        
-        Biological analogy: Memory retrieval and encoding.
-        Justification: Like how memory systems retrieve stored information
-        based on cues and encode new information, this method processes
-        input queries and produces appropriate responses.
-        
-        Args:
-            inputs: List of input data (typically a single query)
-            
-        Returns:
-            The processed output data
-        """
-        # Extract the query from inputs
-        query = inputs[0] if inputs else None
-        self.last_query = query
-        
-        # If no query provided, return None
-        if query is None:
-            return None
-        
-        # Process the query
-        response = await self._process_query(query)
-        self.last_response = response
-        
-        # Record this processing in history
-        self._update_history(query, response)
-        
-        return response 
+        self._monitoring = False
+        if self._monitor_task:
+            self._monitor_task.cancel()
+            self._monitor_task = None 

@@ -1,11 +1,14 @@
 ---
 # Default configuration - all variables assigned
 defaults:
+  # Class specification
+  class: "src.Runner.Runner"
+  
   # Required parameters
   executor: None  # Must be provided, no default
 
   # Optional parameters with defaults
-  activation_threshold: 1.0   # Threshold for activation
+  activation_threshold: 0.1   # Threshold for activation
   resting_level: 0.0         # Base activation level
   recovery_period: 0.0       # Time needed for recovery after activation
   adaptability: 0.0          # How easily parameters can be modified
@@ -30,6 +33,7 @@ metadata:
 
   validation:
     required:
+      - class  # Python class to instantiate
       - executor
     optional:
       - activation_threshold
@@ -41,6 +45,8 @@ metadata:
       - state
       - running
     constraints:
+      class:
+        type: str
       activation_threshold:
         type: float
         min: 0.0

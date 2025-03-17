@@ -24,6 +24,9 @@ class Step(PackageBase, IRunnable):
         # Initialize the base class
         super().__init__(executor, **kwargs)
         
+        # Store the name parameter from kwargs
+        self.name = kwargs.get('name', self.__class__.__name__)
+        
         # Step-specific attributes
         self.input_sources = input_sources or {}
         self.output = output

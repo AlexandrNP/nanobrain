@@ -259,6 +259,11 @@ def show_help(args):
 
 def main():
     """Main entry point for the NanoBrain CLI."""
+    try:
+        subprocess.run(['stty', 'sane'])
+    except Exception as e:
+        pass
+        
     parser = argparse.ArgumentParser(
         description="NanoBrain Command Line Interface",
         usage="nanobrain [command] [options]"

@@ -1,6 +1,15 @@
 #!/usr/bin/env python3
 """
 NanoBrainBuilder - Core builder for NanoBrain workflows.
+
+This module provides the main CLI interface for the NanoBrain framework,
+handling command parsing and delegating to appropriate components.
+
+Biological analogy: Brain's prefrontal cortex executive function.
+Justification: Like how the prefrontal cortex handles planning and
+decision-making through integrating information from various brain regions,
+the NanoBrainBuilder orchestrates workflow creation by coordinating
+between different specialized components.
 """
 
 from typing import List, Dict, Any, Optional
@@ -11,6 +20,7 @@ import argparse
 import importlib.util
 import yaml
 import traceback
+import importlib
 
 from src.Workflow import Workflow
 from src.ExecutorBase import ExecutorBase
@@ -20,15 +30,27 @@ from src.DataUnitBase import DataUnitBase
 from src.TriggerBase import TriggerBase
 from src.enums import ComponentState
 from src.Agent import Agent
-from tools_common import StepFileWriter, StepPlanner, StepCoder, StepGitInit, StepContextSearch, StepWebSearch
+from src.DataStorageCommandLine import DataStorageCommandLine
+from src.LinkDirect import LinkDirect
+from src.TriggerDataUpdated import TriggerDataUpdated
+from src.DataUnitString import DataUnitString
 
-# Import the AgentWorkflowBuilder (will be created next)
+# Import the AgentWorkflowBuilder
 from builder.AgentWorkflowBuilder import AgentWorkflowBuilder
 
 # Import the ConfigManager
 from src.ConfigManager import ConfigManager
 from src.ExecutorFunc import ExecutorFunc
 from src.GlobalConfig import GlobalConfig
+
+# Import WorkflowSteps for handling predefined commands
+from builder.WorkflowSteps import (
+    CreateWorkflow, CreateStep, TestStepStep,
+    SaveStepStep, LinkStepsStep, SaveWorkflowStep
+)
+
+# Import the ensure_async decorator
+from builder.utils import ensure_async
 
 
 class CommandLineTrigger(TriggerBase):
@@ -99,42 +121,46 @@ class CommandLineTrigger(TriggerBase):
 
 class CommandLineStorage(DataStorageBase):
     """
-    Data storage for command line input and output.
+    Storage for command line input and output.
     
-    Biological analogy: Sensory processing and motor output areas.
-    Justification: Like how sensory areas process input and motor areas
-    produce output, this class processes command line input and produces
-    command line output.
+    Biological analogy: Brain's sensory processing system.
+    Justification: Like how the brain's sensory system processes
+    external stimuli and prepares responses, this storage processes
+    command line input and prepares output to be displayed to the user.
     """
     def __init__(self, executor: ExecutorBase, **kwargs):
+        """Initialize the command line storage."""
+        super().__init__(executor, **kwargs)
+        
         # Create input and output data units
-        input_unit = kwargs.pop('input_unit', None) or DataUnitBase()
-        output_unit = kwargs.pop('output_unit', None) or DataUnitBase()
-        trigger = kwargs.pop('trigger', None) or CommandLineTrigger(None)
+        self.input = DataUnitString(name="CommandLineInput")
+        self.output = DataUnitString(name="CommandLineOutput")
         
-        super().__init__(executor, input_unit, output_unit, trigger, **kwargs)
-        
-        # Set this storage as the runnable for the trigger
-        self.trigger.runnable = self
-    
     async def _process_query(self, query: Any) -> Any:
-        """Process the command line input."""
-        # Just print the response to the command line
+        """Process a query."""
+        # For command line interface, just return the query as is
+        # This might do preprocessing in a more complex scenario
         return query
-    
+        
     def display_response(self, response: Any):
-        """Display the response to the command line."""
-        if response:
-            print(f"{response}")
+        """Display the response to the user."""
+        print(f"{response}")
 
 
 class NanoBrainBuilder:
     """
     NanoBrain Builder for constructing workflows and steps.
     
+    This class serves as the main CLI interface for the NanoBrain framework,
+    handling command parsing and delegating to appropriate components:
+    1. For predefined commands: Invoke WorkflowSteps methods
+    2. For step creation: Pass control to DataStorageCommandLine linked with AgentCodeWriter
+    3. For non-predefined commands: Pass to AgentWorkflowBuilder for guidance
+    
     Biological analogy: Brain's prefrontal cortex executive function.
     Justification: Like how the prefrontal cortex handles planning and
-    decision-making, the NanoBrainBuilder plans and constructs workflows.
+    decision-making, the NanoBrainBuilder plans and constructs workflows
+    by orchestrating specialized components.
     """
     def __init__(self, config_path: Optional[str] = None):
         """
@@ -143,8 +169,11 @@ class NanoBrainBuilder:
         Args:
             config_path: Path to the configuration file (optional)
         """
+        # Get the current directory as the base path
+        base_path = os.path.dirname(os.path.abspath(__file__))
+        
         # Initialize the ConfigManager first
-        self.config_manager = ConfigManager()
+        self.config_manager = ConfigManager(base_path=base_path)
         
         # Initialize the executor using ConfigManager
         self.executor = self.config_manager.create_instance("ExecutorFunc")
@@ -157,185 +186,251 @@ class NanoBrainBuilder:
         self.current_workflow = None
         self._workflow_stack = []
         
+        # Set debug mode
+        self._debug_mode = self.config.get('debug', False)
+        
         # Create workflows directory if it doesn't exist
         if not os.path.exists(self.workflows_dir):
             os.makedirs(self.workflows_dir)
         
-        # Initialize the agent using ConfigManager
+        # Initialize the agents
         self._init_agent()
         
         # Initialize the tools using ConfigManager
         self._init_tools()
+        
+        # Set predefined commands
+        self._predefined_commands = {
+            "create_workflow": self.create_workflow,
+            "create_step": self.create_step,
+            "test_step": self.test_step,
+            "save_step": self.save_step,
+            "link_steps": self.link_steps,
+            "save_workflow": self.save_workflow,
+            "list_workflows": lambda: {"success": True, "workflows": self.list_workflows()},
+            "push_workflow": lambda workflow_name: {"success": True, "workflow": self.push_workflow(workflow_name)},
+            "pop_workflow": lambda: {"success": True, "workflow": self.pop_workflow()},
+            "get_current_workflow": lambda: {"success": True, "workflow": self.get_current_workflow()},
+            "help": self._show_help,
+        }
     
     def _init_agent(self):
-        """Initialize the agent from configuration."""
-        # Simply use the config_manager to create the Agent instance
-        # This will properly load all config from Agent.yml without manual overrides
-        # Make sure to explicitly pass the executor which is required
-        self.agent = self.config_manager.create_instance("Agent", executor=self.executor)
-    
-    def _init_tools(self):
-        """Initialize the tools for the agent from configuration."""
-        import traceback
-        
-        # Import tool classes dynamically as needed
-        from tools_common import (
-            StepFileWriter, StepPlanner, StepCoder, 
-            StepGitInit, StepContextSearch, StepWebSearch
+        """
+        Initialize the agents needed by the NanoBrainBuilder:
+        1. AgentWorkflowBuilder - provides guidance on NanoBrain framework
+        2. AgentCodeWriter - template accessible by DataStorageCommandLine for creating code
+        """
+        # Initialize AgentWorkflowBuilder for guidance
+        self.agent = self.config_manager.create_instance(
+            "AgentWorkflowBuilder", 
+            executor=self.executor,
+            _debug_mode=self._debug_mode,
+            use_code_writer=False  # This agent provides guidance only
         )
         
-        # Map tool names to classes
-        tool_classes = {
-            'StepFileWriter': StepFileWriter,
-            'StepPlanner': StepPlanner,
-            'StepCoder': StepCoder,
-            'StepGitInit': StepGitInit,
-            'StepContextSearch': StepContextSearch,
-            'StepWebSearch': StepWebSearch
-        }
+        # We don't directly initialize AgentCodeWriter here
+        # It will be created by the CreateStep.execute method when needed
         
-        # Let ConfigManager get the list of tools from config files
-        tools_config = self.config_manager.get_config("NanoBrainBuilder")
-        tools_list = tools_config.get('tools', [])
+        if self._debug_mode:
+            print("Initialized AgentWorkflowBuilder for guidance")
+    
+    def _init_tools(self):
+        """Initialize the tools using ConfigManager."""
+        # Get tool configurations
+        tools_config = self.config.get('tools', {})
         
-        # Create and add tools
-        for tool_name in tools_list:
-            if tool_name in tool_classes:
+        # Create tool instances
+        self.tools = []
+        
+        # Import tool classes from tools_common
+        tool_map = {}
+        
+        # Try to import each tool class, but don't fail if it's not available
+        tool_classes = [
+            "StepFileWriter",
+            "StepPlanner",
+            "StepCoder",
+            "StepGitInit",
+            "StepContextSearch",
+            "StepWebSearch",
+            "StepGitExclude",
+            "StepDependencySearch",
+            "StepContextArchiver"
+        ]
+        
+        # Import available tools
+        for tool_class in tool_classes:
+            try:
+                # Try to import the tool class
+                module_path = f"tools_common.{tool_class}"
+                module = __import__(module_path, fromlist=[tool_class])
+                tool_class_obj = getattr(module, tool_class)
+                
+                # Add the tool class to the map
+                tool_map[tool_class] = tool_class_obj
+                
+                if self._debug_mode:
+                    print(f"Successfully imported tool class: {tool_class}")
+            except (ImportError, AttributeError) as e:
+                # Skip this tool if it's not available
+                if self._debug_mode:
+                    print(f"Tool class {tool_class} is not available: {e}")
+        
+        # Create the tools
+        for tool_name, tool_config in tools_config.items():
+            if tool_name in tool_map:
                 try:
-                    # Create tool instance using ConfigManager
-                    tool_instance = self.config_manager.create_instance(tool_name, executor=self.executor)
+                    # Create the tool instance
+                    tool = tool_map[tool_name](**tool_config)
                     
-                    # If ConfigManager couldn't create it (no config), fall back to direct instantiation
-                    if tool_instance is None and tool_name in tool_classes:
-                        tool_instance = tool_classes[tool_name](self.executor)
-                        
-                    # Add tool to agent
-                    self.agent.add_tool(tool_instance)
-                    print(f"Successfully added tool: {tool_name}")
+                    # Add the tool to the list
+                    self.tools.append(tool)
+                    
+                    if self._debug_mode:
+                        print(f"Initialized tool: {tool_name}")
                 except Exception as e:
-                    print(f"Error creating tool {tool_name}: {type(e).__name__} - {str(e)}")
-                    print("\nStack trace:")
-                    traceback.print_exc()
+                    print(f"Error initializing tool {tool_name}: {e}")
             else:
-                print(f"Warning: Tool '{tool_name}' not found in available tools.")
+                if self._debug_mode:
+                    print(f"Skipping unavailable tool: {tool_name}")
+        
+        # Make the tools available to the agent
+        if hasattr(self.agent, 'add_tool'):
+            for tool in self.tools:
+                try:
+                    self.agent.add_tool(tool)
+                    if self._debug_mode:
+                        print(f"Added tool to agent: {tool.__class__.__name__}")
+                except Exception as e:
+                    print(f"Error adding tool {tool.__class__.__name__} to agent: {e}")
+    
+    def _show_help(self) -> Dict[str, Any]:
+        """
+        Show help information.
+        
+        Returns:
+            Dictionary with the available commands
+        """
+        commands = list(self._predefined_commands.keys())
+        
+        return {
+            "success": True,
+            "commands": commands,
+            "message": "Available commands: " + ", ".join(commands)
+        }
     
     def get_current_workflow(self) -> Optional[str]:
         """
-        Get the current workflow path.
+        Get the path to the current workflow.
         
         Returns:
-            The current workflow path or None if no workflow is active
+            Path to the current workflow or None if no workflow is active
         """
-        if not self._workflow_stack:
-            return None
-        return self._workflow_stack[-1]
-
+        return self.current_workflow
+    
     def get_current_workflow_object(self) -> Optional[Workflow]:
         """
         Get the current workflow object.
         
         Returns:
-            The current workflow object or None if no workflow is active
+            Current workflow object or None if no workflow is active
         """
         workflow_path = self.get_current_workflow()
+        
         if not workflow_path:
             return None
             
-        try:
-            # Get the workflow class name from the path
-            workflow_name = os.path.basename(workflow_path)
-            workflow_class_name = ''.join(word.capitalize() for word in workflow_name.split('_'))
+        # Look for configuration file
+        config_path = os.path.join(workflow_path, 'config', 'workflow.yml')
+        
+        if not os.path.exists(config_path):
+            return None
             
-            # Import the workflow module
-            spec = importlib.util.spec_from_file_location(
-                workflow_class_name,
-                os.path.join(workflow_path, 'src', f'{workflow_class_name}.py')
-            )
-            if spec is None or spec.loader is None:
+        try:
+            # Load the configuration
+            with open(config_path, 'r') as f:
+                config = yaml.safe_load(f)
+                
+            # Get the entry point
+            entry_point = config.get('entry_point')
+            
+            if not entry_point:
                 return None
                 
+            # Load the entry point module
+            module_path = os.path.join(workflow_path, entry_point)
+            
+            if not os.path.exists(module_path):
+                return None
+                
+            # Import the module
+            spec = importlib.util.spec_from_file_location("workflow_module", module_path)
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
             
             # Get the workflow class
-            workflow_class = getattr(module, workflow_class_name)
-            
-            # Create and return the workflow instance
-            return workflow_class(executor=self.executor)
+            for attr_name in dir(module):
+                attr = getattr(module, attr_name)
+                
+                if isinstance(attr, type) and issubclass(attr, Workflow) and attr != Workflow:
+                    # Create an instance of the workflow
+                    workflow = attr()
+                    return workflow
+                    
+            return None
         except Exception as e:
-            print(f"Error getting workflow object: {e}")
+            print(f"Error loading workflow: {e}")
             return None
     
     def push_workflow(self, workflow_path: str):
         """
-        Push a workflow onto the stack.
+        Push a workflow to the stack and make it the current workflow.
         
         Args:
-            workflow_path: Path to the workflow directory
+            workflow_path: Path to the workflow
         """
-        self._workflow_stack.append(workflow_path)
+        if self.current_workflow:
+            self._workflow_stack.append(self.current_workflow)
+            
+        self.current_workflow = workflow_path
+        return workflow_path
     
     def pop_workflow(self) -> Optional[str]:
         """
-        Pop a workflow from the stack.
+        Pop a workflow from the stack and make it the current workflow.
         
         Returns:
-            The popped workflow path or None if the stack is empty
+            Path to the current workflow or None if no workflow is active
         """
         if not self._workflow_stack:
+            self.current_workflow = None
             return None
-        
-        return self._workflow_stack.pop()
+            
+        self.current_workflow = self._workflow_stack.pop()
+        return self.current_workflow
     
-    def create_workflow(self, workflow_name: str) -> Dict[str, Any]:
+    @ensure_async
+    async def create_workflow(self, workflow_name: str) -> Dict[str, Any]:
         """
         Create a new workflow.
         
         Args:
             workflow_name: Name of the workflow to create
-            
+        
         Returns:
             Dictionary with the result of the operation
         """
-        # Check if workflow already exists
-        if workflow_name in self.get_workflows():
-            return {
-                "success": False,
-                "error": f"Workflow '{workflow_name}' already exists."
-            }
-            
-        # Create workflow directory
-        workflow_path = os.path.join(self.workflows_dir, workflow_name)
-        try:
-            os.makedirs(workflow_path, exist_ok=True)
-            os.makedirs(os.path.join(workflow_path, 'config'), exist_ok=True)
-            
-            # Create initial workflow.yml
-            workflow_config = {
-                "name": workflow_name,
-                "description": f"Workflow {workflow_name}",
-                "steps": []
-            }
-            
-            with open(os.path.join(workflow_path, 'config', 'workflow.yml'), 'w') as f:
-                yaml.dump(workflow_config, f, default_flow_style=False)
-                
-            # Set as current workflow
-            self.current_workflow = workflow_name
-                
-            return {
-                "success": True,
-                "message": f"Workflow '{workflow_name}' created successfully."
-            }
-        except Exception as e:
-            return {
-                "success": False,
-                "error": f"Failed to create workflow: {str(e)}"
-            }
+        # Delegate to the static create_workflow method in CreateWorkflow class
+        return await CreateWorkflow.create_workflow(self, workflow_name)
     
     async def create_step(self, step_name: str, base_class: str = "Step", description: str = None) -> Dict[str, Any]:
         """
         Create a new step.
+        
+        This method delegates to the CreateStep class which:
+        1. Sets up DataStorageCommandLine for step-specific CLI
+        2. Connects it to an AgentCodeWriter via LinkDirect
+        3. Handles the interactive session for creating the step
         
         Args:
             step_name: Name of the step to create
@@ -345,8 +440,7 @@ class NanoBrainBuilder:
         Returns:
             Dictionary with the result of the operation
         """
-        from builder.WorkflowSteps import CreateStep
-        
+        # Delegate to the static execute method of CreateStep
         return await CreateStep.execute(self, step_name, base_class, description)
     
     async def test_step(self, step_name: str) -> Dict[str, Any]:
@@ -359,9 +453,8 @@ class NanoBrainBuilder:
         Returns:
             Dictionary with the result of the operation
         """
-        from builder.WorkflowSteps import TestStepStep
-        
-        return await TestStepStep.execute(self, step_name)
+        # Delegate to the static test_step method of TestStepStep
+        return await TestStepStep.test_step(self, step_name)
     
     async def save_step(self, step_name: str) -> Dict[str, Any]:
         """
@@ -373,234 +466,259 @@ class NanoBrainBuilder:
         Returns:
             Dictionary with the result of the operation
         """
-        from builder.WorkflowSteps import SaveStepStep
-        
-        return await SaveStepStep.execute(self, step_name)
+        # Delegate to the static save_step method of SaveStepStep
+        return await SaveStepStep.save_step(self, step_name)
     
     async def link_steps(self, source_step: str, target_step: str, link_type: str = "LinkDirect") -> Dict[str, Any]:
         """
-        Link steps together.
+        Link two steps.
         
         Args:
             source_step: Name of the source step
             target_step: Name of the target step
-            link_type: Type of link to create (default: "LinkDirect")
+            link_type: Type of link (default: "LinkDirect")
         
         Returns:
             Dictionary with the result of the operation
         """
-        from builder.WorkflowSteps import LinkStepsStep
-        
-        return await LinkStepsStep.execute(self, source_step, target_step, link_type)
+        # Delegate to the static link_steps method of LinkStepsStep
+        return await LinkStepsStep.link_steps(self, source_step, target_step, link_type)
     
     async def save_workflow(self) -> Dict[str, Any]:
         """
-        Save a workflow.
+        Save the current workflow.
         
         Returns:
             Dictionary with the result of the operation
         """
-        from builder.WorkflowSteps import SaveWorkflowStep
-        
-        return await SaveWorkflowStep.execute(self)
+        # Delegate to the static save_workflow method of SaveWorkflowStep
+        return await SaveWorkflowStep.save_workflow(self)
     
     async def process_command(self, command: str, args: List[str]) -> Dict[str, Any]:
         """
         Process a command.
         
+        This is the main method for handling command line input:
+        1. Check if the command is predefined and execute it if it is
+        2. Otherwise, pass the command to the AgentWorkflowBuilder for guidance
+        
         Args:
-            command: The command to process
-            args: List of arguments for the command
+            command: Command to process
+            args: Arguments for the command
         
         Returns:
             Dictionary with the result of the operation
         """
-        if command == "create-workflow":
-            if len(args) < 1:
+        # Normalize command
+        command = command.lower().strip()
+        
+        # Check if the command is predefined
+        if command in self._predefined_commands:
+            try:
+                # Get the command handler
+                handler = self._predefined_commands[command]
+                
+                # Check if the handler is asynchronous
+                if asyncio.iscoroutinefunction(handler):
+                    # Call the handler with the arguments
+                    if args:
+                        result = await handler(*args)
+                    else:
+                        result = await handler()
+                else:
+                    # Call the handler with the arguments
+                    if args:
+                        result = handler(*args)
+                    else:
+                        result = handler()
+                
+                return result
+            except Exception as e:
                 return {
                     "success": False,
-                    "error": "Missing workflow name"
+                    "error": f"Error processing command '{command}': {str(e)}"
                 }
-            
-            workflow_name = args[0]
-            username = args[1] if len(args) > 1 else None
-            
-            return await self.create_workflow(workflow_name)
-        
-        elif command == "create-step":
-            if len(args) < 1:
-                return {
-                    "success": False,
-                    "error": "Missing step name"
-                }
-            
-            step_name = args[0]
-            base_class = args[1] if len(args) > 1 else "Step"
-            description = args[2] if len(args) > 2 else None
-            
-            return await self.create_step(step_name, base_class, description)
-        
-        elif command == "test-step":
-            if len(args) < 1:
-                return {
-                    "success": False,
-                    "error": "Missing step name"
-                }
-            
-            step_name = args[0]
-            
-            return await self.test_step(step_name)
-        
-        elif command == "save-step":
-            if len(args) < 1:
-                return {
-                    "success": False,
-                    "error": "Missing step name"
-                }
-            
-            step_name = args[0]
-            
-            return await self.save_step(step_name)
-        
-        elif command == "link-steps":
-            if len(args) < 2:
-                return {
-                    "success": False,
-                    "error": "Missing source or target step name"
-                }
-            
-            source_step = args[0]
-            target_step = args[1]
-            link_type = args[2] if len(args) > 2 else "LinkDirect"
-            
-            return await self.link_steps(source_step, target_step, link_type)
-        
-        elif command == "save-workflow":
-            return await self.save_workflow()
-        
         else:
-            return {
-                "success": False,
-                "error": f"Unknown command: {command}"
-            }
+            # For non-predefined commands, pass the input to the AgentWorkflowBuilder
+            try:
+                # Prepare the input for the agent
+                agent_input = f"{command} {' '.join(args)}" if args else command
+                
+                # Process the input with the agent and get the response
+                response = await self.agent.process([agent_input])
+                
+                # Return the result
+                return {
+                    "success": True,
+                    "response": response
+                }
+            except Exception as e:
+                return {
+                    "success": False,
+                    "error": f"Error processing input with AgentWorkflowBuilder: {str(e)}"
+                }
     
     @staticmethod
     def get_parser() -> argparse.ArgumentParser:
         """
-        Get the argument parser for the builder.
+        Get the argument parser for command line arguments.
         
         Returns:
-            ArgumentParser instance
+            Argument parser
         """
-        parser = argparse.ArgumentParser(description="NanoBrain builder for constructing workflows")
+        parser = argparse.ArgumentParser(description="NanoBrain Builder for constructing workflows and steps.")
         
+        # Command subparsers
         subparsers = parser.add_subparsers(dest="command", help="Command to execute")
         
-        # Create workflow command
-        create_workflow_parser = subparsers.add_parser("create-workflow", help="Create a new workflow")
-        create_workflow_parser.add_argument("name", help="Name of the workflow to create")
-        create_workflow_parser.add_argument("--username", help="Username for the git repository")
+        # Create workflow subparser
+        create_workflow_parser = subparsers.add_parser("create_workflow", help="Create a new workflow")
+        create_workflow_parser.add_argument("workflow_name", help="Name of the workflow to create")
         
-        # Create step command
-        create_step_parser = subparsers.add_parser("create-step", help="Create a new step")
-        create_step_parser.add_argument("name", help="Name of the step to create")
-        create_step_parser.add_argument("--base-class", default="Step", help="Base class for the step")
-        create_step_parser.add_argument("--description", help="Description of the step")
+        # Create step subparser
+        create_step_parser = subparsers.add_parser("create_step", help="Create a new step")
+        create_step_parser.add_argument("step_name", help="Name of the step to create")
+        create_step_parser.add_argument("--base-class", dest="base_class", default="Step", help="Base class for the step")
+        create_step_parser.add_argument("--description", dest="description", help="Description of the step")
         
-        # Test step command
-        test_step_parser = subparsers.add_parser("test-step", help="Test a step")
-        test_step_parser.add_argument("name", help="Name of the step to test")
+        # Test step subparser
+        test_step_parser = subparsers.add_parser("test_step", help="Test a step")
+        test_step_parser.add_argument("step_name", help="Name of the step to test")
         
-        # Save step command
-        save_step_parser = subparsers.add_parser("save-step", help="Save a step")
-        save_step_parser.add_argument("name", help="Name of the step to save")
+        # Save step subparser
+        save_step_parser = subparsers.add_parser("save_step", help="Save a step")
+        save_step_parser.add_argument("step_name", help="Name of the step to save")
         
-        # Link steps command
-        link_steps_parser = subparsers.add_parser("link-steps", help="Link steps together")
-        link_steps_parser.add_argument("source", help="Name of the source step")
-        link_steps_parser.add_argument("target", help="Name of the target step")
-        link_steps_parser.add_argument("--link-type", default="LinkDirect", help="Type of link to create")
+        # Link steps subparser
+        link_steps_parser = subparsers.add_parser("link_steps", help="Link two steps")
+        link_steps_parser.add_argument("source_step", help="Name of the source step")
+        link_steps_parser.add_argument("target_step", help="Name of the target step")
+        link_steps_parser.add_argument("--link-type", dest="link_type", default="LinkDirect", help="Type of link")
         
-        # Save workflow command
-        subparsers.add_parser("save-workflow", help="Save a workflow")
+        # Save workflow subparser
+        subparsers.add_parser("save_workflow", help="Save the current workflow")
+        
+        # List workflows subparser
+        subparsers.add_parser("list_workflows", help="List available workflows")
+        
+        # Push workflow subparser
+        push_workflow_parser = subparsers.add_parser("push_workflow", help="Push a workflow to the stack")
+        push_workflow_parser.add_argument("workflow_name", help="Name of the workflow to push")
+        
+        # Pop workflow subparser
+        subparsers.add_parser("pop_workflow", help="Pop a workflow from the stack")
+        
+        # Get current workflow subparser
+        subparsers.add_parser("get_current_workflow", help="Get the current workflow")
+        
+        # Help subparser
+        subparsers.add_parser("help", help="Show help information")
         
         return parser
     
     @classmethod
     async def main(cls):
-        """Main entry point for the builder."""
-        parser = cls.get_parser()
-        args = parser.parse_args()
+        """
+        Main entry point for the NanoBrainBuilder.
         
-        if not args.command:
-            parser.print_help()
-            return
-        
-        # Create the builder
-        builder = cls()
-        
-        # Process the command
-        if args.command == "create-workflow":
-            result = await builder.create_workflow(args.name)
-        elif args.command == "create-step":
-            result = await builder.create_step(args.name, args.base_class, args.description)
-        elif args.command == "test-step":
-            result = await builder.test_step(args.name)
-        elif args.command == "save-step":
-            result = await builder.save_step(args.name)
-        elif args.command == "link-steps":
-            result = await builder.link_steps(args.source, args.target, args.link_type)
-        elif args.command == "save-workflow":
-            result = await builder.save_workflow()
-        else:
-            print(f"Unknown command: {args.command}")
-            parser.print_help()
-            return
-        
-        # Print the result
-        if result.get("success", False):
-            print(result.get("message", "Command executed successfully"))
-        else:
-            print(f"Error: {result.get('error', 'Unknown error')}")
-
+        This sets up the NanoBrainBuilder and handles the command line interface.
+        """
+        try:
+            # Create the builder
+            builder = cls()
+            
+            # Get the argument parser
+            parser = cls.get_parser()
+            
+            # Parse the arguments
+            args = parser.parse_args()
+            
+            # Get the command
+            command = args.command
+            
+            if command:
+                # Convert args to dictionary
+                args_dict = vars(args)
+                
+                # Remove the command
+                del args_dict["command"]
+                
+                # Get the arguments
+                command_args = list(args_dict.values())
+                
+                # Process the command
+                result = await builder.process_command(command, command_args)
+                
+                # Print the result
+                print(result)
+            else:
+                # Start the interactive session
+                command_line_trigger = CommandLineTrigger(builder)
+                
+                # Start monitoring for command line input
+                await command_line_trigger.monitor()
+        except KeyboardInterrupt:
+            print("\nProcess interrupted by user.")
+        except Exception as e:
+            print(f"Error in main process: {e}")
+            traceback.print_exc()
+    
     def list_workflows(self) -> List[str]:
         """
-        List all available workflows.
+        List available workflows.
         
         Returns:
-            List of workflow names
+            List of available workflows
         """
-        if not os.path.exists(self.workflows_dir):
+        # Get workflows directory
+        workflows_dir = self.config.get('workflows_dir', 'workflows')
+        
+        # Check if the directory exists
+        if not os.path.exists(workflows_dir):
             return []
             
-        return [d for d in os.listdir(self.workflows_dir) 
-                if os.path.isdir(os.path.join(self.workflows_dir, d))]
-
+        # Get the workflows
+        workflows = []
+        
+        for item in os.listdir(workflows_dir):
+            # Check if it's a directory
+            if os.path.isdir(os.path.join(workflows_dir, item)):
+                workflows.append(item)
+                
+        return workflows
+    
     def get_workflows(self) -> List[str]:
         """
-        Get all available workflows.
-        
-        This is an alias for list_workflows() for API consistency.
+        Get available workflows.
         
         Returns:
-            List of workflow names
+            List of available workflows
         """
         return self.list_workflows()
-                
+    
     def get_workflow_path(self, workflow_name: str) -> Optional[str]:
         """
-        Get the full path to a workflow.
+        Get the path to a workflow.
         
         Args:
             workflow_name: Name of the workflow
-            
+        
         Returns:
-            Full path to the workflow directory or None if not found
+            Path to the workflow or None if not found
         """
-        workflow_path = os.path.join(self.workflows_dir, workflow_name)
-        return workflow_path if os.path.exists(workflow_path) else None
+        # Get workflows directory
+        workflows_dir = self.config.get('workflows_dir', 'workflows')
+        
+        # Get the workflow path
+        workflow_path = os.path.join(workflows_dir, workflow_name)
+        
+        # Check if the directory exists
+        if not os.path.exists(workflow_path):
+            return None
+            
+        return workflow_path
 
-
+# Entry point for the command line interface
 if __name__ == "__main__":
     # Run the main function
     asyncio.run(NanoBrainBuilder.main()) 

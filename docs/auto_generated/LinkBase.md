@@ -120,17 +120,30 @@ Justification: Like how synapses modify signals based on their
 strength and recent activity, links process data based on their
 connection strength and characteristics.
 
-### recover
+### has_data_transferred
 
 ```python
-def recover(self)
+def has_data_transferred(self) -> bool
 ```
 
-Recovers from failed transfers.
+Check if data has been transferred through this link.
 
-Biological analogy: Synaptic recovery.
-Justification: Like how synapses recover from neurotransmitter
-depletion, links recover from failed transfers.
+Biological analogy: Synaptic transmission status.
+Justification: Like how synapses can indicate whether they have
+recently transmitted signals, links can indicate if they have
+transferred data.
+
+### reset_transfer_status
+
+```python
+def reset_transfer_status(self)
+```
+
+Reset the data transfer status.
+
+Biological analogy: Synaptic reset.
+Justification: Like how synapses reset after signal transmission,
+links can reset their transfer status.
 
 ### get_config
 

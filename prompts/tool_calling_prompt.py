@@ -28,6 +28,7 @@ Remember to:
 3. Provide arguments in the correct order and format
 4. Only use tools when necessary
 5. If you don't need to use a tool, just respond normally
+6. If request includes creating or writing code, use corresponding tools to produce it and save files
 
 Context from previous conversation:
 {context}

@@ -1,10 +1,11 @@
 defaults:
+  class: "src.TriggerDataHashChanged.TriggerDataHashChanged"
   # Required parameters
   runnable: null  # Must be provided at runtime
   
   # Optional parameters with defaults
-  sensitivity: 0.8  # Sensitivity to data changes
-  activation_threshold: 0.5  # Threshold for activation
+  sensitivity: 1.0  # Sensitivity to data changes
+  activation_threshold: 0.1  # Threshold for activation
   monitoring_interval: 0.1  # Interval for checking condition in seconds
 
 # Metadata
@@ -22,11 +23,26 @@ metadata:
 
 validation:
   required:
+    - class  # Class path
     - runnable  # Object to run when triggered
   optional:
     - sensitivity
     - activation_threshold
     - monitoring_interval
+  constraints:
+    class:
+      type: str
+    sensitivity:
+      type: float
+      min: 0.0
+      max: 1.0
+    activation_threshold:
+      type: float
+      min: 0.0
+      max: 1.0
+    monitoring_interval:
+      type: float
+      min: 0.0
 
 examples:
   basic:

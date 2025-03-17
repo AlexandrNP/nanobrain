@@ -1,0 +1,185 @@
+defaults:
+  # Python class to instantiate
+  class: "builder.AgentCodeWriter.AgentCodeWriter"
+
+  # Required parameters
+  executor: "ExecutorFunc"  # Default executor class
+
+  # Model configuration
+  model_name: "gpt-4o"  # Using GPT-4o for better code generation capabilities
+  model_class: null  # Use default ChatOpenAI implementation
+  memory_window_size: 8  # Increased context window for better code understanding
+  
+  # Prompt configuration using external prompt file
+  use_prompt_file: true
+  prompt_file: "builder.prompts"
+  prompt_template: "CODE_WRITER_PROMPT"
+  
+  # Context templates for different code types
+  code_context_templates:
+    step: "CODE_WRITER_STEP_CONTEXT"
+    workflow: "CODE_WRITER_WORKFLOW_CONTEXT"
+    link: "CODE_WRITER_LINK_CONTEXT"
+    data_unit: "CODE_WRITER_DATA_UNIT_CONTEXT"
+    trigger: "CODE_WRITER_TRIGGER_CONTEXT"
+  
+  # Legacy prompt variables (can still be used to supplement prompts from file)
+  prompt_variables:
+    role_description: "specialized code writing assistant"
+    specific_instructions: |
+      You are a specialized code writing assistant with expertise in software development.
+      Your primary function is to generate clean, efficient, and well-documented code.
+      
+      Follow these guidelines when writing code:
+      1. Prioritize readability and maintainability
+      2. Include comprehensive docstrings and comments
+      3. Follow best practices for the language/framework being used
+      4. Consider edge cases and error handling
+      5. Implement proper testing strategies
+      6. Adhere to the biological analogies used in the NanoBrain framework
+      7. Ensure compatibility with existing codebase patterns
+      
+      When generating code, first understand the requirements thoroughly,
+      then plan your implementation before writing the actual code.
+      
+      Always explain your implementation choices and highlight any assumptions made.
+    
+    programming_expertise: |
+      - Python (advanced)
+      - Bash scripting (advanced)
+      - Object-oriented programming
+      - Design patterns
+      - Test-driven development
+      - DevOps tools
+      - Docker
+      - Kubernetes
+      - Git
+      - GitHub
+      - GitLab
+      - Jenkins
+      - CI/CD 
+      - MLOps
+      - Data pipelines
+      - System administration
+    code_context: "Auxilary code writer for the various user-defined tasks"
+  
+  # Agent behavior parameters
+  context_sensitivity: 0.9  # High sensitivity to maintain code consistency
+  creativity: 0.6  # Balanced creativity for novel solutions while maintaining standards
+  response_coherence: 0.9  # High coherence for logical code structure
+  
+  # Memory configuration
+  use_shared_context: true  # Share context with other agents
+  shared_context_key: "code_development_team"  # Key for shared context
+  use_buffer_window_memory: true  # Use windowed memory
+  memory_key: "code_history"  # Key for storing code conversation history
+  tools_config_path: "tools.yml"
+
+metadata:
+  description: "Specialized agent for writing high-quality code with biological analogies"
+  biological_analogy: "Specialized cortical region for complex problem-solving and planning"
+  justification: >
+    Like how specialized regions in the brain's cortex handle complex cognitive tasks
+    such as planning, logical reasoning, and problem-solving, this agent specializes
+    in the complex task of code generation, requiring both creativity and logical structure.
+    It integrates multiple knowledge domains and applies them to create coherent,
+    functional code solutions.
+  objectives:
+    - Generate clean, efficient, and well-documented code
+    - Maintain consistency with existing codebase patterns
+    - Incorporate biological analogies in code design
+    - Provide explanations for implementation choices
+    - Consider edge cases and error handling
+    - Implement proper testing strategies
+    - Optimize for readability and maintainability
+    - Use the tools provided to write code  
+
+validation:
+  required:
+    - class  # Python class to instantiate
+    - executor  # ExecutorBase instance required
+  optional:
+    - model_name
+    - model_class
+    - memory_window_size
+    - prompt_file
+    - prompt_template
+    - use_prompt_file
+    - code_context_templates
+    - prompt_variables
+    - use_shared_context
+    - shared_context_key
+    - use_buffer_window_memory
+    - memory_key
+  constraints:
+    class:
+      type: str
+    memory_window_size:
+      min: 1
+      max: 15
+      type: int
+    context_sensitivity:
+      min: 0.0
+      max: 1.0
+      type: float
+    creativity:
+      min: 0.0
+      max: 1.0
+      type: float
+    response_coherence:
+      min: 0.0
+      max: 1.0
+      type: float
+    prompt_file:
+      type: str
+    prompt_template:
+      type: str
+    use_prompt_file:
+      type: bool
+    use_shared_context:
+      type: bool
+    shared_context_key:
+      type: str
+      nullable: true
+    use_buffer_window_memory:
+      type: bool
+    memory_key:
+      type: str
+
+examples:
+  basic_code_writer:
+    description: "Basic code writing agent for general programming tasks"
+    config:
+      class: "builder.AgentCodeWriter.AgentCodeWriter"
+      executor: "ExecutorFunc"
+      model_name: "gpt-4"
+      use_prompt_file: true
+      prompt_file: "builder.prompts"
+      prompt_template: "CODE_WRITER_PROMPT"
+      prompt_variables:
+        role_description: "code writing assistant"
+        specific_instructions: "Focus on clean, maintainable code with proper documentation"
+      memory_window_size: 8
+      use_shared_context: false
+
+  nanobrain_specialist:
+    description: "Specialized agent for NanoBrain framework development"
+    config:
+      class: "builder.AgentCodeWriter.AgentCodeWriter"
+      model_name: "gpt-4"
+      use_prompt_file: true
+      prompt_file: "builder.prompts"
+      prompt_template: "CODE_WRITER_PROMPT"
+      prompt_variables:
+        role_description: "NanoBrain framework developer"
+        specific_instructions: "Ensure all code follows the biological analogies pattern of the framework"
+        programming_expertise: |
+          - Python (advanced)
+          - Asynchronous programming
+          - Neural-inspired architectures
+        code_context: "NanoBrain core component development"
+      context_sensitivity: 1.0
+      creativity: 0.5
+      response_coherence: 0.9
+      use_shared_context: true
+      shared_context_key: "nanobrain_dev_team" 

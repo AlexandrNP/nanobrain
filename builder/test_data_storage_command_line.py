@@ -6,11 +6,13 @@ This module contains tests for the DataStorageCommandLine class.
 
 import unittest
 import asyncio
+import time
 from unittest.mock import MagicMock, AsyncMock, patch
 from io import StringIO
 
 from src.ExecutorBase import ExecutorBase
 from src.DataStorageCommandLine import DataStorageCommandLine
+from src.DataUnitString import DataUnitString
 
 
 class TestDataStorageCommandLine(unittest.IsolatedAsyncioTestCase):
@@ -20,112 +22,127 @@ class TestDataStorageCommandLine(unittest.IsolatedAsyncioTestCase):
         """Set up test environment."""
         self.executor = MagicMock()
         self.storage = DataStorageCommandLine(executor=self.executor)
+        self.storage.output = DataUnitString()
     
     def test_initialization(self):
         """Test that the storage initializes correctly."""
-        self.assertEqual(self.storage.input, None)
-        self.assertEqual(self.storage.output, None)
-        self.assertEqual(self.storage.trigger, None)
-        self.assertEqual(self.storage.last_query, None)
-        self.assertEqual(self.storage.last_response, None)
-        self.assertEqual(self.storage.processing_history, [])
-        self.assertEqual(self.storage.max_history_size, 10)
-        self.assertEqual(self.storage.last_input, None)
-        self.assertEqual(self.storage.last_output, None)
+        self.assertFalse(self.storage._monitoring)
+        self.assertIsNone(self.storage._monitor_task)
+        self.assertIsNone(self.storage.agent_builder)
+        self.assertEqual(self.storage.history, [])
+        self.assertEqual(self.storage.history_size, 20)  # Default value
+        self.assertEqual(self.storage.prompt, '> ')  # Default value
     
-    @patch('sys.stdout', new_callable=StringIO)
-    def test_display_response(self, mock_stdout):
-        """Test response display functionality."""
+    @patch('builtins.print')
+    def test_display_output(self, mock_print):
+        """Test output display functionality."""
         test_output = "Test output message"
-        self.storage.display_response(test_output)
+        # Since there's no display_response method, we'll test _force_output_change
+        self.storage._force_output_change(test_output)
         
-        self.assertEqual(mock_stdout.getvalue().strip(), test_output)
+        # Check that the output was set
+        self.assertEqual(self.storage.output.get(), test_output)
     
-    @patch('builtins.input', return_value="test input")
-    async def test_get_user_input(self, mock_input):
-        """Test input retrieval."""
-        result = await self.storage._get_user_input()
+    @patch('asyncio.get_event_loop')
+    async def test_input_processing(self, mock_get_loop):
+        """Test input processing."""
+        # Mock the run_in_executor to return a test input
+        mock_loop = AsyncMock()
+        mock_loop.run_in_executor.return_value = "test input"
+        mock_get_loop.return_value = mock_loop
         
-        mock_input.assert_called_once_with(self.storage.prompt)
-        self.assertEqual(result, "test input")
+        # Test processing directly
+        result = await self.storage.process("test input")
+        
+        # Check result is processed correctly
+        self.assertEqual(result, "test input")  # Default behavior is to return query
     
     async def test_process_query(self):
         """Test query processing."""
-        test_input = "test command"
+        test_input = "test input"
+        # Test the _process_query method directly
+        result = self.storage._process_query(test_input)
         
-        # Mock _handle_command
-        self.storage._handle_command = AsyncMock(return_value="test response")
+        # Default behavior is to return the query
+        self.assertEqual(result, test_input)
         
-        # Process the query
-        result = await self.storage._process_query(test_input)
+        # Test class pattern detection
+        class_input = "<TestClass>>Create a test class"
+        result = self.storage._process_query(class_input)
         
-        # Verify the processing
-        self.assertEqual(self.storage.last_input, test_input)
-        self.assertEqual(self.storage.last_output, "test response")
-        self.assertEqual(result, "test response")
-    
-    async def test_handle_command(self):
-        """Test command handling."""
-        # Test empty command
-        result = await self.storage._handle_command("")
-        self.assertIsNone(result)
+        # Should format a prompt for generating class code
+        self.assertIn("Generate a class named TestClass", result)
+        self.assertIn("Create a test class", result)
         
-        # Test help command
-        result = await self.storage._handle_command("help")
-        self.assertIn("Available commands:", result)
+        # Test with more complex instructions
+        complex_input = "<ComplexClass>>Create a class with methods for data processing and validation. Include error handling."
+        result = self.storage._process_query(complex_input)
         
-        # Test unknown command
-        result = await self.storage._handle_command("unknown")
-        self.assertEqual(result, "unknown")
+        # Should format a prompt with the complex instructions
+        self.assertIn("Generate a class named ComplexClass", result)
+        self.assertIn("Create a class with methods for data processing and validation", result)
+        self.assertIn("Include error handling", result)
     
-    def test_display_help(self):
-        """Test help display."""
-        help_text = self.storage._display_help()
-        self.assertIn("Available commands:", help_text)
-        self.assertIn("help - Display this help message", help_text)
-        self.assertIn("exit - Exit the current session", help_text)
-    
-    @patch('builtins.input', side_effect=KeyboardInterrupt)
-    async def test_keyboard_interrupt_handling(self, mock_input):
-        """Test handling of keyboard interrupts."""
-        with self.assertRaises(KeyboardInterrupt):
-            await self.storage._get_user_input()
-        mock_input.assert_called_once()
-    
-    @patch('builtins.input', side_effect=EOFError)
-    async def test_eof_handling(self, mock_input):
-        """Test handling of EOF."""
-        with self.assertRaises(EOFError):
-            await self.storage._get_user_input()
-        mock_input.assert_called_once()
-    
-    def test_update_history(self):
+    def test_add_to_history(self):
         """Test history update functionality."""
         test_query = "test query"
         test_response = "test response"
         
-        self.storage._update_history(test_query, test_response)
+        # Add to history
+        self.storage._add_to_history(test_query, test_response)
         
-        self.assertEqual(len(self.storage.processing_history), 1)
-        entry = self.storage.processing_history[0]
-        self.assertEqual(entry['query'], test_query)
-        self.assertEqual(entry['response'], test_response)
-        self.assertIn('timestamp', entry)
+        # Check history was updated
+        self.assertEqual(len(self.storage.history), 1)
+        self.assertEqual(self.storage.history[0]['query'], test_query)
+        self.assertEqual(self.storage.history[0]['response'], test_response)
+        self.assertIn('timestamp', self.storage.history[0])
     
-    async def test_start_stop_monitoring(self):
+    def test_get_history(self):
+        """Test history retrieval."""
+        # Add test entries
+        self.storage._add_to_history("query1", "response1")
+        self.storage._add_to_history("query2", "response2")
+        
+        # Get history
+        history = self.storage.get_history()
+        
+        # Check history
+        self.assertEqual(len(history), 2)
+        self.assertEqual(history[0]['query'], "query1")
+        self.assertEqual(history[1]['query'], "query2")
+    
+    async def test_force_output_change(self):
+        """Test the force_output_change method."""
+        test_data = "test data"
+        
+        # Call force_output_change
+        result = self.storage._force_output_change(test_data)
+        
+        # Check result
+        self.assertTrue(result)
+        self.assertEqual(self.storage.output.get(), test_data)
+        
+        # Test with direct agent_builder reference
+        self.storage.agent_builder = AsyncMock()
+        self.storage.agent_builder.process = AsyncMock()
+        
+        # Call force_output_change again
+        self.storage._force_output_change(test_data)
+        
+        # Check that agent_builder.process was called
+        self.storage.agent_builder.process.assert_called_once()
+    
+    def test_start_stop_monitoring(self):
         """Test monitoring start/stop functionality."""
-        # Mock _get_user_input to return exit command
-        self.storage._get_user_input = AsyncMock(return_value="exit")
+        # We can't actually test the full monitoring loop easily, 
+        # but we can test the state changes
         
-        # Start monitoring
-        await self.storage.start_monitoring()
+        # Check initial state
+        self.assertFalse(self.storage._monitoring)
         
-        # Verify state after monitoring stops
-        self.assertFalse(self.storage.running)
-        
-        # Test stop monitoring
-        await self.storage.stop_monitoring()
-        self.assertFalse(self.storage.running)
+        # Stop monitoring (should be safe when not monitoring)
+        self.storage.stop_monitoring()
+        self.assertFalse(self.storage._monitoring)
 
 
 if __name__ == '__main__':

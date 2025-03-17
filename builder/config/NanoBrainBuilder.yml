@@ -1,5 +1,8 @@
 defaults:
-  agent_config_path: "builder/config/AgentWorkflowBuilder.yml"  # Path to agent configuration
+  # Class specification
+  class: "builder.NanoBrainBuilder.NanoBrainBuilder"
+  
+  agent_config_path: "AgentWorkflowBuilder.yml"  # Path to agent configuration
   session_save_path: "nanobrain_session.pkl"  # Default path for saving sessions
   auto_save: false  # Whether to automatically save sessions
   workflows_dir: "workflows"  # Default directory for storing workflows
@@ -19,6 +22,7 @@ metadata:
 
 validation:
   required:
+    - class  # Python class to instantiate
     - executor  # ExecutorBase instance required
   optional:
     - steps
@@ -26,6 +30,8 @@ validation:
     - session_save_path
     - auto_save
   constraints:
+    class:
+      type: str
     agent_config_path:
       type: str
     session_save_path:
@@ -37,13 +43,15 @@ examples:
   basic:
     description: "Basic workflow builder with default settings"
     config:
-      agent_config_path: "builder/config/AgentWorkflowBuilder.yml"
+      class: "builder.NanoBrainBuilder.NanoBrainBuilder"
+      agent_config_path: "AgentWorkflowBuilder.yml"
       session_save_path: "nanobrain_session.pkl"
       auto_save: false
 
   auto_save:
     description: "Workflow builder with auto-save enabled"
     config:
-      agent_config_path: "builder/config/AgentWorkflowBuilder.yml"
+      class: "builder.NanoBrainBuilder.NanoBrainBuilder"
+      agent_config_path: "AgentWorkflowBuilder.yml"
       session_save_path: "nanobrain_session.pkl"
       auto_save: true 

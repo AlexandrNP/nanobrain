@@ -6,167 +6,189 @@ This module contains tests for the AgentWorkflowBuilder class.
 
 import unittest
 import asyncio
+import os
 from unittest.mock import MagicMock, AsyncMock, patch
 from pathlib import Path
 
 from src.ExecutorBase import ExecutorBase
 from src.DataUnitBase import DataUnitBase
 from src.Agent import Agent
+from src.Step import Step
+from src.Workflow import Workflow
 from builder.AgentWorkflowBuilder import AgentWorkflowBuilder
+from builder.AgentCodeWriter import AgentCodeWriter
 from langchain_core.prompts import PromptTemplate
 
+# Set testing mode
+os.environ['NANOBRAIN_TESTING'] = '1'
+# Mock OpenAI API key for tests that need it
+os.environ['OPENAI_API_KEY'] = 'test_key'
 
-class TestAgentWorkflowBuilder(unittest.IsolatedAsyncioTestCase):
-    """Test cases for the AgentWorkflowBuilder class."""
+# Helper function to run async tests with proper cleanup
+def run_async_test(coroutine):
+    """Run an async test with proper cleanup of pending tasks."""
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        result = loop.run_until_complete(coroutine)
+        
+        # Ensure all pending tasks are complete
+        pending = asyncio.all_tasks(loop)
+        for task in pending:
+            if not task.done():
+                try:
+                    loop.run_until_complete(asyncio.wait_for(task, timeout=0.5))
+                except asyncio.TimeoutError:
+                    task.cancel()
+                    try:
+                        # Give it one more chance to cleanup
+                        loop.run_until_complete(asyncio.wait_for(task, timeout=0.1))
+                    except:
+                        pass
+        
+        return result
+    finally:
+        loop.close()
+        asyncio.set_event_loop(None)
+
+
+class TestAgentWorkflowBuilder(unittest.TestCase):
+    """Test suite for AgentWorkflowBuilder."""
     
-    @patch('src.Agent.Agent._initialize_llm')
-    @patch('src.Agent.Agent._load_prompt_template')
-    def setUp(self, mock_load_prompt, mock_init_llm):
-        """Set up test environment."""
-        self.executor = MagicMock(spec=ExecutorBase)
-        self.mock_llm = MagicMock()
-        mock_init_llm.return_value = self.mock_llm
+    def setUp(self):
+        """Set up test fixtures."""
+        # Create a mock executor
+        self.executor = MagicMock()
+        self.executor.execute = AsyncMock(return_value="Mocked response")
         
-        # Mock prompt template
-        self.mock_prompt = MagicMock(spec=PromptTemplate)
-        mock_load_prompt.return_value = self.mock_prompt
-        
-        self.builder = AgentWorkflowBuilder(executor=self.executor)
-    
-    async def test_initialization(self):
-        """Test that the builder initializes correctly."""
-        self.assertIsInstance(self.builder, AgentWorkflowBuilder)
-        self.assertIsInstance(self.builder, Agent)
-        self.assertIsInstance(self.builder, DataUnitBase)
-        self.assertEqual(self.builder.persistence_level, 0.8)
-        self.assertEqual(self.builder.data, None)
-        self.assertEqual(self.builder.generated_code, "")
-        self.assertEqual(self.builder.generated_config, "")
-        self.assertEqual(self.builder.generated_tests, "")
-        self.assertEqual(self.builder.current_context, {})
-    
-    async def test_data_unit_interface(self):
-        """Test DataUnitBase interface implementation."""
-        test_data = "test input"
-        
-        # Test get/set
-        self.assertEqual(self.builder.get(), None)
-        self.assertTrue(self.builder.set(test_data))
-        self.assertEqual(self.builder.get(), test_data)
-    
-    @patch.object(AgentWorkflowBuilder, '_process_input')
-    async def test_process_input_called(self, mock_process):
-        """Test that setting data triggers input processing."""
-        test_data = "test input"
-        mock_process.return_value = None
-        
-        self.builder.set(test_data)
-        await asyncio.sleep(0)  # Allow async task to run
-        
-        mock_process.assert_called_once_with(test_data)
-    
-    async def test_handle_link_command(self):
-        """Test handling of link command."""
-        source = "source_step"
-        target = "target_step"
-        
-        # Mock the _generate_link_code method
-        self.builder._generate_link_code = AsyncMock(return_value="test link code")
-        
-        # Execute link command
-        await self.builder._handle_link_command(source, target)
-        
-        # Verify context update
-        self.assertIn("links", self.builder.current_context)
-        self.assertEqual(len(self.builder.current_context["links"]), 1)
-        self.assertEqual(
-            self.builder.current_context["links"][0],
-            {"source": source, "target": target}
+        # Create the builder with test parameters
+        self.builder = AgentWorkflowBuilder(
+            executor=self.executor, 
+            use_code_writer=True, 
+            _debug_mode=True
         )
         
-        # Verify code generation
-        self.assertEqual(self.builder.generated_code, "\ntest link code")
+        # Mock the _provide_guidance method to avoid real API calls
+        self.builder._provide_guidance = AsyncMock(return_value="Mocked guidance")
+        
+        # Create a mock code writer if needed
+        if self.builder.code_writer:
+            self.builder.code_writer.process = AsyncMock(return_value="Mocked code response")
+            if hasattr(self.builder.code_writer, '_find_existing_class'):
+                self.builder.code_writer._find_existing_class = MagicMock(return_value=(None, None))
     
-    async def test_handle_code_input(self):
-        """Test handling of code input."""
-        test_input = "def test_function():\n    pass"
-        
-        # Mock the process method
-        self.builder.process = AsyncMock(return_value="generated code")
-        
-        # Execute code input
-        await self.builder._handle_code_input(test_input)
-        
-        # Verify context update
-        self.assertIn("code_inputs", self.builder.current_context)
-        self.assertEqual(len(self.builder.current_context["code_inputs"]), 1)
-        self.assertEqual(self.builder.current_context["code_inputs"][0], test_input)
-        
-        # Verify code update
-        self.assertEqual(self.builder.generated_code, "generated code")
+    def tearDown(self):
+        """Clean up after tests."""
+        self.builder = None
+        self.executor = None
     
-    async def test_process_input_link_command(self):
-        """Test processing of link command input."""
-        # Mock the _handle_link_command method
-        self.builder._handle_link_command = AsyncMock()
+    async def test_process(self):
+        """Test the main process method."""
+        # Test with a normal guidance request
+        result = await self.builder.process(["How does NanoBrain work?"])
+        self.assertIsNotNone(result)
         
-        # Test link command
-        await self.builder._process_input("link source_step target_step")
-        
-        # Verify link command handling
-        self.builder._handle_link_command.assert_called_once_with("source_step", "target_step")
+        # Verify _provide_guidance was called
+        self.builder._provide_guidance.assert_called_once()
     
-    async def test_process_input_help_command(self):
-        """Test processing of help command."""
-        # Mock the _display_help method
-        self.builder._display_help = MagicMock()
+    async def test_is_requesting_new_class(self):
+        """Test that _is_requesting_new_class correctly identifies requests for new classes."""
+        # Test with explicit request for new class
+        result = self.builder._is_requesting_new_class("Create a new class from scratch")
+        self.assertTrue(result)
         
-        # Test help command
-        await self.builder._process_input("help")
+        # Test with request that doesn't specify new class
+        result = self.builder._is_requesting_new_class("How do I create a step?")
+        self.assertFalse(result)
         
-        # Verify help command handling
-        self.builder._display_help.assert_called_once()
+        # Test with request that explicitly mentions custom implementation
+        result = self.builder._is_requesting_new_class("I need a custom class implementation")
+        self.assertTrue(result)
     
-    async def test_process_input_code(self):
-        """Test processing of code input."""
-        # Mock the _handle_code_input method
-        self.builder._handle_code_input = AsyncMock()
+    async def test_should_generate_code(self):
+        """Test that _should_generate_code correctly identifies code generation requests."""
+        # Test with explicit code generation request
+        result = self.builder._should_generate_code("Generate code for a step")
+        self.assertTrue(result)
         
-        # Test code input
-        test_code = "def test():\n    pass"
-        await self.builder._process_input(test_code)
+        # Test with implicit code generation request
+        result = self.builder._should_generate_code("Implement a step that processes text")
+        self.assertTrue(result)
         
-        # Verify code input handling
-        self.builder._handle_code_input.assert_called_once_with(test_code)
+        # Test with guidance request (no code generation)
+        result = self.builder._should_generate_code("What is a NanoBrain step?")
+        self.assertFalse(result)
     
-    async def test_generate_link_code(self):
-        """Test generation of link code."""
-        source = "source_step"
-        target = "target_step"
+    async def test_component_reuse_functionality(self):
+        """Test that the builder prioritizes reusing existing components."""
+        # Make sure code_writer exists and is properly mocked
+        if not self.builder.code_writer:
+            self.builder._init_code_writer(self.executor, True)
+            self.builder.code_writer.process = AsyncMock(return_value="Mocked code response")
         
-        # Mock the process method
-        self.builder.process = AsyncMock(return_value="generated link code")
+        # Mock the _provide_guidance method to call _generate_code_from_user_input
+        # This is needed because process() now calls _provide_guidance
+        original_provide_guidance = self.builder._provide_guidance
         
-        # Generate link code
-        result = await self.builder._generate_link_code(source, target)
+        async def mock_provide_guidance(user_input):
+            if self.builder._should_generate_code(user_input):
+                return await self.builder._generate_code_from_user_input(user_input)
+            return "Mocked guidance"
         
-        # Verify code generation
-        self.assertEqual(result, "generated link code")
-        self.builder.process.assert_called_once_with([
-            "Generate code to link step source_step to target_step"
-        ])
+        self.builder._provide_guidance = mock_provide_guidance
+        
+        # Create a request that should trigger code generation
+        result = await self.builder.process(["Generate code for a link between steps"])
+        
+        # Verify the code writer's process method was called at least once
+        self.assertTrue(self.builder.code_writer.process.called)
+            
+        # Verify a response was returned
+        self.assertIsNotNone(result)
     
-    def test_get_generated_outputs(self):
-        """Test getting generated outputs."""
-        # Set test values
-        self.builder.generated_code = "test code"
-        self.builder.generated_config = "test config"
-        self.builder.generated_tests = "test tests"
+    async def test_suggest_implementation(self):
+        """Test the suggest_implementation method with mocked existing class."""
+        # Make sure code_writer exists and is properly mocked
+        if not self.builder.code_writer:
+            self.builder._init_code_writer(self.executor, True)
         
-        # Verify getters
-        self.assertEqual(self.builder.get_generated_code(), "test code")
-        self.assertEqual(self.builder.get_generated_config(), "test config")
-        self.assertEqual(self.builder.get_generated_tests(), "test tests")
+        # Mock the code writer's process method to return a response
+        self.builder.code_writer.process = AsyncMock(return_value="Mocked code response")
+        
+        # Call suggest_implementation
+        result = await self.builder.suggest_implementation('TestStep', 'A test step that processes data')
+        
+        # Verify the builder.code_writer.process was called at least once
+        self.assertTrue(self.builder.code_writer.process.called)
+        
+        # The first call should be for the code generation
+        first_call_args = self.builder.code_writer.process.call_args_list[0][0][0]
+        self.assertIsInstance(first_call_args, list)
+        self.assertIn("TestStep", first_call_args[0])
+        self.assertIn("A test step that processes data", first_call_args[0])
+        
+        # Verify the method returns the same response as code_writer.process
+        self.assertEqual(result, "Mocked code response")
+    
+    def test_process_sync(self):
+        """Synchronous wrapper for test_process."""
+        run_async_test(self.test_process())
+    
+    def test_is_requesting_new_class_sync(self):
+        """Synchronous wrapper for test_is_requesting_new_class."""
+        run_async_test(self.test_is_requesting_new_class())
+    
+    def test_should_generate_code_sync(self):
+        """Synchronous wrapper for test_should_generate_code."""
+        run_async_test(self.test_should_generate_code())
+    
+    def test_component_reuse_functionality_sync(self):
+        """Synchronous wrapper for test_component_reuse_functionality."""
+        run_async_test(self.test_component_reuse_functionality())
+    
+    def test_suggest_implementation_sync(self):
+        """Synchronous wrapper for test_suggest_implementation."""
+        run_async_test(self.test_suggest_implementation())
 
 
 if __name__ == '__main__':
