@@ -7,12 +7,51 @@ from langchain.schema import SystemMessage, HumanMessage, AIMessage
 from langchain.prompts import PromptTemplate
 from langchain_core.tools import tool, BaseTool, StructuredTool
 from src.Step import Step
+from src.GlobalConfig import GlobalConfig
 from src.ExecutorBase import ExecutorBase
-from prompts.templates import create_chat_template, BASE_ASSISTANT, TECHNICAL_EXPERT, CREATIVE_ASSISTANT
 import importlib
-import yaml
+import sys
 import os
+import yaml
+import json
 import inspect
+import asyncio
+from pathlib import Path
+from enum import Enum
+from langchain.agents.format_scratchpad import format_to_openai_function_messages
+from langchain.agents.output_parsers import OpenAIFunctionsAgentOutputParser
+from src.PackageBase import PackageBase
+
+# Try to import prompts, with fallbacks for missing modules
+try:
+    from prompts.templates import create_chat_template, BASE_ASSISTANT, TECHNICAL_EXPERT, CREATIVE_ASSISTANT
+except ImportError:
+    # Define fallback simple templates if imports fail
+    print("Warning: Could not import templates from prompts package.")
+    from langchain.prompts.chat import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
+    
+    # Define minimal templates as fallbacks
+    BASE_ASSISTANT = PromptTemplate(
+        input_variables=["role_description", "specific_instructions"],
+        template="You are an AI assistant. Your role is to: {role_description}\n\n{specific_instructions}"
+    )
+    
+    TECHNICAL_EXPERT = PromptTemplate(
+        input_variables=["expertise_areas"],
+        template="You are a technical expert in {expertise_areas}."
+    )
+    
+    CREATIVE_ASSISTANT = PromptTemplate(
+        input_variables=["creative_domains"],
+        template="You are a creative assistant specializing in {creative_domains}."
+    )
+    
+    def create_chat_template(system_template):
+        """Fallback implementation of create_chat_template."""
+        system_message = SystemMessagePromptTemplate(prompt=system_template)
+        human_message = HumanMessagePromptTemplate.from_template("{input}")
+        return ChatPromptTemplate.from_messages([system_message, human_message])
+
 from datetime import datetime
 from src.DirectoryTracer import DirectoryTracer
 from src.ConfigManager import ConfigManager
@@ -23,7 +62,7 @@ TESTING_MODE = os.environ.get('NANOBRAIN_TESTING', '0') == '1'
 # Import mock classes if in testing mode
 if TESTING_MODE:
     from test.mock_langchain import (
-        MockChatOpenAI as ChatOpenAI,
+        MockChatOpenAI,
         MockOpenAI,
         MockSystemMessage as SystemMessage,
         MockHumanMessage as HumanMessage,
@@ -117,7 +156,6 @@ class Agent(Step):
                 return_messages=True
             )
         
-        #breakpoint()
         # Load prompt template
         self.prompt_template = self._load_prompt_template(prompt_file, prompt_template)
         self.prompt_variables = prompt_variables or {}
@@ -156,10 +194,16 @@ class Agent(Step):
                 return MockOpenAI()
             else:
                 return MockChatOpenAI()
+                
         
         # Try to get the global configuration
+        
         try:
-            global_config = GlobalConfig.get_instance()
+            global_config = GlobalConfig()  # This will return the singleton instance due to the __new__ method
+            # Load config if not already loaded
+            if not global_config.config:
+                global_config.load_config()
+                global_config.load_from_env()
         except Exception as e:
             # Log the error but proceed with defaults
             if hasattr(self, '_debug_mode') and self._debug_mode:
@@ -292,7 +336,7 @@ class Agent(Step):
         
         # Process with LLM based on its type
         from langchain_core.language_models.chat_models import BaseChatModel
-        if isinstance(self.llm, BaseChatModel):
+        if issubclass(type(self.llm), BaseChatModel):
             # For chat models, create a chat template
             from langchain.schema import SystemMessage, HumanMessage
             system_template = "You are an AI assistant designed to {role_description}. {specific_instructions}"
@@ -300,7 +344,6 @@ class Agent(Step):
             human_message = HumanMessage(content=f"Context: {context}\n\nUser input: {input_text}")
             messages = [system_message, human_message]
             response = self.llm.invoke(messages).content
-            #breakpoint()
         else:
             # For completion models, use the formatted prompt directly
             response = self.llm.predict(formatted_prompt)
@@ -447,7 +490,7 @@ class Agent(Step):
         
         # Bind tools to the LLM if we have any and if the LLM supports tool binding
         if self.langchain_tools and hasattr(self.llm, 'bind_tools'):
-            self.llm = self.llm.bind_tools(self.langchain_tools)
+            self.llm_with_tools = self.llm.bind_tools(self.langchain_tools)
     
     def _create_tool_from_step(self, step: Step) -> Optional[BaseTool]:
         """
@@ -511,7 +554,6 @@ class Agent(Step):
                     func=sync_tool_func
                 )
             
-            #breakpoint()
             return step_tool
             
         except Exception as e:
@@ -535,7 +577,7 @@ class Agent(Step):
                 self.langchain_tools.append(tool_obj)
                 # Re-bind tools to the LLM
                 if hasattr(self.llm, 'bind_tools'):
-                    self.llm = self.llm.bind_tools(self.langchain_tools)
+                    self.llm_with_tools = self.llm.bind_tools(self.langchain_tools)
     
     def remove_tool(self, step: Step):
         """
@@ -566,107 +608,124 @@ class Agent(Step):
         
         if self.use_custom_tool_prompt:
             # Use custom tool calling prompt
-            from prompts.tool_calling_prompt import create_tool_calling_prompt, parse_tool_call
-            
             # Create custom prompt with tool descriptions
-            custom_prompt = create_tool_calling_prompt(self.tools)
-            
-            # Format the prompt with input and context
-            formatted_prompt = custom_prompt.format(
-                context=context,
-                input=input_text
-            )
-            
-            # Process with LLM based on its type
-            from langchain_core.language_models.chat_models import BaseChatModel
-            if isinstance(self.llm, BaseChatModel):
-                # For chat models, create a chat template
-                from langchain.schema import SystemMessage, HumanMessage
-                system_template = "You are an AI assistant with access to tools. {specific_instructions}"
-                system_message = SystemMessage(content=system_template.format(**self.prompt_variables))
-                human_message = HumanMessage(content=formatted_prompt)
-                messages = [system_message, human_message]
-                response = self.llm.predict_messages(messages).content
-            else:
-                # For completion models, use the formatted prompt directly
-                response = self.llm.predict(formatted_prompt)
-            
-            # Parse tool call from response
-            tool_call = parse_tool_call(response)
-            
-            if tool_call:
-                tool_name, args = tool_call
+            try:
+                # We already imported create_tool_calling_prompt and parse_tool_call at the top level
+                custom_prompt = create_tool_calling_prompt(self.tools)
                 
-                # Find the matching tool
-                matching_tool = None
-                for tool in self.tools:
-                    if tool.__class__.__name__ == tool_name:
-                        matching_tool = tool
-                        break
+                # Format the prompt with input and context
+                formatted_prompt = custom_prompt.format(
+                    context=context,
+                    input=input_text
+                )
                 
-                if matching_tool:
-                    # Execute the tool with the provided arguments
-                    try:
-                        tool_result = await matching_tool.process(args)
-                        
-                        # Format the final response with the tool result
-                        final_response = f"I used the {tool_name} tool with arguments: {', '.join(args)}\n\nResult: {tool_result}"
-                        
-                        # Update memory with this interaction
-                        self._update_memories(input_text, final_response)
-                        
-                        return final_response
-                    except Exception as e:
-                        error_response = f"I tried to use the {tool_name} tool, but encountered an error: {str(e)}"
+                # Process with LLM based on its type
+                from langchain_core.language_models.chat_models import BaseChatModel
+                if issubclass(type(self.llm), BaseChatModel):
+                    # For chat models, create a chat template
+                    from langchain.schema import SystemMessage, HumanMessage
+                    system_template = "You are an AI assistant with access to tools. {specific_instructions}"
+                    system_message = SystemMessage(content=system_template.format(**self.prompt_variables))
+                    human_message = HumanMessage(content=formatted_prompt)
+                    messages = [system_message, human_message]
+                    
+                    # Use self.llm_with_tools if available, otherwise fall back to self.llm
+                    if hasattr(self, 'llm_with_tools'):
+                        response = self.llm_with_tools.predict_messages(messages).content
+                    else:
+                        response = self.llm.predict_messages(messages).content
+                else:
+                    # For completion models, use the formatted prompt directly
+                    response = self.llm.predict(formatted_prompt)
+                
+                # Parse tool call from response
+                tool_call = parse_tool_call(response)
+                
+                if tool_call:
+                    tool_name, args = tool_call
+                    
+                    # Find the matching tool
+                    matching_tool = None
+                    for tool in self.tools:
+                        if tool.__class__.__name__ == tool_name:
+                            matching_tool = tool
+                            break
+                    
+                    if matching_tool:
+                        # Execute the tool with the provided arguments
+                        try:
+                            tool_result = await matching_tool.process(args)
+                            
+                            # Format the final response with the tool result
+                            final_response = f"I used the {tool_name} tool with arguments: {', '.join(args)}\n\nResult: {tool_result}"
+                            
+                            # Update memory with this interaction
+                            self._update_memories(input_text, final_response)
+                            
+                            return final_response
+                        except Exception as e:
+                            error_response = f"I tried to use the {tool_name} tool, but encountered an error: {str(e)}"
+                            
+                            # Update memory with this interaction
+                            self._update_memories(input_text, error_response)
+                            
+                            return error_response
+                    else:
+                        error_response = f"I tried to use a tool called {tool_name}, but it's not available."
                         
                         # Update memory with this interaction
                         self._update_memories(input_text, error_response)
                         
                         return error_response
                 else:
-                    error_response = f"I tried to use a tool called {tool_name}, but it's not available."
-                    
+                    # No tool call, just a regular response
                     # Update memory with this interaction
-                    self._update_memories(input_text, error_response)
+                    self._update_memories(input_text, response)
                     
-                    return error_response
-            else:
-                # No tool call, just a regular response
-                # Update memory with this interaction
-                self._update_memories(input_text, response)
-                
-                return response
-        else:
-            # Use LangChain's built-in tool calling
-            # Format the prompt with input and context
-            prompt_vars = {
-                "input": input_text,
-                "context": context,
-                **self.prompt_variables
-            }
+                    return response
+            except Exception as e:
+                print(f"Error using custom tool prompt: {e}, falling back to standard method")
+                # Fall back to standard method if custom tool prompt fails
+        
+        # Use LangChain's built-in tool calling
+        # Format the prompt with input and context
+        prompt_vars = {
+            "input": input_text,
+            "context": context,
+            **self.prompt_variables
+        }
+        
+        # Process with LLM based on its type
+        from langchain_core.language_models.chat_models import BaseChatModel
+        if issubclass(type(self.llm), BaseChatModel):
+            # For chat models, create a chat template with tools
+            from langchain.schema import SystemMessage, HumanMessage
+            system_template = "You are an AI assistant designed to {role_description}. {specific_instructions}"
+            system_message = SystemMessage(content=system_template.format(**self.prompt_variables))
+            human_message = HumanMessage(content=f"Context: {context}\n\nUser input: {input_text}")
+            messages = [system_message, human_message]
             
-            # Process with LLM based on its type
-            from langchain_core.language_models.chat_models import BaseChatModel
-            if isinstance(self.llm, BaseChatModel):
-                # For chat models, create a chat template with tools
-                from langchain.schema import SystemMessage, HumanMessage
-                system_template = "You are an AI assistant designed to {role_description}. {specific_instructions}"
-                system_message = SystemMessage(content=system_template.format(**self.prompt_variables))
-                human_message = HumanMessage(content=f"Context: {context}\n\nUser input: {input_text}")
-                messages = [system_message, human_message]
-                
-                # Use the chat model with tools
+            # Use self.llm_with_tools if available, otherwise fall back to self.llm
+            if hasattr(self, 'llm_with_tools'):
+                response = self.llm_with_tools.predict_messages(messages).content
+            else:
+                print("Warning: llm_with_tools not available, using llm directly")
                 response = self.llm.predict_messages(messages, tools=self.langchain_tools).content
-            else:
-                # For completion models, use the formatted prompt
-                formatted_prompt = self.prompt_template.format(**prompt_vars)
-                response = self.llm.predict(formatted_prompt)
-            
-            # Update memory with this interaction
-            self._update_memories(input_text, response)
-            
-            return response
-            
+        else:
+            print('Current LLM:', self.llm)
+            print('Type of LLM:', type(self.llm))
+            # Check if the llm has a bound attribute before trying to access it
+            if hasattr(self.llm, 'bound'):
+                print('Bindings of LLM:', self.llm.bound)
+            # For completion models, use the formatted prompt
+            formatted_prompt = self.prompt_template.format(**prompt_vars)
+            response = self.llm.predict(formatted_prompt)
+        
+        # Update memory with this interaction
+        self._update_memories(input_text, response)
+        
+        return response
+    
     async def execute_tool(self, tool_name: str, args: List[Any]) -> Any:
         """
         Execute a specific tool by name with the given arguments.
@@ -685,7 +744,25 @@ class Agent(Step):
         if matching_tool:
             # Execute the tool with the provided arguments
             try:
-                return await matching_tool.process(args)
+                # Check if the tool has a process method
+                if hasattr(matching_tool, 'process') and callable(matching_tool.process):
+                    return await matching_tool.process(args)
+                else:
+                    # If no process method, try to determine the appropriate method to call
+                    # based on the arguments
+                    if len(args) == 2 and isinstance(args[0], str):
+                        # Assume this is a file-related tool call with (path, content)
+                        if hasattr(matching_tool, 'create_file') and callable(matching_tool.create_file):
+                            return await matching_tool.create_file(args[0], args[1])
+                        elif hasattr(matching_tool, 'write') and callable(matching_tool.write):
+                            return await matching_tool.write(args[0], args[1])
+                    
+                    # If we couldn't determine the method, show available methods
+                    available_methods = [
+                        method for method in dir(matching_tool) 
+                        if callable(getattr(matching_tool, method)) and not method.startswith('_')
+                    ]
+                    return f"Tool {tool_name} found but has no process method. Available methods: {', '.join(available_methods)}"
             except Exception as e:
                 return f"Error executing tool {tool_name}: {str(e)}"
         else:
@@ -758,18 +835,31 @@ class Agent(Step):
             
         try:
             # Check if the file exists
+            print(f"Looking for tools config in: {self.tools_config_path}")
             if not os.path.exists(self.tools_config_path):
                 print(f"Tools config file not found in: {self.tools_config_path}")
-                config_path = os.path.join(self.directory_tracer.get_current_directory(), "config", self.tools_config_path)
+                # Try to find the config relative to the current directory
+                from src.DirectoryTracer import DirectoryTracer
+                tracer = DirectoryTracer()
+                current_dir = tracer.get_current_directory()
+                config_path = os.path.join(current_dir, "config", self.tools_config_path)
                 print(f"Looking for tools config in: {config_path}")
                 if os.path.exists(config_path):
                     self.tools_config_path = config_path
                     print(f"Found tools config in: {config_path}")
                 else:
-                    print(f"Tools config file not found: {config_path}")
-                    return
+                    # Try with just the base directory
+                    config_path = os.path.join(current_dir, self.tools_config_path)
+                    print(f"Looking for tools config in: {config_path}")
+                    if os.path.exists(config_path):
+                        self.tools_config_path = config_path
+                        print(f"Found tools config in: {config_path}")
+                    else:
+                        print(f"Tools config file not found: {config_path}")
+                        return
                 
             # Load the YAML file
+            print(f"Loading tools config from: {self.tools_config_path}")
             with open(self.tools_config_path, 'r') as file:
                 tools_config = yaml.safe_load(file)
                 
@@ -778,11 +868,20 @@ class Agent(Step):
                 print(f"No 'tools' key found in config: {self.tools_config_path}")
                 return
                 
+            # Print available tools for debugging
+            print(f"Found {len(tools_config['tools'])} tools in config:")
+            for i, tool_config in enumerate(tools_config['tools']):
+                print(f"  {i+1}. {tool_config.get('name', 'Unnamed')}: {tool_config.get('class', 'No class specified')}")
+                
             # Create tool instances
             for tool_config in tools_config['tools']:
+                print(f"Creating tool instance for: {tool_config.get('name', 'Unnamed')}")
                 tool_instance = self._create_tool_instance(tool_config)
                 if tool_instance:
                     self.tools.append(tool_instance)
+                    print(f"Successfully added tool: {tool_instance.__class__.__name__}")
+                else:
+                    print(f"Failed to create tool instance for: {tool_config.get('name', 'Unnamed')}")
                     
         except Exception as e:
             print(f"Error loading tools from config: {str(e)}")
@@ -813,14 +912,23 @@ class Agent(Step):
             # Split into module path and class name
             module_path, class_name = class_path.rsplit('.', 1)
             
-            # Import the module
-            module = importlib.import_module(module_path)
+            # Debug log
+            print(f"Attempting to import module: {module_path} for class: {class_name}")
+            
+            try:
+                # Import the module
+                module = importlib.import_module(module_path)
+            except ModuleNotFoundError as e:
+                print(f"Error importing {module_path}: {str(e)}")
+                print(f"Current sys.path: {sys.path}")
+                raise
             
             # Get the class
             cls = getattr(module, class_name)
             
-            # Create the instance with the same executor used by this Agent
-            instance = cls(executor=self.runner.executor)
+            # Create the instance with the executor from the agent's runner
+            # The executor is passed to the constructor in the Step.__init__
+            instance = cls(executor=self.runner)
             
             print(f"Successfully created tool instance: {instance.__class__.__name__}")
             return instance

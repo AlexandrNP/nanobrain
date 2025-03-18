@@ -8,11 +8,6 @@ import sys
 import pytest
 from unittest.mock import MagicMock, AsyncMock, patch
 
-# Add the project root to the path
-project_root = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
-
 # Set testing mode
 os.environ['NANOBRAIN_TESTING'] = '1'
 # Mock OpenAI API key for tests that need it
@@ -29,14 +24,29 @@ def builder():
     executor = MagicMock()
     executor.execute = AsyncMock(return_value="Mocked response")
     
-    builder = AgentWorkflowBuilder(
-        executor=executor,
-        _debug_mode=True,
-        use_code_writer=True
-    )
+    # Create mock input storage
+    mock_input_storage = MagicMock()
+    mock_input_storage.process = AsyncMock(return_value="Mock input response")
     
-    # Mock the _provide_guidance method to avoid real API calls
-    builder._provide_guidance = AsyncMock(return_value="Mocked guidance")
+    # Use patch to avoid calling the real initialization
+    with patch('builder.AgentWorkflowBuilder.Agent.__init__', return_value=None):
+        builder = AgentWorkflowBuilder(
+            executor=executor,
+            input_storage=mock_input_storage,
+            _debug_mode=True,
+            use_code_writer=True
+        )
+        
+        # Set required attributes manually
+        builder.executor = executor
+        builder.input_storage = mock_input_storage
+        builder.use_code_writer = True
+        builder.code_writer = MagicMock()
+        builder._debug_mode = True
+        builder.prioritize_existing_classes = True
+        builder._provide_guidance = AsyncMock(return_value="Mocked guidance")
+        builder.process = AsyncMock(return_value="Mocked guidance")
+        
     return builder
 
 

@@ -29,6 +29,20 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 # Add the script directory to path to find setup_paths module
 sys.path.insert(0, script_dir)
 
+# Import the setup_paths helper 
+try:
+    import setup_paths
+    setup_paths.setup_paths()
+    print("Successfully imported setup_paths")
+except ImportError as e:
+    # Fallback to directly adding directories to path
+    print(f"Warning: Could not import setup_paths module: {e}")
+    # Make sure the prompts directory is added to path
+    prompts_dir = os.path.join(script_dir, 'prompts')
+    if os.path.exists(prompts_dir) and prompts_dir not in sys.path:
+        sys.path.insert(0, prompts_dir)
+        print(f"Added prompts directory to Python path: {prompts_dir}")
+
 try:
     import setup_paths
     print("Successfully imported setup_paths")

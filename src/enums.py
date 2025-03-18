@@ -13,5 +13,15 @@ class ComponentState(Enum):
     ERROR = "ERROR"             # Component encountered an error during execution
 
 
+class AgentType(Enum):
+    """Represents different types of agents in the system."""
+    ASSISTANT = "ASSISTANT"     # Default assistant agent
+    WORKFLOW = "WORKFLOW"       # Workflow building agent
+    CODE_WRITER = "CODE_WRITER" # Code generation agent
+    PLANNER = "PLANNER"         # Planning agent
+    EXECUTOR = "EXECUTOR"       # Execution agent
+    EVALUATOR = "EVALUATOR"     # Evaluation agent
+
+
 
 

@@ -2,6 +2,7 @@ import asyncio
 import unittest
 import sys
 import os
+from unittest.mock import MagicMock, patch
 
 # Add the parent directory to the path so we can import the modules
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -34,8 +35,14 @@ class TestDataFlow(unittest.TestCase):
         
         self.loop.close()
         
-    def test_data_flow(self):
+    @patch('src.Agent.Agent._initialize_llm')
+    def test_data_flow(self, mock_initialize_llm):
         """Test the data flow from command line to agent."""
+        # Mock the LLM to avoid needing an API key
+        mock_llm = MagicMock()
+        mock_llm.invoke = MagicMock(return_value="Mocked response")
+        mock_initialize_llm.return_value = mock_llm
+        
         async def run_test():
             # Create command line
             command_line = DataStorageCommandLine(executor=self.executor, name="TestCommandLine", debug=True)
@@ -45,7 +52,12 @@ class TestDataFlow(unittest.TestCase):
             command_line.output = cmd_output
             
             # Create agent builder
-            agent_builder = AgentWorkflowBuilder(executor=self.executor, name="TestAgentBuilder", debug=True)
+            agent_builder = AgentWorkflowBuilder(
+                executor=self.executor,
+                input_storage=command_line,
+                name="TestAgentBuilder", 
+                debug=True
+            )
             
             # Create link between command line and agent
             link_id = "test_link"

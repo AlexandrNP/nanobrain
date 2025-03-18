@@ -1,0 +1,27 @@
+- class: StepPlanner
+  description: Plans the implementation of a new step or workflow.
+  name: PlannerTool
+- class: StepFileWriter
+  description: Creates or modifies a file with the provided content.
+  name: FileWriterTool
+- class: StepCoder
+  description: Generates software code based on requirements.
+  name: CoderTool
+- class: StepContextSearch
+  description: Searches the surrounding context for relevant information.
+  name: ContextSearchTool
+- class: StepWebSearch
+  description: Searches the web for relevant information.
+  name: WebSearchTool
+- class: StepContextArchiver
+  description: Archives and summarizes old messages.
+  name: ContextArchiverTool
+- class: StepGitInit
+  description: Initializes a git repository with a given name in the specified folder.
+  name: GitInitTool
+- class: StepGitExclude
+  description: Excludes directory and all files in it from the current git repository.
+  name: GitExcludeTool
+- class: StepDependencySearch
+  description: Searches for dependencies in Python files and saves them to requirements.txt.
+  name: DependencySearchTool

@@ -1,36 +1,41 @@
 #!/usr/bin/env python3
 """
-Path setup for NanoBrain
+Setup paths for NanoBrain framework.
 
-This module sets up the necessary Python import paths for the NanoBrain project.
-It should be imported at the beginning of scripts to ensure all modules can be found.
+This module sets up the Python import paths for the NanoBrain framework
+to ensure all modules can be imported properly.
 """
 
 import os
 import sys
-from pathlib import Path
 
-# Determine the project root directory
-PROJECT_ROOT = Path(__file__).resolve().parent
-if not PROJECT_ROOT.exists():
-    raise RuntimeError(f"Project root directory {PROJECT_ROOT} does not exist")
-
-# Add the project root to sys.path
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
-
-# Add src directory to sys.path
-SRC_DIR = PROJECT_ROOT / "src"
-if str(SRC_DIR) not in sys.path:
-    sys.path.insert(0, str(SRC_DIR))
-
-# Add builder directory to sys.path
-BUILDER_DIR = PROJECT_ROOT / "builder"
-if str(BUILDER_DIR) not in sys.path:
-    sys.path.insert(0, str(BUILDER_DIR))
-
-# Set PYTHONPATH environment variable
-os.environ["PYTHONPATH"] = str(PROJECT_ROOT)
+def setup_paths():
+    """
+    Set up the Python import paths for the NanoBrain framework.
+    This ensures that all modules can be imported correctly.
+    """
+    # Get the current directory (should be the project root)
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    # Add the project root to the path if not already there
+    if current_dir not in sys.path:
+        sys.path.insert(0, current_dir)
+    
+    # Add specific module directories to the path
+    paths_to_add = [
+        os.path.join(current_dir, 'prompts'),
+        os.path.join(current_dir, 'src'),
+        os.path.join(current_dir, 'builder'),
+        os.path.join(current_dir, 'test'),
+        os.path.join(current_dir, 'integration_tests'),
+        os.path.join(current_dir, 'tools_common'),
+    ]
+    
+    for path in paths_to_add:
+        if os.path.exists(path) and path not in sys.path:
+            sys.path.insert(0, path)
+    
+    return True
 
 # Load global configuration
 def load_global_config():
@@ -63,36 +68,54 @@ def load_global_config():
 
 def verify_paths():
     """Print path information and check if key directories and files exist."""
-    print(f"Project root: {PROJECT_ROOT}")
+    print(f"Project root: {os.path.dirname(os.path.abspath(__file__))}")
     print(f"Python path: {sys.path}")
     
     # Check that key directories exist
     print("\nChecking directories:")
     dirs_to_check = {
-        "src": SRC_DIR,
-        "builder": BUILDER_DIR,
-        "tools_common": PROJECT_ROOT / "tools_common",
-        "prompts": PROJECT_ROOT / "prompts"
+        "src": os.path.join(os.path.dirname(os.path.abspath(__file__)), 'src'),
+        "builder": os.path.join(os.path.dirname(os.path.abspath(__file__)), 'builder'),
+        "tools_common": os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tools_common'),
+        "prompts": os.path.join(os.path.dirname(os.path.abspath(__file__)), 'prompts'),
+        "builder/config": os.path.join(os.path.dirname(os.path.abspath(__file__)), 'builder', 'config')
     }
     
     for name, path in dirs_to_check.items():
-        exists = path.exists()
-        has_init = (path / "__init__.py").exists() if exists else False
+        exists = os.path.exists(path)
+        has_init = (os.path.exists(os.path.join(path, '__init__.py')) or os.path.exists(os.path.join(path, '__main__.py'))) if exists else False
         print(f"  {name:<12}: {'✓' if exists else '✗'} (exists) {'✓' if has_init else '✗'} (__init__.py)")
     
     # Check key files
     print("\nChecking key files:")
     files_to_check = {
-        "ConfigManager.py": SRC_DIR / "ConfigManager.py",
-        "NanoBrainBuilder.py": BUILDER_DIR / "NanoBrainBuilder.py",
-        "Agent.py": SRC_DIR / "Agent.py",
-        "Step.py": SRC_DIR / "Step.py",
-        "GlobalConfig.py": SRC_DIR / "GlobalConfig.py"
+        "ConfigManager.py": os.path.join(os.path.dirname(os.path.abspath(__file__)), 'src', 'ConfigManager.py'),
+        "NanoBrainBuilder.py": os.path.join(os.path.dirname(os.path.abspath(__file__)), 'builder', 'NanoBrainBuilder.py'),
+        "Agent.py": os.path.join(os.path.dirname(os.path.abspath(__file__)), 'src', 'Agent.py'),
+        "Step.py": os.path.join(os.path.dirname(os.path.abspath(__file__)), 'src', 'Step.py'),
+        "GlobalConfig.py": os.path.join(os.path.dirname(os.path.abspath(__file__)), 'src', 'GlobalConfig.py'),
+        "tools.yml": os.path.join(os.path.dirname(os.path.abspath(__file__)), 'builder', 'config', 'tools.yml')
     }
     
     for name, path in files_to_check.items():
-        exists = path.exists()
+        exists = os.path.exists(path)
         print(f"  {name:<20}: {'✓' if exists else '✗'}")
+    
+    # Check if tools.yml exists and print its content
+    tools_yml_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'builder', 'config', 'tools.yml')
+    if os.path.exists(tools_yml_path):
+        print(f"\nFound tools.yml at: {tools_yml_path}")
+        try:
+            import yaml
+            with open(tools_yml_path, 'r') as f:
+                tools_config = yaml.safe_load(f)
+                print(f"  Contains {len(tools_config.get('tools', []))} tool definitions")
+                for i, tool in enumerate(tools_config.get('tools', [])):
+                    print(f"    {i+1}. {tool.get('name', 'Unnamed')}: {tool.get('class', 'No class')}")
+        except Exception as e:
+            print(f"  Error reading tools.yml: {e}")
+    else:
+        print(f"\nNo tools.yml found at: {tools_yml_path}")
     
     return True
 

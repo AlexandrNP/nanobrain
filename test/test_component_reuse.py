@@ -18,11 +18,6 @@ import asyncio
 import glob
 import re
 
-# Add the project root to the path
-parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if parent_dir not in sys.path:
-    sys.path.insert(0, parent_dir)
-
 # Import required modules
 from src.ConfigManager import ConfigManager
 from src.ExecutorFunc import ExecutorFunc
@@ -58,9 +53,14 @@ class TestComponentReuse(unittest.TestCase):
         # Mock the process method directly
         self.code_writer.process = AsyncMock(return_value="Mocked code writer response")
         
+        # Create mock input storage
+        self.mock_input_storage = MagicMock()
+        self.mock_input_storage.process = AsyncMock(return_value="Mock input response")
+        
         # Initialize workflow builder with mocked executor
         self.workflow_builder = AgentWorkflowBuilder(
             executor=self.executor,
+            input_storage=self.mock_input_storage,
             use_code_writer=True,
             _debug_mode=True
         )

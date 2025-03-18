@@ -8,13 +8,19 @@ import sys
 import unittest
 from unittest.mock import patch, mock_open
 
-# Add the parent directory to the path
-parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if parent_dir not in sys.path:
-    sys.path.insert(0, parent_dir)
-
-from src.ConfigManager import ConfigManager
-from src.ExecutorBase import ExecutorBase
+# Import the necessary classes
+try:
+    # Try direct import first
+    from src.ConfigManager import ConfigManager
+    from src.ExecutorBase import ExecutorBase
+except ImportError:
+    # If that fails, add the parent directory to the path as a fallback
+    parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if parent_dir not in sys.path:
+        sys.path.insert(0, parent_dir)
+    # Then try the import again
+    from src.ConfigManager import ConfigManager
+    from src.ExecutorBase import ExecutorBase
 
 
 class TestConfigManager(unittest.TestCase):

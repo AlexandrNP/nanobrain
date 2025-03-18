@@ -214,6 +214,9 @@ class TestCreateStepIntegration(unittest.TestCase):
             builder_mock.get_generated_tests = MagicMock(return_value="test tests")
             builder_mock._debug_mode = False
             builder_mock.name = "BuilderMock"  # Add name to avoid attribute errors
+            builder_mock.input_storage = None
+            builder_mock.input_sources = {}
+            builder_mock._monitoring = False
             
             # Add file_writer_tool to our builder
             self.builder.agent = MagicMock()
@@ -279,7 +282,12 @@ class TestCreateStepIntegration(unittest.TestCase):
                     
                     # Execute the CreateStep
                     print("Before CreateStep.execute call")
-                    result = await CreateStep.execute(self.builder, "test_step")
+                    result = await CreateStep.execute(
+                        self.builder, 
+                        "test_step",
+                        command_line=command_line_mock,
+                        agent_builder=builder_mock
+                    )
                     
                     print(f"Result: {result}")
                     

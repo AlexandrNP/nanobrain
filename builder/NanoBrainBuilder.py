@@ -12,15 +12,16 @@ the NanoBrainBuilder orchestrates workflow creation by coordinating
 between different specialized components.
 """
 
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Set, Callable, Tuple, Union
 import os
 import asyncio
 from pathlib import Path
 import argparse
 import importlib.util
-import yaml
 import traceback
 import importlib
+import sys
+import json
 
 from src.Workflow import Workflow
 from src.ExecutorBase import ExecutorBase
@@ -51,6 +52,10 @@ from builder.WorkflowSteps import (
 
 # Import the ensure_async decorator
 from builder.utils import ensure_async
+
+# Import nanobrain components
+from src.regulations import ConnectionStrength, SystemRegulator, SystemModulator
+from src.enums import AgentType
 
 
 class CommandLineTrigger(TriggerBase):
@@ -119,32 +124,6 @@ class CommandLineTrigger(TriggerBase):
         self._monitoring = False
 
 
-class CommandLineStorage(DataStorageBase):
-    """
-    Storage for command line input and output.
-    
-    Biological analogy: Brain's sensory processing system.
-    Justification: Like how the brain's sensory system processes
-    external stimuli and prepares responses, this storage processes
-    command line input and prepares output to be displayed to the user.
-    """
-    def __init__(self, executor: ExecutorBase, **kwargs):
-        """Initialize the command line storage."""
-        super().__init__(executor, **kwargs)
-        
-        # Create input and output data units
-        self.input = DataUnitString(name="CommandLineInput")
-        self.output = DataUnitString(name="CommandLineOutput")
-        
-    async def _process_query(self, query: Any) -> Any:
-        """Process a query."""
-        # For command line interface, just return the query as is
-        # This might do preprocessing in a more complex scenario
-        return query
-        
-    def display_response(self, response: Any):
-        """Display the response to the user."""
-        print(f"{response}")
 
 
 class NanoBrainBuilder:
@@ -196,9 +175,6 @@ class NanoBrainBuilder:
         # Initialize the agents
         self._init_agent()
         
-        # Initialize the tools using ConfigManager
-        self._init_tools()
-        
         # Set predefined commands
         self._predefined_commands = {
             "create_workflow": self.create_workflow,
@@ -219,11 +195,38 @@ class NanoBrainBuilder:
         Initialize the agents needed by the NanoBrainBuilder:
         1. AgentWorkflowBuilder - provides guidance on NanoBrain framework
         2. AgentCodeWriter - template accessible by DataStorageCommandLine for creating code
+        
+        All agent tools are initialized automatically via YAML configuration
+        during the agent creation process. The AgentWorkflowBuilder class
+        reads the tools.yml file and loads the specified tools.
         """
+        # Create a DataStorageCommandLine instance using ConfigManager
+        input_storage = self.config_manager.create_instance(
+            "DataStorageCommandLine",
+            executor=self.executor,
+            _debug_mode=self._debug_mode
+        )
+        
+        # Get the tools config path
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        config_dir = os.path.join(project_root, "builder", "config")
+        tools_config_path = os.path.join(config_dir, "tools.yml")
+        
+        # Ensure the config directory exists
+        os.makedirs(config_dir, exist_ok=True)
+        
+        if self._debug_mode:
+            print(f"Using tools config path: {tools_config_path}")
+            print(f"Tools config exists: {os.path.exists(tools_config_path)}")
+        
         # Initialize AgentWorkflowBuilder for guidance
+        # The AgentWorkflowBuilder will load tools from the YAML configuration automatically
+        # in its __init__ method through the _load_tools() function
         self.agent = self.config_manager.create_instance(
             "AgentWorkflowBuilder", 
             executor=self.executor,
+            input_storage=input_storage,
+            tools_config_path=tools_config_path,
             _debug_mode=self._debug_mode,
             use_code_writer=False  # This agent provides guidance only
         )
@@ -231,78 +234,22 @@ class NanoBrainBuilder:
         # We don't directly initialize AgentCodeWriter here
         # It will be created by the CreateStep.execute method when needed
         
+        # Create a tool_map that maps tool names to their classes
+        self.tool_map = {}
+        if hasattr(self.agent, 'tools'):
+            for tool in self.agent.tools:
+                tool_class = tool.__class__
+                tool_name = tool_class.__name__
+                self.tool_map[tool_name] = tool_class
+        
         if self._debug_mode:
-            print("Initialized AgentWorkflowBuilder for guidance")
-    
-    def _init_tools(self):
-        """Initialize the tools using ConfigManager."""
-        # Get tool configurations
-        tools_config = self.config.get('tools', {})
-        
-        # Create tool instances
-        self.tools = []
-        
-        # Import tool classes from tools_common
-        tool_map = {}
-        
-        # Try to import each tool class, but don't fail if it's not available
-        tool_classes = [
-            "StepFileWriter",
-            "StepPlanner",
-            "StepCoder",
-            "StepGitInit",
-            "StepContextSearch",
-            "StepWebSearch",
-            "StepGitExclude",
-            "StepDependencySearch",
-            "StepContextArchiver"
-        ]
-        
-        # Import available tools
-        for tool_class in tool_classes:
-            try:
-                # Try to import the tool class
-                module_path = f"tools_common.{tool_class}"
-                module = __import__(module_path, fromlist=[tool_class])
-                tool_class_obj = getattr(module, tool_class)
-                
-                # Add the tool class to the map
-                tool_map[tool_class] = tool_class_obj
-                
-                if self._debug_mode:
-                    print(f"Successfully imported tool class: {tool_class}")
-            except (ImportError, AttributeError) as e:
-                # Skip this tool if it's not available
-                if self._debug_mode:
-                    print(f"Tool class {tool_class} is not available: {e}")
-        
-        # Create the tools
-        for tool_name, tool_config in tools_config.items():
-            if tool_name in tool_map:
-                try:
-                    # Create the tool instance
-                    tool = tool_map[tool_name](**tool_config)
-                    
-                    # Add the tool to the list
-                    self.tools.append(tool)
-                    
-                    if self._debug_mode:
-                        print(f"Initialized tool: {tool_name}")
-                except Exception as e:
-                    print(f"Error initializing tool {tool_name}: {e}")
+            print(f"Initialized AgentWorkflowBuilder for guidance")
+            if hasattr(self.agent, 'tools'):
+                print(f"Agent has {len(self.agent.tools)} tools loaded.")
+                for i, tool in enumerate(self.agent.tools):
+                    print(f"  {i+1}. {tool.__class__.__name__}")
             else:
-                if self._debug_mode:
-                    print(f"Skipping unavailable tool: {tool_name}")
-        
-        # Make the tools available to the agent
-        if hasattr(self.agent, 'add_tool'):
-            for tool in self.tools:
-                try:
-                    self.agent.add_tool(tool)
-                    if self._debug_mode:
-                        print(f"Added tool to agent: {tool.__class__.__name__}")
-                except Exception as e:
-                    print(f"Error adding tool {tool.__class__.__name__} to agent: {e}")
+                print("Agent has no tools loaded.")
     
     def _show_help(self) -> Dict[str, Any]:
         """
@@ -339,30 +286,35 @@ class NanoBrainBuilder:
         
         if not workflow_path:
             return None
-            
-        # Look for configuration file
-        config_path = os.path.join(workflow_path, 'config', 'workflow.yml')
         
-        if not os.path.exists(config_path):
-            return None
-            
         try:
-            # Load the configuration
-            with open(config_path, 'r') as f:
-                config = yaml.safe_load(f)
-                
+            # Create a workflow-specific ConfigManager
+            workflow_config_manager = ConfigManager(base_path=workflow_path)
+            
+            # Look for workflow configuration
+            config = workflow_config_manager.get_config("workflow")
+            
+            if not config:
+                return None
+            
             # Get the entry point
             entry_point = config.get('entry_point')
             
             if not entry_point:
                 return None
-                
-            # Load the entry point module
+            
+            # Check if the workflow configuration specifies a class
+            if 'class' in config:
+                # If a specific class is defined, use ConfigManager to create the instance
+                workflow = workflow_config_manager.create_instance(configuration_name="workflow")
+                return workflow
+            
+            # If no class is specified, use the traditional loading from entry_point
             module_path = os.path.join(workflow_path, entry_point)
             
             if not os.path.exists(module_path):
                 return None
-                
+            
             # Import the module
             spec = importlib.util.spec_from_file_location("workflow_module", module_path)
             module = importlib.util.module_from_spec(spec)
@@ -376,7 +328,7 @@ class NanoBrainBuilder:
                     # Create an instance of the workflow
                     workflow = attr()
                     return workflow
-                    
+            
             return None
         except Exception as e:
             print(f"Error loading workflow: {e}")

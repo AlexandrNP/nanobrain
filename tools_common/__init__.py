@@ -1,5 +1,8 @@
 """
-Common tools for the NanoBrain framework builder.
+Tools for NanoBrain workflows.
+
+This package contains tools used by the NanoBrain framework for workflow creation
+and management.
 """
 
 try:

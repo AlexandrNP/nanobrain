@@ -13,11 +13,6 @@ import sys
 import os
 from unittest.mock import MagicMock, AsyncMock, patch
 
-# Add the project root to the Python path
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../"))
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
-
 from builder.AgentWorkflowBuilder import AgentWorkflowBuilder
 
 class TestAgentWorkflowBuilderAsync(unittest.TestCase):
@@ -28,9 +23,13 @@ class TestAgentWorkflowBuilderAsync(unittest.TestCase):
         # Create a mock executor
         self.mock_executor = MagicMock()
         
+        # Create a mock input storage
+        self.mock_input_storage = MagicMock()
+        self.mock_input_storage.process = AsyncMock(return_value="Mock input response")
+        
         # Create the AgentWorkflowBuilder with minimal initialization
         with patch('builder.AgentWorkflowBuilder.Agent.__init__', return_value=None):
-            self.builder = AgentWorkflowBuilder(executor=self.mock_executor)
+            self.builder = AgentWorkflowBuilder(executor=self.mock_executor, input_storage=self.mock_input_storage)
             self.builder.executor = self.mock_executor
     
     @pytest.mark.asyncio

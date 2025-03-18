@@ -1,0 +1,24 @@
+# Configuration for DataStorageCommandLine
+defaults:
+  class: src.DataStorageCommandLine.DataStorageCommandLine
+  name: CommandLineStorage
+  executor: ExecutorFunc
+
+metadata:
+  description: "Command line interface for step-specific console interaction"
+  author: "NanoBrainBuilder"
+  version: "0.1.0"
+  biological_analogy: "Brain's sensory processing system"
+  justification: "Like how the brain's sensory system processes external stimuli and prepares responses, this storage processes command line input and prepares output to be displayed to the user."
+
+validation:
+  required:
+    - name
+    - executor
+  optional:
+    - debug_mode
+
+examples:
+  - name: "StepCommandLine"
+    executor: ExecutorFunc
+    debug_mode: true 
