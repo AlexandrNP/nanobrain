@@ -11,14 +11,25 @@ class IDirectoryTracer(ABC):
     Justification: Just as place cells allow an organism to know its location in physical space,
     this interface defines how components can know their location in the codebase's structure.
     """
+
     @abstractmethod
     def get_relative_path(self) -> str:
         """Returns the relative path from the package root."""
         pass
-    
+
     @abstractmethod
     def get_absolute_path(self) -> str:
         """Returns the absolute path in the filesystem."""
+        pass
+
+    @abstractmethod
+    def get_relative_directory_location(self) -> str:
+        """Returns the relative directory location from the package root."""
+        pass
+    
+    @abstractmethod
+    def get_absolute_directory_location(self) -> str:
+        """Returns the absolute directory location in the filesystem."""
         pass
 
 

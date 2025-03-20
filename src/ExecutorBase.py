@@ -41,21 +41,18 @@ class ExecutorBase:
     
     def execute(self, runnable: 'RunnableMixin') -> Any:
         """
-        Contains logic for running a specific Runnable implementation.
+        Execute the runnable.
         
-        Biological analogy: Neurotransmitter-mediated activation.
-        Justification: Like how neurotransmitters trigger specific receptor-mediated
-        responses in target neurons, executors trigger specific execution logic in
-        target runnables.
+        Biological analogy: Neural computation.
+        Justification: Like how neurons compute outputs from inputs,
+        executors compute results from runnables.
+        
+        Args:
+            runnable: The runnable to execute
+            
+        Returns:
+            The result of execution
         """
-        # Check energy level
-        if self.energy_level < self.energy_per_execution:
-            raise ValueError("Insufficient energy for execution")
-        
-        # Consume energy
-        self.energy_level -= self.energy_per_execution
-        
-        # The specific execution logic would be implemented by subclasses
         raise NotImplementedError("Subclasses must implement execute()")
     
     def recover_energy(self):

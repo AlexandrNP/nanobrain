@@ -15,7 +15,7 @@ import yaml
 import logging
 from pathlib import Path
 from typing import Dict, Any, Optional, Union
-
+from src.DirectoryTracer import DirectoryTracer
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -45,6 +45,7 @@ class GlobalConfig:
         self._config_path = None
         self._initialized = True
         self._env_vars_loaded = False
+        self.tracer = DirectoryTracer(self.__class__.__module__)
     
     def load_config(self, config_path: Optional[str] = None) -> bool:
         """

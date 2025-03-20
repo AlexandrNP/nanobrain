@@ -68,7 +68,7 @@ class Step(PackageBase, IRunnable):
         """
         self.output = data_unit
     
-    async def execute(self):
+    def execute(self):
         """
         Execute the step's operation.
         
@@ -90,7 +90,7 @@ class Step(PackageBase, IRunnable):
             
         try:
             # Wait for trigger condition (all inputs received)
-            if self.trigger and not await self.trigger.monitor():
+            if self.trigger and not self.trigger.monitor():
                 self._state = ComponentState.WAITING
                 self._running = False
                 return None
@@ -102,8 +102,11 @@ class Step(PackageBase, IRunnable):
                 if data is not None:
                     inputs[link_id] = data
             
-            # Process inputs
-            self.result = await self.process(inputs)
+            # Process inputs using executor
+            if self.executor:
+                self.result = self.executor.execute(self)
+            else:
+                self.result = self.process(inputs)
             
             # Store in working memory
             self.working_memory.store('last_result', self.result)

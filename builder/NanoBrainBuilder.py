@@ -223,13 +223,14 @@ class NanoBrainBuilder:
         # The AgentWorkflowBuilder will load tools from the YAML configuration automatically
         # in its __init__ method through the _load_tools() function
         self.agent = self.config_manager.create_instance(
-            "AgentWorkflowBuilder", 
+            configuration_name = "AgentWorkflowBuilder.yml", 
             executor=self.executor,
             input_storage=input_storage,
             tools_config_path=tools_config_path,
             _debug_mode=self._debug_mode,
             use_code_writer=False  # This agent provides guidance only
         )
+        
         
         # We don't directly initialize AgentCodeWriter here
         # It will be created by the CreateStep.execute method when needed

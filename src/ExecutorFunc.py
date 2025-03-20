@@ -19,40 +19,42 @@ class ExecutorFunc:
     
     def execute(self, runnable: Any) -> Any:
         """
-        Executes the function on the runnable.
+        Execute the function with the runnable as input.
         
         Biological analogy: Specialized neural computation.
-        Justification: Like how specialized neurons transform their inputs in
-        specific ways (e.g., edge detection), this method transforms inputs
-        through a specific function.
-        """
-        # Check reliability level
-        reliability = self.base_executor.get_modulator_effect("reliability")
-        if reliability < self.reliability_threshold:
-            # Low reliability - execution may fail or be suboptimal
-            execution_probability = reliability / self.reliability_threshold
-            if random.random() > execution_probability:
-                # Execution failed due to low reliability
-                self.base_executor.system_modulators.update_from_event("failure", 0.1)
-                return None
+        Justification: Like how specialized neural circuits perform specific
+        computations, this executor performs a specific function computation.
         
-        # Check and consume energy through base executor
-        if not self.base_executor.can_execute(runnable.__class__.__name__):
-            return None
+        Args:
+            runnable: The input to the function
             
-        # Execute function if provided
-        if self.function:
-            try:
-                result = self.function(runnable)
-                # Successful execution updates system state
-                self.base_executor.system_modulators.update_from_event("success", 0.05)
-                return result
-            except Exception as e:
-                # Failed execution updates system state
-                self.base_executor.system_modulators.update_from_event("failure", 0.1)
-                raise e
-        
-        return None
+        Returns:
+            The result of the function
+        """
+        # Check if we have enough energy
+        if self.energy_level < self.energy_per_execution:
+            raise ValueError("Insufficient energy for execution")
+            
+        # Check if we have enough reliability
+        if self.reliability < self.reliability_threshold:
+            raise ValueError("Insufficient reliability for execution")
+            
+        try:
+            # Consume energy
+            self.energy_level -= self.energy_per_execution
+            
+            # Execute the function
+            result = self.function(runnable)
+            
+            # Increase reliability on success
+            self.reliability = min(1.0, self.reliability + 0.01)
+            
+            return result
+            
+        except Exception as e:
+            # Decrease reliability on failure
+            self.reliability = max(0.0, self.reliability - 0.05)
+            raise e
     
     async def execute_async(self, runnable: Any) -> Any:
         """

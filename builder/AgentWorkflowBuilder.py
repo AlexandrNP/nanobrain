@@ -24,218 +24,32 @@ class AgentWorkflowBuilder(Agent):
         input_storage: DataStorageBase,
         model_name: str = "gpt-3.5-turbo",
         model_class: Optional[str] = None,
-        tools_config_path: Optional[str] = None,
         **kwargs
     ):
         # Store the executor as an instance attribute
         self.executor = executor
         
         # Initialize the Agent base class
+        breakpoint()
         super().__init__(
             executor=executor,
             model_name=model_name,
             model_class=model_class,
             **kwargs
         )
+        self.tools = self.get_tools()
+        
         
         # AgentWorkflowBuilder-specific attributes
         self.input_storage = input_storage
-        self.tools_config_path = tools_config_path or os.path.join(
-            os.path.dirname(__file__), "config", "tools.yml"
-        )
         
         # Context management
         self.documentation_context = {}  # NanoBrain documentation
         self.workflow_context = {}  # Current workflow visibility
         
         # Load tools from configuration
-        self._load_tools()
+        #self._load_tools()
     
-    def _load_tools(self):
-        """Load tools from configuration file."""
-        # Check if the tools configuration file exists and is readable
-        valid_config_file = False
-        
-        if self.tools_config_path and os.path.exists(self.tools_config_path):
-            try:
-                # Try to read the file
-                with open(self.tools_config_path, 'r') as f:
-                    file_content = f.read()
-                    if file_content.strip():  # File exists and has content
-                        valid_config_file = True
-            except Exception as e:
-                print(f"Error reading tools configuration file: {e}")
-        
-        if not valid_config_file:
-            print(f"Tools configuration file not found or empty: {self.tools_config_path}")
-            print("Creating a default configuration file...")
-            self._create_default_tools_config()
-        
-        try:
-            import yaml
-            with open(self.tools_config_path, 'r') as f:
-                tools_config = yaml.safe_load(f)
-            
-            # Check if the file has the expected structure
-            if not isinstance(tools_config, dict) or 'tools' not in tools_config:
-                print(f"Invalid tools configuration format. Expected a dict with 'tools' key.")
-                print("Creating a default configuration file...")
-                self._create_default_tools_config()
-                with open(self.tools_config_path, 'r') as f:
-                    tools_config = yaml.safe_load(f)
-            
-            # Initialize tools from configuration
-            for tool_config in tools_config.get('tools', []):
-                self._initialize_tool(tool_config)
-        
-        except Exception as e:
-            print(f"Error loading tools configuration: {e}")
-    
-    def _create_default_tools_config(self):
-        """Create a default tools configuration file."""
-        import yaml
-        
-        # Define default tools
-        self.default_tools = [
-            {
-                'name': 'PlannerTool',
-                'class': 'tools_common.StepPlanner.StepPlanner',
-                'description': 'Plans the implementation of a new step or workflow.'
-            },
-            {
-                'name': 'FileWriterTool',
-                'class': 'tools_common.StepFileWriter.StepFileWriter',
-                'description': 'Creates or modifies a file with the provided content.'
-            },
-            {
-                'name': 'CoderTool',
-                'class': 'tools_common.StepCoder.StepCoder',
-                'description': 'Generates software code based on requirements.'
-            },
-            {
-                'name': 'ContextSearchTool',
-                'class': 'tools_common.StepContextSearch.StepContextSearch',
-                'description': 'Searches the surrounding context for relevant information.'
-            },
-            {
-                'name': 'WebSearchTool',
-                'class': 'tools_common.StepWebSearch.StepWebSearch',
-                'description': 'Searches the web for relevant information.'
-            },
-            {
-                'name': 'ContextArchiverTool',
-                'class': 'tools_common.StepContextArchiver.StepContextArchiver',
-                'description': 'Archives and summarizes old messages.'
-            },
-            {
-                'name': 'GitInitTool',
-                'class': 'tools_common.StepGitInit.StepGitInit',
-                'description': 'Initializes a git repository with a given name in the specified folder.'
-            },
-            {
-                'name': 'GitExcludeTool',
-                'class': 'tools_common.StepGitExclude.StepGitExclude',
-                'description': 'Excludes directory and all files in it from the current git repository.'
-            },
-            {
-                'name': 'DependencySearchTool',
-                'class': 'tools_common.StepDependencySearch.StepDependencySearch',
-                'description': 'Searches for dependencies in Python files and saves them to requirements.txt.'
-            }
-        ]
-        
-        # If tools_config_path is not set, use a default path
-        if not self.tools_config_path:
-            # Set a default path
-            project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            config_dir = os.path.join(project_root, "builder", "config")
-            self.tools_config_path = os.path.join(config_dir, "tools.yml")
-        
-        # Create the directory if it doesn't exist
-        config_dir = os.path.dirname(self.tools_config_path)
-        if config_dir and not os.path.exists(config_dir):
-            os.makedirs(config_dir, exist_ok=True)
-        
-        # Create a default tools.yml with proper structure
-        default_config = {'tools': self.default_tools}
-        
-        # Write the default configuration
-        with open(self.tools_config_path, 'w') as f:
-            yaml.dump(default_config, f, default_flow_style=False)
-    
-    def _initialize_tool(self, tool_config: Dict[str, Any]):
-        """Initialize a tool from configuration."""
-        try:
-            # Extract tool information
-            tool_name = tool_config.get('name')
-            tool_class_path = tool_config.get('class')
-            tool_description = tool_config.get('description', '')
-            
-            if not tool_name or not tool_class_path:
-                print(f"Invalid tool configuration: {tool_config}")
-                return
-            
-            # Split the class path into module and class
-            module_parts = tool_class_path.split('.')
-            
-            # Add tools_common to sys.path if not already there
-            project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            tools_common_dir = os.path.join(project_root, 'tools_common')
-            if tools_common_dir not in sys.path:
-                sys.path.insert(0, tools_common_dir)
-            
-            # Try to import the module and get the class
-            try:
-                # Case 1: If it's a fully qualified path (module.class)
-                if len(module_parts) >= 2:
-                    class_name = module_parts[-1]
-                    module_path = '.'.join(module_parts[:-1])
-                    
-                    import importlib
-                    module = importlib.import_module(module_path)
-                    tool_class = getattr(module, class_name)
-                # Case 2: If it's just a class name, assume it's in tools_common
-                else:
-                    class_name = module_parts[0]
-                    module_path = f"tools_common.{class_name}"
-                    
-                    try:
-                        import importlib
-                        module = importlib.import_module(module_path)
-                        tool_class = getattr(module, class_name)
-                    except ImportError:
-                        # Try alternative approach - just the class name
-                        # Search in common module paths
-                        found = False
-                        for base_module in ['tools_common', 'src', 'builder']:
-                            try:
-                                module_path = f"{base_module}"
-                                module = importlib.import_module(module_path)
-                                if hasattr(module, class_name):
-                                    tool_class = getattr(module, class_name)
-                                    found = True
-                                    break
-                            except (ImportError, AttributeError):
-                                pass
-                        
-                        if not found:
-                            print(f"Could not find class {class_name} in any module")
-                            return
-                
-                # Create an instance of the tool
-                tool_instance = tool_class(executor=self.executor)
-                
-                # Add the tool to the agent
-                self.add_tool(tool_instance)
-                
-                print(f"Initialized tool: {tool_name}")
-            except ImportError as e:
-                print(f"Error importing module for {tool_class_path}: {e}")
-            except AttributeError as e:
-                print(f"Error getting class from module for {tool_class_path}: {e}")
-        
-        except Exception as e:
-            print(f"Error initializing tool {tool_config.get('name')}: {e}")
     
     async def process(self, inputs: List[Any]) -> Any:
         """
@@ -245,14 +59,21 @@ class AgentWorkflowBuilder(Agent):
         Justification: Like how humans use tools to extend their cognitive
         capabilities, this agent uses tools to extend its processing capabilities.
         """
-        # Process the input with tools
-        response = await self.process_with_tools(inputs)
-        
-        # Display the response if input_storage is available and has display_response method
-        if self.input_storage is not None and hasattr(self.input_storage, 'display_response'):
-            self.input_storage.display_response(response)
-        
-        return response
+        try:
+            # Process the input with tools
+            response = await self.process_with_tools(inputs)
+            
+            # Display the response if input_storage is available and has display_response method
+            if self.input_storage is not None and hasattr(self.input_storage, 'display_response'):
+                await self.input_storage.display_response(response)
+            
+            return response
+        except Exception as e:
+            if getattr(self, "_debug_mode", False):
+                print(f"Error in process: {e}")
+                import traceback
+                traceback.print_exc()
+            return f"Error processing input: {str(e)}"
     
     def load_documentation_context(self):
         """Load NanoBrain documentation context."""
@@ -640,15 +461,3 @@ if __name__ == '__main__':
             return self.code_writer.generated_code
         
         return "" 
-
-    def add_tool(self, tool):
-        """
-        Add a tool to the agent's repertoire.
-        
-        In biological analogy, this is akin to an organism acquiring a new capability,
-        like a new enzyme or sensory ability that helps it interact with its environment.
-        
-        Parameters:
-            tool: The tool to add to the agent's repertoire.
-        """
-        super().add_tool(tool) 

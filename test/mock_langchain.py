@@ -51,9 +51,25 @@ class MockChatOpenAI:
         """Return a mock response."""
         return f"Mock response to: {text}"
         
+    async def apredict(self, text: str, **kwargs) -> str:
+        """Return a mock response asynchronously."""
+        return self.predict(text, **kwargs)
+        
     def predict_messages(self, messages: List[MockMessage], **kwargs) -> MockAIMessage:
         """Return a mock response as an AIMessage."""
         return MockAIMessage("Mock response to messages")
+    
+    async def apredict_messages(self, messages: List[MockMessage], **kwargs) -> MockAIMessage:
+        """Return a mock response as an AIMessage asynchronously."""
+        return self.predict_messages(messages, **kwargs)
+    
+    def invoke(self, messages: List[MockMessage], **kwargs) -> MockAIMessage:
+        """Return a mock response when invoked."""
+        return self.predict_messages(messages, **kwargs)
+    
+    async def ainvoke(self, messages: List[MockMessage], **kwargs) -> MockAIMessage:
+        """Return a mock response when invoked asynchronously."""
+        return await self.apredict_messages(messages, **kwargs)
     
     def bind_tools(self, tools: List[Any]) -> 'MockChatOpenAI':
         """Bind tools to the model."""
@@ -71,6 +87,18 @@ class MockOpenAI:
     def predict(self, text: str, **kwargs) -> str:
         """Return a mock response."""
         return f"Mock response to: {text}"
+    
+    async def apredict(self, text: str, **kwargs) -> str:
+        """Return a mock response asynchronously."""
+        return self.predict(text, **kwargs)
+    
+    def invoke(self, text: str, **kwargs) -> str:
+        """Return a mock response when invoked."""
+        return self.predict(text, **kwargs)
+    
+    async def ainvoke(self, text: str, **kwargs) -> str:
+        """Return a mock response when invoked asynchronously."""
+        return await self.apredict(text, **kwargs)
     
     def bind_tools(self, tools: List[Any]) -> 'MockOpenAI':
         """Bind tools to the model."""

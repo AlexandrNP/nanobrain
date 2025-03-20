@@ -430,12 +430,25 @@ class StepTestStep(Step):
         cli_instance.history = []
         cli_instance.chat_history = []
         
+        # Create code writer instance with all required methods mocked
+        code_writer_instance = MagicMock()
+        code_writer_instance._debug_mode = False
+        code_writer_instance._monitoring = False
+        code_writer_instance.input_sources = {}  # Required for LinkDirect
+        code_writer_instance.name = "MockCodeWriter"
+        code_writer_instance.process = AsyncMock(return_value="Code writer result")
+        code_writer_instance.recent_response = "Generated solution code"
+        code_writer_instance._extract_code = MagicMock(return_value="// Extracted solution code")
+        code_writer_instance.generated_code = "// Generated solution code"
+        
         # Configure ConfigManager.create_instance to return our mocks
         def create_instance_side_effect(*args, **kwargs):
             if args[0] == "AgentWorkflowBuilder":
                 return builder_instance
             elif args[0] == "DataStorageCommandLine":
                 return cli_instance
+            elif args[0] == "AgentCodeWriter":
+                return code_writer_instance
             else:
                 return MagicMock()
         

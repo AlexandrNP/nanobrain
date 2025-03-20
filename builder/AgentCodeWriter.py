@@ -132,6 +132,17 @@ class AgentCodeWriter(Agent):
         # Default paths for searching configuration files
         self.default_config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'default_configs')
         
+        # Track recently generated code for context
+        self.recent_code = []
+        self.max_recent_code = 3
+        
+        # Store the most recent raw LLM response and cleaned code
+        self.recent_response = None
+        self.generated_code = None
+        
+        # Initialize input_sources dictionary for LinkDirect compatibility
+        self.input_sources = {}
+        
         # Initialize the parent class after setting up our own attributes
         super().__init__(
             executor=executor,
@@ -142,10 +153,6 @@ class AgentCodeWriter(Agent):
             _debug_mode=self._debug_mode,
             **kwargs
         )
-        
-        # Track recently generated code for context
-        self.recent_code = []
-        self.max_recent_code = 3
     
     def _get_default_context_templates(self) -> Dict[str, str]:
         """
@@ -162,60 +169,64 @@ class AgentCodeWriter(Agent):
             'trigger': CODE_WRITER_TRIGGER_CONTEXT
         }
     
-    async def _safe_execute(self, executor, messages, max_tokens=None, temperature=None, debug_mode=False):
+    async def _safe_execute(self, executor, messages, max_tokens, temperature, debug_mode=False):
         """
-        Safely execute a prompt using the provided executor with fallback options.
+        Safely execute the executor with proper error handling and async support.
         
         Args:
             executor: The executor to use
-            messages: The messages to process
-            max_tokens: Maximum tokens for response (optional)
-            temperature: Temperature for response (optional)
-            debug_mode: Whether to enable debug mode (optional)
+            messages: Messages to process
+            max_tokens: Maximum number of tokens
+            temperature: Temperature for generation
+            debug_mode: Whether to run in debug mode
             
         Returns:
-            The executor's response or an error message
+            The response from the executor
         """
-        if executor is None:
-            return "Error: Executor is not available."
-            
-        # Try different approaches to execute with the executor
         try:
+            # Check if executor has execute method
+            if not hasattr(executor, 'execute'):
+                if debug_mode:
+                    print("Warning: Executor has no execute method")
+                return None
+                
+            # Check if execute is a coroutine function
+            if not asyncio.iscoroutinefunction(executor.execute):
+                if debug_mode:
+                    print("Warning: Executor's execute method is not async, wrapping it")
+                # Wrap it in an async function
+                orig_execute = executor.execute
+                async def async_execute(*args, **kwargs):
+                    return orig_execute(*args, **kwargs)
+                executor.execute = async_execute
+            
             # Try the simplest approach first - just pass messages
             return await executor.execute(messages)
+            
         except TypeError as e:
             if debug_mode:
                 print(f"First execution attempt failed: {e}, trying with parameters...")
-            
             try:
-                # Try with parameters dictionary
-                params = {"messages": messages}
-                if max_tokens is not None:
-                    params["max_tokens"] = max_tokens
-                if temperature is not None:
-                    params["temperature"] = temperature
-                
-                # Convert to keyword arguments
-                return await executor.execute(**params)
-            except Exception as e2:
+                # Try with explicit parameters
+                return await executor.execute(
+                    messages,
+                    max_tokens=max_tokens,
+                    temperature=temperature
+                )
+            except TypeError as e2:
                 if debug_mode:
-                    print(f"Second execution attempt failed: {e2}, trying with stringified input...")
-                
+                    print(f"Second execution attempt failed: {e2}, trying with kwargs...")
                 try:
-                    # Last resort - convert to string
-                    if isinstance(messages, list) and len(messages) > 0:
-                        user_message = ""
-                        for msg in messages:
-                            if msg.get("role") == "user":
-                                user_message = msg.get("content", "")
-                                break
-                        if user_message:
-                            return await executor.execute(user_message)
-                    return await executor.execute(str(messages))
+                    # Try with kwargs
+                    return await executor.execute(**{
+                        'messages': messages,
+                        'max_tokens': max_tokens,
+                        'temperature': temperature
+                    })
                 except Exception as e3:
                     if debug_mode:
                         print(f"All execution attempts failed: {e3}")
-                    return f"Error processing request: {str(e3)}"
+                    return None
 
     async def process(self, input_data: List[Any]) -> Any:
         """
@@ -269,11 +280,20 @@ class AgentCodeWriter(Agent):
             self._debug_mode
         )
         
+        # Store the raw response for reference
+        self.recent_response = response
+        
         # Add the generated code to recent code for future context
         self._update_recent_code(code_type, response)
         
         # Extract and clean code if it's in a markdown code block
         cleaned_code = self._extract_code(response)
+        
+        # Store the cleaned code for easier access
+        self.generated_code = cleaned_code
+        
+        if self._debug_mode:
+            print(f"Generated code ({len(cleaned_code.splitlines())} lines)")
         
         return cleaned_code
     

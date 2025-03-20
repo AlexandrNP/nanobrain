@@ -131,7 +131,7 @@ class ConfigManager(IConfigurable):
             return True
         return False
     
-    def create_instance(self, class_name: Optional[str] = None, configuration_name: Optional[str] = None, **kwargs) -> Any:
+    def create_instance(self, configuration_name: str, class_name: Optional[str] = None, **kwargs) -> Any:
         """
         Factory method that creates an instance of the specified class using configuration.
         If class_name is provided, it will be used regardless of the 'class' field in configuration.
@@ -158,17 +158,20 @@ class ConfigManager(IConfigurable):
             ValueError: If neither class_name nor 'class' field in configuration is provided
         """
         # Determine the configuration name
-        if not configuration_name:
-            if class_name:
-                configuration_name = class_name
+        if not class_name:
+            if configuration_name:
+                class_name = configuration_name.strip('.yml')
             else:
                 raise ValueError("Either class_name or configuration_name must be provided")
         
         # Ensure the configuration file exists at the workflow level
-        self.ensure_config_file_exists(configuration_name)
+        # configuration_path is the path to the configuration file, but self.get_config() still expects the class name
+        configuration_path = self.ensure_config_file_exists(class_name)
+        if not configuration_path:
+            raise ValueError(f"Configuration file for {class_name} not found! Configuration was requested from {configuration_path}")
         
         # Get configuration for the specified name
-        config = self.get_config(configuration_name)
+        config = self.get_config(class_name)
         
         # Determine the class to instantiate
         target_class_name = None
@@ -193,22 +196,26 @@ class ConfigManager(IConfigurable):
             raise ImportError(f"Could not load class {target_class_name}")
             
         # Merge config with kwargs, with kwargs taking precedence
-        merged_config = {**default_config, **config, **kwargs}
+        breakpoint()
+        if 'defaults' in default_config:
+            default_config = default_config['defaults']
+            
+        merged_config = {**default_config, **config['defaults'], **kwargs}
         
         # If the configuration has a defaults section, flatten it into the merged_config
-        if 'defaults' in merged_config:
-            for key, value in merged_config['defaults'].items():
-                if key != 'class':  # Don't include the class field
-                    merged_config[key] = value
-            del merged_config['defaults']
+        #if 'defaults' in merged_config:
+        #    for key, value in merged_config['defaults'].items():
+        #        if key != 'class':  # Don't include the class field
+        #            merged_config[key] = value
+        #    del merged_config['defaults']
         
-        # Remove other non-parameter sections from merged_config
-        for section in ['metadata', 'validation', 'examples']:
-            if section in merged_config:
-                del merged_config[section]
+        ## Remove other non-parameter sections from merged_config
+        #for section in ['metadata', 'validation', 'examples']:
+        #    if section in merged_config:
+        #        del merged_config[section]
         
         # Special case for Agent class - remove prompt_template if it's not a string
-        if target_class_name.endswith("Agent") and "prompt_template" in merged_config:
+        if target_class_name.startswith("Agent") and "prompt_template" in merged_config:
             prompt_template = merged_config.get("prompt_template")
             if not isinstance(prompt_template, str) and prompt_template is not None:
                 del merged_config["prompt_template"]
@@ -248,7 +255,7 @@ class ConfigManager(IConfigurable):
             # If the class accepts a config_manager parameter, pass self
             if 'config_manager' in inspect.signature(cls.__init__).parameters:
                 merged_config['config_manager'] = self
-            
+            breakpoint()
             instance = cls(**merged_config)
             
             # If instance is configurable, update its config

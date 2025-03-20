@@ -4,8 +4,12 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_openai import ChatOpenAI
 from langchain.memory import ConversationBufferMemory, ConversationBufferWindowMemory
 from langchain.schema import SystemMessage, HumanMessage, AIMessage
-from langchain.prompts import PromptTemplate
-from langchain_core.tools import tool, BaseTool, StructuredTool
+from langchain.prompts import PromptTemplate, ChatPromptTemplate
+from langchain_core.tools import tool, Tool, BaseTool, StructuredTool
+from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
+from langchain.agents import AgentExecutor, create_tool_calling_agent
+from langchain.tools.render import format_tool_to_openai_function
+from langchain_core.prompts import MessagesPlaceholder
 from src.Step import Step
 from src.GlobalConfig import GlobalConfig
 from src.ExecutorBase import ExecutorBase
@@ -166,8 +170,8 @@ class Agent(Step):
         
         # Store tools
         self.tools = tools or []
-        self.langchain_tools = []
         
+        breakpoint()
         # Register tools from config if provided
         if self.tools_config_path:
             self._load_tools_from_config()
@@ -175,6 +179,10 @@ class Agent(Step):
         # Register tools if provided
         if self.tools:
             self._register_tools(self.tools)
+        
+        # Set up agent executor for tool calling
+        self.agent_executor = None
+        self._setup_agent_executor()
     
     def _initialize_llm(self, model_name: str, model_class: Optional[str] = None) -> Union[BaseLLM, 'BaseChatModel']:
         """
@@ -314,6 +322,10 @@ class Agent(Step):
         from multiple sources and generates adaptive responses, this method
         integrates inputs with context to generate responses.
         """
+        # If we have tools available, use process_with_tools instead
+        if self.tools and self.agent_executor:
+            return await self.process_with_tools(inputs)
+            
         # Extract the input text from the inputs list
         input_text = inputs[0] if inputs else ""
         
@@ -343,10 +355,11 @@ class Agent(Step):
             system_message = SystemMessage(content=system_template.format(**self.prompt_variables))
             human_message = HumanMessage(content=f"Context: {context}\n\nUser input: {input_text}")
             messages = [system_message, human_message]
-            response = self.llm.invoke(messages).content
+            response_obj = await self.llm.ainvoke(messages)
+            response = response_obj.content
         else:
             # For completion models, use the formatted prompt directly
-            response = self.llm.predict(formatted_prompt)
+            response = await self.llm.ainvoke(formatted_prompt)
         
         # Update memory with this interaction
         self._update_memories(input_text, response)
@@ -476,21 +489,40 @@ class Agent(Step):
         motor skills with cognitive understanding, this method integrates
         Step objects as tools for the agent's cognitive processing.
         """
-        self.langchain_tools = []
-        from langchain_core.tools import Tool
+        if getattr(self, "_debug_mode", False):
+            print(f"Registering {len(tools)} tools")
+            
+        langchain_tools = []
+        failed_conversion_tool_names = set({})
+
 
         for step in tools:
-            if type(step) == Tool:
-                self.langchain_tools.append(step)
+            if issubclass(type(step), Tool):
+                if getattr(self, "_debug_mode", False):
+                    print(f"Adding existing Tool: {step.name}")
+                langchain_tools.append(step)
                 continue
+                
             # Create a tool from the Step object
             step_tool = self._create_tool_from_step(step)
             if step_tool:
-                self.langchain_tools.append(step_tool)
+                if getattr(self, "_debug_mode", False):
+                    print(f"Created tool from step: {step.__class__.__name__}")
+                langchain_tools.append(step_tool)
+            else:
+                if getattr(self, "_debug_mode", False):
+                    print(f"Failed to create tool from step: {step.__class__.__name__}")
+                failed_conversion_tool_names.add(step.__class__.__name__)
+
+        if len(failed_conversion_tool_names) > 0:
+            print(f"Failed to convert the following tools: {failed_conversion_tool_names}")
+
+        # Set up or refresh the agent executor with the new tools
+        self.tools = langchain_tools
+        self._setup_agent_executor()
         
-        # Bind tools to the LLM if we have any and if the LLM supports tool binding
-        if self.langchain_tools and hasattr(self.llm, 'bind_tools'):
-            self.llm_with_tools = self.llm.bind_tools(self.langchain_tools)
+        if getattr(self, "_debug_mode", False):
+            print(f"Total tools registered: {len(self.tools)}")
     
     def _create_tool_from_step(self, step: Step) -> Optional[BaseTool]:
         """
@@ -503,12 +535,15 @@ class Agent(Step):
         """
         import traceback
         
+        breakpoint()
         # Skip if the step doesn't have a process method
         if not hasattr(step, 'process') or not callable(step.process):
+            if getattr(self, "_debug_mode", False):
+                print(f"Step {step.__class__.__name__} has no process method")
             return None
         
-        # Get the signature of the process method
         try:
+            # Get the signature of the process method
             sig = inspect.signature(step.process)
             
             # Create a wrapper function that will call the step's process method
@@ -518,79 +553,78 @@ class Agent(Step):
                 result = await step.process(inputs)
                 return result
             
-            # Create a synchronous version for tools that don't support async
-            def sync_tool_func(*args, **kwargs):
-                import asyncio
-                # Convert args to a list for the process method
-                inputs = list(args)
-                # Run the async function in a new event loop
-                loop = asyncio.new_event_loop()
-                try:
-                    result = loop.run_until_complete(step.process(inputs))
-                    return result
-                finally:
-                    loop.close()
-            
             # Get the docstring for the step
             doc = step.__doc__ or f"Execute the {step.__class__.__name__} step"
             
-            # Create a tool from the function
-            if TESTING_MODE:
-                # In testing mode, use the mock implementation
-                from test.mock_langchain import MockBaseTool
-                # Create a tool directly instead of using the decorator
-                step_tool = MockBaseTool(
-                    name=step.__class__.__name__,
-                    description=doc,
-                    func=sync_tool_func
-                )
-            else:
-                # In production mode, use the real implementation
-                from langchain_core.tools import Tool
-                # Create a Tool instance directly
-                step_tool = Tool(
-                    name=step.__class__.__name__,
-                    description=doc,
-                    func=sync_tool_func
-                )
+            # Create the tool
+            tool = Tool(
+                name=step.__class__.__name__,
+                func=tool_func,
+                description=doc,
+                coroutine=True  # Mark as async tool
+            )
             
-            return step_tool
+            if getattr(self, "_debug_mode", False):
+                print(f"Successfully created tool for step: {step.__class__.__name__}")
+            
+            return tool
             
         except Exception as e:
-            print(f"Error creating tool from step {step.__class__.__name__}: {type(e).__name__} - {str(e)}")
-            print("\nStack trace:")
-            traceback.print_exc()
+            if getattr(self, "_debug_mode", False):
+                print(f"Error creating tool from step {step.__class__.__name__}: {e}")
+                traceback.print_exc()
             return None
     
     def add_tool(self, step: Step):
         """
-        Add a new tool to the agent.
+        Add a Step object as a tool for the LLM.
         
-        Biological analogy: Tool acquisition.
-        Justification: Like how organisms can learn to use new tools over time,
-        this method adds a new tool to the agent's repertoire.
+        Biological analogy: New tool acquisition.
+        Justification: Like how primates learn to use new tools as they
+        encounter them, this method adds a new Step as a tool for the agent.
         """
         if step not in self.tools:
-            self.tools.append(step)
-            tool_obj = self._create_tool_from_step(step)
-            if tool_obj:
-                self.langchain_tools.append(tool_obj)
-                # Re-bind tools to the LLM
-                if hasattr(self.llm, 'bind_tools'):
-                    self.llm_with_tools = self.llm.bind_tools(self.langchain_tools)
+            # Create a tool from the Step object
+            step_tool = self._create_tool_from_step(step)
+            if step_tool:
+                self.tools.append(step_tool)
+                
+                # Set up or refresh the agent executor with the new tools
+                self._setup_agent_executor()
+            else:
+                print(f"Failed to create tool from step: {step.__class__.__name__}")
     
     def remove_tool(self, step: Step):
         """
-        Remove a tool from the agent.
+        Remove a Step object from the available tools.
         
-        Biological analogy: Tool disuse.
-        Justification: Like how organisms may stop using certain tools when they're
-        no longer needed, this method removes a tool from the agent's repertoire.
+        Biological analogy: Tool abandonment.
+        Justification: Like how organisms may abandon tools that are no longer
+        useful, this method removes a Step from the available tools.
         """
         if step in self.tools:
             self.tools.remove(step)
-            # Recreate all tools to ensure consistency
-            self._register_tools(self.tools)
+            
+            # Remove from tools
+            tool_name = step.__class__.__name__
+            self.tools = [t for t in self.tools if t.name != tool_name]
+            
+            # Set up or refresh the agent executor with the updated tools
+            self._setup_agent_executor()
+    
+    def get_tools(self) -> List:
+        """
+        Get the list of tools available to this agent.
+        
+        Biological analogy: Tool inventory assessment.
+        Justification: Like how humans can mentally inventory the tools 
+        they have available for a task, this method provides access to 
+        the agent's current set of tools.
+        
+        Returns:
+            List of tool objects available to the agent
+        """
+        return self.tools
     
     async def process_with_tools(self, inputs: List[Any]) -> Any:
         """
@@ -606,125 +640,32 @@ class Agent(Step):
         # Get context from memory
         context = self.get_context_history()
         
-        if self.use_custom_tool_prompt:
-            # Use custom tool calling prompt
-            # Create custom prompt with tool descriptions
-            try:
-                # We already imported create_tool_calling_prompt and parse_tool_call at the top level
-                custom_prompt = create_tool_calling_prompt(self.tools)
-                
-                # Format the prompt with input and context
-                formatted_prompt = custom_prompt.format(
-                    context=context,
-                    input=input_text
-                )
-                
-                # Process with LLM based on its type
-                from langchain_core.language_models.chat_models import BaseChatModel
-                if issubclass(type(self.llm), BaseChatModel):
-                    # For chat models, create a chat template
-                    from langchain.schema import SystemMessage, HumanMessage
-                    system_template = "You are an AI assistant with access to tools. {specific_instructions}"
-                    system_message = SystemMessage(content=system_template.format(**self.prompt_variables))
-                    human_message = HumanMessage(content=formatted_prompt)
-                    messages = [system_message, human_message]
-                    
-                    # Use self.llm_with_tools if available, otherwise fall back to self.llm
-                    if hasattr(self, 'llm_with_tools'):
-                        response = self.llm_with_tools.predict_messages(messages).content
-                    else:
-                        response = self.llm.predict_messages(messages).content
-                else:
-                    # For completion models, use the formatted prompt directly
-                    response = self.llm.predict(formatted_prompt)
-                
-                # Parse tool call from response
-                tool_call = parse_tool_call(response)
-                
-                if tool_call:
-                    tool_name, args = tool_call
-                    
-                    # Find the matching tool
-                    matching_tool = None
-                    for tool in self.tools:
-                        if tool.__class__.__name__ == tool_name:
-                            matching_tool = tool
-                            break
-                    
-                    if matching_tool:
-                        # Execute the tool with the provided arguments
-                        try:
-                            tool_result = await matching_tool.process(args)
-                            
-                            # Format the final response with the tool result
-                            final_response = f"I used the {tool_name} tool with arguments: {', '.join(args)}\n\nResult: {tool_result}"
-                            
-                            # Update memory with this interaction
-                            self._update_memories(input_text, final_response)
-                            
-                            return final_response
-                        except Exception as e:
-                            error_response = f"I tried to use the {tool_name} tool, but encountered an error: {str(e)}"
-                            
-                            # Update memory with this interaction
-                            self._update_memories(input_text, error_response)
-                            
-                            return error_response
-                    else:
-                        error_response = f"I tried to use a tool called {tool_name}, but it's not available."
-                        
-                        # Update memory with this interaction
-                        self._update_memories(input_text, error_response)
-                        
-                        return error_response
-                else:
-                    # No tool call, just a regular response
-                    # Update memory with this interaction
-                    self._update_memories(input_text, response)
-                    
-                    return response
-            except Exception as e:
-                print(f"Error using custom tool prompt: {e}, falling back to standard method")
-                # Fall back to standard method if custom tool prompt fails
+        # If agent_executor is not set up, we can't use tools - fall back to regular process
+        breakpoint()
+        if not self.agent_executor or not self.tools:
+            print("Warning: No agent_executor or tools available. Falling back to regular process.")
+            return await self.process(inputs)
         
-        # Use LangChain's built-in tool calling
-        # Format the prompt with input and context
-        prompt_vars = {
-            "input": input_text,
-            "context": context,
-            **self.prompt_variables
-        }
-        
-        # Process with LLM based on its type
-        from langchain_core.language_models.chat_models import BaseChatModel
-        if issubclass(type(self.llm), BaseChatModel):
-            # For chat models, create a chat template with tools
-            from langchain.schema import SystemMessage, HumanMessage
-            system_template = "You are an AI assistant designed to {role_description}. {specific_instructions}"
-            system_message = SystemMessage(content=system_template.format(**self.prompt_variables))
-            human_message = HumanMessage(content=f"Context: {context}\n\nUser input: {input_text}")
-            messages = [system_message, human_message]
+        try:
+            # Invoke the agent executor to process the input with tools
+            result = await self.agent_executor.ainvoke({"input": input_text})
             
-            # Use self.llm_with_tools if available, otherwise fall back to self.llm
-            if hasattr(self, 'llm_with_tools'):
-                response = self.llm_with_tools.predict_messages(messages).content
-            else:
-                print("Warning: llm_with_tools not available, using llm directly")
-                response = self.llm.predict_messages(messages, tools=self.langchain_tools).content
-        else:
-            print('Current LLM:', self.llm)
-            print('Type of LLM:', type(self.llm))
-            # Check if the llm has a bound attribute before trying to access it
-            if hasattr(self.llm, 'bound'):
-                print('Bindings of LLM:', self.llm.bound)
-            # For completion models, use the formatted prompt
-            formatted_prompt = self.prompt_template.format(**prompt_vars)
-            response = self.llm.predict(formatted_prompt)
-        
-        # Update memory with this interaction
-        self._update_memories(input_text, response)
-        
-        return response
+            # The agent executor result will be a dict with an 'output' key
+            response = result.get("output", "")
+            
+            # Update memory with this interaction
+            self._update_memories(input_text, response)
+            
+            return response
+        except Exception as e:
+            # If there's an error, fall back to regular processing
+            if getattr(self, "_debug_mode", False):
+                print(f"Error processing with tools: {e}. Falling back to regular process.")
+                import traceback
+                traceback.print_exc()
+            
+            # Fall back to regular process without tools
+            return await self.process(inputs)
     
     async def execute_tool(self, tool_name: str, args: List[Any]) -> Any:
         """
@@ -734,6 +675,17 @@ class Agent(Step):
         Justification: Like how humans can deliberately select and use specific tools
         for specific tasks, this method allows direct execution of a specific tool.
         """
+        # If we have an agent_executor, we can use the invoke_tool method directly
+        if self.agent_executor and hasattr(self.agent_executor, "invoke_tool"):
+            try:
+                # Convert args to a single string or dict as required by invoke_tool
+                tool_input = args[0] if len(args) == 1 else args
+                return await self.agent_executor.invoke_tool(tool_name=tool_name, tool_input=tool_input)
+            except (AttributeError, ValueError, TypeError) as e:
+                if getattr(self, "_debug_mode", False):
+                    print(f"Error using agent_executor.invoke_tool: {e}, falling back to manual tool execution")
+        
+        # Otherwise, fall back to the traditional approach
         # Find the matching tool
         matching_tool = None
         for tool in self.tools:
@@ -835,21 +787,20 @@ class Agent(Step):
             
         try:
             # Check if the file exists
-            print(f"Looking for tools config in: {self.tools_config_path}")
-            if not os.path.exists(self.tools_config_path):
+            global_config = GlobalConfig()
+            if not os.path.isfile(self.tools_config_path):
+                print(f"Looking for tools config in: {self.tools_config_path}")
                 print(f"Tools config file not found in: {self.tools_config_path}")
                 # Try to find the config relative to the current directory
-                from src.DirectoryTracer import DirectoryTracer
-                tracer = DirectoryTracer()
-                current_dir = tracer.get_current_directory()
-                config_path = os.path.join(current_dir, "config", self.tools_config_path)
-                print(f"Looking for tools config in: {config_path}")
-                if os.path.exists(config_path):
-                    self.tools_config_path = config_path
-                    print(f"Found tools config in: {config_path}")
+                current_dir = self.directory_tracer.get_absolute_directory_location()
+                workflow_config_path = os.path.join(current_dir, "config", self.tools_config_path)
+                print(f"Looking for tools config in: {workflow_config_path}")
+                if os.path.exists(workflow_config_path):
+                    self.tools_config_path = workflow_config_path
+                    print(f"Found tools config in: {workflow_config_path}")
                 else:
                     # Try with just the base directory
-                    config_path = os.path.join(current_dir, self.tools_config_path)
+                    config_path = os.path.join(global_config.tracer.get_absolute_directory_location(), 'default_config', self.tools_config_path)
                     print(f"Looking for tools config in: {config_path}")
                     if os.path.exists(config_path):
                         self.tools_config_path = config_path
@@ -867,7 +818,6 @@ class Agent(Step):
             if 'tools' not in tools_config:
                 print(f"No 'tools' key found in config: {self.tools_config_path}")
                 return
-                
             # Print available tools for debugging
             print(f"Found {len(tools_config['tools'])} tools in config:")
             for i, tool_config in enumerate(tools_config['tools']):
@@ -938,3 +888,55 @@ class Agent(Step):
             import traceback
             traceback.print_exc()
             return None 
+
+    def _setup_agent_executor(self):
+        """
+        Set up the agent executor for tool calling.
+        
+        Biological analogy: Tool use acquisition.
+        Justification: Like how primates learn to use tools by integrating
+        motor skills with cognitive understanding, this method integrates
+        Step objects as tools for the agent's cognitive processing.
+        """
+        # Don't set up the agent executor if there are no tools
+        if not self.tools:
+            if getattr(self, "_debug_mode", False):
+                print("Warning: No tools available for agent executor setup")
+            return
+        
+        try:
+            # Create a system message prompt based on the agent's role
+            system_message_prompt = SystemMessage(
+                content="You are an AI assistant designed to {role_description}. {specific_instructions}"
+                .format(**self.prompt_variables)
+            )
+            
+            # Create a chat prompt template
+            prompt = ChatPromptTemplate.from_messages([
+                system_message_prompt,
+                MessagesPlaceholder(variable_name=self.memory_key),
+                ("user", "{input}"),
+                MessagesPlaceholder(variable_name="agent_scratchpad")
+            ])
+            
+            # Create the agent using LangChain's create_tool_calling_agent
+            agent = create_tool_calling_agent(self.llm, self.tools, prompt)
+            
+            # Create the agent executor
+            self.agent_executor = AgentExecutor(
+                agent=agent,
+                tools=self.tools,
+                verbose=True if getattr(self, "_debug_mode", False) else False,
+                memory=self.langchain_memory,
+                handle_parsing_errors=True
+            )
+            
+            # Log successful creation
+            if getattr(self, "_debug_mode", False):
+                print(f"Successfully set up agent executor with {len(self.tools)} tools")
+        except Exception as e:
+            # Log error but don't re-raise
+            if getattr(self, "_debug_mode", False):
+                print(f"Error setting up agent executor: {e}")
+                import traceback
+                traceback.print_exc() 
