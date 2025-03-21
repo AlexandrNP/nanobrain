@@ -117,11 +117,8 @@ class TestAgentTools(unittest.TestCase):
         self.assertIn(self.calculator_step, self.agent.tools)
         self.assertIn(self.text_processing_step, self.agent.tools)
         
-        # Verify langchain tools are created
-        self.assertEqual(len(self.agent.langchain_tools), 2)
-        
         # Verify tool names
-        tool_names = [tool.name for tool in self.agent.langchain_tools]
+        tool_names = [tool.name for tool in self.agent.tools]
         self.assertIn("CalculatorStep", tool_names)
         self.assertIn("TextProcessingStep", tool_names)
     
@@ -135,15 +132,13 @@ class TestAgentTools(unittest.TestCase):
         
         # Verify no tools initially
         self.assertEqual(len(agent.tools), 0)
-        self.assertEqual(len(agent.langchain_tools), 0)
         
         # Add a tool
         agent.add_tool(self.calculator_step)
         
         # Verify tool was added
         self.assertEqual(len(agent.tools), 1)
-        self.assertEqual(len(agent.langchain_tools), 1)
-        self.assertEqual(agent.langchain_tools[0].name, "CalculatorStep")
+        self.assertEqual(agent.tools[0].name, "CalculatorStep")
     
     def test_remove_tool(self):
         """Test removing a tool from the agent."""
@@ -155,8 +150,7 @@ class TestAgentTools(unittest.TestCase):
         
         # Verify tool was removed
         self.assertEqual(len(self.agent.tools), 1)
-        self.assertEqual(len(self.agent.langchain_tools), 1)
-        self.assertEqual(self.agent.langchain_tools[0].name, "TextProcessingStep")
+        self.assertEqual(self.agent.tools[0].name, "TextProcessingStep")
     
     def test_tool_creation(self):
         """Test the creation of a tool from a Step object."""
@@ -170,21 +164,28 @@ class TestAgentTools(unittest.TestCase):
     
     async def async_test_process_with_tools(self):
         """Test processing with tools."""
-        # Mock the LLM's predict method to simulate tool calling
-        self.agent.llm.predict = MagicMock(return_value="I'll use the calculator to add 5 and 3. The result is 8.")
+        # Replace the entire LLM with a mock instead of trying to mock a method
+        original_llm = self.agent.llm
+        mock_llm = MagicMock()
+        mock_llm.ainvoke = AsyncMock(return_value="I'll use the calculator to add 5 and 3. The result is 8.")
+        self.agent.llm = mock_llm
         
-        # Process input with tools
-        result = await self.agent.process_with_tools(["Calculate 5 + 3"])
-        
-        # Verify result
-        self.assertEqual(result, "I'll use the calculator to add 5 and 3. The result is 8.")
-        
-        # Verify memory was updated
-        self.assertEqual(len(self.agent.memory), 2)
-        self.assertEqual(self.agent.memory[0]["role"], "user")
-        self.assertEqual(self.agent.memory[0]["content"], "Calculate 5 + 3")
-        self.assertEqual(self.agent.memory[1]["role"], "assistant")
-        self.assertEqual(self.agent.memory[1]["content"], "I'll use the calculator to add 5 and 3. The result is 8.")
+        try:
+            # Process input with tools
+            result = await self.agent.process_with_tools(["Calculate 5 + 3"])
+            
+            # Verify result
+            self.assertEqual(result, "I'll use the calculator to add 5 and 3. The result is 8.")
+            
+            # Verify memory was updated
+            self.assertEqual(len(self.agent.memory), 2)
+            self.assertEqual(self.agent.memory[0]["role"], "user")
+            self.assertEqual(self.agent.memory[0]["content"], "Calculate 5 + 3")
+            self.assertEqual(self.agent.memory[1]["role"], "assistant")
+            self.assertEqual(self.agent.memory[1]["content"], "I'll use the calculator to add 5 and 3. The result is 8.")
+        finally:
+            # Restore the original LLM
+            self.agent.llm = original_llm
     
     def test_process_with_tools(self):
         """Run the async test for process_with_tools."""

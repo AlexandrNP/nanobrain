@@ -4,6 +4,7 @@ from src.ExecutorBase import ExecutorBase
 from src.DataUnitBase import DataUnitBase
 from src.TriggerBase import TriggerBase
 from src.enums import ComponentState
+from pydantic import Field
 import asyncio
 import time
 
@@ -16,6 +17,12 @@ class DataStorageBase(Step):
     retrieve it in response to specific cues, this class stores data and
     produces output in response to trigger conditions.
     """
+    # Fields for Pydantic/BaseTool validation
+    input: Any = Field(default=None, exclude=True)
+    last_query: Any = Field(default=None, exclude=True)
+    last_response: Any = Field(default=None, exclude=True)
+    processing_history: List = Field(default_factory=list, exclude=True)
+    max_history_size: int = Field(default=10, exclude=True)
     
     def __init__(self, 
                  executor: ExecutorBase,
@@ -33,7 +40,16 @@ class DataStorageBase(Step):
             trigger: The trigger that activates this storage operation
             **kwargs: Additional keyword arguments
         """
-        super().__init__(executor, **kwargs)
+        # Initialize with proper name for BaseTool
+        name = kwargs.get('name', self.__class__.__name__)
+        description = kwargs.get('description', self.__doc__ or f"Data storage operation")
+        
+        super().__init__(
+            executor=executor, 
+            name=name,
+            description=description,
+            **kwargs
+        )
         
         self.input = input_unit
         self.output = output_unit
@@ -180,4 +196,39 @@ class DataStorageBase(Step):
         return {
             'query': self.last_query,
             'response': self.last_response
-        } 
+        }
+    
+    # BaseTool required methods
+    
+    def _run(self, *args: Any, run_manager: Optional[Any] = None) -> Any:
+        """
+        Use the data storage as a tool synchronously.
+        
+        Biological analogy: Conscious memory retrieval.
+        Justification: Like how we can consciously retrieve stored memories,
+        this method retrieves data from storage in response to specific queries.
+        """
+        loop = asyncio.get_event_loop()
+        # Call the process method with the input arguments
+        if len(args) == 1 and isinstance(args[0], list):
+            # If input is a list, pass it directly to process
+            return loop.run_until_complete(self.process(args[0]))
+        else:
+            # Otherwise, package the arguments as a list
+            return loop.run_until_complete(self.process(list(args)))
+    
+    async def _arun(self, *args: Any, run_manager: Optional[Any] = None) -> Any:
+        """
+        Use the data storage as a tool asynchronously.
+        
+        Biological analogy: Automatic memory association.
+        Justification: Like how memories can be automatically retrieved through
+        associative processes, this method asynchronously retrieves data.
+        """
+        # Call the process method with the input arguments
+        if len(args) == 1 and isinstance(args[0], list):
+            # If input is a list, pass it directly to process
+            return await self.process(args[0])
+        else:
+            # Otherwise, package the arguments as a list
+            return await self.process(list(args)) 

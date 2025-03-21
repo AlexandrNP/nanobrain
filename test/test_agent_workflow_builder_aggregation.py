@@ -28,24 +28,26 @@ def builder():
     mock_input_storage = MagicMock()
     mock_input_storage.process = AsyncMock(return_value="Mock input response")
     
-    # Use patch to avoid calling the real initialization
-    with patch('builder.AgentWorkflowBuilder.Agent.__init__', return_value=None):
-        builder = AgentWorkflowBuilder(
-            executor=executor,
-            input_storage=mock_input_storage,
-            _debug_mode=True,
-            use_code_writer=True
-        )
-        
-        # Set required attributes manually
-        builder.executor = executor
-        builder.input_storage = mock_input_storage
-        builder.use_code_writer = True
-        builder.code_writer = MagicMock()
-        builder._debug_mode = True
-        builder.prioritize_existing_classes = True
-        builder._provide_guidance = AsyncMock(return_value="Mocked guidance")
-        builder.process = AsyncMock(return_value="Mocked guidance")
+    # Create a mock LLM instead of patching Agent.__init__
+    mock_llm = MagicMock()
+    mock_llm.invoke = MagicMock(return_value="Mocked response")
+    mock_llm.ainvoke = AsyncMock(return_value="Mocked response")
+    
+    # Create the builder with proper initialization
+    builder = AgentWorkflowBuilder(
+        executor=executor,
+        input_storage=mock_input_storage,
+        debug_mode=True,
+        use_code_writer=True,
+        llm=mock_llm
+    )
+    
+    # Mock some methods directly
+    builder._provide_guidance = AsyncMock(return_value="Mocked guidance")
+    builder.process = AsyncMock(return_value="Mocked guidance")
+    
+    # Manually set code_writer after initialization
+    builder.code_writer = MagicMock()
         
     return builder
 
@@ -57,6 +59,7 @@ def test_initialization(builder):
     
     # Check that the builder has the expected attributes
     assert builder.use_code_writer
+    assert builder.debug_mode
     assert hasattr(builder, 'prioritize_existing_classes')
     assert hasattr(builder, 'code_writer')
 

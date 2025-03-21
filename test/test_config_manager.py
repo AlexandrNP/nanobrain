@@ -115,6 +115,9 @@ class TestConfigManager(unittest.TestCase):
         # Mock the _get_class method to return our test class
         self.config_manager._get_class = lambda class_name: TestExecutorBase
         
+        # Mock ensure_config_file_exists to return a path
+        self.config_manager.ensure_config_file_exists = lambda class_name: "/mock/path/TestExecutorBase.yml"
+        
         # Create an instance
         instance = self.config_manager.create_instance('TestExecutorBase', energy_level=0.8)
         
@@ -138,6 +141,12 @@ class TestConfigManager(unittest.TestCase):
     
     def test_create_instance_invalid_class(self):
         """Test creating an instance with an invalid class name."""
+        # Mock ensure_config_file_exists to return a path
+        self.config_manager.ensure_config_file_exists = lambda class_name: "/mock/path/NonExistentClass.yml"
+        
+        # Mock _get_class to raise ImportError
+        self.config_manager._get_class = lambda class_name: exec('raise ImportError("Class not found")')
+        
         with self.assertRaises(ImportError):
             self.config_manager.create_instance('NonExistentClass')
 

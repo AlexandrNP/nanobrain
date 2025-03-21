@@ -31,6 +31,7 @@ from src.DataUnitBase import DataUnitBase
 from src.TriggerBase import TriggerBase
 from src.enums import ComponentState
 from src.Step import Step
+from pydantic import Field
 
 
 class DataStorageCommandLine(Step):
@@ -42,26 +43,60 @@ class DataStorageCommandLine(Step):
     the brain for processing, the command line gathers user input and passes it to
     the system for processing.
     """
+    # Define fields for pydantic validation
+    history: List[Dict[str, str]] = Field(default_factory=list, description="History of interactions")
+    history_size: int = Field(default=100, description="Maximum number of entries in history")
+    prompt: str = Field(default=">>> ", description="Prompt shown to user for input")
+    welcome_message: str = Field(default="Interactive session started. Type 'help' for available commands.", description="Message shown when starting session")
+    goodbye_message: str = Field(default="Interactive session ended.", description="Message shown when ending session")
+    exit_command: str = Field(default="finish", description="Command to exit the interactive session")
+    monitoring: bool = Field(default=False, exclude=True, description="Whether input monitoring is active")
+    monitor_task: Optional[asyncio.Task] = Field(default=None, exclude=True, description="Task for monitoring input")
+    agent_builder: Any = Field(default=None, exclude=True, description="AgentWorkflowBuilder instance")
+    debug_mode: bool = Field(default=False, exclude=True, description="Whether debug mode is enabled")
     
-    def __init__(self, name="CommandLine", history_size=20, **kwargs):
+    def __init__(self, name=None, description=None, **kwargs):
         """
-        Initialize the command line interface.
+        Initialize the DataStorageCommandLine with a prompt and welcome message.
         
         Args:
-            name: Name of the interface
-            history_size: Maximum number of history entries to keep
+            name: Name of the command line storage component (default: "CommandLine")
+            description: Description of the command line storage component
+            **kwargs: Additional keyword arguments
+            
+        Biological analogy: Prefrontal cortex language processing area.
+        Justification: Like how the prefrontal cortex processes language input
+        and generates language output, this component processes text input
+        and generates text output through a command-line interface.
         """
-        super().__init__(name=name, **kwargs)
-        self.history: List[Dict[str, str]] = []  # Store interaction history
-        self.history_size = history_size  # Maximum size of history
-        self.prompt = kwargs.get('prompt', '> ')  # Prompt for user input
-        self.welcome_message = kwargs.get('welcome_message', 'Welcome to the command line interface.')
-        self.goodbye_message = kwargs.get('goodbye_message', 'Goodbye!')
-        self.exit_command = kwargs.get('exit_command', 'exit')
-        self._monitoring = False
-        self._monitor_task = None
-        self.agent_builder = None  # Direct reference to agent builder if available
-        self._debug_mode = kwargs.get('debug', False)  # Enable debug output
+        # Initialize with name and description for BaseTool
+        name = name or "CommandLine"
+        description = description or self.__doc__ or "Command line interface for data storage"
+        
+        # Initialize parent class
+        super().__init__(name=name, description=description, **kwargs)
+        
+        # Initialize history
+        self.history = kwargs.get('history', [])
+        self.history_size = kwargs.get('history_size', 100)
+        
+        # Initialize prompt messages
+        self.prompt = kwargs.get('prompt', ">>> ")
+        self.welcome_message = kwargs.get('welcome_message', 
+                                      "Interactive session started. Type 'help' for available commands.")
+        self.goodbye_message = kwargs.get('goodbye_message', 
+                                      "Interactive session ended.")
+        self.exit_command = kwargs.get('exit_command', "finish")
+        
+        # Initialize monitoring
+        self.monitoring = False
+        self.monitor_task = None
+        
+        # Store agent builder if provided
+        self.agent_builder = kwargs.get('agent_builder', None)
+        
+        # Debug mode
+        self.debug_mode = kwargs.get('_debug_mode', False)
         
     def _force_output_change(self, data):
         """
@@ -79,7 +114,7 @@ class DataStorageCommandLine(Step):
             True if successful, False otherwise
         """
         if not hasattr(self, 'output') or not self.output:
-            if self._debug_mode:
+            if self.debug_mode:
                 print("DataStorageCommandLine: No output to update")
             return False
             
@@ -89,12 +124,12 @@ class DataStorageCommandLine(Step):
         # Force update with a new object instance
         self.output.set(copied_data)
         
-        if self._debug_mode:
+        if self.debug_mode:
             print(f"DataStorageCommandLine: Forced output change to: {copied_data}")
             
         # If we have a direct reference to agent_builder, trigger it directly too
         if self.agent_builder and hasattr(self.agent_builder, 'process'):
-            if self._debug_mode:
+            if self.debug_mode:
                 print("DataStorageCommandLine: Also triggering agent_builder directly")
             asyncio.create_task(self.agent_builder.process([copied_data]))
             
@@ -115,7 +150,7 @@ class DataStorageCommandLine(Step):
             Processed data
         """
         if not inputs:
-            if self._debug_mode:
+            if self.debug_mode:
                 print("DataStorageCommandLine: No inputs to process")
             return None
             
@@ -130,7 +165,7 @@ class DataStorageCommandLine(Step):
             
         # Check if query is provided
         if not query:
-            if self._debug_mode:
+            if self.debug_mode:
                 print("DataStorageCommandLine: No query provided")
             return None
             
@@ -167,7 +202,7 @@ class DataStorageCommandLine(Step):
             class_name = class_pattern.group(1)
             instructions = class_pattern.group(2).strip()
             
-            if self._debug_mode:
+            if self.debug_mode:
                 print(f"DataStorageCommandLine: Detected class-specific command pattern")
                 print(f"  Class: {class_name}")
                 print(f"  Instructions: {instructions}")
@@ -221,10 +256,7 @@ class DataStorageCommandLine(Step):
         Justification: Like how sensory systems attend to external stimuli,
         this method attends to user input.
         """
-        if self._monitoring:
-            return  # Already monitoring
-            
-        self._monitoring = True
+        self.monitoring = True
         
         # Show welcome message
         print(self.welcome_message)
@@ -239,7 +271,7 @@ class DataStorageCommandLine(Step):
         print("   - Any other input will be used to enhance the step's code\n")
         
         # Show data flow information if debug mode is enabled
-        if self._debug_mode:
+        if self.debug_mode:
             print("\nData Flow Information:")
             print("1. User input -> DataStorageCommandLine.process")
             print("2. DataStorageCommandLine.process -> _force_output_change")
@@ -262,7 +294,7 @@ class DataStorageCommandLine(Step):
         
         try:
             # Loop to get user input
-            while self._monitoring:
+            while self.monitoring:
                 # Show prompt and get input
                 sys.stdout.write(self.prompt)
                 sys.stdout.flush()
@@ -283,7 +315,7 @@ class DataStorageCommandLine(Step):
                 if user_input.strip().lower() == self.exit_command:
                     print(self.goodbye_message)
                     break
-                
+                    
                 try:
                     # Handle special commands directly here to avoid async issues
                     if user_input.strip().lower() == "finish":
@@ -291,7 +323,7 @@ class DataStorageCommandLine(Step):
                         print("✅ Finishing step creation...")
                         
                         # Stop monitoring to exit the loop
-                        self._monitoring = False
+                        self.monitoring = False
                         response = "Step creation completed."
                         self._add_to_history(user_input, response)
                         self._force_output_change(response)
@@ -338,7 +370,7 @@ Other inputs will be used to enhance the step's code. Examples:
                     else:
                         print(f"\n⚠️ No changes were made. Please provide more specific instructions.")
                     
-                    if self._debug_mode:
+                    if self.debug_mode:
                         print(f"Process result: {result}")
                         
                         # Check if output was updated
@@ -358,7 +390,7 @@ Other inputs will be used to enhance the step's code. Examples:
             pass
         finally:
             # Clean up
-            self._monitoring = False
+            self.monitoring = False
             print("\n✅ Step creation session ended. Files will be saved.")
             
     def stop_monitoring(self) -> None:
@@ -369,7 +401,114 @@ Other inputs will be used to enhance the step's code. Examples:
         Justification: Like how sensory systems can inhibit attention to stimuli,
         this method stops attending to user input.
         """
-        self._monitoring = False
-        if self._monitor_task:
-            self._monitor_task.cancel()
-            self._monitor_task = None 
+        self.monitoring = False
+        if self.monitor_task:
+            self.monitor_task.cancel()
+            self.monitor_task = None
+
+    # Implement BaseTool required methods
+    
+    def _run(self, *args: Any, run_manager: Optional[Any] = None) -> Any:
+        """
+        Use the command line interface as a tool synchronously.
+        
+        Biological analogy: Conscious sensory processing.
+        Justification: Like how we can consciously process sensory information,
+        this method handles command line input in response to specific queries.
+        """
+        loop = asyncio.get_event_loop()
+        # Process the input and return response
+        if len(args) == 1 and isinstance(args[0], list):
+            return loop.run_until_complete(self.process(args[0]))
+        else:
+            return loop.run_until_complete(self.process(list(args)))
+    
+    async def _arun(self, *args: Any, run_manager: Optional[Any] = None) -> Any:
+        """
+        Use the command line interface as a tool asynchronously.
+        
+        Biological analogy: Automatic sensory processing.
+        Justification: Like how our brain can automatically process sensory information 
+        in parallel with other cognitive tasks, this method asynchronously handles command line input.
+        """
+        # Process the input and return response
+        if len(args) == 1 and isinstance(args[0], list):
+            return await self.process(args[0])
+        else:
+            return await self.process(list(args))
+
+    # Add the async monitoring methods
+    async def start_monitoring_async(self):
+        """
+        Start monitoring for user input asynchronously.
+        
+        This method creates an asyncio task to monitor user input.
+        
+        Biological analogy: Attentional focus on auditory input.
+        Justification: Like how the brain continuously monitors auditory input,
+        this method attends to user input.
+        """
+        if self.monitoring:
+            return  # Already monitoring
+            
+        self.monitoring = True
+        
+        # Create a task to monitor user input
+        if self.monitor_task is None or self.monitor_task.done():
+            self.monitor_task = asyncio.create_task(self._monitor_input())
+            
+    async def _monitor_input(self):
+        """
+        Monitor for user input in an asynchronous context.
+        
+        This internal method runs in an asyncio task to get and process user input.
+        """
+        try:
+            # Show welcome message
+            print(self.welcome_message)
+            
+            # Loop to get user input
+            while self.monitoring:
+                # Use aioconsole to get input asynchronously if available
+                try:
+                    import aioconsole
+                    user_input = await aioconsole.ainput(self.prompt)
+                except ImportError:
+                    # Fallback to regular input (blocking)
+                    user_input = input(self.prompt)
+                
+                # Process the input
+                if user_input.lower() == self.exit_command:
+                    print(self.goodbye_message)
+                    self.monitoring = False
+                    break
+                    
+                # Process the input and get response
+                response = await self.process([user_input])
+                
+                # Show the response
+                if response:
+                    print(response)
+        except asyncio.CancelledError:
+            # Task was cancelled
+            if self.debug_mode:
+                print("Monitoring task cancelled")
+        finally:
+            # Clean up
+            self.monitoring = False
+            self.monitor_task = None
+            
+    async def stop_monitoring_async(self):
+        """
+        Stop monitoring for user input asynchronously.
+        
+        This method cancels the asyncio task monitoring user input.
+        
+        Biological analogy: Shifting attentional focus.
+        Justification: Like how the brain can shift attention away from
+        auditory input, this method stops attending to user input.
+        """
+        self.monitoring = False
+        if self.monitor_task:
+            self.monitor_task.cancel()
+            self.monitor_task = None 

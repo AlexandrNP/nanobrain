@@ -50,9 +50,9 @@ async def main():
         for tool in agent.tools:
             print(f"  - {tool.__class__.__name__}")
         
-        # Print LangChain tools
-        print(f"\nCreated {len(agent.langchain_tools)} LangChain tools:")
-        for tool in agent.langchain_tools:
+        # Print tool details
+        print(f"\nTool details:")
+        for tool in agent.tools:
             print(f"  - {tool.name}: {tool.description}")
         
         print("\nSuccess! All tools loaded correctly.")

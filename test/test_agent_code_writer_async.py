@@ -28,9 +28,19 @@ class TestAgentCodeWriterAsync(unittest.TestCase):
         # Create a mock executor
         self.mock_executor = MagicMock()
         
-        # Create the AgentCodeWriter with minimal initialization
-        with patch('builder.AgentCodeWriter.Agent.__init__', return_value=None):
-            self.code_writer = AgentCodeWriter(executor=self.mock_executor)
+        # Create a mock LLM object to avoid API calls
+        with patch('src.Agent.Agent._initialize_llm') as mock_initialize_llm:
+            mock_llm = MagicMock()
+            mock_llm.invoke = MagicMock(return_value="Mocked response")
+            mock_initialize_llm.return_value = mock_llm
+            
+            # Create the AgentCodeWriter with minimal initialization
+            self.code_writer = AgentCodeWriter(
+                executor=self.mock_executor,
+                debug_mode=False  # Use debug_mode instead of _debug_mode
+            )
+            
+            # Set the executor directly to ensure it's the mock
             self.code_writer.executor = self.mock_executor
     
     @pytest.mark.asyncio

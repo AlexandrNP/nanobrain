@@ -27,9 +27,20 @@ class TestAgentWorkflowBuilderAsync(unittest.TestCase):
         self.mock_input_storage = MagicMock()
         self.mock_input_storage.process = AsyncMock(return_value="Mock input response")
         
-        # Create the AgentWorkflowBuilder with minimal initialization
-        with patch('builder.AgentWorkflowBuilder.Agent.__init__', return_value=None):
-            self.builder = AgentWorkflowBuilder(executor=self.mock_executor, input_storage=self.mock_input_storage)
+        # Create the AgentWorkflowBuilder with proper initialization
+        with patch('src.Agent.Agent._initialize_llm') as mock_initialize_llm:
+            mock_llm = MagicMock()
+            mock_llm.invoke = MagicMock(return_value="Mocked response")
+            mock_initialize_llm.return_value = mock_llm
+            
+            # Create the AgentWorkflowBuilder with minimal initialization
+            self.builder = AgentWorkflowBuilder(
+                executor=self.mock_executor, 
+                input_storage=self.mock_input_storage,
+                debug_mode=False
+            )
+            
+            # Set the executor directly to ensure it's the mock
             self.builder.executor = self.mock_executor
     
     @pytest.mark.asyncio

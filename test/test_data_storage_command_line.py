@@ -42,8 +42,8 @@ class TestDataStorageCommandLine(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.storage.exit_command, "quit")
         self.assertEqual(self.storage.welcome_message, "Welcome to test!")
         self.assertEqual(self.storage.goodbye_message, "Goodbye from test!")
-        self.assertFalse(self.storage._monitoring)
-        self.assertIsNone(self.storage._monitor_task)
+        self.assertFalse(self.storage.monitoring)
+        self.assertIsNone(self.storage.monitor_task)
         self.assertIsNone(self.storage.agent_builder)
         self.assertEqual(self.storage.history, [])
     
@@ -100,18 +100,18 @@ class TestDataStorageCommandLine(unittest.IsolatedAsyncioTestCase):
     async def test_stop_monitoring(self):
         """Test the stop_monitoring method."""
         # Start monitoring
-        self.storage._monitoring = True
+        self.storage.monitoring = True
         
         # Create a mock task
         mock_task = MagicMock()
         mock_task.cancel = MagicMock()
-        self.storage._monitor_task = mock_task
+        self.storage.monitor_task = mock_task
         
         # Stop monitoring
         self.storage.stop_monitoring()
         
         # Check that monitoring was stopped
-        self.assertFalse(self.storage._monitoring)
+        self.assertFalse(self.storage.monitoring)
         mock_task.cancel.assert_called_once()
     
     def test_add_to_history(self):

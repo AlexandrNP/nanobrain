@@ -25,6 +25,7 @@ from src.Agent import Agent
 from src.ExecutorBase import ExecutorBase
 from src.enums import ComponentState
 from src.ConfigManager import ConfigManager
+from pydantic import Field, BaseModel
 
 # Import prompt templates
 from builder.prompts import (
@@ -51,10 +52,27 @@ class AgentCodeWriter(Agent):
     movement commands based on stored patterns, this agent generates precisely
     structured code based on learned code patterns and best practices.
     """
+    # Fields specific to AgentCodeWriter
+    model_name: str = Field(default="gpt-4")
+    max_tokens: int = Field(default=2000)
+    temperature: float = Field(default=0.5)
+    debug_mode: bool = Field(default=False)
+    use_prompt_file: bool = Field(default=False)
+    prompt_file: str = Field(default="builder.prompts")
+    prompt_template: str = Field(default="CODE_WRITER_PROMPT")
+    code_context_templates: Dict[str, str] = Field(default_factory=dict)
+    recent_code: Dict[str, str] = Field(default_factory=dict)
+    recent_code_type: Optional[str] = Field(default=None)
     
-    def __init__(self, executor: ExecutorBase, system_prompt: str = None, 
-                 model: str = None, max_tokens: int = 2000, temperature: float = 0.5, 
-                 _debug_mode: bool = False, **kwargs):
+    # Pydantic model configuration to allow arbitrary types
+    model_config = {
+        "arbitrary_types_allowed": True,
+        "extra": "allow",
+    }
+    
+    def __init__(self, executor: Optional[ExecutorBase] = None, system_prompt: Optional[str] = None, 
+                 model: Optional[str] = None, max_tokens: Optional[int] = 2000, temperature: Optional[float] = 0.5, 
+                 debug_mode: Optional[bool]  = False, **kwargs):
         """
         Initialize the AgentCodeWriter.
         
@@ -64,19 +82,33 @@ class AgentCodeWriter(Agent):
             model: Model to use for the agent (optional)
             max_tokens: Maximum number of tokens for the model (default: 2000)
             temperature: Temperature for the model (default: 0.5)
-            _debug_mode: Whether to run in debug mode (default: False)
+            debug_mode: Whether to run in debug mode (default: False)
             **kwargs: Additional arguments to pass to the parent class
         """
-        # Store executor as instance attribute
-        self.executor = executor
+        # Initialize with name and description for BaseTool
+        name = kwargs.pop('name', "CodeWriter")
+        description = kwargs.pop('description', self.__doc__ or "Specialized agent for generating NanoBrain framework code")
         
-        # Store model name
-        self.model = model or "gpt-4"
+        # Remove any parameters that would conflict with explicit parameters
+        # to avoid "got multiple values for keyword argument" errors
+        if 'executor' in kwargs:
+            kwargs.pop('executor')
+        if 'model_name' in kwargs:
+            kwargs.pop('model_name')
         
-        # Store other parameters
+        # Initialize parent class first with all parameters
+        super().__init__(
+            executor=executor,
+            name=name,
+            description=description,
+            **kwargs
+        )
+        
+        # Set specific fields after parent initialization
+        self.model_name = model or "gpt-4"
         self.max_tokens = max_tokens
         self.temperature = temperature
-        self._debug_mode = _debug_mode
+        self.debug_mode = debug_mode
         
         # Load prompts from configuration or use defaults
         self.use_prompt_file = kwargs.get('use_prompt_file', False)
@@ -86,45 +118,14 @@ class AgentCodeWriter(Agent):
         # Context templates for different code types
         self.code_context_templates = kwargs.get('code_context_templates', {})
         if not self.code_context_templates:
-            self.code_context_templates = {
-                'step': 'CODE_WRITER_STEP_CONTEXT',
-                'workflow': 'CODE_WRITER_WORKFLOW_CONTEXT',
-                'link': 'CODE_WRITER_LINK_CONTEXT',
-                'data_unit': 'CODE_WRITER_DATA_UNIT_CONTEXT',
-                'trigger': 'CODE_WRITER_TRIGGER_CONTEXT'
-            }
+            self.code_context_templates = self._get_default_context_templates()
         
-        # Get prompts either from external file or default constants
-        if self.use_prompt_file and self.prompt_file and self.prompt_template:
-            try:
-                # Try to import the specified prompt file
-                prompt_module = importlib.import_module(self.prompt_file)
-                system_prompt = getattr(prompt_module, self.prompt_template)
-                
-                # Load context templates
-                self.context_templates = {}
-                for code_type, template_name in self.code_context_templates.items():
-                    try:
-                        self.context_templates[code_type] = getattr(prompt_module, template_name)
-                    except AttributeError:
-                        if _debug_mode:
-                            print(f"Warning: Context template {template_name} not found in {self.prompt_file}")
-                
-            except (ImportError, AttributeError) as e:
-                if _debug_mode:
-                    print(f"Failed to load prompts from file: {e}. Using defaults.")
-                system_prompt = CODE_WRITER_PROMPT
-                # Use default context templates
-                self.context_templates = self._get_default_context_templates()
-        else:
-            # Use the built-in prompts
-            if system_prompt is None:
-                system_prompt = CODE_WRITER_PROMPT
-            # Use default context templates
-            self.context_templates = self._get_default_context_templates()
+        # Track the most recently generated code for context
+        self.recent_code = {}
+        self.recent_code_type = None
         
-        # Set system_prompt as instance attribute
-        self.system_prompt = system_prompt or CODE_WRITER_PROMPT
+        if system_prompt:
+            self.system_template = system_prompt
         
         # Initialize the config manager for finding existing classes
         self.config_manager = kwargs.get('config_manager', ConfigManager(base_path=os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -142,17 +143,6 @@ class AgentCodeWriter(Agent):
         
         # Initialize input_sources dictionary for LinkDirect compatibility
         self.input_sources = {}
-        
-        # Initialize the parent class after setting up our own attributes
-        super().__init__(
-            executor=executor,
-            system_prompt=self.system_prompt,
-            model=self.model,
-            max_tokens=self.max_tokens,
-            temperature=self.temperature,
-            _debug_mode=self._debug_mode,
-            **kwargs
-        )
     
     def _get_default_context_templates(self) -> Dict[str, str]:
         """
@@ -260,7 +250,7 @@ class AgentCodeWriter(Agent):
         
         # Process the input using the LLM
         messages = [
-            {"role": "system", "content": self.system_prompt},
+            {"role": "system", "content": self.system_template},
             {"role": "system", "content": context}
         ]
         
@@ -277,7 +267,7 @@ class AgentCodeWriter(Agent):
             messages, 
             self.max_tokens, 
             self.temperature, 
-            self._debug_mode
+            self.debug_mode
         )
         
         # Store the raw response for reference
@@ -292,7 +282,7 @@ class AgentCodeWriter(Agent):
         # Store the cleaned code for easier access
         self.generated_code = cleaned_code
         
-        if self._debug_mode:
+        if self.debug_mode:
             print(f"Generated code ({len(cleaned_code.splitlines())} lines)")
         
         return cleaned_code
@@ -341,7 +331,7 @@ class AgentCodeWriter(Agent):
             Specialized context for the code type
         """
         # Use the context templates loaded from config or defaults
-        return self.context_templates.get(code_type, self.context_templates['step'])
+        return self.code_context_templates.get(code_type, self.code_context_templates['step'])
     
     def _get_recent_code_context(self) -> str:
         """
@@ -420,7 +410,7 @@ class AgentCodeWriter(Agent):
         Returns:
             Tuple containing class name and configuration dict if found, or (None, None) if not
         """
-        if self._debug_mode:
+        if self.debug_mode:
             print(f"Searching for existing {component_type} class that meets requirements: {requirements}")
         
         # Map component types to common base classes and directories to search
@@ -445,7 +435,7 @@ class AgentCodeWriter(Agent):
         config_files.extend(glob.glob(os.path.join(self.default_config_path, '*.yml')))
         config_files = list(set(config_files))  # Remove duplicates
         
-        if not config_files and self._debug_mode:
+        if not config_files and self.debug_mode:
             print(f"No configuration files found for {component_type}")
             return None, None
         
@@ -484,7 +474,7 @@ class AgentCodeWriter(Agent):
                     'full_config': config
                 })
             except Exception as e:
-                if self._debug_mode:
+                if self.debug_mode:
                     print(f"Error processing config file {config_file}: {e}")
         
         # Sort by relevance score

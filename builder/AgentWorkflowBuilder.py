@@ -3,11 +3,13 @@ import os
 import asyncio
 from pathlib import Path
 import sys
+from datetime import datetime
 
 from src.Agent import Agent
 from src.ExecutorBase import ExecutorBase
 from src.Step import Step
 from src.DataStorageBase import DataStorageBase
+from pydantic import Field, BaseModel
 
 
 class AgentWorkflowBuilder(Agent):
@@ -18,6 +20,23 @@ class AgentWorkflowBuilder(Agent):
     Justification: Like how the prefrontal cortex plans and organizes complex
     behaviors, this agent plans and organizes the creation of workflows.
     """
+    # Fields specific to AgentWorkflowBuilder
+    input_storage: Optional[DataStorageBase] = Field(default=None)
+    documentation_context: Dict[str, Any] = Field(default_factory=dict)
+    workflow_context: Dict[str, Any] = Field(default_factory=dict)
+    workflow_path: Optional[str] = Field(default=None)
+    last_update_time: Optional[datetime] = Field(default=None)
+    use_code_writer: bool = Field(default=True)
+    code_writer: Any = Field(default=None)
+    prioritize_existing_classes: bool = Field(default=True)
+    debug_mode: bool = Field(default=False)
+    
+    # Pydantic model configuration to allow arbitrary types
+    model_config = {
+        "arbitrary_types_allowed": True,
+        "extra": "allow",
+    }
+    
     def __init__(
         self,
         executor: ExecutorBase,
@@ -26,19 +45,38 @@ class AgentWorkflowBuilder(Agent):
         model_class: Optional[str] = None,
         **kwargs
     ):
-        # Store the executor as an instance attribute
-        self.executor = executor
+        """
+        Initialize the AgentWorkflowBuilder.
+        
+        Args:
+            executor: The executor for running the agent
+            input_storage: Storage for input data
+            model_name: Name of the language model to use
+            model_class: Optional class name for the language model
+            **kwargs: Additional keyword arguments
+        """
+        # Initialize with name and description for BaseTool
+        name = kwargs.pop('name', "WorkflowBuilder")
+        description = kwargs.pop('description', self.__doc__ or "AI assistant for creating and managing NanoBrain workflow structures")
+        
+        # Remove any parameters that would conflict with explicit parameters
+        # to avoid "got multiple values for keyword argument" errors
+        if 'executor' in kwargs:
+            kwargs.pop('executor')
+        if 'model_name' in kwargs:
+            kwargs.pop('model_name')
+        if 'model_class' in kwargs:
+            kwargs.pop('model_class')
         
         # Initialize the Agent base class
-        breakpoint()
         super().__init__(
             executor=executor,
             model_name=model_name,
             model_class=model_class,
+            name=name,
+            description=description,
             **kwargs
         )
-        self.tools = self.get_tools()
-        
         
         # AgentWorkflowBuilder-specific attributes
         self.input_storage = input_storage
@@ -46,9 +84,16 @@ class AgentWorkflowBuilder(Agent):
         # Context management
         self.documentation_context = {}  # NanoBrain documentation
         self.workflow_context = {}  # Current workflow visibility
+        self.workflow_path = None
+        self.last_update_time = None
         
-        # Load tools from configuration
-        #self._load_tools()
+        # Code writer integration
+        self.use_code_writer = kwargs.get('use_code_writer', True)
+        self.code_writer = kwargs.get('code_writer', None)
+        self.prioritize_existing_classes = kwargs.get('prioritize_existing_classes', True)
+        
+        # Debug mode
+        self.debug_mode = kwargs.get('debug_mode', False)
     
     
     async def process(self, inputs: List[Any]) -> Any:
@@ -61,6 +106,7 @@ class AgentWorkflowBuilder(Agent):
         """
         try:
             # Process the input with tools
+            breakpoint()
             response = await self.process_with_tools(inputs)
             
             # Display the response if input_storage is available and has display_response method
@@ -69,7 +115,7 @@ class AgentWorkflowBuilder(Agent):
             
             return response
         except Exception as e:
-            if getattr(self, "_debug_mode", False):
+            if getattr(self, "debug_mode", False):
                 print(f"Error in process: {e}")
                 import traceback
                 traceback.print_exc()
@@ -81,8 +127,29 @@ class AgentWorkflowBuilder(Agent):
         pass
     
     def update_workflow_context(self, workflow_path: str):
-        """Update the current workflow context."""
-        # TODO: Implement updating workflow context
+        """
+        Update the current workflow context.
+        
+        This method updates the agent's context with information about the
+        current workflow, which helps it generate more accurate code.
+        
+        Args:
+            workflow_path: Path to the current workflow
+        """
+        # First call the parent method to update basic context
+        super().update_workflow_context(workflow_path)
+        
+        # Store the workflow path and update timestamp
+        self.workflow_path = workflow_path
+        self.last_update_time = datetime.now()
+        
+        # Store the workflow path in this agent's context
+        self.workflow_context = {
+            "path": workflow_path,
+            "updated_at": datetime.now().isoformat() if datetime else None
+        }
+        
+        # TODO: Load workflow-specific information (existing steps, etc.)
         pass
     
     def archive_old_messages(self):

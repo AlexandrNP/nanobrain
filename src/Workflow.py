@@ -1,10 +1,11 @@
 import asyncio
-from typing import List, Any
+from typing import List, Any, Dict, Optional
 from src.enums import ComponentState
 from src.ExecutorBase import ExecutorBase
 from src.concurrency import DeadlockDetector
 from src.regulations import SystemModulator
 from src.Step import Step
+from pydantic import Field
 
 
 class Workflow(Step):
@@ -17,6 +18,15 @@ class Workflow(Step):
     tasks, workflows involve multiple interconnected steps working
     together to accomplish complex processing.
     """
+    # Additional fields from BaseTool that may need customization
+    steps: List[Step] = Field(default_factory=list, exclude=True)
+    links: List[Any] = Field(default_factory=list, exclude=True)
+    deadlock_detector: Any = Field(default=None, exclude=True)
+    step_order: Dict = Field(default_factory=dict, exclude=True)
+    active_inhibition: Dict = Field(default_factory=dict, exclude=True)
+    system_modulators: Any = Field(default=None, exclude=True)
+    network_efficiency: float = Field(default=0.5, exclude=True)
+    
     def __init__(self, executor: ExecutorBase, steps: List[Step] = None, **kwargs):
         # Initialize the Step base class
         super().__init__(executor, **kwargs)
@@ -288,3 +298,38 @@ class Workflow(Step):
                 assign_level(step_idx, 0)
         
         self.step_order = assigned_levels
+    
+    # BaseTool required methods
+    
+    def _run(self, *args: Any, run_manager: Optional[Any] = None) -> Any:
+        """
+        Use the workflow as a tool synchronously.
+        
+        Biological analogy: Conscious execution of a complex behavioral sequence.
+        Justification: Like how we can consciously execute a series of actions,
+        this method executes the workflow as a single coordinated action.
+        """
+        loop = asyncio.get_event_loop()
+        # Call the process method with the input arguments
+        if len(args) == 1 and isinstance(args[0], list):
+            # If input is a list, pass it directly to process
+            return loop.run_until_complete(self.process(args[0]))
+        else:
+            # Otherwise, package the arguments as a list
+            return loop.run_until_complete(self.process(list(args)))
+    
+    async def _arun(self, *args: Any, run_manager: Optional[Any] = None) -> Any:
+        """
+        Use the workflow as a tool asynchronously.
+        
+        Biological analogy: Autonomous execution of a complex behavioral sequence.
+        Justification: Like how well-practiced behaviors can execute autonomously
+        without conscious control, this method executes the workflow asynchronously.
+        """
+        # Call the process method with the input arguments
+        if len(args) == 1 and isinstance(args[0], list):
+            # If input is a list, pass it directly to process
+            return await self.process(args[0])
+        else:
+            # Otherwise, package the arguments as a list
+            return await self.process(list(args))

@@ -46,8 +46,19 @@ class MockChatOpenAI:
         self.model_name = model_name
         self.kwargs = kwargs
         self.tools = []
+        self._predict = None
         
-    def predict(self, text: str, **kwargs) -> str:
+    @property
+    def predict(self) -> Callable:
+        """Get the predict method."""
+        return self._predict or self._default_predict
+
+    @predict.setter
+    def predict(self, value: Callable):
+        """Set the predict method."""
+        self._predict = value
+        
+    def _default_predict(self, text: str, **kwargs) -> str:
         """Return a mock response."""
         return f"Mock response to: {text}"
         

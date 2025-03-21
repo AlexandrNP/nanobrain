@@ -196,10 +196,9 @@ class ConfigManager(IConfigurable):
             raise ImportError(f"Could not load class {target_class_name}")
             
         # Merge config with kwargs, with kwargs taking precedence
-        breakpoint()
         if 'defaults' in default_config:
             default_config = default_config['defaults']
-            
+
         merged_config = {**default_config, **config['defaults'], **kwargs}
         
         # If the configuration has a defaults section, flatten it into the merged_config
@@ -255,7 +254,6 @@ class ConfigManager(IConfigurable):
             # If the class accepts a config_manager parameter, pass self
             if 'config_manager' in inspect.signature(cls.__init__).parameters:
                 merged_config['config_manager'] = self
-            breakpoint()
             instance = cls(**merged_config)
             
             # If instance is configurable, update its config
