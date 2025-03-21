@@ -39,9 +39,9 @@ class ExecutorBase:
         
         return type_compatible and energy_sufficient
     
-    def execute(self, runnable: 'RunnableMixin') -> Any:
+    def execute(self, runnable: 'RunnableMixin', *args, **kwargs) -> Any:
         """
-        Execute the runnable.
+        Execute the runnable with additional parameters.
         
         Biological analogy: Neural computation.
         Justification: Like how neurons compute outputs from inputs,
@@ -49,6 +49,8 @@ class ExecutorBase:
         
         Args:
             runnable: The runnable to execute
+            *args: Additional positional arguments to pass to the runnable
+            **kwargs: Additional keyword arguments to pass to the runnable
             
         Returns:
             The result of execution

@@ -16,17 +16,20 @@ class ExecutorFunc:
         self.base_executor = ExecutorBase(**kwargs)
         self.function = function
         self.reliability_threshold = 0.3  # Minimum reliability to execute
+        self._reliability = 0.5  # Default reliability
     
-    def execute(self, runnable: Any) -> Any:
+    def execute(self, runnable: Any, *args, **kwargs) -> Any:
         """
-        Execute the function with the runnable as input.
+        Execute the function with the runnable and additional parameters.
         
         Biological analogy: Specialized neural computation.
         Justification: Like how specialized neural circuits perform specific
         computations, this executor performs a specific function computation.
         
         Args:
-            runnable: The input to the function
+            runnable: The primary input to the function
+            *args: Additional positional arguments
+            **kwargs: Additional keyword arguments
             
         Returns:
             The result of the function
@@ -44,7 +47,18 @@ class ExecutorFunc:
             self.energy_level -= self.energy_per_execution
             
             # Execute the function
-            result = self.function(runnable)
+            if callable(getattr(runnable, 'process', None)):
+                # If runnable has a process method, call it with args
+                if args and 'inputs' not in kwargs:
+                    # Assume first arg is inputs if not provided in kwargs
+                    kwargs['inputs'] = args[0] if len(args) == 1 else args
+                result = runnable.process(**kwargs)
+            elif self.function:
+                # Use the executor's function with runnable and args
+                result = self.function(runnable, *args, **kwargs)
+            else:
+                # Default: try to call the runnable directly
+                result = runnable(*args, **kwargs) if callable(runnable) else runnable
             
             # Increase reliability on success
             self.reliability = min(1.0, self.reliability + 0.01)
@@ -56,7 +70,7 @@ class ExecutorFunc:
             self.reliability = max(0.0, self.reliability - 0.05)
             raise e
     
-    async def execute_async(self, runnable: Any) -> Any:
+    async def execute_async(self, runnable: Any, *args, **kwargs) -> Any:
         """
         Async wrapper for the execute method.
         
@@ -67,14 +81,18 @@ class ExecutorFunc:
         in various brain regions, this method adapts the execution to async contexts.
         
         Args:
-            runnable: The input to process
+            runnable: The primary input to process
+            *args: Additional positional arguments
+            **kwargs: Additional keyword arguments
             
         Returns:
             The result of execution
         """
         # Use run_in_executor to run the synchronous execute method in a thread pool
         loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, self.execute, runnable)
+        # Create a lambda to capture all arguments
+        func = lambda: self.execute(runnable, *args, **kwargs)
+        return await loop.run_in_executor(None, func)
         
     # Delegate methods to base executor
     def can_execute(self, runnable_type: str) -> bool:
@@ -119,3 +137,12 @@ class ExecutorFunc:
     @property
     def runnable_types(self):
         return self.base_executor.runnable_types
+
+    # Add reliability property
+    @property
+    def reliability(self):
+        return self._reliability
+        
+    @reliability.setter
+    def reliability(self, value):
+        self._reliability = value

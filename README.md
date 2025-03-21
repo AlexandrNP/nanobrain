@@ -322,3 +322,14 @@ When running in testing mode (with the `NANOBRAIN_TESTING=1` environment variabl
 # Run in testing mode
 NANOBRAIN_TESTING=1 ./nanobrain builder
 ```
+
+## Executor Arbitrary Parameters
+
+The Executor classes (`ExecutorBase`, `ExecutorFunc`, and `ExecutorParallel`) have been updated to accept a runnable along with arbitrary additional parameters. This enhancement allows the `Step` class and its derived classes to pass 'self' and actual parameters when calling `executor.execute()`. The changes include:
+
+1. Updated `ExecutorBase.execute` method to accept `*args` and `**kwargs`
+2. Modified `ExecutorFunc.execute` and `execute_async` methods to handle additional parameters
+3. Updated `ExecutorParallel.execute` method to support arbitrary parameters
+4. Changed `Step.execute` to pass inputs to the executor
+
+These changes provide greater flexibility and enable more complex execution patterns while maintaining backward compatibility.

@@ -1,6 +1,6 @@
 import asyncio
 from typing import Any, List
-from ExecutorBase import ExecutorBase
+from src.ExecutorBase import ExecutorBase
 
 class ExecutorParallel:
     """
@@ -18,14 +18,22 @@ class ExecutorParallel:
         self.base_executor.energy_per_execution *= 1.2  # Higher energy cost for parallel
         self.reliability_threshold = 0.4  # Higher reliability needed
         
-    async def execute(self, runnable: Any) -> Any:
+    async def execute(self, runnable: Any, *args, **kwargs) -> Any:
         """
-        Executes the runnable in parallel if possible.
+        Executes the runnable in parallel with additional parameters if possible.
         
         Biological analogy: Distributed neural computation.
         Justification: Like how the brain processes information through
         multiple parallel pathways, this executor distributes computation
         across concurrent tasks.
+        
+        Args:
+            runnable: The runnable to execute
+            *args: Additional positional arguments
+            **kwargs: Additional keyword arguments
+            
+        Returns:
+            The result of execution
         """
         # Check reliability level
         reliability = self.base_executor.get_modulator_effect("reliability")
@@ -49,7 +57,17 @@ class ExecutorParallel:
             
         try:
             # Create and start new task
-            task = asyncio.create_task(runnable.invoke())
+            # If runnable has a process method that takes inputs, ensure they are passed
+            if callable(getattr(runnable, 'process', None)):
+                if args and 'inputs' not in kwargs:
+                    # Assume first arg is inputs if not provided in kwargs
+                    kwargs['inputs'] = args[0] if len(args) == 1 else args
+                # Create a task with the process method and args
+                task = asyncio.create_task(runnable.process(**kwargs))
+            else:
+                # Default behavior: use invoke method
+                task = asyncio.create_task(runnable.invoke(*args, **kwargs))
+                
             self.active_tasks.append(task)
             
             result = await task
