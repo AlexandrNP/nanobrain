@@ -18,11 +18,77 @@ from pathlib import Path
 from dataclasses import dataclass, asdict
 from enum import Enum
 
-# Configure structured logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+# Configure structured logging conditionally based on global configuration
+def _configure_global_logging():
+    """Configure global logging based on NanoBrain configuration."""
+    try:
+        # Try to import config manager
+        import sys
+        import os
+        config_path = Path(__file__).parent.parent.parent / "config"
+        sys.path.insert(0, str(config_path))
+        
+        from config_manager import should_log_to_console, should_log_to_file, get_logging_config
+        
+        # Get logging configuration
+        logging_config = get_logging_config()
+        console_config = logging_config.get('console', {})
+        
+        # Only configure console logging if console output is enabled
+        if should_log_to_console():
+            console_format = console_config.get('format', '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+            logging.basicConfig(
+                level=logging.INFO,
+                format=console_format
+            )
+        else:
+            # In file-only mode, configure minimal root logger to avoid console output
+            # Set up a null handler to prevent default console output
+            root_logger = logging.getLogger()
+            if not root_logger.handlers:
+                # Add a null handler to prevent "No handlers found" warnings
+                null_handler = logging.NullHandler()
+                root_logger.addHandler(null_handler)
+            root_logger.setLevel(logging.WARNING)  # Set high level to minimize output
+            
+            # Suppress third-party library console output
+            _suppress_third_party_console_logging()
+            
+    except ImportError:
+        # Fallback to default configuration if config manager not available
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        )
+
+def _suppress_third_party_console_logging():
+    """Suppress console logging for common third-party libraries when in file-only mode."""
+    # List of common third-party libraries that might log to console
+    third_party_loggers = [
+        'openai',
+        'httpx',
+        'httpcore', 
+        'parsl',
+        'parsl.executors',
+        'parsl.providers',
+        'parsl.monitoring',
+        'urllib3',
+        'requests',
+        'asyncio',
+        'concurrent.futures'
+    ]
+    
+    for logger_name in third_party_loggers:
+        logger = logging.getLogger(logger_name)
+        # Remove any existing console handlers
+        logger.handlers = [h for h in logger.handlers if not isinstance(h, logging.StreamHandler)]
+        # Set level to WARNING to reduce noise
+        logger.setLevel(logging.WARNING)
+        # Prevent propagation to root logger
+        logger.propagate = False
+
+# Initialize global logging configuration
+_configure_global_logging()
 
 class LogLevel(Enum):
     """Log levels for NanoBrain operations."""
@@ -184,6 +250,72 @@ class NanoBrainLogger:
         """Get the current execution context."""
         return self._context_stack[-1] if self._context_stack else None
     
+    def _serialize_data_for_logging(self, data: Any, max_length: int = 1000, max_depth: int = 3) -> Any:
+        """
+        Serialize data for logging in a readable format.
+        
+        Args:
+            data: The data to serialize
+            max_length: Maximum length for string representations
+            max_depth: Maximum depth for nested structures
+            
+        Returns:
+            Serialized data suitable for logging
+        """
+        def _serialize_recursive(obj: Any, current_depth: int = 0) -> Any:
+            if current_depth > max_depth:
+                return f"<max_depth_exceeded: {type(obj).__name__}>"
+            
+            if obj is None:
+                return None
+            elif isinstance(obj, (str, int, float, bool)):
+                if isinstance(obj, str) and len(obj) > max_length:
+                    return f"{obj[:max_length]}... <truncated, total_length: {len(obj)}>"
+                return obj
+            elif isinstance(obj, dict):
+                if len(obj) == 0:
+                    return {}
+                # Limit number of keys shown
+                items = list(obj.items())[:10]  # Show first 10 items
+                result = {}
+                for k, v in items:
+                    key_str = str(k)[:50]  # Limit key length
+                    result[key_str] = _serialize_recursive(v, current_depth + 1)
+                if len(obj) > 10:
+                    result["<additional_keys>"] = f"{len(obj) - 10} more items"
+                return result
+            elif isinstance(obj, (list, tuple)):
+                if len(obj) == 0:
+                    return []
+                # Limit number of items shown
+                items = obj[:5]  # Show first 5 items
+                result = [_serialize_recursive(item, current_depth + 1) for item in items]
+                if len(obj) > 5:
+                    result.append(f"<additional_items: {len(obj) - 5} more>")
+                return result
+            elif hasattr(obj, '__dict__'):
+                # Handle custom objects
+                try:
+                    obj_dict = {
+                        "__type__": type(obj).__name__,
+                        "__module__": getattr(type(obj), '__module__', 'unknown')
+                    }
+                    # Add a few key attributes
+                    for attr in ['name', 'id', 'value', 'data', 'content'][:3]:
+                        if hasattr(obj, attr):
+                            obj_dict[attr] = _serialize_recursive(getattr(obj, attr), current_depth + 1)
+                    return obj_dict
+                except Exception:
+                    return f"<{type(obj).__name__} object>"
+            else:
+                # Fallback to string representation
+                str_repr = str(obj)
+                if len(str_repr) > max_length:
+                    return f"{str_repr[:max_length]}... <{type(obj).__name__}>"
+                return str_repr
+        
+        return _serialize_recursive(data)
+
     def _log_structured(self, level: LogLevel, message: str, 
                        context: Optional[ExecutionContext] = None, **kwargs):
         """Log a structured message with context."""
@@ -197,19 +329,40 @@ class NanoBrainLogger:
         if context:
             log_data["context"] = asdict(context)
         
-        log_data.update(kwargs)
+        # Process kwargs to make data more readable
+        processed_kwargs = {}
+        for key, value in kwargs.items():
+            if key in ['inputs', 'outputs', 'data', 'result', 'parameters']:
+                # Special handling for data-heavy fields
+                processed_kwargs[key] = self._serialize_data_for_logging(value)
+            elif key in ['conversation', 'tool_call']:
+                # These are already structured, keep as-is but limit size
+                processed_kwargs[key] = self._serialize_data_for_logging(value, max_length=2000)
+            else:
+                # Regular fields
+                processed_kwargs[key] = value
+        
+        log_data.update(processed_kwargs)
+        
+        # Create a more readable log format
+        try:
+            # Try to create a clean JSON representation
+            json_str = json.dumps(log_data, indent=2, default=str, ensure_ascii=False)
+        except Exception:
+            # Fallback to basic representation
+            json_str = json.dumps(log_data, default=str)
         
         # Log to appropriate level
         if level == LogLevel.TRACE or level == LogLevel.DEBUG:
-            self.logger.debug(json.dumps(log_data, default=str))
+            self.logger.debug(json_str)
         elif level == LogLevel.INFO:
-            self.logger.info(json.dumps(log_data, default=str))
+            self.logger.info(json_str)
         elif level == LogLevel.WARNING:
-            self.logger.warning(json.dumps(log_data, default=str))
+            self.logger.warning(json_str)
         elif level == LogLevel.ERROR:
-            self.logger.error(json.dumps(log_data, default=str))
+            self.logger.error(json_str)
         elif level == LogLevel.CRITICAL:
-            self.logger.critical(json.dumps(log_data, default=str))
+            self.logger.critical(json_str)
     
     @contextmanager
     def execution_context(self, operation_type: OperationType, 
@@ -403,6 +556,37 @@ class NanoBrainLogger:
             size_bytes=size_bytes
         )
     
+    def log_data_unit_operation(self, operation: str, data_unit_name: str, 
+                               data: Any = None, metadata: Optional[Dict[str, Any]] = None):
+        """
+        Log data unit operations with detailed content logging.
+        
+        Args:
+            operation: The operation performed ('read', 'write', 'clear', etc.)
+            data_unit_name: Name of the data unit
+            data: The data involved in the operation
+            metadata: Additional metadata about the operation
+        """
+        log_entry = {
+            "operation": operation,
+            "data_unit": data_unit_name,
+            "data_type": type(data).__name__ if data is not None else "None",
+            "data_size": len(str(data)) if data is not None else 0
+        }
+        
+        if metadata:
+            log_entry["metadata"] = metadata
+        
+        # Include actual data content for better visibility
+        if data is not None:
+            log_entry["data"] = data
+        
+        self._log_structured(
+            LogLevel.INFO,
+            f"DataUnit {operation}: {data_unit_name}",
+            **log_entry
+        )
+    
     def log_trigger_activation(self, trigger_name: str, trigger_type: str,
                              conditions: Dict[str, Any], activated: bool = True):
         """Log trigger activation."""
@@ -551,4 +735,72 @@ def set_debug_mode(enabled: bool = True):
         if enabled:
             logger.logger.setLevel(logging.DEBUG)
         else:
-            logger.logger.setLevel(logging.INFO) 
+            logger.logger.setLevel(logging.INFO)
+
+def reconfigure_global_logging():
+    """Reconfigure global logging based on current NanoBrain configuration."""
+    _configure_global_logging()
+
+def configure_third_party_loggers(console_enabled: bool = None):
+    """Configure third-party library loggers based on logging mode.
+    
+    Args:
+        console_enabled: If None, will check global configuration. 
+                        If False, will suppress console output for third-party libraries.
+    """
+    if console_enabled is None:
+        try:
+            from config_manager import should_log_to_console
+            console_enabled = should_log_to_console()
+        except ImportError:
+            console_enabled = True
+    
+    if not console_enabled:
+        _suppress_third_party_console_logging()
+    else:
+        # Re-enable console logging for third-party libraries
+        third_party_loggers = [
+            'openai',
+            'httpx',
+            'httpcore', 
+            'parsl',
+            'parsl.executors',
+            'parsl.providers',
+            'parsl.monitoring',
+            'urllib3',
+            'requests',
+            'asyncio',
+            'concurrent.futures'
+        ]
+        
+        for logger_name in third_party_loggers:
+            logger = logging.getLogger(logger_name)
+            # Reset to default behavior
+            logger.setLevel(logging.NOTSET)
+            logger.propagate = True
+
+def get_logging_status():
+    """Get current logging configuration status for debugging.
+    
+    Returns:
+        Dict containing current logging configuration details.
+    """
+    try:
+        from config_manager import get_logging_mode, should_log_to_console, should_log_to_file
+        
+        root_logger = logging.getLogger()
+        
+        return {
+            'nanobrain_mode': get_logging_mode(),
+            'console_enabled': should_log_to_console(),
+            'file_enabled': should_log_to_file(),
+            'root_logger_level': logging.getLevelName(root_logger.level),
+            'root_logger_handlers': [type(h).__name__ for h in root_logger.handlers],
+            'nanobrain_loggers': list(_global_loggers.keys())
+        }
+    except ImportError:
+        return {
+            'error': 'Configuration manager not available',
+            'root_logger_level': logging.getLevelName(logging.getLogger().level),
+            'nanobrain_loggers': list(_global_loggers.keys())
+        } 

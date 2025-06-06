@@ -203,7 +203,7 @@ logging:
   # - "console": Log only to console/terminal (no file output)
   # - "file": Log only to files (no console output, silent mode)
   # - "both": Log to both console and files (default behavior)
-  mode: "both"
+  mode: "file"
   
   # Log level for configuration loading
   level: "INFO"

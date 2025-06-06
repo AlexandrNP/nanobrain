@@ -14,6 +14,9 @@ from pathlib import Path
 import json
 import time
 
+# Import logging system
+from .logging_system import NanoBrainLogger, get_logger
+
 logger = logging.getLogger(__name__)
 
 
@@ -55,6 +58,18 @@ class DataUnitBase(ABC):
         self._is_initialized = False
         self._lock = asyncio.Lock()
         
+        # Initialize logging
+        self.enable_logging = kwargs.get('enable_logging', True)
+        if self.enable_logging:
+            log_file = kwargs.get('log_file')
+            self.nb_logger = NanoBrainLogger(
+                name=f"data_units.{self.name}",
+                log_file=log_file,
+                debug_mode=kwargs.get('debug_mode', False)
+            )
+        else:
+            self.nb_logger = None
+        
     @abstractmethod
     async def get(self) -> Any:
         """Get data from the unit."""
@@ -75,9 +90,31 @@ class DataUnitBase(ABC):
         if not self._is_initialized:
             self._is_initialized = True
             logger.debug(f"DataUnit {self.name} initialized")
+            
+            # Log initialization
+            if self.enable_logging and self.nb_logger:
+                self.nb_logger.log_data_unit_operation(
+                    operation="initialize",
+                    data_unit_name=self.name,
+                    metadata={
+                        "data_unit_type": type(self).__name__,
+                        "config": self.config.model_dump() if hasattr(self.config, 'model_dump') else str(self.config)
+                    }
+                )
     
     async def shutdown(self) -> None:
         """Shutdown the data unit."""
+        # Log shutdown
+        if self.enable_logging and self.nb_logger:
+            self.nb_logger.log_data_unit_operation(
+                operation="shutdown",
+                data_unit_name=self.name,
+                metadata={
+                    "data_unit_type": type(self).__name__,
+                    "final_metadata": self._metadata
+                }
+            )
+        
         await self.clear()
         self._is_initialized = False
         logger.debug(f"DataUnit {self.name} shutdown")
@@ -103,10 +140,38 @@ class DataUnitBase(ABC):
 
     async def read(self) -> Any:
         """Read data from the unit (alias for get)."""
-        return await self.get()
+        data = await self.get()
+        
+        # Log the read operation
+        if self.enable_logging and self.nb_logger:
+            self.nb_logger.log_data_unit_operation(
+                operation="read",
+                data_unit_name=self.name,
+                data=data,
+                metadata={
+                    "data_unit_type": type(self).__name__,
+                    "config": self.config.model_dump() if hasattr(self.config, 'model_dump') else str(self.config),
+                    "metadata": self._metadata
+                }
+            )
+        
+        return data
     
     async def write(self, data: Any) -> None:
         """Write data to the unit (alias for set)."""
+        # Log the write operation
+        if self.enable_logging and self.nb_logger:
+            self.nb_logger.log_data_unit_operation(
+                operation="write",
+                data_unit_name=self.name,
+                data=data,
+                metadata={
+                    "data_unit_type": type(self).__name__,
+                    "config": self.config.model_dump() if hasattr(self.config, 'model_dump') else str(self.config),
+                    "metadata": self._metadata
+                }
+            )
+        
         await self.set(data)
 
 
