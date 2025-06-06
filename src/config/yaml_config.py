@@ -57,17 +57,17 @@ class YAMLConfig(BaseModel):
         """Convert to serializable dictionary."""
         result = {}
         
-        for key, value in self.dict().items():
+        for key, value in self.model_dump().items():
             if isinstance(value, BaseModel):
-                result[key] = value.dict()
+                result[key] = value.model_dump()
             elif isinstance(value, list):
                 result[key] = [
-                    item.dict() if isinstance(item, BaseModel) else item
+                    item.model_dump() if isinstance(item, BaseModel) else item
                     for item in value
                 ]
             elif isinstance(value, dict):
                 result[key] = {
-                    k: v.dict() if isinstance(v, BaseModel) else v
+                    k: v.model_dump() if isinstance(v, BaseModel) else v
                     for k, v in value.items()
                 }
             else:
@@ -128,8 +128,8 @@ class YAMLConfig(BaseModel):
         Returns:
             New merged configuration
         """
-        self_dict = self.dict()
-        other_dict = other.dict()
+        self_dict = self.model_dump()
+        other_dict = other.model_dump()
         
         # Deep merge dictionaries
         merged_dict = self._deep_merge(self_dict, other_dict)

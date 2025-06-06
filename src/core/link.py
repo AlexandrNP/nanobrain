@@ -10,7 +10,7 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional, List, Callable, Union
 from enum import Enum
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 logger = logging.getLogger(__name__)
 
@@ -32,8 +32,7 @@ class LinkConfig(BaseModel):
     condition: Optional[str] = None
     file_path: Optional[str] = None
     
-    class Config:
-        use_enum_values = True
+    model_config = ConfigDict(use_enum_values=True)
 
 
 class LinkBase(ABC):

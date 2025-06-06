@@ -9,7 +9,7 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional, List, Callable, Union
 from enum import Enum
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 logger = logging.getLogger(__name__)
 
@@ -32,8 +32,7 @@ class ToolConfig(BaseModel):
     async_execution: bool = True
     timeout: Optional[float] = None
     
-    class Config:
-        use_enum_values = True
+    model_config = ConfigDict(use_enum_values=True)
 
 
 class ToolBase(ABC):
@@ -258,7 +257,7 @@ class LangChainTool(ToolBase):
         """Get schema from LangChain tool."""
         if hasattr(self.langchain_tool, 'args_schema') and self.langchain_tool.args_schema:
             # Convert Pydantic schema to function calling schema
-            schema = self.langchain_tool.args_schema.schema()
+            schema = self.langchain_tool.args_schema.model_json_schema()
             return {
                 "type": "function",
                 "function": {

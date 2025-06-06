@@ -33,7 +33,7 @@ class SchemaGenerator:
         Returns:
             JSON schema dictionary
         """
-        schema = model_class.schema()
+        schema = model_class.model_json_schema()
         
         if title:
             schema["title"] = title
@@ -164,7 +164,7 @@ class SchemaGenerator:
         Returns:
             UI schema dictionary
         """
-        schema = model_class.schema()
+        schema = model_class.model_json_schema()
         ui_schema = {}
         
         # Generate UI hints based on field types and metadata
@@ -215,7 +215,7 @@ class SchemaGenerator:
         try:
             # Create instance with default values
             instance = model_class()
-            return instance.dict()
+            return instance.model_dump()
         except Exception as e:
             logger.warning(f"Could not generate example for {model_class.__name__}: {e}")
             return {}

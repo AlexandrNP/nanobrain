@@ -249,8 +249,36 @@ class ParslExecutor(ExecutorBase):
             
             # Create Parsl configuration
             if self.config.parsl_config:
-                # Use provided Parsl configuration
-                self._parsl_config = Config(**self.config.parsl_config)
+                # Process provided Parsl configuration
+                parsl_config_dict = self.config.parsl_config.copy()
+                
+                # Convert executor dictionaries to actual executor objects
+                if 'executors' in parsl_config_dict:
+                    executors = []
+                    for executor_config in parsl_config_dict['executors']:
+                        if isinstance(executor_config, dict):
+                            # Extract class name and parameters
+                            executor_class_name = executor_config.pop('class', 'parsl.executors.HighThroughputExecutor')
+                            
+                            # Import the executor class
+                            if executor_class_name == 'parsl.executors.HighThroughputExecutor':
+                                executor_class = HighThroughputExecutor
+                            else:
+                                # Dynamic import for other executor types
+                                module_name, class_name = executor_class_name.rsplit('.', 1)
+                                module = __import__(module_name, fromlist=[class_name])
+                                executor_class = getattr(module, class_name)
+                            
+                            # Create executor instance
+                            executor = executor_class(**executor_config)
+                            executors.append(executor)
+                        else:
+                            # Already an executor object
+                            executors.append(executor_config)
+                    
+                    parsl_config_dict['executors'] = executors
+                
+                self._parsl_config = Config(**parsl_config_dict)
             else:
                 # Default configuration
                 self._parsl_config = Config(
@@ -263,7 +291,16 @@ class ParslExecutor(ExecutorBase):
                 )
             
             # Load Parsl configuration
-            self._parsl_dfk = parsl.load(self._parsl_config)
+            try:
+                self._parsl_dfk = parsl.load(self._parsl_config)
+            except Exception as e:
+                if "Config has already been loaded" in str(e):
+                    # Parsl is already loaded, get the existing DataFlowKernel
+                    self._parsl_dfk = parsl.dfk()
+                    logger.info("ParslExecutor using existing Parsl configuration")
+                else:
+                    raise
+            
             self._is_initialized = True
             logger.info("ParslExecutor initialized")
             

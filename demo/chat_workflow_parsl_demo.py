@@ -727,7 +727,7 @@ class ParslChatWorkflow:
                 'executors': [{
                     'class': 'parsl.executors.HighThroughputExecutor',
                     'label': 'htex_local',
-                    'max_workers': 8,
+                    'max_workers_per_node': 8,
                     'cores_per_worker': 1
                 }]
             }

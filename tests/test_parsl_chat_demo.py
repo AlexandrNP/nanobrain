@@ -206,13 +206,13 @@ class TestParslIntegration:
                 'executors': [{
                     'class': 'parsl.executors.HighThroughputExecutor',
                     'label': 'test_htex',
-                    'max_workers': 4
+                    'max_workers_per_node': 4
                 }]
             }
         )
         
         executor = ParslExecutor(config=config)
-        assert executor.config.executor_type == ExecutorType.PARSL
+        assert executor.config.executor_type == ExecutorType.PARSL.value  # Pydantic V2 stores enum values
         assert executor.config.max_workers == 4
     
     @pytest.mark.asyncio
