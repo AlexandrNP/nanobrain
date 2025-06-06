@@ -156,11 +156,38 @@ class Agent(ABC):
         try:
             # Try to import OpenAI client
             from openai import AsyncOpenAI
-            self.llm_client = AsyncOpenAI()
+            import os
+            
+            # Check if API key is available
+            api_key = os.getenv('OPENAI_API_KEY')
+            if not api_key:
+                self.nb_logger.warning(f"No OpenAI API key found for agent {self.name}. Set OPENAI_API_KEY environment variable.")
+                self.llm_client = None
+                return
+            
+            # Create OpenAI client with API key
+            self.llm_client = AsyncOpenAI(api_key=api_key)
             self.nb_logger.debug(f"Agent {self.name} initialized with OpenAI client")
+            
+            # Test the client with a simple call to verify it works
+            try:
+                # Make a minimal test call to verify the client works
+                test_response = await self.llm_client.chat.completions.create(
+                    model="gpt-3.5-turbo",
+                    messages=[{"role": "user", "content": "test"}],
+                    max_tokens=1
+                )
+                self.nb_logger.debug(f"Agent {self.name} OpenAI client test successful")
+            except Exception as e:
+                self.nb_logger.warning(f"OpenAI client test failed for agent {self.name}: {e}")
+                self.llm_client = None
+                
         except ImportError:
             self.nb_logger.warning("OpenAI client not available. Install with: pip install openai")
             # Could add other LLM clients here (Anthropic, etc.)
+            self.llm_client = None
+        except Exception as e:
+            self.nb_logger.error(f"Failed to initialize LLM client for agent {self.name}: {e}")
             self.llm_client = None
     
     async def _register_tool_from_config(self, tool_config: Dict[str, Any]) -> None:

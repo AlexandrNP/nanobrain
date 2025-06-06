@@ -1,0 +1,200 @@
+---
+# Parsl Chat Workflow Configuration
+# Configuration for the NanoBrain Parsl-based chat workflow demo
+
+name: "parsl_chat_workflow"
+description: "Parsl-based chat workflow with parallel agent processing"
+version: "1.0.0"
+
+# Executor configuration
+executors:
+  parsl_executor:
+    executor_type: "parsl"
+    max_workers: 8
+    timeout: 300
+    parsl_config:
+      # Parsl configuration for local high-throughput execution
+      executors:
+        - class: "parsl.executors.HighThroughputExecutor"
+          label: "htex_local"
+          max_workers: 8
+          cores_per_worker: 1
+          worker_debug: false
+          # Optional: Configure for specific HPC systems
+          # provider:
+          #   class: "parsl.providers.SlurmProvider"
+          #   nodes_per_block: 1
+          #   cores_per_node: 16
+          #   walltime: "01:00:00"
+      
+      # Monitoring configuration
+      monitoring:
+        hub_address: "127.0.0.1"
+        hub_port: 55055
+        logging_level: "INFO"
+        resource_monitoring_interval: 10
+
+# Agent configuration
+agents:
+  parallel_agents:
+    count: 3
+    base_config:
+      model_name: "gpt-3.5-turbo"
+      temperature: 0.7
+      max_tokens: 500
+      timeout: 30
+    
+    # Individual agent configurations
+    agent_configs:
+      - name: "parsl_agent_0"
+        description: "Primary parallel conversational agent"
+        system_prompt: |
+          You are Agent 1 in a parallel processing system using Parsl for distributed execution.
+          You're part of a high-performance chat workflow that can handle multiple requests simultaneously.
+          Be helpful, informative, and mention your parallel processing capabilities when relevant.
+          Keep responses concise but engaging.
+      
+      - name: "parsl_agent_1"
+        description: "Secondary parallel conversational agent"
+        system_prompt: |
+          You are Agent 2 in a parallel processing system using Parsl for distributed execution.
+          You specialize in handling concurrent chat requests with high efficiency.
+          Provide detailed and thoughtful responses while highlighting the benefits of parallel processing.
+          Be friendly and professional in your interactions.
+      
+      - name: "parsl_agent_2"
+        description: "Tertiary parallel conversational agent"
+        system_prompt: |
+          You are Agent 3 in a parallel processing system using Parsl for distributed execution.
+          You excel at processing chat requests in a distributed computing environment.
+          Focus on being helpful and educational, especially about parallel computing concepts.
+          Maintain a conversational and approachable tone.
+
+# Data units configuration
+data_units:
+  input_data:
+    data_type: "memory"
+    persistent: false
+    name: "parsl_chat_input"
+    
+  output_data:
+    data_type: "memory"
+    persistent: false
+    name: "parsl_chat_output"
+    
+  performance_data:
+    data_type: "memory"
+    persistent: true
+    name: "parsl_performance_metrics"
+
+# Triggers configuration
+triggers:
+  input_trigger:
+    trigger_type: "data_updated"
+    debounce_ms: 50
+    name: "parsl_input_trigger"
+    
+  performance_trigger:
+    trigger_type: "timer"
+    timer_interval_ms: 10000
+    name: "parsl_performance_trigger"
+
+# Links configuration
+links:
+  agent_output_link:
+    link_type: "direct"
+    name: "parsl_agent_output"
+    
+  performance_link:
+    link_type: "direct"
+    name: "parsl_performance_link"
+
+# Performance monitoring
+performance:
+  enable_monitoring: true
+  metrics_collection_interval: 5
+  track_agent_performance: true
+  track_executor_performance: true
+  
+  # Metrics to track
+  metrics:
+    - "request_processing_time"
+    - "agent_response_time"
+    - "executor_utilization"
+    - "parallel_efficiency"
+    - "error_rate"
+
+# Logging configuration
+logging:
+  level: "INFO"
+  enable_parsl_logging: true
+  log_performance_metrics: true
+  session_logging: true
+  
+  # File logging
+  file_logging:
+    enabled: true
+    base_directory: "logs/parsl_chat"
+    use_session_directories: true
+    
+  # Console logging
+  console_logging:
+    enabled: true
+    show_performance_stats: true
+
+# Demo-specific settings
+demo:
+  interactive_mode: true
+  show_help_on_start: true
+  enable_batch_testing: true
+  default_batch_size: 5
+  
+  # CLI interface settings
+  cli:
+    prompt: "You: "
+    show_processing_time: true
+    show_agent_id: true
+    enable_commands: true
+    
+    # Available commands
+    commands:
+      - "/help"
+      - "/stats"
+      - "/batch <N>"
+      - "/agents"
+      - "/performance"
+      - "/quit"
+
+# API configuration
+api:
+  openai:
+    model: "gpt-3.5-turbo"
+    max_tokens: 500
+    temperature: 0.7
+    timeout: 30
+  
+  # Fallback configuration for when API is not available
+  fallback:
+    use_mock_responses: true
+    mock_delay_ms: 100
+    mock_responses:
+      - "I'm a parallel processing agent running on Parsl! How can I help you today?"
+      - "Thanks to distributed execution, I can handle multiple requests simultaneously."
+      - "Parsl enables me to scale across multiple cores and even multiple machines!"
+      - "I'm processing your request using high-performance computing capabilities."
+
+# Resource management
+resources:
+  max_concurrent_requests: 10
+  request_timeout: 60
+  agent_pool_size: 3
+  
+  # Memory management
+  memory:
+    max_memory_per_worker: "1GB"
+    cleanup_interval: 300
+    
+  # CPU management
+  cpu:
+    cores_per_agent: 1
+    max_cpu_usage: 80 
