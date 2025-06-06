@@ -1,0 +1,201 @@
+name: "StepCoder"
+description: "Tool for generating software code based on natural language instructions"
+class: "CodeWriterAgent"  # Use CodeWriterAgent for specialized code generation
+
+defaults:
+  model: "gpt-4-turbo"
+  temperature: 0.2
+  max_tokens: 4000
+
+metadata:
+  biological_analogy: "Language generation areas of the brain"
+  justification: >
+    Like how language areas generate coherent sentences based on concepts,
+    this tool generates coherent code based on requirements.
+  objectives:
+    - Process natural language requests for code generation
+    - Generate clean, well-documented code from descriptions
+    - Create specialized code structures like classes and functions
+    - Refactor existing code based on natural language instructions
+
+config:
+  name: "StepCoder"
+  description: "Specialized agent for generating software code"
+  model: "gpt-4-turbo"
+  temperature: 0.2
+  max_tokens: 4000
+  system_prompt: |
+    You are a specialized code generation agent for the NanoBrain framework.
+
+    Your responsibilities:
+    1. Generate high-quality, well-documented code based on natural language descriptions
+    2. Create Python classes, functions, and modules following best practices
+    3. Refactor existing code based on natural language instructions
+    4. Provide clear explanations of the generated code
+
+    When generating code:
+    - Follow PEP 8 style guidelines for Python
+    - Include comprehensive docstrings
+    - Add type hints where appropriate
+    - Handle errors gracefully
+    - Write clean, maintainable code
+    - Consider performance and scalability
+
+    Input format: You will receive natural language descriptions of code to generate.
+    Output format: Provide the generated code with explanations.
+
+    Examples of requests you can handle:
+    - "Write a Python function that implements the binary search algorithm"
+    - "Create a User class with methods for authentication and profile management"
+    - "Refactor this code to use more efficient data structures: [CODE]"
+    - "Generate a script that processes CSV files and outputs summary statistics"
+
+  # Prompt templates for different code generation methods
+  prompt_templates:
+    enhanced_input: |
+      Code Generation Request: {input_text}
+
+      Available tools for file operations: {available_tools}
+
+      Please generate the requested code and use appropriate tools to save it if needed.
+
+    python_function: |
+      Generate a Python function with the following specifications:
+      - Function name: {function_name}
+      - Description: {description}
+      - Parameters: {parameters}
+      - Return type: {return_type}
+
+      Include:
+      - Comprehensive docstring with Args and Returns sections
+      - Type hints
+      - Error handling where appropriate
+      - Example usage in the docstring
+
+    python_class: |
+      Generate a Python class with the following specifications:
+      - Class name: {class_name}{base_classes}
+      - Description: {description}
+
+      Methods to implement:
+      {methods}
+
+      Include:
+      - Comprehensive class docstring
+      - Type hints for all methods
+      - Proper __init__ method
+      - Error handling where appropriate
+      - Follow best practices for class design
+
+    nanobrain_step: |
+      Generate a NanoBrain Step class with the following specifications:
+      - Class name: {step_name}
+      - Description: {description}
+      - Input types: {input_types}
+      - Output types: {output_types}
+
+      The class should:
+      - Inherit from the Step base class
+      - Implement the process method
+      - Include proper configuration handling
+      - Follow NanoBrain framework patterns
+      - Include comprehensive docstrings
+      - Handle errors gracefully
+
+      Example structure:
+      ```python
+      from nanobrain.src.core.step import Step, StepConfig
+
+      class {step_name}(Step):
+          \"\"\"
+          {description}
+          \"\"\"
+          
+          async def process(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
+              # Implementation here
+              pass
+      ```
+
+    write_code_to_file: |
+      Please use the {tool_name} tool to save the following code to {file_path}:
+
+      {description}
+
+      Code:
+      ```python
+      {code}
+      ```
+
+      File path: {file_path}
+
+validation:
+  required:
+    - model
+  optional:
+    - temperature
+    - max_tokens
+  constraints:
+    temperature:
+      min: 0.0
+      max: 1.0
+      type: float
+    max_tokens:
+      min: 100
+      max: 16000
+      type: int
+
+input_schema:
+  type: "object"
+  properties:
+    input:
+      type: "string"
+      description: >
+        Detailed description of your code-related request. The input will be processed by a specialized agent that can:
+        
+        1. Generate code from descriptions
+        2. Create classes with methods
+        3. Write functions with appropriate signatures
+        4. Refactor existing code
+        
+        Examples:
+        - "Write a Python function that implements the binary search algorithm"
+        - "Create a User class with methods for authentication and profile management"
+        - "Refactor this code to use more efficient data structures: [CODE]"
+        - "Generate a script that processes CSV files and outputs summary statistics"
+        - "Create a RESTful API endpoint for user registration using Flask"
+      required: true
+    language:
+      type: "string"
+      description: "Programming language to use (e.g., Python, JavaScript, TypeScript, Java, Go, etc.). Default is 'Python'"
+      required: false
+      default: "Python"
+    context:
+      type: "string"
+      description: "Additional context or code snippets that provide background information"
+      required: false
+
+examples:
+  generate_function:
+    description: "Generate a Python function"
+    input: "Write a function that takes a list of integers and returns the sum of all even numbers"
+    
+  create_class:
+    description: "Create a class with methods"
+    input: "Create a DataProcessor class that can load, transform, and save data from multiple sources"
+    
+  javascript_code:
+    description: "Generate JavaScript code"
+    input: "Write code to fetch data from an API and display it in a table"
+    config:
+      language: "JavaScript"
+      
+  refactor_code:
+    description: "Refactor existing code"
+    input: "Refactor this code to use list comprehensions instead of for loops: for i in range(10): result.append(i*2)"
+    
+  complex_with_context:
+    description: "Generate code with additional context"
+    input: "Create a data model for a blog application"
+    config:
+      language: "Python"
+      context: "The application uses SQLAlchemy ORM and needs models for User, Post, and Comment with appropriate relationships." 

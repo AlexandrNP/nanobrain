@@ -1,0 +1,361 @@
+name: "StepCoderEnhanced"
+description: "Advanced tool for generating software code based on natural language instructions"
+class: "CodeWriterAgent"  # Use specialized CodeWriterAgent
+
+defaults:
+  model: "gpt-4-turbo"
+  temperature: 0.2
+  max_tokens: 4000
+  debug_mode: false
+
+metadata:
+  biological_analogy: "Language generation areas of the brain"
+  justification: >
+    Like how language areas generate coherent sentences based on concepts,
+    this tool generates coherent code based on requirements.
+  objectives:
+    - Process natural language requests for code generation
+    - Generate clean, well-documented code from descriptions
+    - Create specialized code structures like classes and functions
+    - Refactor existing code based on natural language instructions
+  version: "2.0.0"
+  author: "NanoBrain Framework"
+
+config:
+  name: "StepCoderEnhanced"
+  description: "Advanced specialized agent for generating software code"
+  model: "gpt-4-turbo"
+  temperature: 0.2
+  max_tokens: 4000
+  system_prompt: |
+    You are an advanced code generation agent for the NanoBrain framework.
+
+    Your enhanced responsibilities:
+    1. Generate high-quality, well-documented code based on natural language descriptions
+    2. Create Python classes, functions, and modules following best practices
+    3. Refactor existing code based on natural language instructions
+    4. Provide clear explanations and documentation for generated code
+    5. Handle complex architectural patterns and design principles
+    6. Generate test cases and validation code when requested
+
+    Advanced capabilities:
+    - Multi-language code generation (Python, JavaScript, TypeScript, Java, Go, Rust)
+    - Design pattern implementation (Factory, Observer, Strategy, etc.)
+    - API design and implementation
+    - Database schema and ORM model generation
+    - Microservice architecture components
+    - Error handling and logging integration
+    - Performance optimization suggestions
+
+    When generating code:
+    - Follow language-specific style guidelines (PEP 8 for Python, etc.)
+    - Include comprehensive docstrings and comments
+    - Add type hints and annotations where appropriate
+    - Handle errors gracefully with proper exception handling
+    - Write clean, maintainable, and scalable code
+    - Consider performance, security, and scalability
+    - Include unit tests when appropriate
+    - Provide usage examples and documentation
+
+    Input format: You will receive structured requests with context and requirements.
+    Output format: Provide the generated code with explanations, documentation, and usage examples.
+
+# Advanced validation schema
+validation:
+  required:
+    - model
+    - name
+    - description
+  optional:
+    - temperature
+    - max_tokens
+    - debug_mode
+    - language
+    - context
+    - complexity_level
+  constraints:
+    model:
+      type: string
+      pattern: "^(gpt-|claude-|llama-)"
+      message: "Model must be a supported LLM (gpt-, claude-, or llama-)"
+    temperature:
+      type: float
+      min: 0.0
+      max: 1.0
+      message: "Temperature must be between 0.0 and 1.0"
+    max_tokens:
+      type: integer
+      min: 100
+      max: 16000
+      message: "Max tokens must be between 100 and 16000"
+    complexity_level:
+      type: string
+      enum: ["simple", "intermediate", "advanced", "expert"]
+      message: "Complexity level must be one of: simple, intermediate, advanced, expert"
+    language:
+      type: string
+      enum: ["Python", "JavaScript", "TypeScript", "Java", "Go", "Rust", "C++", "C#"]
+      message: "Language must be a supported programming language"
+
+# Input schema with enhanced validation
+input_schema:
+  type: "object"
+  properties:
+    input:
+      type: "string"
+      description: >
+        Detailed description of your code-related request. The enhanced agent can handle:
+        
+        1. Code Generation:
+           - Functions, classes, and modules
+           - API endpoints and services
+           - Database models and schemas
+           - Configuration and setup scripts
+        
+        2. Architecture Patterns:
+           - Design patterns (Factory, Observer, Strategy, etc.)
+           - Microservice components
+           - Event-driven architectures
+           - Plugin systems
+        
+        3. Advanced Features:
+           - Error handling and logging
+           - Testing and validation
+           - Performance optimization
+           - Security implementations
+        
+        Examples:
+        - "Create a microservice for user authentication with JWT tokens, rate limiting, and audit logging"
+        - "Implement a plugin system using the Factory pattern with dynamic loading capabilities"
+        - "Generate a REST API with FastAPI including CRUD operations, validation, and OpenAPI documentation"
+        - "Create a data processing pipeline with error handling, retry logic, and monitoring"
+      required: true
+      min_length: 10
+      max_length: 5000
+    
+    language:
+      type: "string"
+      description: "Programming language to use"
+      required: false
+      default: "Python"
+      enum: ["Python", "JavaScript", "TypeScript", "Java", "Go", "Rust", "C++", "C#"]
+    
+    context:
+      type: "string"
+      description: "Additional context, existing code, or architectural constraints"
+      required: false
+      max_length: 10000
+    
+    complexity_level:
+      type: "string"
+      description: "Complexity level of the generated code"
+      required: false
+      default: "intermediate"
+      enum: ["simple", "intermediate", "advanced", "expert"]
+    
+    include_tests:
+      type: "boolean"
+      description: "Whether to include unit tests with the generated code"
+      required: false
+      default: false
+    
+    include_docs:
+      type: "boolean"
+      description: "Whether to include comprehensive documentation"
+      required: false
+      default: true
+    
+    architecture_pattern:
+      type: "string"
+      description: "Specific architecture pattern to implement"
+      required: false
+      enum: ["MVC", "MVP", "MVVM", "Clean Architecture", "Hexagonal", "Microservices", "Event-Driven"]
+
+# Parameter schemas for different operations
+parameters:
+  generate_function:
+    description: "Parameters for generating a function"
+    fields:
+      function_name:
+        type: "string"
+        description: "Name of the function to generate"
+        required: true
+        pattern: "^[a-zA-Z_][a-zA-Z0-9_]*$"
+      parameters:
+        type: "list"
+        description: "Function parameters with types"
+        required: false
+      return_type:
+        type: "string"
+        description: "Return type of the function"
+        required: false
+      async_function:
+        type: "boolean"
+        description: "Whether to generate an async function"
+        required: false
+        default: false
+  
+  generate_class:
+    description: "Parameters for generating a class"
+    fields:
+      class_name:
+        type: "string"
+        description: "Name of the class to generate"
+        required: true
+        pattern: "^[A-Z][a-zA-Z0-9_]*$"
+      base_classes:
+        type: "list"
+        description: "Base classes to inherit from"
+        required: false
+      methods:
+        type: "list"
+        description: "Methods to include in the class"
+        required: false
+      properties:
+        type: "list"
+        description: "Properties to include in the class"
+        required: false
+      design_pattern:
+        type: "string"
+        description: "Design pattern to implement"
+        required: false
+        enum: ["Singleton", "Factory", "Observer", "Strategy", "Command", "Decorator"]
+  
+  generate_api:
+    description: "Parameters for generating API code"
+    fields:
+      framework:
+        type: "string"
+        description: "Web framework to use"
+        required: true
+        enum: ["FastAPI", "Flask", "Django", "Express", "Spring Boot", "Gin"]
+      endpoints:
+        type: "list"
+        description: "API endpoints to generate"
+        required: true
+      authentication:
+        type: "string"
+        description: "Authentication method"
+        required: false
+        enum: ["JWT", "OAuth2", "API Key", "Basic Auth", "None"]
+      database:
+        type: "string"
+        description: "Database integration"
+        required: false
+        enum: ["PostgreSQL", "MySQL", "MongoDB", "SQLite", "Redis"]
+
+# Custom validators
+validators:
+  validate_language_context:
+    fields: ["language", "context"]
+    pre: true
+    description: "Validate that context is appropriate for the selected language"
+    code: |
+      language = values.get('language', 'Python')
+      context = values.get('context', '')
+      
+      if context and language:
+          # Check for language-specific keywords in context
+          language_keywords = {
+              'Python': ['def', 'class', 'import', 'from', '__init__'],
+              'JavaScript': ['function', 'const', 'let', 'var', 'class'],
+              'TypeScript': ['interface', 'type', 'enum', 'namespace'],
+              'Java': ['public', 'private', 'class', 'interface', 'package'],
+              'Go': ['func', 'type', 'struct', 'interface', 'package'],
+              'Rust': ['fn', 'struct', 'impl', 'trait', 'mod']
+          }
+          
+          if language in language_keywords:
+              keywords = language_keywords[language]
+              # If context contains code, check if it matches the language
+              if any(keyword in context for keyword in keywords):
+                  # Context seems to match the language
+                  pass
+              elif len(context) > 100 and not any(keyword in context for keyword in keywords):
+                  # Long context without language keywords might be mismatched
+                  values['_warning'] = f"Context may not match selected language: {language}"
+      
+      return values
+  
+  validate_complexity_requirements:
+    fields: ["complexity_level", "input"]
+    pre: true
+    description: "Validate that input requirements match complexity level"
+    code: |
+      complexity = values.get('complexity_level', 'intermediate')
+      input_text = values.get('input', '')
+      
+      complexity_indicators = {
+          'simple': ['function', 'basic', 'simple', 'easy'],
+          'intermediate': ['class', 'method', 'API', 'service'],
+          'advanced': ['pattern', 'architecture', 'system', 'framework'],
+          'expert': ['microservice', 'distributed', 'scalable', 'enterprise']
+      }
+      
+      if complexity in complexity_indicators:
+          indicators = complexity_indicators[complexity]
+          input_lower = input_text.lower()
+          
+          # Check if input complexity matches selected level
+          matches = sum(1 for indicator in indicators if indicator in input_lower)
+          
+          if complexity == 'simple' and matches == 0 and len(input_text) > 200:
+              values['complexity_level'] = 'intermediate'
+          elif complexity == 'expert' and matches == 0:
+              values['_suggestion'] = "Consider using 'advanced' complexity for this request"
+      
+      return values
+
+# Usage examples with different complexity levels
+examples:
+  simple_function:
+    description: "Generate a simple utility function"
+    input: "Write a function that calculates the factorial of a number"
+    config:
+      language: "Python"
+      complexity_level: "simple"
+      include_tests: true
+    
+  intermediate_class:
+    description: "Create a data processing class"
+    input: "Create a DataProcessor class that can load CSV files, clean data, and export results"
+    config:
+      language: "Python"
+      complexity_level: "intermediate"
+      include_tests: true
+      include_docs: true
+    
+  advanced_api:
+    description: "Generate a REST API with authentication"
+    input: "Create a REST API for a blog application with user authentication, CRUD operations for posts, and comment management"
+    config:
+      language: "Python"
+      complexity_level: "advanced"
+      architecture_pattern: "Clean Architecture"
+      include_tests: true
+    
+  expert_microservice:
+    description: "Design a microservice architecture"
+    input: "Design a microservice for order processing with event sourcing, CQRS pattern, and distributed transaction handling"
+    config:
+      language: "Python"
+      complexity_level: "expert"
+      architecture_pattern: "Event-Driven"
+      include_tests: true
+      include_docs: true
+    
+  javascript_frontend:
+    description: "Generate JavaScript frontend code"
+    input: "Create a React component for a user dashboard with real-time data updates and responsive design"
+    config:
+      language: "JavaScript"
+      complexity_level: "advanced"
+      context: "Using React, Redux, and WebSocket for real-time updates"
+    
+  go_service:
+    description: "Generate Go service code"
+    input: "Create a high-performance HTTP service for file uploads with progress tracking and virus scanning"
+    config:
+      language: "Go"
+      complexity_level: "advanced"
+      include_tests: true 

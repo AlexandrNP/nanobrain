@@ -1,0 +1,237 @@
+name: "ChatWorkflow"
+description: "Complete NanoBrain chat workflow with CLI interface, conversational agent, and event-driven processing"
+version: "1.0.0"
+
+metadata:
+  biological_analogy: "Neural conversation processing pathway"
+  justification: >
+    Like how the brain processes conversation through interconnected neural pathways,
+    this workflow processes chat through interconnected NanoBrain components.
+  objectives:
+    - Demonstrate complete NanoBrain framework integration
+    - Provide interactive chat interface using CLI
+    - Show event-driven processing with triggers and links
+    - Illustrate data flow through multiple data units
+    - Showcase conversational agent capabilities
+
+# Executor configuration
+executors:
+  local_executor:
+    executor_type: "local"
+    name: "local_executor"
+    description: "Local executor for chat workflow processing"
+    max_workers: 2
+    timeout: 30.0
+    debug_mode: true
+
+# Data units for state management
+data_units:
+  user_input:
+    data_type: "memory"
+    name: "user_input"
+    description: "Stores user input from CLI interface"
+    persistent: false
+    cache_size: 100
+    
+  agent_input:
+    data_type: "memory"
+    name: "agent_input"
+    description: "Processed user input ready for agent processing"
+    persistent: false
+    cache_size: 100
+    
+  agent_output:
+    data_type: "memory"
+    name: "agent_output"
+    description: "Agent responses ready for CLI output"
+    persistent: false
+    cache_size: 100
+
+# Triggers for event-driven processing
+triggers:
+  user_input_trigger:
+    trigger_type: "data_updated"
+    name: "user_input_trigger"
+    description: "Triggers when user provides input"
+    conditions:
+      data_units: ["user_input"]
+      require_all: true
+      
+  agent_input_trigger:
+    trigger_type: "data_updated"
+    name: "agent_input_trigger"
+    description: "Triggers when agent input is ready for processing"
+    conditions:
+      data_units: ["agent_input"]
+      require_all: true
+      
+  agent_output_trigger:
+    trigger_type: "data_updated"
+    name: "agent_output_trigger"
+    description: "Triggers when agent output is ready for display"
+    conditions:
+      data_units: ["agent_output"]
+      require_all: true
+
+# Agents for AI processing
+agents:
+  chat_assistant:
+    class: "ConversationalAgent"
+    config:
+      name: "ChatAssistant"
+      description: "Helpful conversational assistant for chat workflow"
+      model: "gpt-3.5-turbo"
+      temperature: 0.7
+      max_tokens: 1000
+      system_prompt: |
+        You are a helpful and friendly AI assistant. You engage in natural conversations with users, providing helpful, accurate, and thoughtful responses.
+
+        Key guidelines:
+        - Be conversational and personable
+        - Provide clear and helpful answers
+        - Ask follow-up questions when appropriate
+        - Maintain context throughout the conversation
+        - Be concise but thorough in your responses
+        - Show enthusiasm and interest in the user's questions
+        - Provide examples when helpful
+        - Admit when you don't know something
+      auto_initialize: false
+      debug_mode: true
+      enable_logging: true
+      log_conversations: true
+      log_tool_calls: true
+
+# Steps for workflow processing
+steps:
+  chat_agent_step:
+    class: "ConversationalAgentStep"
+    config:
+      name: "chat_agent_step"
+      description: "Conversational agent step for chat processing"
+      debug_mode: true
+      enable_logging: true
+    input_configs:
+      user_input:
+        data_type: "memory"
+        name: "agent_input"
+        description: "User input for agent processing"
+        persistent: false
+        cache_size: 100
+    output_config:
+      data_type: "memory"
+      name: "agent_output"
+      description: "Agent response output"
+      persistent: false
+      cache_size: 100
+
+# Links for data flow
+links:
+  - name: "user_to_agent_link"
+    link_type: "direct"
+    description: "Transfers user input to agent input data unit"
+    source: "user_input"
+    target: "agent_input"
+    
+  - name: "agent_input_to_step_link"
+    link_type: "direct"
+    description: "Transfers agent input to processing step"
+    source: "agent_input"
+    target: "chat_agent_step"
+    
+  - name: "step_to_output_link"
+    link_type: "direct"
+    description: "Transfers step output to agent output data unit"
+    source: "chat_agent_step"
+    target: "agent_output"
+
+# Workflow configuration
+workflow:
+  name: "ChatWorkflow"
+  description: "Interactive chat workflow using NanoBrain framework"
+  
+  # Execution flow
+  flow:
+    - stage: "input"
+      description: "User input collection"
+      components: ["user_input"]
+      
+    - stage: "transfer"
+      description: "Data transfer to agent"
+      components: ["user_to_agent_link", "user_input_trigger"]
+      
+    - stage: "processing"
+      description: "Agent processing"
+      components: ["agent_input", "chat_agent_step", "agent_input_trigger"]
+      
+    - stage: "output"
+      description: "Response output"
+      components: ["agent_output", "step_to_output_link", "agent_output_trigger"]
+  
+  # Performance settings
+  performance:
+    max_concurrent_conversations: 5
+    response_timeout: 30.0
+    retry_attempts: 3
+    
+  # Logging configuration
+  logging:
+    level: "INFO"
+    log_conversations: true
+    log_data_transfers: true
+    log_trigger_activations: true
+    log_performance_metrics: true
+
+# Validation rules
+validation:
+  required_components:
+    - "local_executor"
+    - "user_input"
+    - "agent_input"
+    - "agent_output"
+    - "chat_assistant"
+    - "chat_agent_step"
+    
+  data_flow_validation:
+    - source: "user_input"
+      target: "agent_input"
+      via: "user_to_agent_link"
+      
+    - source: "agent_input"
+      target: "chat_agent_step"
+      via: "agent_input_to_step_link"
+      
+    - source: "chat_agent_step"
+      target: "agent_output"
+      via: "step_to_output_link"
+
+# Example usage scenarios
+examples:
+  basic_chat:
+    description: "Basic conversational interaction"
+    input: "Hello, how are you today?"
+    expected_flow:
+      - "User types message in CLI"
+      - "Message stored in user_input data unit"
+      - "user_input_trigger activates"
+      - "user_to_agent_link transfers data to agent_input"
+      - "agent_input_trigger activates"
+      - "chat_agent_step processes input through ConversationalAgent"
+      - "Response stored in agent_output data unit"
+      - "agent_output_trigger activates"
+      - "CLI displays response to user"
+      
+  multi_turn_conversation:
+    description: "Multi-turn conversation with context"
+    scenario:
+      - user: "What is machine learning?"
+      - assistant: "Machine learning is a subset of artificial intelligence..."
+      - user: "Can you give me an example?"
+      - assistant: "Sure! A common example is email spam detection..."
+      
+  error_handling:
+    description: "Error handling in the workflow"
+    scenarios:
+      - "Network timeout during LLM call"
+      - "Invalid input format"
+      - "Agent processing failure"
+      - "Data unit storage error" 
