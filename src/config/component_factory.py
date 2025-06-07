@@ -11,17 +11,17 @@ from pathlib import Path
 from enum import Enum
 import asyncio
 
-from core import (
+from ..core import (
     Step, SimpleStep, Agent, SimpleAgent,
     DataUnitMemory, DataUnitFile, DataUnitString, DataUnitStream,
     ManualTrigger, TimerTrigger, AllDataReceivedTrigger, DataUpdatedTrigger,
     DirectLink, LangChainTool,
     LocalExecutor, ThreadExecutor, ParslExecutor, ProcessExecutor
 )
-from agents.code_writer import CodeWriterAgent
-from agents.file_writer import FileWriterAgent
-from config.yaml_config import YAMLConfig
-from config.schema_validator import SchemaValidator, ConfigSchema, create_schema_from_yaml
+from ..agents.code_writer import CodeWriterAgent
+from ..agents.file_writer import FileWriterAgent
+from .yaml_config import YAMLConfig
+from .schema_validator import SchemaValidator, ConfigSchema, create_schema_from_yaml
 
 logger = logging.getLogger(__name__)
 
@@ -236,8 +236,12 @@ class ComponentFactory:
         if name and 'name' not in agent_config_dict:
             agent_config_dict['name'] = name
         
+        # Include prompt_templates from top level if available
+        if 'prompt_templates' in config:
+            agent_config_dict['prompt_templates'] = config['prompt_templates']
+        
         # Create AgentConfig object
-        from core.agent import AgentConfig
+        from ..core.agent import AgentConfig
         agent_config = AgentConfig(**agent_config_dict)
         
         # Create agent instance
@@ -267,12 +271,12 @@ class ComponentFactory:
             agent = self._create_agent(agent_config)
 
         # Create StepConfig object
-        from core.step import StepConfig
+        from ..core.step import StepConfig
         step_config = StepConfig(**step_config_dict)
 
         # Create step instance based on type
         if step_type == 'SimpleStep':
-            from core.step import SimpleStep
+            from ..core.step import SimpleStep
             step = SimpleStep(config=step_config, agent=agent)
         else:
             raise ValueError(f"Unknown step type: {step_type}")
@@ -296,7 +300,7 @@ class ComponentFactory:
         
         # Convert string to enum if needed
         if isinstance(data_type, str):
-            from core.data_unit import DataUnitType, DataUnitConfig
+            from ..core.data_unit import DataUnitType, DataUnitConfig
             try:
                 data_type_enum = DataUnitType(data_type.lower())
             except ValueError:
@@ -305,7 +309,7 @@ class ComponentFactory:
             data_type_enum = data_type
         
         # Create DataUnitConfig object
-        from core.data_unit import DataUnitConfig
+        from ..core.data_unit import DataUnitConfig
         data_config = DataUnitConfig(**config)
         
         # Create data unit based on type
@@ -328,7 +332,7 @@ class ComponentFactory:
         
         # Convert string to enum if needed
         if isinstance(trigger_type, str):
-            from core.trigger import TriggerType, TriggerConfig
+            from ..core.trigger import TriggerType, TriggerConfig
             try:
                 trigger_type_enum = TriggerType(trigger_type.lower())
             except ValueError:
@@ -337,7 +341,7 @@ class ComponentFactory:
             trigger_type_enum = trigger_type
         
         # Create TriggerConfig object
-        from core.trigger import TriggerConfig
+        from ..core.trigger import TriggerConfig
         trigger_config = TriggerConfig(**config)
         
         # Create trigger based on type
@@ -381,7 +385,7 @@ class ComponentFactory:
             target = Placeholder(f"placeholder_target_{target_name}")
         
         # Create LinkConfig object
-        from core.link import LinkConfig, LinkType
+        from ..core.link import LinkConfig, LinkType
         link_config_dict = {k: v for k, v in config.items() if k not in ['source', 'target', 'source_id', 'target_id', 'name']}
         link_config_dict['link_type'] = LinkType.DIRECT
         link_config = LinkConfig(**link_config_dict)
@@ -399,7 +403,7 @@ class ComponentFactory:
         
         # Convert string to enum if needed
         if isinstance(executor_type, str):
-            from core.executor import ExecutorType, ExecutorConfig
+            from ..core.executor import ExecutorType, ExecutorConfig
             try:
                 executor_type_enum = ExecutorType(executor_type.lower())
             except ValueError:
@@ -408,7 +412,7 @@ class ComponentFactory:
             executor_type_enum = executor_type
         
         # Create ExecutorConfig object
-        from core.executor import ExecutorConfig
+        from ..core.executor import ExecutorConfig
         executor_config = ExecutorConfig(**config)
         
         # Create executor based on type

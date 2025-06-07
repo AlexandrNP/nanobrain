@@ -112,10 +112,12 @@ class Step(ABC):
             if self.config.trigger_config:
                 self.nb_logger.debug(f"Initializing trigger")
                 self.trigger = self._create_trigger(self.config.trigger_config)
-                await self.trigger.initialize()
                 
                 # Set up trigger callback
-                self.trigger.set_callback(self._on_trigger_activated)
+                await self.trigger.add_callback(self._on_trigger_activated)
+                
+                # Start monitoring
+                await self.trigger.start_monitoring()
             
             self._is_initialized = True
             context.metadata['input_count'] = len(self.input_data_units)
@@ -143,7 +145,7 @@ class Step(ABC):
             
             # Shutdown trigger
             if self.trigger:
-                await self.trigger.shutdown()
+                await self.trigger.stop_monitoring()
             
             # Shutdown data units
             for data_unit in self.input_data_units.values():
@@ -398,6 +400,31 @@ class Step(ABC):
             "links_count": len(self.links),
             "has_trigger": self.trigger is not None
         }
+    
+    async def set_input(self, data: Any, input_id: str = "input_0") -> None:
+        """Convenience method to set input data."""
+        if input_id not in self.input_data_units:
+            # Create a default input data unit if it doesn't exist
+            from .data_unit import DataUnitConfig, DataUnitType, DataUnitMemory
+            config = DataUnitConfig(data_type=DataUnitType.MEMORY)
+            data_unit = DataUnitMemory(config=config, name=input_id)
+            await data_unit.initialize()
+            self.input_data_units[input_id] = data_unit
+        
+        await self.input_data_units[input_id].set(data)
+    
+    async def get_output(self) -> Any:
+        """Convenience method to get output data."""
+        if not self.output_data_unit:
+            return self._last_result
+        return await self.output_data_unit.get()
+    
+    @property
+    def is_running(self) -> bool:
+        """Check if the step is currently running."""
+        # For now, just return False as we don't track running state
+        # This could be enhanced to track actual execution state
+        return False
 
 
 class SimpleStep(Step):

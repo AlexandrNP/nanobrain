@@ -8,12 +8,12 @@ import logging
 import os
 from pathlib import Path
 from typing import Any, Dict, Optional
-from core.agent import Agent, AgentConfig
+from ..core.agent import SimpleAgent, AgentConfig
 
 logger = logging.getLogger(__name__)
 
 
-class FileWriterAgent(Agent):
+class FileWriterAgent(SimpleAgent):
     """
     Specialized agent for file operations.
     

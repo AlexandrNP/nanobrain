@@ -8,6 +8,8 @@ import asyncio
 import logging
 import json
 import time
+import yaml
+import os
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional, List, Union
 from pydantic import BaseModel, Field, ConfigDict
@@ -35,6 +37,7 @@ class AgentConfig(BaseModel):
     prompt_templates: Optional[Dict[str, str]] = Field(default=None, description="Templates for different prompt types")
     executor_config: Optional[ExecutorConfig] = None
     tools: List[Dict[str, Any]] = Field(default_factory=list)
+    tools_config_path: Optional[str] = Field(default=None, description="Path to YAML file containing tool configurations")
     auto_initialize: bool = True
     debug_mode: bool = False
     enable_logging: bool = True
@@ -99,6 +102,11 @@ class Agent(ABC):
             # Initialize LLM client
             self.nb_logger.debug(f"Initializing LLM client for agent {self.name}")
             await self._initialize_llm_client()
+            
+            # Load tools from YAML configuration if specified
+            if self.config.tools_config_path:
+                self.nb_logger.debug(f"Loading tools from YAML config: {self.config.tools_config_path}")
+                await self._load_tools_from_yaml_config()
             
             # Register tools from configuration
             self.nb_logger.debug(f"Registering {len(self.config.tools)} tools for agent {self.name}")
@@ -189,6 +197,106 @@ class Agent(ABC):
         except Exception as e:
             self.nb_logger.error(f"Failed to initialize LLM client for agent {self.name}: {e}")
             self.llm_client = None
+
+    async def _load_tools_from_yaml_config(self) -> None:
+        """Load tools from YAML configuration file."""
+        if not self.config.tools_config_path:
+            return
+            
+        try:
+            # Resolve the config path
+            config_path = self._resolve_config_path(self.config.tools_config_path)
+            
+            self.nb_logger.debug(f"Loading tools from YAML file: {config_path}")
+            
+            # Load YAML file
+            with open(config_path, 'r') as file:
+                tools_config = yaml.safe_load(file)
+            
+            # Check if 'tools' key exists
+            if 'tools' not in tools_config:
+                self.nb_logger.warning(f"No 'tools' key found in config: {config_path}")
+                return
+            
+            # Add tools from YAML to the agent's tools list
+            yaml_tools = tools_config['tools']
+            self.nb_logger.info(f"Found {len(yaml_tools)} tools in YAML config")
+            
+            # Convert YAML tool configs to the format expected by _register_tool_from_config
+            for tool_config in yaml_tools:
+                # Create a standardized tool configuration
+                standardized_config = self._standardize_tool_config(tool_config)
+                self.config.tools.append(standardized_config)
+                
+        except FileNotFoundError:
+            self.nb_logger.error(f"Tools config file not found: {self.config.tools_config_path}")
+            raise
+        except yaml.YAMLError as e:
+            self.nb_logger.error(f"Error parsing YAML config: {e}")
+            raise
+        except Exception as e:
+            self.nb_logger.error(f"Error loading tools from YAML config: {e}")
+            raise
+
+    def _resolve_config_path(self, config_path: str) -> str:
+        """Resolve the configuration file path."""
+        # If absolute path, use as-is
+        if os.path.isabs(config_path):
+            if os.path.exists(config_path):
+                return config_path
+            else:
+                raise FileNotFoundError(f"Config file not found: {config_path}")
+        
+        # Try relative to current working directory
+        if os.path.exists(config_path):
+            return config_path
+        
+        # Try relative to src directory
+        src_path = os.path.join("src", config_path)
+        if os.path.exists(src_path):
+            return src_path
+        
+        # Try in config directories
+        config_dirs = [
+            "config",
+            "src/config", 
+            "src/agents/config",
+            "agents/config"
+        ]
+        
+        for config_dir in config_dirs:
+            full_path = os.path.join(config_dir, config_path)
+            if os.path.exists(full_path):
+                return full_path
+        
+        raise FileNotFoundError(f"Config file not found in any search paths: {config_path}")
+
+    def _standardize_tool_config(self, tool_config: Dict[str, Any]) -> Dict[str, Any]:
+        """Standardize tool configuration from YAML to internal format."""
+        # Extract basic information
+        name = tool_config.get('name', 'unnamed_tool')
+        description = tool_config.get('description', '')
+        class_path = tool_config.get('class', '')
+        
+        # Determine tool type based on class path or explicit type
+        tool_type = tool_config.get('tool_type', 'agent')  # Default to agent for backward compatibility
+        
+        # Create standardized configuration
+        standardized = {
+            'tool_type': tool_type,
+            'name': name,
+            'description': description,
+            'class_path': class_path,
+            'parameters': tool_config.get('parameters', {}),
+            'config': tool_config.get('config', {})
+        }
+        
+        # Add any additional fields from the original config
+        for key, value in tool_config.items():
+            if key not in standardized:
+                standardized[key] = value
+        
+        return standardized
     
     async def _register_tool_from_config(self, tool_config: Dict[str, Any]) -> None:
         """Register a tool from configuration."""
@@ -199,20 +307,82 @@ class Agent(ABC):
                             tool_name=tool_config.get('name', 'unnamed'))
         
         # Create tool configuration
-        config = ToolConfig(**tool_config)
+        config = ToolConfig(**{k: v for k, v in tool_config.items() 
+                              if k in ['tool_type', 'name', 'description', 'parameters', 'async_execution', 'timeout']})
         
         # Create and register tool based on type
         if tool_type == ToolType.FUNCTION:
             # Function tools need to be provided externally
             self.nb_logger.warning(f"Function tool {config.name} needs to be registered manually")
         elif tool_type == ToolType.AGENT:
-            # Agent tools need agent instance
-            self.nb_logger.warning(f"Agent tool {config.name} needs to be registered manually")
+            # Create agent instance from class path
+            await self._register_agent_tool_from_config(tool_config, config)
         else:
             # Other tool types can be created from config
             tool = create_tool(tool_type, config, **tool_config)
             self.tool_registry.register(tool)
             self.nb_logger.debug(f"Successfully registered tool: {config.name}")
+
+    async def _register_agent_tool_from_config(self, tool_config: Dict[str, Any], config: ToolConfig) -> None:
+        """Register an agent tool from configuration by creating the agent instance."""
+        class_path = tool_config.get('class_path', tool_config.get('class', ''))
+        
+        if not class_path:
+            self.nb_logger.error(f"No class path specified for agent tool: {config.name}")
+            return
+        
+        try:
+            # Import and create the agent class
+            agent_class = self._import_class_from_path(class_path)
+            
+            # Create agent configuration
+            agent_config_data = tool_config.get('config', {})
+            agent_config_data.setdefault('name', config.name)
+            agent_config_data.setdefault('description', config.description)
+            
+            # Create AgentConfig instance (AgentConfig is available in this module)
+            agent_config = AgentConfig(**agent_config_data)
+            
+            # Create agent instance
+            agent_instance = agent_class(agent_config)
+            
+            # Initialize the agent
+            await agent_instance.initialize()
+            
+            # Create agent tool
+            tool = create_tool(ToolType.AGENT, config, agent=agent_instance)
+            self.tool_registry.register(tool)
+            
+            self.nb_logger.info(f"Successfully registered agent tool: {config.name} ({class_path})")
+            
+        except Exception as e:
+            self.nb_logger.error(f"Failed to register agent tool {config.name}: {e}")
+            raise
+
+    def _import_class_from_path(self, class_path: str):
+        """Import a class from a module path."""
+        try:
+            # Split module path and class name
+            if '.' not in class_path:
+                raise ValueError(f"Invalid class path format: {class_path}")
+            
+            module_path, class_name = class_path.rsplit('.', 1)
+            
+            # Import the module
+            import importlib
+            module = importlib.import_module(module_path)
+            
+            # Get the class
+            agent_class = getattr(module, class_name)
+            
+            return agent_class
+            
+        except ImportError as e:
+            raise ImportError(f"Could not import module {module_path}: {e}")
+        except AttributeError as e:
+            raise AttributeError(f"Class {class_name} not found in module {module_path}: {e}")
+        except Exception as e:
+            raise Exception(f"Error importing class {class_path}: {e}")
     
     def register_tool(self, tool: ToolBase) -> None:
         """Register a tool with the agent."""
@@ -221,45 +391,9 @@ class Agent(ABC):
                            tool_name=tool.name, 
                            tool_type=type(tool).__name__)
     
-    def register_function_tool(self, func: callable, name: str, description: str = "", 
-                             parameters: Optional[Dict[str, Any]] = None) -> None:
-        """Register a function as a tool."""
-        self.nb_logger.debug(f"Registering function tool: {name}", 
-                            function_name=func.__name__ if hasattr(func, '__name__') else 'unknown')
-        
-        config = ToolConfig(
-            tool_type=ToolType.FUNCTION,
-            name=name,
-            description=description,
-            parameters=parameters or {}
-        )
-        tool = create_tool(ToolType.FUNCTION, config, func=func)
-        self.register_tool(tool)
+
     
-    def register_agent_tool(self, agent: 'Agent', name: Optional[str] = None, 
-                           description: Optional[str] = None) -> None:
-        """Register another agent as a tool."""
-        tool_name = name or agent.name
-        self.nb_logger.debug(f"Registering agent tool: {tool_name}", 
-                            target_agent=agent.name)
-        
-        config = ToolConfig(
-            tool_type=ToolType.AGENT,
-            name=tool_name,
-            description=description or agent.description,
-            parameters={
-                "type": "object",
-                "properties": {
-                    "input": {
-                        "type": "string",
-                        "description": "Input text for the agent"
-                    }
-                },
-                "required": ["input"]
-            }
-        )
-        tool = create_tool(ToolType.AGENT, config, agent=agent)
-        self.register_tool(tool)
+
     
     @abstractmethod
     async def process(self, input_text: str, **kwargs) -> str:
@@ -423,7 +557,7 @@ class Agent(ABC):
                                        arguments=tool_args)
                     
                     # Get tool from registry
-                    tool = self.tool_registry.get_tool(tool_name)
+                    tool = self.tool_registry.get(tool_name)
                     if not tool:
                         raise ValueError(f"Tool '{tool_name}' not found")
                     
@@ -562,9 +696,9 @@ class SimpleAgent(Agent):
                 if self.tool_registry.list_tools():
                     tools = []
                     for tool_name in self.tool_registry.list_tools():
-                        tool = self.tool_registry.get_tool(tool_name)
-                        if tool and hasattr(tool, 'get_openai_function_schema'):
-                            tools.append(tool.get_openai_function_schema())
+                        tool = self.tool_registry.get(tool_name)
+                        if tool and hasattr(tool, 'get_schema'):
+                            tools.append(tool.get_schema())
                 
                 # Call LLM
                 llm_response = await self._call_llm(messages, tools)
@@ -640,9 +774,9 @@ class ConversationalAgent(Agent):
                 if self.tool_registry.list_tools():
                     tools = []
                     for tool_name in self.tool_registry.list_tools():
-                        tool = self.tool_registry.get_tool(tool_name)
-                        if tool and hasattr(tool, 'get_openai_function_schema'):
-                            tools.append(tool.get_openai_function_schema())
+                        tool = self.tool_registry.get(tool_name)
+                        if tool and hasattr(tool, 'get_schema'):
+                            tools.append(tool.get_schema())
                 
                 # Call LLM
                 llm_response = await self._call_llm(messages, tools)

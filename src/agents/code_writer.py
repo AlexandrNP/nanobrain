@@ -6,12 +6,12 @@ Specialized agent for generating and writing code files.
 
 import logging
 from typing import Any, Dict, Optional
-from core.agent import Agent, AgentConfig
+from ..core.agent import SimpleAgent, AgentConfig
 
 logger = logging.getLogger(__name__)
 
 
-class CodeWriterAgent(Agent):
+class CodeWriterAgent(SimpleAgent):
     """
     Specialized agent for generating code and writing files.
     
@@ -204,16 +204,4 @@ class CodeWriterAgent(Agent):
         
         return await self.process(request)
     
-    def register_file_writer_tool(self, file_writer_agent: Agent) -> None:
-        """
-        Register a file writer agent as a tool.
-        
-        Args:
-            file_writer_agent: File writer agent instance
-        """
-        self.register_agent_tool(
-            file_writer_agent,
-            name="file_writer",
-            description="Tool for writing files based on natural language descriptions"
-        )
-        logger.info("Registered file writer tool with CodeWriterAgent") 
+ 

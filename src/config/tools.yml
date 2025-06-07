@@ -1,0 +1,42 @@
+tools:
+  - name: "file_writer"
+    tool_type: "agent"
+    class: "src.agents.file_writer.FileWriterAgent"
+    description: "Tool for writing files based on natural language descriptions"
+    parameters:
+      type: "object"
+      properties:
+        input:
+          type: "string"
+          description: "Input text for the file writer agent"
+      required: ["input"]
+    config:
+      name: "FileWriterAgent"
+      description: "Handles file operations with detailed logging"
+      model: "gpt-4"
+      temperature: 0.3
+      debug_mode: false
+      enable_logging: true
+      log_conversations: true
+      log_tool_calls: true
+
+  - name: "code_writer"
+    tool_type: "agent"
+    class: "src.agents.code_writer.CodeWriterAgent"
+    description: "Tool for generating software code based on natural language instructions"
+    parameters:
+      type: "object"
+      properties:
+        input:
+          type: "string"
+          description: "Input text for the code writer agent"
+      required: ["input"]
+    config:
+      name: "CodeWriterAgent"
+      description: "Specialized agent for generating and writing code"
+      model: "gpt-4"
+      temperature: 0.2
+      debug_mode: false
+      enable_logging: true
+      log_conversations: true
+      log_tool_calls: true 
