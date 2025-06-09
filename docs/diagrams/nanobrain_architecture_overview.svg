@@ -1,0 +1,237 @@
+<!-- NanoBrain Framework - Architecture Overview -->
+<!-- Clean, readable SVG diagram showing the framework architecture -->
+<!-- For Mermaid source code, see nanobrain_architecture_overview.mmd -->
+
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 1000" style="background: white;">
+    <defs>
+        <style>
+            .title {
+                font-family: Arial, sans-serif;
+                font-size: 20px;
+                font-weight: bold;
+                text-anchor: middle;
+                fill: #333;
+            }
+
+            .group-title {
+                font-family: Arial, sans-serif;
+                font-size: 14px;
+                font-weight: bold;
+                text-anchor: middle;
+                fill: #333;
+            }
+
+            .component {
+                font-family: Arial, sans-serif;
+                font-size: 11px;
+                text-anchor: middle;
+                fill: #333;
+            }
+
+            .core-component {
+                fill: #e1f5fe;
+                stroke: #01579b;
+                stroke-width: 2;
+            }
+
+            .improvement {
+                fill: #e8f5e8;
+                stroke: #2e7d32;
+                stroke-width: 2;
+            }
+
+            .data-flow {
+                fill: #fff3e0;
+                stroke: #ef6c00;
+                stroke-width: 2;
+            }
+
+            .config {
+                fill: #f3e5f5;
+                stroke: #7b1fa2;
+                stroke-width: 2;
+            }
+
+            .logging {
+                fill: #fce4ec;
+                stroke: #c2185b;
+                stroke-width: 2;
+            }
+
+            .testing {
+                fill: #fff8e1;
+                stroke: #f57f17;
+                stroke-width: 2;
+            }
+
+            .parallel {
+                fill: #e8f4fd;
+                stroke: #1976d2;
+                stroke-width: 2;
+            }
+
+            .arrow {
+                stroke: #666;
+                stroke-width: 1.5;
+                fill: none;
+                marker-end: url(#arrowhead);
+            }
+        </style>
+        <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#666" />
+        </marker>
+    </defs>
+
+    <!-- Title -->
+    <text x="700" y="30" class="title">🧠 NanoBrain Framework - Refactored Architecture</text>
+
+    <!-- Core Components Group -->
+    <rect x="50" y="60" width="600" height="300" fill="none" stroke="#333" stroke-width="2" rx="10" />
+    <text x="350" y="80" class="group-title">Core Components</text>
+
+    <!-- Agent System -->
+    <rect x="70" y="100" width="130" height="80" class="core-component" rx="5" />
+    <text x="135" y="120" class="component">🤖 Agent System</text>
+    <text x="135" y="135" class="component">ConversationalAgent</text>
+    <text x="135" y="150" class="component">AgentConfig</text>
+    <text x="135" y="165" class="component">LLM Integration</text>
+
+    <!-- Executor System -->
+    <rect x="220" y="100" width="130" height="80" class="core-component" rx="5" />
+    <text x="285" y="120" class="component">⚡ Executor System</text>
+    <text x="285" y="135" class="component">LocalExecutor</text>
+    <text x="285" y="150" class="component">ThreadExecutor</text>
+    <text x="285" y="165" class="component">ParslExecutor (HPC)</text>
+
+    <!-- Data Management -->
+    <rect x="370" y="100" width="130" height="80" class="core-component" rx="5" />
+    <text x="435" y="120" class="component">💾 Data Management</text>
+    <text x="435" y="135" class="component">DataUnitBase</text>
+    <text x="435" y="150" class="component">DataUnitMemory</text>
+    <text x="435" y="165" class="component">Content Logging</text>
+
+    <!-- Workflow Engine -->
+    <rect x="520" y="100" width="130" height="80" class="core-component" rx="5" />
+    <text x="585" y="120" class="component">🔄 Workflow Engine</text>
+    <text x="585" y="135" class="component">Step Processing</text>
+    <text x="585" y="150" class="component">Link Management</text>
+    <text x="585" y="165" class="component">Trigger System</text>
+
+    <!-- Configuration & Validation Group -->
+    <rect x="50" y="200" width="280" height="120" class="config" rx="5" />
+    <text x="190" y="220" class="group-title">Configuration &amp; Validation</text>
+
+    <rect x="70" y="240" width="120" height="60" fill="white" stroke="#7b1fa2" rx="3" />
+    <text x="130" y="260" class="component">⚙️ Configuration</text>
+    <text x="130" y="275" class="component">YAML Loading</text>
+    <text x="130" y="290" class="component">Pydantic V2</text>
+
+    <rect x="200" y="240" width="120" height="60" fill="white" stroke="#7b1fa2" rx="3" />
+    <text x="260" y="260" class="component">📋 Schema Mgmt</text>
+    <text x="260" y="275" class="component">Dynamic Generation</text>
+    <text x="260" y="290" class="component">Type Safety</text>
+
+    <!-- Logging & Monitoring Group -->
+    <rect x="350" y="200" width="300" height="120" class="logging" rx="5" />
+    <text x="500" y="220" class="group-title">Logging &amp; Monitoring</text>
+
+    <rect x="370" y="240" width="90" height="60" fill="white" stroke="#c2185b" rx="3" />
+    <text x="415" y="260" class="component">📝 Core Logging</text>
+    <text x="415" y="275" class="component">Structured</text>
+    <text x="415" y="290" class="component">JSON Format</text>
+
+    <rect x="470" y="240" width="90" height="60" fill="white" stroke="#c2185b" rx="3" />
+    <text x="515" y="260" class="component">🔧 Log Config</text>
+    <text x="515" y="275" class="component">Mode Selection</text>
+    <text x="515" y="290" class="component">Suppression</text>
+
+    <rect x="570" y="240" width="90" height="60" fill="white" stroke="#c2185b" rx="3" />
+    <text x="615" y="260" class="component">📊 Data Logging</text>
+    <text x="615" y="275" class="component">Operation Track</text>
+    <text x="615" y="290" class="component">Rich Metadata</text>
+
+    <!-- Parallel Processing Group -->
+    <rect x="700" y="60" width="250" height="160" class="parallel" rx="10" />
+    <text x="825" y="80" class="group-title">Parallel Processing</text>
+
+    <rect x="720" y="100" width="100" height="60" fill="white" stroke="#1976d2" rx="3" />
+    <text x="770" y="120" class="component">🚀 Parsl Integration</text>
+    <text x="770" y="135" class="component">HPC Execution</text>
+    <text x="770" y="150" class="component">Distributed</text>
+
+    <rect x="830" y="100" width="100" height="60" fill="white" stroke="#1976d2" rx="3" />
+    <text x="880" y="120" class="component">🎯 Demo Apps</text>
+    <text x="880" y="135" class="component">Chat Workflow</text>
+    <text x="880" y="150" class="component">Performance</text>
+
+    <!-- Key Improvements Group -->
+    <rect x="1000" y="60" width="350" height="300" class="improvement" rx="10" />
+    <text x="1175" y="80" class="group-title">✅ Key Improvements</text>
+
+    <rect x="1020" y="100" width="150" height="80" fill="white" stroke="#2e7d32" rx="3" />
+    <text x="1095" y="120" class="component">Pydantic V2 Migration</text>
+    <text x="1095" y="135" class="component">ConfigDict usage</text>
+    <text x="1095" y="150" class="component">model_dump() methods</text>
+    <text x="1095" y="165" class="component">Zero warnings</text>
+
+    <rect x="1180" y="100" width="150" height="80" fill="white" stroke="#2e7d32" rx="3" />
+    <text x="1255" y="120" class="component">Logging System Fixes</text>
+    <text x="1255" y="135" class="component">Third-party suppression</text>
+    <text x="1255" y="150" class="component">File-only mode</text>
+    <text x="1255" y="165" class="component">Rich content logging</text>
+
+    <rect x="1100" y="200" width="150" height="80" fill="white" stroke="#2e7d32" rx="3" />
+    <text x="1175" y="220" class="component">Parsl Configuration Fix</text>
+    <text x="1175" y="235" class="component">Dynamic executor creation</text>
+    <text x="1175" y="250" class="component">Parameter mapping</text>
+    <text x="1175" y="265" class="component">HPC compatibility</text>
+
+    <!-- Data Flow -->
+    <rect x="50" y="400" width="600" height="100" class="data-flow" rx="10" />
+    <text x="350" y="420" class="group-title">📊 Data Flow</text>
+
+    <rect x="70" y="440" width="80" height="40" fill="white" stroke="#ef6c00" rx="3" />
+    <text x="110" y="465" class="component">📥 Input Data</text>
+
+    <rect x="170" y="440" width="80" height="40" fill="white" stroke="#ef6c00" rx="3" />
+    <text x="210" y="465" class="component">Data Unit</text>
+
+    <rect x="270" y="440" width="80" height="40" fill="white" stroke="#ef6c00" rx="3" />
+    <text x="310" y="465" class="component">Workflow</text>
+
+    <rect x="370" y="440" width="80" height="40" fill="white" stroke="#ef6c00" rx="3" />
+    <text x="410" y="465" class="component">Agent</text>
+
+    <rect x="470" y="440" width="80" height="40" fill="white" stroke="#ef6c00" rx="3" />
+    <text x="510" y="465" class="component">Executor</text>
+
+    <rect x="570" y="440" width="80" height="40" fill="white" stroke="#ef6c00" rx="3" />
+    <text x="610" y="465" class="component">📤 Output</text>
+
+    <!-- Data Flow Arrows -->
+    <line x1="150" y1="460" x2="170" y2="460" class="arrow" />
+    <line x1="250" y1="460" x2="270" y2="460" class="arrow" />
+    <line x1="350" y1="460" x2="370" y2="460" class="arrow" />
+    <line x1="450" y1="460" x2="470" y2="460" class="arrow" />
+    <line x1="550" y1="460" x2="570" y2="460" class="arrow" />
+
+    <!-- Testing Framework -->
+    <rect x="700" y="400" width="250" height="100" class="testing" rx="10" />
+    <text x="825" y="420" class="group-title">🧪 Testing Framework</text>
+
+    <rect x="720" y="440" width="200" height="40" fill="white" stroke="#f57f17" rx="3" />
+    <text x="820" y="465" class="component">Unit • Integration • Performance Tests</text>
+
+    <!-- Connection arrows (simplified) -->
+    <line x1="350" y1="320" x2="135" y2="180" class="arrow" />
+    <line x1="500" y1="320" x2="285" y2="180" class="arrow" />
+    <line x1="825" y1="220" x2="770" y2="160" class="arrow" />
+    <line x1="825" y1="400" x2="585" y2="180" class="arrow" />
+
+    <!-- Status indicators -->
+    <text x="700" y="550" class="component" style="font-size: 14px; font-weight: bold;">Framework Status:</text>
+    <text x="700" y="570" class="component" style="fill: #2e7d32;">✅ Pydantic V2 Migration Complete</text>
+    <text x="700" y="590" class="component" style="fill: #2e7d32;">✅ Logging System Enhanced</text>
+    <text x="700" y="610" class="component" style="fill: #2e7d32;">✅ Parsl Integration Fixed</text>
+    <text x="700" y="630" class="component" style="fill: #2e7d32;">✅ HPC Execution Ready</text>
+</svg>

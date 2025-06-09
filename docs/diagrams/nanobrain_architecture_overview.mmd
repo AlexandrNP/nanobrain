@@ -1,0 +1,80 @@
+graph TB
+    subgraph "NanoBrain Framework - Refactored Architecture"
+        subgraph "Core Components"
+            Agent["🤖 Agent System<br/>- ConversationalAgent<br/>- AgentConfig<br/>- LLM Integration"]
+            Executor["⚡ Executor System<br/>- LocalExecutor<br/>- ThreadExecutor<br/>- ProcessExecutor<br/>- ParslExecutor (HPC)"]
+            DataUnit["💾 Data Management<br/>- DataUnitBase<br/>- DataUnitMemory<br/>- DataUnitFile<br/>- Content Logging"]
+            Workflow["🔄 Workflow Engine<br/>- Step Processing<br/>- Link Management<br/>- Trigger System"]
+        end
+
+        subgraph "Configuration & Validation"
+            Config["⚙️ Configuration System<br/>- YAML Config Loading<br/>- Pydantic V2 Models<br/>- Schema Validation"]
+            Schema["📋 Schema Management<br/>- Dynamic Generation<br/>- Type Safety<br/>- Validation Rules"]
+        end
+
+        subgraph "Logging & Monitoring"
+            LogCore["📝 Core Logging<br/>- NanoBrainLogger<br/>- Structured Logging<br/>- JSON Formatting"]
+            LogConfig["🔧 Logging Configuration<br/>- Mode Selection (console/file/both)<br/>- Third-party Suppression<br/>- Dynamic Reconfiguration"]
+            LogData["📊 Data Unit Logging<br/>- Operation Tracking<br/>- Content Serialization<br/>- Rich Metadata"]
+        end
+
+        subgraph "Parallel Processing"
+            Parsl["🚀 Parsl Integration<br/>- HPC Execution<br/>- Distributed Computing<br/>- Configuration Processing"]
+            Demo["🎯 Demo Applications<br/>- Chat Workflow<br/>- Performance Testing<br/>- Load Balancing"]
+        end
+
+        subgraph "Testing Framework"
+            Tests["🧪 Comprehensive Testing<br/>- Unit Tests<br/>- Integration Tests<br/>- Performance Tests<br/>- Mock Support"]
+        end
+    end
+
+    subgraph "Key Improvements"
+        Pydantic["✅ Pydantic V2 Migration<br/>- ConfigDict usage<br/>- model_dump() methods<br/>- field_validator decorators<br/>- Zero deprecation warnings"]
+        
+        LogFix["✅ Logging System Fixes<br/>- Third-party suppression<br/>- File-only mode support<br/>- Data unit content logging<br/>- Readable JSON output"]
+        
+        ParslFix["✅ Parsl Configuration Fix<br/>- Dynamic executor creation<br/>- Correct parameter mapping<br/>- Config reuse handling<br/>- HPC compatibility"]
+    end
+
+    subgraph "Data Flow"
+        Input["📥 Input Data"] --> DataUnit
+        DataUnit --> Workflow
+        Workflow --> Agent
+        Agent --> Executor
+        Executor --> Parsl
+        Parsl --> Output["📤 Output Data"]
+    end
+
+    %% Connections
+    Config --> Agent
+    Config --> Executor
+    Config --> Workflow
+    Config --> LogConfig
+    
+    Schema --> Config
+    
+    LogCore --> LogConfig
+    LogCore --> LogData
+    LogConfig --> Agent
+    LogConfig --> Executor
+    LogConfig --> Workflow
+    
+    Tests --> Agent
+    Tests --> Executor
+    Tests --> DataUnit
+    Tests --> Workflow
+    Tests --> Config
+    Tests --> LogCore
+    
+    Demo --> Parsl
+    Demo --> Agent
+    Demo --> Executor
+    
+    %% Styling
+    classDef coreComponent fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    classDef improvement fill:#e8f5e8,stroke:#2e7d32,stroke-width:2px
+    classDef dataFlow fill:#fff3e0,stroke:#ef6c00,stroke-width:2px
+    
+    class Agent,Executor,DataUnit,Workflow coreComponent
+    class Pydantic,LogFix,ParslFix improvement
+    class Input,Output dataFlow 
