@@ -31,3 +31,4 @@ __pycache__
 logs
 runinfo
 output
+.db

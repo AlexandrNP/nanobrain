@@ -9,12 +9,17 @@ An advanced demonstration of the NanoBrain framework featuring:
 - Multi-turn context management
 - Real-time statistics
 - Export/import capabilities
+- A2A (Agent-to-Agent) protocol support
+- MCP (Model Context Protocol) support
+- Multi-agent collaboration capabilities
 
 Architecture:
-CLI Input → User Input DataUnit → Agent Input DataUnit → ConversationalAgentStep → Agent Output DataUnit → CLI Output
+CLI Input → User Input DataUnit → Agent Input DataUnit → Enhanced Agent Step → Agent Output DataUnit → CLI Output
                                                     ↓
                                             Conversation History
                                             Performance Metrics
+                                            A2A Agent Collaboration
+                                            MCP Tool Integration
 """
 
 import asyncio
@@ -33,13 +38,131 @@ from collections import defaultdict
 # Add src to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from core.data_unit import DataUnitMemory, DataUnitConfig
-from core.trigger import DataUpdatedTrigger, TriggerConfig
-from core.link import DirectLink, LinkConfig
+from core.data_unit import DataUnitMemory, DataUnitConfig, DataUnitType
+from core.trigger import DataUpdatedTrigger, TriggerConfig, TriggerType
+from core.link import DirectLink, LinkConfig, LinkType
 from core.step import Step, StepConfig
 from core.agent import ConversationalAgent, AgentConfig
 from core.executor import LocalExecutor, ExecutorConfig
-from config.component_factory import ComponentFactory, get_factory
+from core.a2a_support import A2ASupportMixin, with_a2a_support
+from core.mcp_support import MCPSupportMixin
+# from config.component_factory import ComponentFactory, get_factory
+
+
+class EnhancedCollaborativeAgent(A2ASupportMixin, MCPSupportMixin, ConversationalAgent):
+    """
+    Enhanced conversational agent with A2A and MCP protocol support.
+    
+    This agent can:
+    - Use MCP tools for structured operations
+    - Collaborate with A2A agents for specialized tasks
+    - Maintain conversation context and history
+    - Provide performance metrics and monitoring
+    """
+    
+    def __init__(self, config: AgentConfig, **kwargs):
+        super().__init__(config, **kwargs)
+        self.collaboration_count = 0
+        self.tool_usage_count = 0
+        self.delegation_rules = kwargs.get('delegation_rules', [])
+    
+    async def process(self, input_text: str, **kwargs) -> str:
+        """Enhanced process method with A2A delegation and MCP tool usage."""
+        # Check if we should delegate to an A2A agent
+        if self.a2a_enabled and self.a2a_agents:
+            delegation_result = await self._check_for_delegation(input_text)
+            if delegation_result:
+                self.collaboration_count += 1
+                return delegation_result
+        
+        # Check if we should use MCP tools
+        if self.mcp_enabled and self.mcp_tools:
+            tool_result = await self._check_for_tool_usage(input_text)
+            if tool_result:
+                self.tool_usage_count += 1
+                return tool_result
+        
+        # Fall back to normal processing
+        return await super().process(input_text, **kwargs)
+    
+    async def _check_for_delegation(self, input_text: str) -> Optional[str]:
+        """Check if the input should be delegated to an A2A agent."""
+        input_lower = input_text.lower()
+        
+        # Check delegation rules
+        for rule in self.delegation_rules:
+            keywords = rule.get('keywords', [])
+            agent_name = rule.get('agent')
+            
+            if any(keyword in input_lower for keyword in keywords):
+                if agent_name in self.a2a_agents:
+                    try:
+                        # Log delegation
+                        self.nb_logger.info(f"Delegating to A2A agent: {agent_name}",
+                                          rule_description=rule.get('description', ''),
+                                          collaboration_count=self.collaboration_count + 1)
+                        
+                        # Call A2A agent
+                        result = await self.call_a2a_agent(agent_name, input_text)
+                        
+                        # Wrap result with context
+                        return f"🤝 Collaborated with {agent_name}:\n\n{result}"
+                        
+                    except Exception as e:
+                        self.nb_logger.error(f"A2A delegation failed: {e}")
+                        # Continue with normal processing
+                        break
+        
+        return None
+    
+    async def _check_for_tool_usage(self, input_text: str) -> Optional[str]:
+        """Check if the input should use MCP tools."""
+        input_lower = input_text.lower()
+        
+        # Simple keyword-based tool detection
+        tool_keywords = {
+            'calculator': ['calculate', 'math', 'compute', 'add', 'subtract', 'multiply', 'divide'],
+            'weather': ['weather', 'temperature', 'forecast', 'climate'],
+            'file': ['file', 'read', 'write', 'save', 'load']
+        }
+        
+        for tool_name, keywords in tool_keywords.items():
+            if any(keyword in input_lower for keyword in keywords):
+                if tool_name in self.mcp_tools:
+                    try:
+                        # Log tool usage
+                        self.nb_logger.info(f"Using MCP tool: {tool_name}",
+                                          tool_usage_count=self.tool_usage_count + 1)
+                        
+                        # Use MCP tool (simplified - would need actual tool calling logic)
+                        result = f"🔧 Used {tool_name} tool to process: {input_text}"
+                        
+                        return result
+                        
+                    except Exception as e:
+                        self.nb_logger.error(f"MCP tool usage failed: {e}")
+                        # Continue with normal processing
+                        break
+        
+        return None
+    
+    def get_enhanced_status(self) -> Dict[str, Any]:
+        """Get enhanced status including A2A and MCP information."""
+        status = {
+            'agent_name': self.config.name,
+            'collaboration_count': self.collaboration_count,
+            'tool_usage_count': self.tool_usage_count
+        }
+        
+        # Add A2A status
+        if hasattr(self, 'get_a2a_status'):
+            status['a2a'] = self.get_a2a_status()
+        
+        # Add MCP status
+        if hasattr(self, 'get_mcp_status'):
+            status['mcp'] = self.get_mcp_status()
+        
+        return status
 
 
 @dataclass
@@ -250,10 +373,10 @@ class PerformanceTracker:
 
 class EnhancedConversationalAgentStep(Step):
     """
-    Enhanced step wrapper for ConversationalAgent with metrics and history.
+    Enhanced step wrapper for EnhancedCollaborativeAgent with metrics, history, and protocol support.
     """
     
-    def __init__(self, config: StepConfig, agent: ConversationalAgent, 
+    def __init__(self, config: StepConfig, agent: EnhancedCollaborativeAgent, 
                  history_manager: ConversationHistoryManager,
                  performance_tracker: PerformanceTracker):
         super().__init__(config)
@@ -355,15 +478,41 @@ class EnhancedCLIInterface:
         self.input_thread = None
         self.show_metrics = False
         self.metrics_thread = None
+        self.response_queue = asyncio.Queue()
+        self.last_message_id = 0
+        self.event_loop = None  # Store event loop reference
         
-    async def start(self):
+        # Response statistics tracking (like Parsl demo)
+        self.response_stats = {
+            'total_requests': 0,
+            'total_responses': 0,
+            'total_processing_time': 0.0,
+            'error_count': 0
+        }
+        
+        # Coordination for input/output timing
+        self.waiting_for_response = False
+        self.response_received_event = None
+        
+    async def start(self, show_welcome=True):
         """Start the enhanced CLI interface."""
         self.running = True
         
-        # Set up output monitoring
-        await self.output_data_unit.subscribe(self._on_output_received)
+        # Store event loop reference for use in threads
+        try:
+            self.event_loop = asyncio.get_running_loop()
+        except RuntimeError as e:
+            print(f"❌ Failed to get event loop: {e}")
+            raise
         
-        self._show_welcome()
+        # Initialize response coordination event
+        self.response_received_event = asyncio.Event()
+        
+        # Note: Output monitoring is handled by trigger callbacks, not polling
+        # This eliminates duplicate response display
+        
+        if show_welcome:
+            self._show_welcome()
         
         # Start input thread
         self.input_thread = threading.Thread(target=self._input_loop, daemon=True)
@@ -373,6 +522,18 @@ class EnhancedCLIInterface:
         if self.show_metrics:
             self.metrics_thread = threading.Thread(target=self._metrics_loop, daemon=True)
             self.metrics_thread.start()
+    
+    async def start_for_testing(self):
+        """Start the CLI interface for testing without welcome message or input thread."""
+        self.running = True
+        
+        # Store event loop reference for use in threads
+        self.event_loop = asyncio.get_running_loop()
+        
+        # Note: Output monitoring is handled by trigger callbacks, not polling
+        # This eliminates duplicate response display
+        
+        # Don't start input thread or show welcome for testing
         
     async def stop(self):
         """Stop the CLI interface."""
@@ -386,13 +547,14 @@ class EnhancedCLIInterface:
         """Show enhanced welcome message."""
         print("🧠 Enhanced NanoBrain Chat Workflow Demo")
         print("=" * 60)
-        print("🚀 Features: History • Metrics • Multi-turn Context • Export")
+        print("🚀 Features: History • Metrics • Multi-turn Context • Export • A2A • MCP")
         print("📝 Type your messages below or use commands:")
         print("   /help     - Show all commands")
         print("   /quit     - Exit the chat")
         print("   /new      - Start new conversation")
         print("   /history  - Show conversation history")
         print("   /stats    - Show performance statistics")
+        print("   /status   - Show A2A and MCP status")
         print("   /export   - Export conversations")
         print("=" * 60)
     
@@ -407,17 +569,11 @@ class EnhancedCLIInterface:
                 
                 # Handle commands
                 if user_input.startswith('/'):
-                    asyncio.run_coroutine_threadsafe(
-                        self._handle_command(user_input),
-                        asyncio.get_event_loop()
-                    )
+                    self._handle_command_sync(user_input)
                     continue
                 
                 # Handle regular chat input
-                asyncio.run_coroutine_threadsafe(
-                    self.input_data_unit.store({'user_input': user_input}),
-                    asyncio.get_event_loop()
-                )
+                self._handle_user_input_sync(user_input)
                 
             except (EOFError, KeyboardInterrupt):
                 print("\n👋 Goodbye!")
@@ -425,6 +581,59 @@ class EnhancedCLIInterface:
                 break
             except Exception as e:
                 print(f"❌ Input error: {e}")
+    
+    def _handle_command_sync(self, command: str):
+        """Handle commands synchronously from input thread."""
+        try:
+            if self.event_loop and not self.event_loop.is_closed():
+                future = asyncio.run_coroutine_threadsafe(
+                    self._handle_command(command),
+                    self.event_loop
+                )
+                # Wait for command to complete with timeout
+                future.result(timeout=5.0)
+            else:
+                print("❌ Event loop not available")
+        except Exception as e:
+            print(f"❌ Command error: {e}")
+    
+    def _handle_user_input_sync(self, user_input: str):
+        """Handle user input synchronously from input thread."""
+        try:
+            if self.event_loop and not self.event_loop.is_closed():
+                # Track the request
+                self.response_stats['total_requests'] += 1
+                
+                # Set waiting flag and clear the event
+                self.waiting_for_response = True
+                if self.response_received_event:
+                    # Clear the event - this is not a coroutine
+                    self.response_received_event.clear()
+                
+                future = asyncio.run_coroutine_threadsafe(
+                    self.input_data_unit.set({'user_input': user_input}),
+                    self.event_loop
+                )
+                # Don't wait for this to complete to avoid blocking input
+                
+                # Wait for response with timeout
+                if self.response_received_event:
+                    try:
+                        wait_future = asyncio.run_coroutine_threadsafe(
+                            asyncio.wait_for(self.response_received_event.wait(), timeout=10.0),
+                            self.event_loop
+                        )
+                        wait_future.result(timeout=11.0)  # Slightly longer timeout for the future itself
+                    except (asyncio.TimeoutError, Exception):
+                        # Continue if timeout or error - don't block indefinitely
+                        pass
+                    finally:
+                        self.waiting_for_response = False
+            else:
+                print("❌ Event loop not available")
+        except Exception as e:
+            print(f"❌ Input processing error: {e}")
+            self.waiting_for_response = False
     
     async def _handle_command(self, command: str):
         """Handle CLI commands."""
@@ -446,6 +655,9 @@ class EnhancedCLIInterface:
             
         elif cmd == '/stats':
             await self._show_stats()
+            
+        elif cmd == '/status':
+            await self._show_protocol_status()
             
         elif cmd == '/export':
             await self._export_conversations()
@@ -516,6 +728,58 @@ class EnhancedCLIInterface:
         except Exception as e:
             print(f"❌ Error showing stats: {e}")
     
+    async def _show_protocol_status(self):
+        """Show A2A and MCP protocol status."""
+        try:
+            print(f"\n🔗 Protocol Status")
+            print("-" * 40)
+            
+            # Get enhanced status from agent
+            if hasattr(self.agent_step.agent, 'get_enhanced_status'):
+                status = self.agent_step.agent.get_enhanced_status()
+                
+                print(f"🤖 Agent: {status.get('agent_name', 'Unknown')}")
+                print(f"🤝 A2A Collaborations: {status.get('collaboration_count', 0)}")
+                print(f"🔧 MCP Tool Usage: {status.get('tool_usage_count', 0)}")
+                
+                # A2A Status
+                a2a_status = status.get('a2a', {})
+                if a2a_status:
+                    print(f"\n📡 A2A Protocol:")
+                    print(f"   Enabled: {a2a_status.get('enabled', False)}")
+                    print(f"   Client Initialized: {a2a_status.get('client_initialized', False)}")
+                    print(f"   Available Agents: {a2a_status.get('total_agents', 0)}")
+                    
+                    agents = a2a_status.get('agents', {})
+                    if agents:
+                        print(f"   Configured Agents:")
+                        for name, info in agents.items():
+                            print(f"     - {name}: {info.get('description', 'No description')}")
+                            print(f"       Skills: {info.get('skills_count', 0)}")
+                else:
+                    print(f"\n📡 A2A Protocol: Not configured")
+                
+                # MCP Status
+                mcp_status = status.get('mcp', {})
+                if mcp_status:
+                    print(f"\n🔧 MCP Protocol:")
+                    print(f"   Enabled: {mcp_status.get('enabled', False)}")
+                    print(f"   Client Initialized: {mcp_status.get('client_initialized', False)}")
+                    print(f"   Available Tools: {mcp_status.get('total_tools', 0)}")
+                    
+                    tools = mcp_status.get('tools', {})
+                    if tools:
+                        print(f"   Configured Tools:")
+                        for name, info in tools.items():
+                            print(f"     - {name}: {info.get('description', 'No description')}")
+                else:
+                    print(f"\n🔧 MCP Protocol: Not configured")
+            else:
+                print("⚠️  Enhanced status not available")
+                
+        except Exception as e:
+            print(f"❌ Error showing protocol status: {e}")
+    
     async def _export_conversations(self):
         """Export conversations to file."""
         try:
@@ -563,13 +827,72 @@ class EnhancedCLIInterface:
             except Exception:
                 break
     
+    # Note: Output monitoring is now handled by trigger callbacks only
+    # This eliminates duplicate response display and follows NanoBrain architecture
+    
+    async def _handle_response(self, response_data: Dict[str, Any]):
+        """Handle response from agents following Parsl demo pattern."""
+        try:
+            # Handle the response data structure
+            response_text = ""
+            metadata = response_data.get('metadata', {})
+            
+            # Check for agent_response field (enhanced demo format)
+            if 'agent_response' in response_data:
+                response_text = response_data['agent_response']
+            # Check for response field (generic format)
+            elif 'response' in response_data:
+                response_text = response_data['response']
+            # Handle direct string response
+            elif isinstance(response_data, str):
+                response_text = response_data
+            else:
+                response_text = str(response_data)
+            
+            # Clean up the response text if it contains error info
+            if response_text.startswith('Error: Error code:'):
+                response_text = "I apologize, but I encountered an error processing your request. Please try again."
+            
+            # Display the bot response
+            if response_text and response_text.strip():
+                if self.show_metrics:
+                    print()  # New line after metrics
+                
+                print(f"\n🤖 Bot: {response_text}")
+                
+                # Show processing info if available and significant
+                processing_time = metadata.get('processing_time', 0)
+                if processing_time and processing_time > 1.0:
+                    agent_id = metadata.get('agent_id', 'assistant')
+                    print(f"     (processed in {processing_time:.2f}s by {agent_id})")
+                
+                # Add spacing after response
+                print()
+                
+                # Update response statistics
+                if hasattr(self, 'response_stats'):
+                    self.response_stats['total_responses'] += 1
+                    self.response_stats['total_processing_time'] += processing_time
+            
+            # Check for errors
+            if response_data.get('error'):
+                if hasattr(self, 'response_stats'):
+                    self.response_stats['error_count'] += 1
+                print(f"⚠️  Error: {response_data['error']}")
+            
+            # Signal that response has been displayed
+            if self.waiting_for_response and self.response_received_event:
+                self.response_received_event.set()
+            
+        except Exception as e:
+            print(f"⚠️  Error displaying response: {e}")
+            # Signal completion even on error
+            if self.waiting_for_response and self.response_received_event:
+                self.response_received_event.set()
+    
     async def _on_output_received(self, data: Dict[str, Any]):
-        """Handle output from the agent."""
-        response = data.get('agent_response', '')
-        if response and response.strip():
-            if self.show_metrics:
-                print()  # New line after metrics
-            print(f"\n🤖 Assistant: {response}")
+        """Handle output from the agent (legacy method for compatibility)."""
+        await self._handle_response(data)
     
     def _show_help(self):
         """Show comprehensive help information."""
@@ -579,6 +902,7 @@ class EnhancedCLIInterface:
         print("  /new       - Start a new conversation")
         print("  /history   - Show current conversation history")
         print("  /stats     - Show performance statistics")
+        print("  /status    - Show A2A and MCP protocol status")
         print("  /export    - Export all conversations to JSON")
         print("  /metrics   - Toggle real-time metrics display")
         print("  /recent    - Show recent conversation IDs")
@@ -589,6 +913,8 @@ class EnhancedCLIInterface:
         print("  - Conversation export/import")
         print("  - Response time tracking")
         print("  - Error rate monitoring")
+        print("  - A2A agent-to-agent collaboration")
+        print("  - MCP tool integration")
 
 
 class EnhancedChatWorkflow:
@@ -597,7 +923,7 @@ class EnhancedChatWorkflow:
     """
     
     def __init__(self):
-        self.factory = get_factory()
+        # self.factory = get_factory()
         self.components = {}
         self.cli = None
         self.executor = None
@@ -623,52 +949,48 @@ class EnhancedChatWorkflow:
         
         # User input data unit
         user_input_config = DataUnitConfig(
-            data_type="memory",
-            name="user_input",
-            description="Enhanced user input with metadata",
+            data_type=DataUnitType.MEMORY,
             persistent=False,
             cache_size=200  # Increased cache
         )
-        user_input_du = DataUnitMemory(user_input_config)
+        user_input_du = DataUnitMemory(user_input_config, name="user_input")
         await user_input_du.initialize()
         self.components['user_input_du'] = user_input_du
         
         # Agent input data unit
         agent_input_config = DataUnitConfig(
-            data_type="memory",
-            name="agent_input",
-            description="Enhanced agent input with context",
+            data_type=DataUnitType.MEMORY,
             persistent=False,
             cache_size=200
         )
-        agent_input_du = DataUnitMemory(agent_input_config)
+        agent_input_du = DataUnitMemory(agent_input_config, name="agent_input")
         await agent_input_du.initialize()
         self.components['agent_input_du'] = agent_input_du
         
         # Agent output data unit
         agent_output_config = DataUnitConfig(
-            data_type="memory",
-            name="agent_output",
-            description="Enhanced agent output with metrics",
+            data_type=DataUnitType.MEMORY,
             persistent=False,
             cache_size=200
         )
-        agent_output_du = DataUnitMemory(agent_output_config)
+        agent_output_du = DataUnitMemory(agent_output_config, name="agent_output")
         await agent_output_du.initialize()
         self.components['agent_output_du'] = agent_output_du
         
-        # 3. Create conversational agent
-        print("   Creating enhanced conversational agent...")
+        # 3. Create enhanced collaborative agent
+        print("   Creating enhanced collaborative agent with A2A and MCP support...")
         agent_config = AgentConfig(
-            name="EnhancedChatAssistant",
-            description="Enhanced conversational assistant with context management",
+            name="EnhancedCollaborativeAssistant",
+            description="Enhanced conversational assistant with A2A and MCP protocol support",
             model="gpt-3.5-turbo",
             temperature=0.7,
             max_tokens=1500,  # Increased for longer responses
-            system_prompt="""You are an advanced AI assistant with enhanced capabilities. You maintain conversation context, provide detailed and helpful responses, and can engage in complex multi-turn conversations.
+            system_prompt="""You are an advanced AI assistant with enhanced capabilities including multi-agent collaboration and tool integration. You maintain conversation context, provide detailed and helpful responses, and can engage in complex multi-turn conversations.
 
 Key capabilities:
 - Maintain conversation context across multiple turns
+- Collaborate with specialized A2A agents for complex tasks
+- Use MCP tools for structured operations
 - Provide detailed explanations with examples
 - Ask clarifying questions when needed
 - Offer suggestions and follow-up topics
@@ -676,13 +998,20 @@ Key capabilities:
 - Remember previous topics in the conversation
 - Provide structured responses when appropriate
 
+Multi-agent collaboration:
+- Delegate travel-related tasks to travel agents
+- Delegate coding tasks to code agents
+- Delegate data analysis to data agents
+- Use appropriate tools for calculations, file operations, etc.
+
 Guidelines:
 - Be conversational, helpful, and engaging
 - Show enthusiasm for learning and helping
 - Provide accurate and well-reasoned responses
 - Use examples and analogies when helpful
 - Acknowledge when you don't know something
-- Offer to explore topics in more depth""",
+- Offer to explore topics in more depth
+- Be transparent about when you're collaborating with other agents or using tools""",
             auto_initialize=False,
             debug_mode=True,
             enable_logging=True,
@@ -690,7 +1019,34 @@ Guidelines:
             log_tool_calls=True
         )
         
-        agent = ConversationalAgent(agent_config)
+        # Create delegation rules for A2A
+        delegation_rules = [
+            {
+                'keywords': ['flight', 'hotel', 'travel', 'trip', 'vacation', 'booking'],
+                'agent': 'travel_agent',
+                'description': 'Delegate travel-related requests to travel specialist'
+            },
+            {
+                'keywords': ['code', 'program', 'function', 'algorithm', 'debug', 'python', 'javascript'],
+                'agent': 'code_agent',
+                'description': 'Delegate programming tasks to code specialist'
+            },
+            {
+                'keywords': ['data', 'analyze', 'chart', 'graph', 'statistics', 'visualization'],
+                'agent': 'data_agent',
+                'description': 'Delegate data analysis tasks to data specialist'
+            }
+        ]
+        
+        agent = EnhancedCollaborativeAgent(
+            agent_config,
+            a2a_enabled=True,
+            a2a_config_path="config/a2a_config.yaml",
+            mcp_enabled=True,
+            mcp_config_path="config/mcp_config.yaml",
+            delegation_rules=delegation_rules
+        )
+        
         await agent.initialize()
         self.components['agent'] = agent
         
@@ -719,9 +1075,7 @@ Guidelines:
         
         # User input trigger
         user_trigger_config = TriggerConfig(
-            trigger_type="data_updated",
-            name="enhanced_user_input_trigger",
-            description="Enhanced trigger for user input processing"
+            trigger_type=TriggerType.DATA_UPDATED
         )
         user_trigger = DataUpdatedTrigger([user_input_du], user_trigger_config, name="enhanced_user_input_trigger")
         await user_trigger.add_callback(self._on_user_input)
@@ -730,9 +1084,7 @@ Guidelines:
         
         # Agent input trigger
         agent_input_trigger_config = TriggerConfig(
-            trigger_type="data_updated",
-            name="enhanced_agent_input_trigger",
-            description="Enhanced trigger for agent input processing"
+            trigger_type=TriggerType.DATA_UPDATED
         )
         agent_input_trigger = DataUpdatedTrigger([agent_input_du], agent_input_trigger_config, name="enhanced_agent_input_trigger")
         await agent_input_trigger.add_callback(self._on_agent_input)
@@ -741,9 +1093,7 @@ Guidelines:
         
         # Agent output trigger
         agent_output_trigger_config = TriggerConfig(
-            trigger_type="data_updated",
-            name="enhanced_agent_output_trigger",
-            description="Enhanced trigger for agent output processing"
+            trigger_type=TriggerType.DATA_UPDATED
         )
         agent_output_trigger = DataUpdatedTrigger([agent_output_du], agent_output_trigger_config, name="enhanced_agent_output_trigger")
         await agent_output_trigger.add_callback(self._on_agent_output)
@@ -755,11 +1105,10 @@ Guidelines:
         
         # User to agent link
         user_to_agent_config = LinkConfig(
-            link_type="direct",
-            name="enhanced_user_to_agent_link",
-            description="Enhanced link from user input to agent input"
+            link_type=LinkType.DIRECT
         )
         user_to_agent_link = DirectLink(user_input_du, agent_input_du, user_to_agent_config)
+        await user_to_agent_link.start()  # Start the link
         self.components['user_to_agent_link'] = user_to_agent_link
         
         # 7. Create enhanced CLI interface
@@ -769,15 +1118,22 @@ Guidelines:
             self.history_manager, self.performance_tracker, agent_step
         )
         
+        # Store CLI reference for output notifications
+        self.components['cli'] = self.cli
+        
         print("✅ Enhanced chat workflow setup complete!")
         print(f"📊 Performance tracking enabled")
         print(f"💾 Conversation history enabled")
-        print(f"🚀 Ready for enhanced chat experience!")
+        print(f"🤝 A2A agent collaboration enabled")
+        print(f"🔧 MCP tool integration enabled")
+        print(f"🚀 Ready for enhanced collaborative chat experience!")
         
     async def _on_user_input(self, data: Dict[str, Any]):
         """Handle user input trigger activation."""
-        # Data is automatically transferred by the direct link
-        pass
+        # Transfer data through the direct link
+        user_to_agent_link = self.components.get('user_to_agent_link')
+        if user_to_agent_link:
+            await user_to_agent_link.transfer(data)
         
     async def _on_agent_input(self, data: Dict[str, Any]):
         """Handle agent input trigger activation."""
@@ -787,12 +1143,14 @@ Guidelines:
         
         # Store result in output data unit
         agent_output_du = self.components['agent_output_du']
-        await agent_output_du.store(result)
+        await agent_output_du.set(result)
         
     async def _on_agent_output(self, data: Dict[str, Any]):
         """Handle agent output trigger activation."""
-        # Output is handled by CLI interface subscription
-        pass
+        # Notify CLI interface of new output
+        cli = self.components.get('cli')
+        if cli and hasattr(cli, '_on_output_received'):
+            await cli._on_output_received(data)
     
     async def run(self):
         """Run the enhanced chat workflow."""
@@ -818,7 +1176,7 @@ Guidelines:
                 if hasattr(component, 'shutdown'):
                     await component.shutdown()
                 elif hasattr(component, 'stop_monitoring'):
-                    component.stop_monitoring()
+                    await component.stop_monitoring()
                 print(f"   ✅ Shutdown {name}")
             except Exception as e:
                 print(f"   ⚠️  Error shutting down {name}: {e}")
@@ -831,11 +1189,14 @@ Guidelines:
 
 
 async def main():
-    """Main function to run the enhanced chat workflow demo."""
+    """Main function to run the enhanced collaborative chat workflow demo."""
     workflow = EnhancedChatWorkflow()
     
     try:
-        print("🚀 Starting Enhanced NanoBrain Chat Workflow Demo")
+        print("🚀 Starting Enhanced NanoBrain Collaborative Chat Workflow Demo")
+        print("=" * 70)
+        print("🤝 Features: A2A Agent Collaboration • MCP Tool Integration")
+        print("📊 Enhanced: History • Metrics • Multi-turn Context • Export")
         print("=" * 70)
         
         await workflow.setup()
