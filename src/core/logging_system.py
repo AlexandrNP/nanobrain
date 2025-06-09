@@ -194,6 +194,23 @@ class NanoBrainLogger:
             # Get logging configuration
             logging_config = get_logging_config()
             console_config = logging_config.get('console', {})
+            file_config = logging_config.get('file', {})
+            
+            # Auto-create session directory and log file if file logging is enabled but no log_file provided
+            if enable_file and log_file is None:
+                base_log_dir = Path(file_config.get('base_directory', 'logs'))
+                use_session_directories = file_config.get('use_session_directories', True)
+                
+                if use_session_directories:
+                    # Create session directory with current timestamp
+                    session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    session_dir = base_log_dir / f"session_{session_id}"
+                    session_dir.mkdir(parents=True, exist_ok=True)
+                    log_file = session_dir / f"{name.replace('.', '_')}.log"
+                else:
+                    # Use base directory directly
+                    base_log_dir.mkdir(parents=True, exist_ok=True)
+                    log_file = base_log_dir / f"{name.replace('.', '_')}.log"
             
         except ImportError:
             # Fallback to defaults if config manager not available
@@ -202,6 +219,7 @@ class NanoBrainLogger:
             if enable_file is None:
                 enable_file = True
             console_config = {}
+            file_config = {}
         
         # Set log level based on debug mode
         if debug_mode:
@@ -231,10 +249,15 @@ class NanoBrainLogger:
             )
             file_handler.setFormatter(file_formatter)
             self.logger.addHandler(file_handler)
+            
+            # Log the session creation for debugging
+            if enable_console:
+                print(f"📝 Created log session: {log_file.parent.name if log_file.parent.name.startswith('session_') else log_file}")
         
         # Store configuration for reference
         self.enable_console = enable_console
         self.enable_file = enable_file
+        self.log_file = log_file
         
         # Execution context stack
         self._context_stack: List[ExecutionContext] = []
@@ -719,10 +742,264 @@ def trace_function_calls(logger: NanoBrainLogger):
 
 # Global logger instances
 _global_loggers: Dict[str, NanoBrainLogger] = {}
+_system_log_manager: Optional['SystemLogManager'] = None
 
-def get_logger(name: str = "nanobrain", **kwargs) -> NanoBrainLogger:
-    """Get or create a NanoBrain logger instance."""
+class SystemLogManager:
+    """
+    Comprehensive system-level logging manager for NanoBrain framework.
+    
+    Provides organized logging with:
+    - Component-based directory structure (agents/, steps/, triggers/, etc.)
+    - Session summaries and metadata tracking
+    - Lifecycle logging for all framework components
+    - Performance and execution tracking
+    """
+    
+    def __init__(self, base_log_dir: Optional[str] = None):
+        # Get global logging configuration
+        try:
+            from config_manager import get_logging_config, should_log_to_file, should_log_to_console
+            
+            self.logging_config = get_logging_config()
+            self.should_log_to_file = should_log_to_file()
+            self.should_log_to_console = should_log_to_console()
+            
+            file_config = self.logging_config.get('file', {})
+            if base_log_dir is None:
+                base_log_dir = file_config.get('base_directory', 'logs')
+            self.use_session_directories = file_config.get('use_session_directories', True)
+            
+        except ImportError:
+            self.logging_config = {}
+            self.should_log_to_file = True
+            self.should_log_to_console = True
+            if base_log_dir is None:
+                base_log_dir = "logs"
+            self.use_session_directories = True
+        
+        self.base_log_dir = Path(base_log_dir)
+        self.session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.session_start_time = datetime.now().isoformat()
+        
+        if self.use_session_directories:
+            self.session_dir = self.base_log_dir / f"session_{self.session_id}"
+        else:
+            self.session_dir = self.base_log_dir
+            
+        self.loggers_created = []
+        self.log_files = []
+        self.component_registry = {}
+        
+        if self.should_log_to_file:
+            self._setup_session_directories()
+        
+    def _setup_session_directories(self):
+        """Create organized session directory structure."""
+        directories = [
+            self.session_dir,
+            self.session_dir / "components",
+            self.session_dir / "agents", 
+            self.session_dir / "steps",
+            self.session_dir / "triggers",
+            self.session_dir / "links",
+            self.session_dir / "data_units",
+            self.session_dir / "executors",
+            self.session_dir / "workflows"
+        ]
+        
+        for directory in directories:
+            directory.mkdir(parents=True, exist_ok=True)
+            
+        if self.should_log_to_console:
+            print(f"📝 Created system log session: {self.session_dir}")
+        
+    def get_logger(self, name: str, category: str = "components", 
+                   debug_mode: bool = True) -> NanoBrainLogger:
+        """Get or create a categorized logger for system components."""
+        logger_key = f"{category}_{name}"
+        
+        # Check if logger already exists in global registry
+        global _global_loggers
+        if logger_key in _global_loggers:
+            return _global_loggers[logger_key]
+        
+        log_file = None
+        if self.should_log_to_file:
+            log_file = self.session_dir / category / f"{name}.log"
+        
+        logger = NanoBrainLogger(
+            name=f"{category}.{name}",
+            log_file=log_file,
+            debug_mode=debug_mode
+        )
+        
+        # Register in global and local registries
+        _global_loggers[logger_key] = logger
+        self.loggers_created.append(logger_key)
+        
+        if log_file:
+            self.log_files.append({
+                "name": f"{name}.log",
+                "path": f"{category}/{name}.log",
+                "size_bytes": 0,
+                "category": category
+            })
+        
+        # Log the logger creation
+        logger.info(f"Logger initialized for {name}", 
+                   category=category, 
+                   log_file=str(log_file) if log_file else None,
+                   session_id=self.session_id,
+                   console_enabled=self.should_log_to_console,
+                   file_enabled=self.should_log_to_file)
+        
+        return logger
+    
+    def register_component(self, component_type: str, component_name: str, 
+                          component_instance: Any, metadata: Dict[str, Any] = None):
+        """Register a framework component for lifecycle tracking."""
+        component_id = f"{component_type}_{component_name}"
+        
+        self.component_registry[component_id] = {
+            "type": component_type,
+            "name": component_name,
+            "instance": component_instance,
+            "metadata": metadata or {},
+            "created_at": datetime.now().isoformat(),
+            "status": "active"
+        }
+        
+        # Get or create logger for this component
+        logger = self.get_logger(component_name, component_type)
+        logger.info(f"Component registered: {component_name}",
+                   component_type=component_type,
+                   component_id=component_id,
+                   metadata=metadata)
+    
+    def log_component_lifecycle(self, component_type: str, component_name: str, 
+                               event: str, details: Dict[str, Any] = None):
+        """Log component lifecycle events (initialize, start, stop, shutdown)."""
+        logger = self.get_logger(component_name, component_type)
+        
+        logger.info(f"Component {event}: {component_name}",
+                   component_type=component_type,
+                   lifecycle_event=event,
+                   details=details or {})
+        
+        # Update component status in registry
+        component_id = f"{component_type}_{component_name}"
+        if component_id in self.component_registry:
+            self.component_registry[component_id]["status"] = event
+            self.component_registry[component_id]["last_event"] = datetime.now().isoformat()
+    
+    def log_data_unit_operation(self, data_unit_name: str, operation: str, 
+                               data: Any = None, metadata: Dict[str, Any] = None):
+        """Log data unit operations (create, read, write, update, delete)."""
+        logger = self.get_logger(data_unit_name, "data_units")
+        
+        logger.log_data_unit_operation(operation, data_unit_name, data, metadata)
+    
+    def log_trigger_event(self, trigger_name: str, trigger_type: str,
+                         event: str, conditions: Dict[str, Any] = None, 
+                         activated: bool = True):
+        """Log trigger activation and events."""
+        logger = self.get_logger(trigger_name, "triggers")
+        
+        logger.log_trigger_activation(trigger_name, trigger_type, conditions or {}, activated)
+        logger.info(f"Trigger {event}: {trigger_name}",
+                   trigger_type=trigger_type,
+                   trigger_event=event,
+                   activated=activated,
+                   conditions=conditions)
+    
+    def log_link_operation(self, link_name: str, operation: str, 
+                          source: str, destination: str, data: Any = None):
+        """Log link operations and data transfers."""
+        logger = self.get_logger(link_name, "links")
+        
+        logger.log_data_transfer(source, destination, type(data).__name__ if data else "unknown")
+        logger.info(f"Link {operation}: {link_name}",
+                   link_operation=operation,
+                   source=source,
+                   destination=destination,
+                   data_type=type(data).__name__ if data else "unknown")
+    
+    def log_workflow_event(self, workflow_name: str, event: str, 
+                          details: Dict[str, Any] = None):
+        """Log workflow-level events and orchestration."""
+        logger = self.get_logger(workflow_name, "workflows")
+        
+        logger.info(f"Workflow {event}: {workflow_name}",
+                   workflow_event=event,
+                   details=details or {})
+    
+    def create_session_summary(self):
+        """Create a comprehensive session summary."""
+        if not self.should_log_to_file:
+            return
+        
+        # Update log file sizes
+        for log_file_info in self.log_files:
+            log_path = self.session_dir / log_file_info["path"]
+            if log_path.exists():
+                log_file_info["size_bytes"] = log_path.stat().st_size
+        
+        summary = {
+            "session_id": self.session_id,
+            "start_time": self.session_start_time,
+            "end_time": datetime.now().isoformat(),
+            "log_directory": str(self.session_dir),
+            "loggers_created": self.loggers_created,
+            "log_files": self.log_files,
+            "components_registered": len(self.component_registry),
+            "component_registry": {
+                comp_id: {
+                    "type": comp_info["type"],
+                    "name": comp_info["name"],
+                    "status": comp_info["status"],
+                    "created_at": comp_info["created_at"],
+                    "metadata": comp_info["metadata"]
+                }
+                for comp_id, comp_info in self.component_registry.items()
+            }
+        }
+        
+        summary_path = self.session_dir / "session_summary.json"
+        with open(summary_path, 'w') as f:
+            json.dump(summary, f, indent=2)
+        
+        if self.should_log_to_console:
+            print(f"📊 Session summary created: {summary_path}")
+        
+        return summary
+
+def get_system_log_manager() -> SystemLogManager:
+    """Get or create the global system log manager."""
+    global _system_log_manager
+    if _system_log_manager is None:
+        _system_log_manager = SystemLogManager()
+    return _system_log_manager
+
+def get_logger(name: str = "nanobrain", category: str = None, **kwargs) -> NanoBrainLogger:
+    """
+    Get or create a NanoBrain logger instance.
+    
+    Args:
+        name: Logger name
+        category: Optional category for system-level logging (agents, steps, triggers, etc.)
+        **kwargs: Additional arguments passed to NanoBrainLogger
+    
+    Returns:
+        NanoBrainLogger instance
+    """
     global _global_loggers
+    
+    # If category is specified, use system log manager for organized logging
+    if category:
+        system_manager = get_system_log_manager()
+        return system_manager.get_logger(name, category, **kwargs)
+    
+    # Otherwise use simple global logger registry
     if name not in _global_loggers:
         _global_loggers[name] = NanoBrainLogger(name, **kwargs)
     return _global_loggers[name]
@@ -779,6 +1056,47 @@ def configure_third_party_loggers(console_enabled: bool = None):
             logger.setLevel(logging.NOTSET)
             logger.propagate = True
 
+# Convenience functions for system-level logging
+def log_component_lifecycle(component_type: str, component_name: str, 
+                           event: str, details: Dict[str, Any] = None):
+    """Convenience function for logging component lifecycle events."""
+    system_manager = get_system_log_manager()
+    system_manager.log_component_lifecycle(component_type, component_name, event, details)
+
+def register_component(component_type: str, component_name: str, 
+                      component_instance: Any, metadata: Dict[str, Any] = None):
+    """Convenience function for registering framework components."""
+    system_manager = get_system_log_manager()
+    system_manager.register_component(component_type, component_name, component_instance, metadata)
+
+def log_workflow_event(workflow_name: str, event: str, details: Dict[str, Any] = None):
+    """Convenience function for logging workflow events."""
+    system_manager = get_system_log_manager()
+    system_manager.log_workflow_event(workflow_name, event, details)
+
+def log_data_unit_operation(data_unit_name: str, operation: str, 
+                           data: Any = None, metadata: Dict[str, Any] = None):
+    """Convenience function for logging data unit operations."""
+    system_manager = get_system_log_manager()
+    system_manager.log_data_unit_operation(data_unit_name, operation, data, metadata)
+
+def log_trigger_event(trigger_name: str, trigger_type: str, event: str, 
+                     conditions: Dict[str, Any] = None, activated: bool = True):
+    """Convenience function for logging trigger events."""
+    system_manager = get_system_log_manager()
+    system_manager.log_trigger_event(trigger_name, trigger_type, event, conditions, activated)
+
+def log_link_operation(link_name: str, operation: str, source: str, 
+                      destination: str, data: Any = None):
+    """Convenience function for logging link operations."""
+    system_manager = get_system_log_manager()
+    system_manager.log_link_operation(link_name, operation, source, destination, data)
+
+def create_session_summary():
+    """Convenience function for creating session summary."""
+    system_manager = get_system_log_manager()
+    return system_manager.create_session_summary()
+
 def get_logging_status():
     """Get current logging configuration status for debugging.
     
@@ -790,7 +1108,7 @@ def get_logging_status():
         
         root_logger = logging.getLogger()
         
-        return {
+        status = {
             'nanobrain_mode': get_logging_mode(),
             'console_enabled': should_log_to_console(),
             'file_enabled': should_log_to_file(),
@@ -798,6 +1116,18 @@ def get_logging_status():
             'root_logger_handlers': [type(h).__name__ for h in root_logger.handlers],
             'nanobrain_loggers': list(_global_loggers.keys())
         }
+        
+        # Add system log manager info if available
+        global _system_log_manager
+        if _system_log_manager:
+            status['system_log_manager'] = {
+                'session_id': _system_log_manager.session_id,
+                'session_dir': str(_system_log_manager.session_dir),
+                'loggers_created': len(_system_log_manager.loggers_created),
+                'components_registered': len(_system_log_manager.component_registry)
+            }
+        
+        return status
     except ImportError:
         return {
             'error': 'Configuration manager not available',

@@ -6,9 +6,10 @@ Specialized agent for file operations based on natural language descriptions.
 
 import logging
 import os
+import re
 from pathlib import Path
 from typing import Any, Dict, Optional
-from ..core.agent import SimpleAgent, AgentConfig
+from core.agent import SimpleAgent, AgentConfig
 
 logger = logging.getLogger(__name__)
 
@@ -18,11 +19,12 @@ class FileWriterAgent(SimpleAgent):
     Specialized agent for file operations.
     
     This agent can create, write, and manage files based on natural
-    language descriptions without requiring LLM calls for simple operations.
+    language descriptions. It intelligently detects file operations
+    and performs them directly when possible.
     """
     
     def __init__(self, config: Optional[AgentConfig] = None, **kwargs):
-        # Set default configuration if not provided
+        # Use provided config or create minimal default
         if config is None:
             config = AgentConfig(
                 name="file_writer",
@@ -30,22 +32,27 @@ class FileWriterAgent(SimpleAgent):
                 model="gpt-3.5-turbo",  # Lighter model since this is more operational
                 system_prompt="""You are a specialized file writing agent for the NanoBrain framework.
 
-Your responsibilities:
-1. Create and write files based on natural language descriptions
-2. Handle file paths and directory creation
-3. Manage file permissions and error handling
+CRITICAL: When asked to create, write, or save files, you MUST actually perform the file operation, not just describe it.
+
+Your capabilities:
+1. Create and write files with any content
+2. Parse file paths and content from natural language requests
+3. Handle directory creation automatically
 4. Provide clear feedback about file operations
 
-When handling file operations:
-- Create directories if they don't exist
-- Handle file permissions appropriately
-- Provide clear error messages
-- Confirm successful operations
-- Support various file formats (text, code, data files)
+When you receive a request to create/write/save a file:
+1. Extract the file path from the request
+2. Extract or generate the content as requested
+3. Actually create the file using your file writing capabilities
+4. Confirm the operation was successful
 
-You can handle direct file operations without LLM calls for simple tasks.""",
-                temperature=0.1,  # Very low temperature for consistent file operations
-                tools=[]
+Examples of requests you should handle:
+- "Create a Python file at path/to/file.py with a hello function"
+- "Save this code to utils.py: [code content]"
+- "Write a config file with database settings"
+
+ALWAYS actually perform the file operation - never just provide instructions or example content.""",
+                temperature=0.1  # Very low temperature for consistent file operations
             )
         
         super().__init__(config, **kwargs)
@@ -64,6 +71,11 @@ You can handle direct file operations without LLM calls for simple tasks.""",
         # Check if this is a direct file operation request
         if self._is_direct_file_operation(input_text, **kwargs):
             return await self._handle_direct_file_operation(input_text, **kwargs)
+        
+        # Check if this is a file operation that can be parsed from text
+        file_op_result = await self._try_parse_and_execute_file_operation(input_text)
+        if file_op_result:
+            return file_op_result
         
         # Otherwise, use LLM for complex operations
         return await super().process(input_text, **kwargs)
@@ -88,6 +100,77 @@ You can handle direct file operations without LLM calls for simple tasks.""",
         has_keywords = any(keyword in input_text.lower() for keyword in file_keywords)
         
         return has_file_path and (has_content or has_keywords)
+    
+    async def _try_parse_and_execute_file_operation(self, input_text: str) -> Optional[str]:
+        """
+        Try to parse and execute file operations from natural language.
+        
+        Args:
+            input_text: Input text to parse
+            
+        Returns:
+            Result of file operation if successful, None otherwise
+        """
+        try:
+            # Look for file creation patterns
+            create_patterns = [
+                r"create.*?(?:file|script).*?(?:at|to|in)\s+([^\s]+)",
+                r"save.*?(?:to|at|in)\s+([^\s]+)",
+                r"write.*?(?:to|at|in)\s+([^\s]+)",
+                r"(?:file|script).*?(?:called|named)\s+([^\s]+)",
+            ]
+            
+            file_path = None
+            for pattern in create_patterns:
+                match = re.search(pattern, input_text, re.IGNORECASE)
+                if match:
+                    file_path = match.group(1).strip('"\'')
+                    break
+            
+            if not file_path:
+                return None
+            
+            # Look for content patterns
+            content = None
+            
+            # Pattern 1: "with content: [content]"
+            content_match = re.search(r"with content:\s*(.+)", input_text, re.IGNORECASE | re.DOTALL)
+            if content_match:
+                content = content_match.group(1).strip()
+            
+            # Pattern 2: Code blocks
+            code_match = re.search(r"```(?:python|py)?\s*\n(.*?)\n```", input_text, re.DOTALL)
+            if code_match:
+                content = code_match.group(1).strip()
+            
+            # Pattern 3: Function/class descriptions
+            if not content:
+                if "function" in input_text.lower():
+                    # Extract function name if mentioned
+                    func_match = re.search(r"function.*?(?:called|named)\s+([a-zA-Z_][a-zA-Z0-9_]*)", input_text, re.IGNORECASE)
+                    if func_match:
+                        func_name = func_match.group(1)
+                        content = f"def {func_name}():\n    \"\"\"Generated function.\"\"\"\n    pass"
+                elif "class" in input_text.lower():
+                    # Extract class name if mentioned
+                    class_match = re.search(r"class.*?(?:called|named)\s+([a-zA-Z_][a-zA-Z0-9_]*)", input_text, re.IGNORECASE)
+                    if class_match:
+                        class_name = class_match.group(1)
+                        content = f"class {class_name}:\n    \"\"\"Generated class.\"\"\"\n    pass"
+            
+            # If we have a file path, create the file
+            if file_path:
+                if not content:
+                    content = f"# Generated file from request: {input_text[:100]}...\n"
+                
+                result = await self.write_file(file_path, content)
+                return f"Successfully processed file operation: {result}"
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error parsing file operation: {e}")
+            return None
     
     async def _handle_direct_file_operation(self, input_text: str, **kwargs) -> str:
         """

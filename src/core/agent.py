@@ -11,8 +11,20 @@ import time
 import yaml
 import os
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional, List, Union
+from typing import Any, Dict, Optional, List, Union, Type
 from pydantic import BaseModel, Field, ConfigDict
+
+# LangChain imports for tool compatibility
+try:
+    from langchain_core.tools import BaseTool
+    from langchain_core.callbacks import CallbackManagerForToolRun, AsyncCallbackManagerForToolRun
+    LANGCHAIN_AVAILABLE = True
+except ImportError:
+    # Fallback if LangChain is not available
+    BaseTool = object
+    CallbackManagerForToolRun = object
+    AsyncCallbackManagerForToolRun = object
+    LANGCHAIN_AVAILABLE = False
 
 from .executor import ExecutorBase, LocalExecutor, ExecutorConfig
 from .tool import ToolBase, ToolRegistry, ToolType, ToolConfig, create_tool
@@ -22,6 +34,11 @@ from .logging_system import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+class AgentToolSchema(BaseModel):
+    """Schema for agent tool input using Pydantic V2."""
+    input: str = Field(..., description="Input text for the agent to process")
 
 
 class AgentConfig(BaseModel):
@@ -53,6 +70,8 @@ class Agent(ABC):
     Justification: Like how the prefrontal cortex coordinates different brain
     regions for complex tasks, agents coordinate different tools for complex
     AI processing tasks.
+    
+    This class is also compatible with LangChain tools when LangChain is available.
     """
     
     def __init__(self, config: AgentConfig, executor: Optional[ExecutorBase] = None, **kwargs):
@@ -614,6 +633,91 @@ class Agent(ABC):
         
         return results
     
+    def _setup_agent_executor(self):
+        """Set up LangChain agent executor for tool calling."""
+        if not LANGCHAIN_AVAILABLE:
+            self.nb_logger.warning("LangChain not available, cannot set up agent executor")
+            return
+        
+        if not self.tool_registry.list_tools():
+            self.nb_logger.debug("No tools available, skipping agent executor setup")
+            return
+        
+        try:
+            from langchain_openai import ChatOpenAI
+            from langchain.agents import AgentExecutor, create_tool_calling_agent
+            from langchain_core.prompts import ChatPromptTemplate
+            
+            # Create LangChain LLM
+            llm = ChatOpenAI(
+                model=self.config.model,
+                temperature=self.config.temperature,
+                max_tokens=self.config.max_tokens
+            )
+            
+            # Convert NanoBrain tools to LangChain tools
+            langchain_tools = []
+            for tool_name in self.tool_registry.list_tools():
+                tool = self.tool_registry.get(tool_name)
+                if tool:
+                    langchain_tool = tool.to_langchain_tool() if hasattr(tool, 'to_langchain_tool') else None
+                    if langchain_tool:
+                        langchain_tools.append(langchain_tool)
+            
+            if not langchain_tools:
+                self.nb_logger.warning("No LangChain-compatible tools found")
+                return
+            
+            # Create prompt template
+            prompt = ChatPromptTemplate.from_messages([
+                ("system", self.config.system_prompt or "You are a helpful assistant."),
+                ("human", "{input}"),
+                ("placeholder", "{agent_scratchpad}"),
+            ])
+            
+            # Create agent
+            agent = create_tool_calling_agent(llm, langchain_tools, prompt)
+            
+            # Create agent executor
+            self.agent_executor = AgentExecutor(
+                agent=agent,
+                tools=langchain_tools,
+                verbose=self.config.debug_mode
+            )
+            
+            self.nb_logger.info(f"Agent executor set up with {len(langchain_tools)} tools")
+            
+        except Exception as e:
+            self.nb_logger.error(f"Failed to set up agent executor: {e}")
+            self.agent_executor = None
+    
+    async def process_with_tools(self, input_text: str, **kwargs) -> str:
+        """Process input using LangChain agent executor with tools."""
+        if not hasattr(self, 'agent_executor'):
+            self.agent_executor = None
+            
+        if not self.agent_executor:
+            self._setup_agent_executor()
+        
+        if not self.agent_executor:
+            # Fallback to regular processing
+            return await self.process(input_text, **kwargs)
+        
+        try:
+            # Use LangChain agent executor
+            result = await self.agent_executor.ainvoke({"input": input_text})
+            
+            # Extract output
+            if isinstance(result, dict) and "output" in result:
+                return result["output"]
+            else:
+                return str(result)
+                
+        except Exception as e:
+            self.nb_logger.error(f"Error in process_with_tools: {e}")
+            # Fallback to regular processing
+            return await self.process(input_text, **kwargs)
+    
     def add_to_conversation(self, role: str, content: str) -> None:
         """Add a message to the conversation history."""
         message = {"role": role, "content": content, "timestamp": time.time()}
@@ -667,6 +771,51 @@ class Agent(ABC):
             "conversation_length": len(self._conversation_history),
             "available_tools": len(self.available_tools)
         }
+    
+    def to_langchain_tool(self):
+        """Convert this agent to a LangChain tool."""
+        if not LANGCHAIN_AVAILABLE:
+            raise ImportError("LangChain is not available")
+        
+        return AgentLangChainTool(self)
+
+
+class AgentLangChainTool(BaseTool if LANGCHAIN_AVAILABLE else object):
+    """
+    LangChain tool wrapper for NanoBrain agents.
+    """
+    
+    def __init__(self, agent: Agent):
+        self.agent = agent
+        
+        if LANGCHAIN_AVAILABLE:
+            super().__init__(
+                name=agent.name,
+                description=agent.description,
+                args_schema=AgentToolSchema
+            )
+    
+    def _run(self, input: str, run_manager: Optional[CallbackManagerForToolRun] = None) -> str:
+        """Synchronous run method for LangChain compatibility."""
+        if not LANGCHAIN_AVAILABLE:
+            raise NotImplementedError("LangChain is not available")
+        
+        # Run the async process method synchronously
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            result = loop.run_until_complete(self.agent.process(input))
+            return str(result)
+        finally:
+            loop.close()
+    
+    async def _arun(self, input: str, run_manager: Optional[AsyncCallbackManagerForToolRun] = None) -> str:
+        """Asynchronous run method for LangChain compatibility."""
+        if not LANGCHAIN_AVAILABLE:
+            raise NotImplementedError("LangChain is not available")
+        
+        result = await self.agent.process(input)
+        return str(result)
 
 
 class SimpleAgent(Agent):
@@ -841,4 +990,73 @@ def create_agent(agent_type: str, config: AgentConfig, **kwargs) -> Agent:
     elif agent_type.lower() == "conversational":
         return ConversationalAgent(config, **kwargs)
     else:
-        raise ValueError(f"Unknown agent type: {agent_type}") 
+        raise ValueError(f"Unknown agent type: {agent_type}")
+
+
+def create_langchain_agent_executor(agents: List[Agent], llm_model: str = "gpt-3.5-turbo"):
+    """
+    Create a LangChain agent executor that can use NanoBrain agents as tools.
+    
+    Args:
+        agents: List of NanoBrain agents to use as tools
+        llm_model: LLM model to use for the main agent
+        
+    Returns:
+        LangChain AgentExecutor that can use the provided agents as tools
+    """
+    if not LANGCHAIN_AVAILABLE:
+        raise ImportError("LangChain is not available. Install with: pip install langchain langchain-openai")
+    
+    try:
+        from langchain_openai import ChatOpenAI
+        from langchain.agents import AgentExecutor, create_tool_calling_agent
+        from langchain_core.prompts import ChatPromptTemplate
+        
+        # Create the main LLM
+        llm = ChatOpenAI(model=llm_model, temperature=0.7)
+        
+        # Convert NanoBrain agents to LangChain tools
+        tools = []
+        for agent in agents:
+            try:
+                langchain_tool = agent.to_langchain_tool()
+                tools.append(langchain_tool)
+            except Exception as e:
+                logger.warning(f"Failed to convert agent {agent.name} to LangChain tool: {e}")
+        
+        # Create a prompt template
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", "You are a helpful assistant that can use specialized agents as tools. "
+                      "Each agent has specific capabilities. Use them appropriately based on the user's request."),
+            ("human", "{input}"),
+            ("placeholder", "{agent_scratchpad}"),
+        ])
+        
+        # Create the agent
+        agent = create_tool_calling_agent(llm, tools, prompt)
+        
+        # Create the agent executor
+        agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
+        
+        return agent_executor
+        
+    except ImportError as e:
+        raise ImportError(f"Required LangChain components not available: {e}")
+
+
+async def initialize_agents_for_langchain(agents: List[Agent]) -> List[Agent]:
+    """
+    Initialize a list of agents for use with LangChain.
+    
+    Args:
+        agents: List of agents to initialize
+        
+    Returns:
+        List of initialized agents
+    """
+    initialized_agents = []
+    for agent in agents:
+        if not agent.is_initialized:
+            await agent.initialize()
+        initialized_agents.append(agent)
+    return initialized_agents 

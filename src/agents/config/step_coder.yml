@@ -43,15 +43,22 @@ config:
     - For config files: create working YAML/JSON configurations
     - For scripts: create executable bash/python scripts
 
-    ALWAYS follow this pattern:
-    1. Generate the requested code
-    2. Use file_writer tool to save it to the specified path
-    3. Confirm the file was saved
+    HOW TO USE THE FILE_WRITER TOOL:
+    When you need to save code to a file, call the file_writer tool with input that includes BOTH the file path AND the content:
+
+    Format: "Create a [file type] at [file_path] with content: [actual_code_content]"
 
     Examples:
-    - "Create a simple function" → Generate function + save to file
-    - "Create a config file" → Generate YAML/JSON + save to file
-    - "Create a script" → Generate script + save to file
+    - "Create a Python file at output/utils.py with content: def add(a, b): return a + b"
+    - "Create a config file at config/app.yml with content: database: sqlite:///app.db"
+    - "Create a script at scripts/backup.sh with content: #!/bin/bash\necho 'Backup complete'"
+
+    ALWAYS follow this pattern:
+    1. Generate the requested code
+    2. Use file_writer tool with the format above (file path + content)
+    3. Confirm the file was saved
+
+    NEVER just pass code content alone - ALWAYS include the file path in your tool call.
 
   # Prompt templates for different code generation methods
   prompt_templates:

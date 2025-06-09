@@ -59,48 +59,40 @@ async def demo_agent_to_agent_interaction():
         # Create CodeWriter agent using the step_coder.yml configuration
         code_writer = create_component_from_yaml("src/agents/config/step_coder.yml")
         await code_writer.initialize()
-        print(f"✓ CodeWriter agent initialized")
+        print(f"✓ CodeWriter agent initialized with YAML configuration")
         print(f"  Available tools: {code_writer.available_tools}")
         
-        # Test 1: Generate a simple utility function
-        print("\n--- Test 1: Generate Utility Function ---")
-        request1 = """Create a simple Python function 'add_numbers(a, b)' that adds two numbers and returns the result. Save it to 'output/utils.py'."""
+        # Test 1: Generate a simple Python function
+        print("\n--- Test 1: Generate Python Function ---")
+        request1 = """
+        Generate a Python function called 'fibonacci' that calculates the nth Fibonacci number.
+        The function should:
+        - Take an integer parameter 'n'
+        - Return the nth Fibonacci number
+        - Include proper error handling for negative numbers
+        - Save the function to 'output/fibonacci.py'
+        """
         
         response1 = await code_writer.process(request1)
-        if "output/utils.py" in response1:
-            print("✓ utils.py generated")
-        else:
-            print("⚠ Function generated but file creation unclear")
+        print(f"Response: {response1[:200]}...")
         
-        # Test 2: Generate a simple class
-        print("\n--- Test 2: Generate Simple Class ---")
-        request2 = """Create a simple Python class 'Calculator' with methods add() and multiply(). Save it to 'output/calculator.py'."""
+        # Test 2: Generate a NanoBrain Step class
+        print("\n--- Test 2: Generate NanoBrain Step ---")
+        response2 = await code_writer.generate_nanobrain_step(
+            step_name="DataProcessorStep",
+            description="A step that processes and transforms input data",
+            input_types=["Dict[str, Any]"],
+            output_types=["Dict[str, Any]"]
+        )
+        print(f"Generated step class: {len(response2)} characters")
         
-        response2 = await code_writer.process(request2)
-        if "output/calculator.py" in response2:
-            print("✓ calculator.py generated")
-        else:
-            print("⚠ Class generated but file creation unclear")
-        
-        # Test 3: Generate configuration file
-        print("\n--- Test 3: Generate Config File ---")
-        request3 = """Create a simple YAML configuration file for a web app with database settings. Save it to 'output/app_config.yml'."""
-        
-        response3 = await code_writer.process(request3)
-        if "output/app_config.yml" in response3:
-            print("✓ app_config.yml generated")
-        else:
-            print("⚠ Config generated but file creation unclear")
-        
-        # Test 4: Generate bash script
-        print("\n--- Test 4: Generate Bash Script ---")
-        request4 = """Create a simple bash script that backs up files to a directory. Save it to 'output/backup.sh'."""
-        
-        response4 = await code_writer.process(request4)
-        if "output/backup.sh" in response4:
-            print("✓ backup.sh generated")
-        else:
-            print("⚠ Script generated but file creation unclear")
+        # Save the generated step
+        save_result = await code_writer.write_code_to_file(
+            response2,
+            "output/data_processor_step.py",
+            "Generated NanoBrain Step class"
+        )
+        print(f"Save result: {save_result}")
         
         # Cleanup
         await code_writer.shutdown()
@@ -159,16 +151,30 @@ async def demo_step_based_processing():
         
         # Test data processing
         print("\n--- Processing Test Data ---")
-        test_data = ["Hello, NanoBrain!", {"status": "ok"}, [1, 2, 3]]
+        test_data = [
+            "Hello, NanoBrain!",
+            {"message": "Framework refactored", "version": "2.0"},
+            [1, 2, 3, 4, 5]
+        ]
         
         for i, data in enumerate(test_data):
+            print(f"\nProcessing item {i+1}: {data}")
+            
+            # Set input data
             await transform_step.set_input(data)
-            await transform_step.execute()
+            
+            # Execute step
+            result = await transform_step.execute()
+            
+            # Get output
             output = await transform_step.get_output()
-            print(f"  Item {i+1}: {type(data).__name__} → processed")
+            print(f"Result: {output}")
         
         # Show step statistics
-        print(f"✓ Processed {transform_step.execution_count} items, {transform_step.error_count} errors")
+        print(f"\n--- Step Statistics ---")
+        print(f"Executions: {transform_step.execution_count}")
+        print(f"Errors: {transform_step.error_count}")
+        print(f"Running: {transform_step.is_running}")
         
         # Cleanup
         await transform_step.shutdown()
@@ -190,30 +196,63 @@ async def demo_yaml_configuration():
     try:
         # Create example configuration
         config = create_example_config()
-        print(f"✓ Created configuration: {config.name}")
+        print(f"✓ Created example configuration: {config.name}")
         
-        # Add minimal components for demo
+        # Add custom agents to the configuration
         config.add_agent("code_writer", {
             "agent_type": "simple",
             "name": "code_writer",
-            "description": "Code writing agent",
-            "model": "gpt-4"
+            "description": "Specialized code writing agent",
+            "model": "gpt-4",
+            "system_prompt": "You are a code writing assistant.",
+            "tools": [
+                {
+                    "tool_type": "agent",
+                    "name": "file_writer",
+                    "description": "File writing tool"
+                }
+            ]
         })
         
-        config.add_step("processor", {
+        config.add_agent("file_writer", {
+            "agent_type": "simple",
+            "name": "file_writer", 
+            "description": "File operations agent",
+            "model": "gpt-3.5-turbo",
+            "system_prompt": "You handle file operations."
+        })
+        
+        # Add custom steps
+        config.add_step("code_generator", {
             "step_type": "simple",
-            "name": "processor",
-            "description": "Data processor",
-            "executor": "local"
+            "name": "code_generator",
+            "description": "Generate code based on specifications",
+            "executor": "local",
+            "input_data_units": [{"data_type": "memory"}],
+            "output_data_units": [{"data_type": "file", "file_path": "/tmp/generated_code.py"}],
+            "trigger_config": {"trigger_type": "data_updated"}
         })
         
-        print(f"✓ Added {len(config.agents)} agents and {len(config.steps)} steps")
+        # Add links between components
+        config.add_link({
+            "link_type": "direct",
+            "source": "data_processor",
+            "target": "code_generator",
+            "name": "processor_to_generator"
+        })
         
-        # Validate and save
+        print(f"✓ Configuration updated with {len(config.agents)} agents and {len(config.steps)} steps")
+        
+        # Validate configuration
         errors = config.validate_references()
-        if not errors:
+        if errors:
+            print(f"⚠️  Configuration validation errors:")
+            for error in errors:
+                print(f"   - {error}")
+        else:
             print("✓ Configuration validation passed")
         
+        # Save configuration to YAML
         output_dir = Path("output")
         output_dir.mkdir(exist_ok=True)
         
@@ -226,7 +265,14 @@ async def demo_yaml_configuration():
         generate_all_schemas(schema_dir)
         print(f"✓ Schemas generated in {schema_dir}")
         
-        print(f"✓ Summary: {len(config.agents)} agents, {len(config.steps)} steps, {len(config.links)} links")
+        # Show configuration summary
+        print(f"\n--- Configuration Summary ---")
+        print(f"Name: {config.name}")
+        print(f"Version: {config.version}")
+        print(f"Agents: {list(config.agents.keys())}")
+        print(f"Steps: {list(config.steps.keys())}")
+        print(f"Executors: {list(config.executors.keys())}")
+        print(f"Links: {len(config.links)}")
         
     except Exception as e:
         logger.error(f"Error in YAML configuration demo: {e}")
@@ -284,21 +330,28 @@ Please generate clean, well-documented Python code and save it to an appropriate
         # Test the workflow
         print(f"\n--- Testing Mixed Workflow ---")
         
-        requests = [
-            "Create a simple User class with name and email attributes",
-            "Generate a function to add two numbers",
-            "Create a basic config file for a web app"
+        raw_requests = [
+            "Create a class for managing user sessions with login/logout methods",
+            "Generate a function to calculate compound interest",
+            "Build a simple REST API endpoint for user registration"
         ]
         
-        for i, request in enumerate(requests):
+        for i, request in enumerate(raw_requests):
+            print(f"\n{i+1}. Processing: {request[:50]}...")
+            
+            # Step 1: Process request through step
             await request_step.set_input(request)
             await request_step.execute()
             formatted_request = await request_step.get_output()
             
+            # Step 2: Generate code using agent
             response = await code_writer.process(formatted_request)
-            print(f"  {i+1}. {request[:30]}... → Generated")
+            print(f"   ✓ Code generated ({len(response)} chars)")
         
-        print(f"✓ Processed {len(requests)} requests through {request_step.execution_count} step executions")
+        # Show workflow statistics
+        print(f"\n--- Workflow Statistics ---")
+        print(f"Request Step - Executions: {request_step.execution_count}")
+        print(f"Code Writer - Executions: {code_writer.execution_count}")
         
         # Cleanup
         await request_step.shutdown()

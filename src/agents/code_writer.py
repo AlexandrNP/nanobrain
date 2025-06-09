@@ -6,7 +6,7 @@ Specialized agent for generating and writing code files.
 
 import logging
 from typing import Any, Dict, Optional
-from ..core.agent import SimpleAgent, AgentConfig
+from core.agent import SimpleAgent, AgentConfig
 
 logger = logging.getLogger(__name__)
 
@@ -18,46 +18,22 @@ class CodeWriterAgent(SimpleAgent):
     This agent can generate code based on natural language descriptions
     and use other agents as tools for file operations.
     
-    All prompts and templates are loaded from YAML configuration.
+    All configuration including tools is loaded from YAML configuration.
     """
     
     def __init__(self, config: Optional[AgentConfig] = None, **kwargs):
-        # Set default configuration if not provided
+        # Use provided config or create minimal default
         if config is None:
             config = AgentConfig(
                 name="code_writer",
                 description="Specialized agent for generating and writing code",
                 model="gpt-4",
-                system_prompt=self._get_default_system_prompt(),
-                temperature=0.3,
-                tools=[]
+                system_prompt="You are a specialized code generation agent.",
+                temperature=0.3
             )
-        else:
-            # If config is provided but system_prompt is empty, use default
-            if not config.system_prompt or config.system_prompt.strip() == "":
-                config.system_prompt = self._get_default_system_prompt()
         
         super().__init__(config, **kwargs)
         
-        # Load prompt templates from configuration
-        self.prompt_templates = self._load_prompt_templates()
-        
-    def _get_default_system_prompt(self) -> str:
-        """Get the default system prompt for CodeWriterAgent."""
-        # All prompts should be loaded from YAML configuration
-        # No hardcoded defaults
-        return ""
-
-    def _load_prompt_templates(self) -> Dict[str, str]:
-        """Load prompt templates from configuration."""
-        # All prompt templates must be loaded from YAML configuration
-        if hasattr(self.config, 'prompt_templates') and self.config.prompt_templates:
-            return self.config.prompt_templates
-        
-        # No fallback defaults - all prompts must come from YAML
-        logger.warning("No prompt templates found in configuration. All prompts should be defined in YAML.")
-        return {}
-
     async def process(self, input_text: str, **kwargs) -> str:
         """
         Process code generation request.
@@ -69,14 +45,8 @@ class CodeWriterAgent(SimpleAgent):
         Returns:
             Generated code or response
         """
-        # Use enhanced input template from configuration
-        enhanced_input = self.prompt_templates["enhanced_input"].format(
-            input_text=input_text,
-            available_tools=', '.join(self.available_tools)
-        )
-        
-        # Process using parent class
-        response = await super().process(enhanced_input, **kwargs)
+        # Process using parent class with tool calling capability
+        response = await super().process(input_text, **kwargs)
         
         logger.info(f"CodeWriterAgent processed request: {input_text[:100]}...")
         return response
@@ -101,13 +71,13 @@ class CodeWriterAgent(SimpleAgent):
             param_list = [f"{name}: {type_hint}" for name, type_hint in parameters.items()]
             params_str = ", ".join(param_list)
         
-        # Use python_function template from configuration
-        request = self.prompt_templates["python_function"].format(
-            function_name=function_name,
-            description=description,
-            parameters=params_str,
-            return_type=return_type
-        )
+        request = f"""Generate a Python function with the following specifications:
+- Function name: {function_name}
+- Description: {description}
+- Parameters: {params_str}
+- Return type: {return_type}
+
+Include comprehensive docstring with Args and Returns sections, type hints, and error handling where appropriate."""
         
         return await self.process(request)
     
@@ -137,13 +107,14 @@ class CodeWriterAgent(SimpleAgent):
                 methods_list.append(f"- {method.get('name', 'method')}: {method.get('description', 'No description')}")
             methods_str = "\n".join(methods_list)
         
-        # Use python_class template from configuration
-        request = self.prompt_templates["python_class"].format(
-            class_name=class_name,
-            base_classes=base_str,
-            description=description,
-            methods=methods_str
-        )
+        request = f"""Generate a Python class with the following specifications:
+- Class name: {class_name}{base_str}
+- Description: {description}
+
+Methods to implement:
+{methods_str}
+
+Include comprehensive class docstring, type hints for all methods, proper __init__ method, and error handling where appropriate."""
         
         return await self.process(request)
     
@@ -165,13 +136,13 @@ class CodeWriterAgent(SimpleAgent):
         input_str = ", ".join(input_types) if input_types else "Any"
         output_str = ", ".join(output_types) if output_types else "Any"
         
-        # Use nanobrain_step template from configuration
-        request = self.prompt_templates["nanobrain_step"].format(
-            step_name=step_name,
-            description=description,
-            input_types=input_str,
-            output_types=output_str
-        )
+        request = f"""Generate a NanoBrain Step class with the following specifications:
+- Class name: {step_name}
+- Description: {description}
+- Input types: {input_str}
+- Output types: {output_str}
+
+The class should inherit from the Step base class, implement the process method, include proper configuration handling, follow NanoBrain framework patterns, include comprehensive docstrings, and handle errors gracefully."""
         
         return await self.process(request)
     
@@ -188,19 +159,16 @@ class CodeWriterAgent(SimpleAgent):
         Returns:
             Result of the file writing operation
         """
-        if not self.available_tools:
-            return "No file writing tools available. Code generated but not saved."
-        
-        # Use the first available tool (assuming it's a file writer)
-        tool_name = self.available_tools[0]
-        
-        # Use write_code_to_file template from configuration
-        request = self.prompt_templates["write_code_to_file"].format(
-            tool_name=tool_name,
-            file_path=file_path,
-            description=description or 'Generated code',
-            code=code
-        )
+        request = f"""Please save the following code to {file_path}:
+
+{description or 'Generated code'}
+
+Code:
+```
+{code}
+```
+
+File path: {file_path}"""
         
         return await self.process(request)
     

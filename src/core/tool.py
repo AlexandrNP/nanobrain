@@ -99,6 +99,72 @@ class ToolBase(ABC):
                 "parameters": self.config.parameters
             }
         }
+    
+    def to_langchain_tool(self):
+        """Convert this tool to a LangChain-compatible tool."""
+        try:
+            from langchain_core.tools import BaseTool
+            from langchain_core.callbacks import CallbackManagerForToolRun, AsyncCallbackManagerForToolRun
+            from pydantic import BaseModel, Field
+            from typing import Optional, Type
+            
+            # Create input schema for the tool
+            class ToolInputSchema(BaseModel):
+                """Input schema for the tool."""
+                pass
+            
+            # Add fields based on parameters
+            if self.config.parameters and "properties" in self.config.parameters:
+                for param_name, param_info in self.config.parameters["properties"].items():
+                    field_type = str  # Default to string
+                    field_description = param_info.get("description", "")
+                    field_default = ... if param_name in self.config.parameters.get("required", []) else None
+                    
+                    # Set field on the schema class
+                    setattr(ToolInputSchema, param_name, Field(default=field_default, description=field_description))
+            
+            # If no specific parameters, use a generic input field
+            if not hasattr(ToolInputSchema, '__fields__') or not ToolInputSchema.__fields__:
+                setattr(ToolInputSchema, 'input', Field(..., description="Input for the tool"))
+            
+            # Create the LangChain tool class
+            class NanoBrainLangChainTool(BaseTool):
+                name: str = self.name
+                description: str = self.description
+                args_schema: Type[BaseModel] = ToolInputSchema
+                
+                def __init__(self, nanobrain_tool):
+                    super().__init__()
+                    self.nanobrain_tool = nanobrain_tool
+                
+                def _run(self, run_manager: Optional[CallbackManagerForToolRun] = None, **kwargs) -> str:
+                    """Synchronous execution."""
+                    try:
+                        # Run async method in sync context
+                        import asyncio
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
+                        try:
+                            result = loop.run_until_complete(self.nanobrain_tool.execute(**kwargs))
+                            return str(result)
+                        finally:
+                            loop.close()
+                    except Exception as e:
+                        return f"Error: {str(e)}"
+                
+                async def _arun(self, run_manager: Optional[AsyncCallbackManagerForToolRun] = None, **kwargs) -> str:
+                    """Asynchronous execution."""
+                    try:
+                        result = await self.nanobrain_tool.execute(**kwargs)
+                        return str(result)
+                    except Exception as e:
+                        return f"Error: {str(e)}"
+            
+            return NanoBrainLangChainTool(self)
+            
+        except ImportError:
+            logger.warning("LangChain not available, cannot create LangChain tool")
+            return None
 
 
 class FunctionTool(ToolBase):
