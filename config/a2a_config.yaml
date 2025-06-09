@@ -1,0 +1,84 @@
+# A2A (Agent-to-Agent) Protocol Configuration
+# This file configures A2A client behavior and agent connections
+
+# Client configuration for A2A behavior
+client:
+  default_timeout: 30.0
+  default_max_retries: 3
+  default_retry_delay: 1.0
+  connection_pool_size: 10
+  enable_task_caching: true
+  task_cache_ttl: 300  # seconds
+  auto_discover_agents: true
+  fail_on_agent_error: false
+  log_agent_calls: true
+
+# A2A agent configurations
+agents:
+  # Travel planning agent
+  - name: travel_agent
+    url: https://travel.example.com/a2a
+    description: Specialized agent for travel planning and booking
+    auth_type: none
+    timeout: 45.0
+    max_retries: 3
+    retry_delay: 2.0
+    enabled: true
+
+  # Code generation agent  
+  - name: code_agent
+    url: https://code.example.com/a2a
+    description: AI agent specialized in code generation and review
+    auth_type: bearer
+    auth_token: ${CODE_AGENT_TOKEN}  # Environment variable
+    timeout: 60.0
+    max_retries: 2
+    retry_delay: 1.5
+    enabled: true
+
+  # Data analysis agent
+  - name: data_agent
+    url: https://data.example.com/a2a
+    description: Agent for data analysis and visualization
+    auth_type: oauth2
+    oauth_config:
+      client_id: ${DATA_AGENT_CLIENT_ID}
+      client_secret: ${DATA_AGENT_CLIENT_SECRET}
+      token_url: https://data.example.com/oauth/token
+      scope: "data:read data:analyze"
+    timeout: 120.0
+    max_retries: 3
+    retry_delay: 3.0
+    enabled: false  # Disabled by default
+
+  # Local development agent
+  - name: local_dev_agent
+    url: http://localhost:8080/a2a
+    description: Local development A2A agent for testing
+    auth_type: none
+    timeout: 15.0
+    max_retries: 1
+    retry_delay: 0.5
+    enabled: false  # Only enable for local development
+
+# Mock agents for testing (when real agents are not available)
+mock_agents:
+  - name: mock_travel
+    description: Mock travel agent for testing
+    skills:
+      - flight_search
+      - hotel_booking
+      - itinerary_planning
+  
+  - name: mock_code
+    description: Mock code agent for testing
+    skills:
+      - code_generation
+      - code_review
+      - debugging
+
+  - name: mock_general
+    description: Mock general purpose agent
+    skills:
+      - general_assistance
+      - information_lookup 

@@ -1,0 +1,105 @@
+# Agent Configuration with A2A Support
+# This demonstrates how to configure a NanoBrain agent with A2A capabilities
+
+# Basic agent configuration
+agent:
+  name: "CollaborativeAgent"
+  description: "NanoBrain agent with A2A protocol support for multi-agent collaboration"
+  model: "gpt-3.5-turbo"
+  temperature: 0.7
+  max_tokens: 1500
+  
+  system_prompt: |
+    You are a collaborative AI assistant with access to specialized agents through the A2A protocol.
+    
+    You can work with other agents to accomplish complex tasks:
+    - Travel agents for trip planning and booking
+    - Code agents for programming tasks
+    - Data agents for analysis and visualization
+    - Other specialized agents as needed
+    
+    When a user request requires specialized expertise:
+    1. Identify which type of agent would be most helpful
+    2. Delegate the appropriate subtask to that agent
+    3. Integrate the results into your response
+    4. Provide a comprehensive answer to the user
+    
+    Always be transparent about when you're collaborating with other agents.
+    
+  auto_initialize: false
+  debug_mode: true
+  enable_logging: true
+  log_conversations: true
+  log_tool_calls: true
+
+# A2A configuration
+a2a:
+  enabled: true
+  config_path: "a2a_config.yaml"  # Relative to this config file
+  
+  # Agent-specific A2A settings
+  preferred_agents:
+    travel: "travel_agent"
+    coding: "code_agent"
+    data: "data_agent"
+    general: "mock_general"
+  
+  # Task delegation rules
+  delegation_rules:
+    - keywords: ["flight", "hotel", "travel", "trip", "vacation"]
+      agent: "travel_agent"
+      description: "Delegate travel-related requests"
+    
+    - keywords: ["code", "program", "function", "algorithm", "debug"]
+      agent: "code_agent"
+      description: "Delegate programming tasks"
+    
+    - keywords: ["data", "analyze", "chart", "graph", "statistics"]
+      agent: "data_agent"
+      description: "Delegate data analysis tasks"
+
+# Tool configuration (compatible with existing tool system)
+tools:
+  # A2A agents can be exposed as tools
+  - name: "delegate_to_travel_agent"
+    description: "Delegate travel-related tasks to specialized travel agent"
+    type: "a2a_agent"
+    agent_name: "travel_agent"
+    
+  - name: "delegate_to_code_agent"
+    description: "Delegate coding tasks to specialized code agent"
+    type: "a2a_agent"
+    agent_name: "code_agent"
+
+# MCP configuration (A2A works alongside MCP)
+mcp:
+  enabled: true
+  config_path: "mcp_config.yaml"
+  
+  # MCP provides tools, A2A provides agent collaboration
+  integration_mode: "complementary"
+
+# Workflow integration
+workflow:
+  # A2A agents can be used in workflow steps
+  enable_a2a_steps: true
+  
+  # Multi-agent coordination
+  coordination:
+    max_concurrent_agents: 3
+    timeout_per_agent: 60.0
+    fallback_strategy: "graceful_degradation"
+
+# Logging and monitoring
+logging:
+  a2a_events: true
+  agent_interactions: true
+  task_delegation: true
+  performance_metrics: true
+
+# Security settings
+security:
+  # A2A authentication is handled in a2a_config.yaml
+  validate_agent_responses: true
+  sanitize_cross_agent_data: true
+  max_delegation_depth: 3  # Prevent infinite delegation loops 
