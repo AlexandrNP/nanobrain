@@ -36,17 +36,18 @@ from dataclasses import dataclass, asdict
 from collections import defaultdict
 
 # Add src to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+current_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in globals() else os.getcwd()
+sys.path.insert(0, os.path.join(current_dir, '..', 'src'))
 
-from core.data_unit import DataUnitMemory, DataUnitConfig, DataUnitType
-from core.trigger import DataUpdatedTrigger, TriggerConfig, TriggerType
-from core.link import DirectLink, LinkConfig, LinkType
-from core.step import Step, StepConfig
-from core.agent import ConversationalAgent, AgentConfig
-from core.executor import LocalExecutor, ExecutorConfig
-from core.a2a_support import A2ASupportMixin, with_a2a_support
-from core.mcp_support import MCPSupportMixin
-# from config.component_factory import ComponentFactory, get_factory
+from nanobrain.core.data_unit import DataUnitMemory, DataUnitConfig, DataUnitType
+from nanobrain.core.trigger import DataUpdatedTrigger, TriggerConfig, TriggerType
+from nanobrain.core.link import DirectLink, LinkConfig, LinkType
+from nanobrain.core.step import Step, StepConfig
+from nanobrain.core.agent import ConversationalAgent, AgentConfig
+from nanobrain.core.executor import LocalExecutor, ExecutorConfig
+from nanobrain.core.a2a_support import A2ASupportMixin, with_a2a_support
+from nanobrain.core.mcp_support import MCPSupportMixin
+# from nanobrain.config.component_factory import ComponentFactory, get_factory
 
 
 class EnhancedCollaborativeAgent(A2ASupportMixin, MCPSupportMixin, ConversationalAgent):

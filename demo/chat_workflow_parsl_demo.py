@@ -38,16 +38,16 @@ current_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in global
 sys.path.insert(0, os.path.join(current_dir, '..', 'src'))
 
 # Import NanoBrain components
-from core.data_unit import DataUnitMemory, DataUnitConfig
-from core.trigger import DataUpdatedTrigger, TriggerConfig
-from core.link import DirectLink, LinkConfig
-from core.step import Step, StepConfig
-from core.agent import ConversationalAgent, AgentConfig
-from core.executor import ParslExecutor, ExecutorConfig, ExecutorType
-from config.component_factory import ComponentFactory, get_factory
+from nanobrain.core.data_unit import DataUnitMemory, DataUnitConfig
+from nanobrain.core.trigger import DataUpdatedTrigger, TriggerConfig
+from nanobrain.core.link import DirectLink, LinkConfig
+from nanobrain.core.step import Step, StepConfig
+from nanobrain.core.agent import ConversationalAgent, AgentConfig
+from nanobrain.core.executor import ParslExecutor, ExecutorConfig, ExecutorType
+from nanobrain.config.component_factory import ComponentFactory, get_factory
 
 # Import logging system
-from core.logging_system import (
+from nanobrain.core.logging_system import (
     NanoBrainLogger, get_logger, set_debug_mode, OperationType,
     get_system_log_manager, log_component_lifecycle, register_component,
     log_workflow_event, create_session_summary
@@ -55,13 +55,25 @@ from core.logging_system import (
 
 # Import global configuration
 try:
-    sys.path.insert(0, os.path.join(current_dir, '..', 'config'))
-    from config_manager import get_config_manager, get_api_key, get_provider_config, get_logging_config, should_log_to_file, should_log_to_console
+    from nanobrain.config import get_config_manager, get_api_key, get_provider_config, get_logging_config, should_log_to_file, should_log_to_console
     CONFIG_AVAILABLE = True
 except ImportError as e:
     print(f"⚠️  Warning: Could not import configuration manager: {e}")
     print("   API keys will need to be set via environment variables")
     CONFIG_AVAILABLE = False
+    # Provide fallback functions
+    def get_logging_config():
+        return {}
+    def should_log_to_file():
+        return True
+    def should_log_to_console():
+        return True
+    def get_config_manager():
+        return None
+    def get_api_key(provider):
+        return os.getenv(f'{provider.upper()}_API_KEY')
+    def get_provider_config(provider):
+        return None
 
 
 @dataclass
@@ -979,7 +991,7 @@ class ParslChatWorkflow:
                 print("   Falling back to local execution for demo")
             
             # Fallback to local executor
-            from core.executor import LocalExecutor
+            from nanobrain.core.executor import LocalExecutor
             executor_config = ExecutorConfig(
                 executor_type="local",
                 max_workers=4,

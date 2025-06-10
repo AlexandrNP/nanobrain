@@ -74,8 +74,8 @@ pip install -r requirements.txt
 
 ```python
 import asyncio
-from nanobrain.src.agents.code_writer import CodeWriterAgent
-from nanobrain.src.agents.file_writer import FileWriterAgent
+from nanobrain.library.agents.specialized.code_writer import CodeWriterAgent
+from nanobrain.library.agents.specialized.file_writer import FileWriterAgent
 
 async def main():
     # Create agents
@@ -228,7 +228,7 @@ pytest tests/
 
 ```python
 import pytest
-from nanobrain.src.agents.code_writer import CodeWriterAgent
+from nanobrain.library.agents.specialized.code_writer import CodeWriterAgent
 
 @pytest.mark.asyncio
 async def test_code_writer():

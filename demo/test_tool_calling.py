@@ -10,10 +10,11 @@ import os
 import sys
 
 # Add src to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+current_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in globals() else os.getcwd()
+sys.path.insert(0, os.path.join(current_dir, '..', 'src'))
 
-from core.agent import AgentConfig, SimpleAgent
-from core.tool import ToolConfig, ToolType, FunctionTool
+from nanobrain.core.agent import AgentConfig, SimpleAgent
+from nanobrain.core.tool import ToolConfig, ToolType, FunctionTool
 
 # Set up OpenAI API key for testing
 if not os.getenv('OPENAI_API_KEY'):

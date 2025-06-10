@@ -14,9 +14,10 @@ import logging
 from pathlib import Path
 
 # Add src to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+current_file = Path(__file__) if '__file__' in globals() else Path.cwd() / 'demo' / 'enhanced_validation_demo.py'
+sys.path.insert(0, str(current_file.parent.parent / "src"))
 
-from config import (
+from nanobrain.config import (
     ComponentFactory, SchemaValidator, ConfigSchema,
     FieldSchema, ParameterSchema, FieldType, ConstraintType, FieldConstraint,
     ValidatorFunction, create_component_from_yaml

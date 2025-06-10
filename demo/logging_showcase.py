@@ -33,7 +33,11 @@ from core import (
     trace_function_calls, LogLevel
 )
 
-from agents import CodeWriterAgent, FileWriterAgent
+import sys
+from pathlib import Path
+current_file = Path(__file__) if '__file__' in globals() else Path.cwd() / 'demo' / 'logging_showcase.py'
+sys.path.insert(0, str(current_file.parent.parent / "library"))
+from agents.specialized import CodeWriterAgent, FileWriterAgent
 
 
 async def demonstrate_agent_logging():

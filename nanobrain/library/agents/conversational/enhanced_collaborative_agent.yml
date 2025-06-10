@@ -1,0 +1,229 @@
+name: "EnhancedCollaborativeAgent"
+description: "Advanced conversational agent with A2A and MCP protocol support"
+class: "EnhancedCollaborativeAgent"
+
+defaults:
+  model: "gpt-4-turbo"
+  temperature: 0.7
+  max_tokens: 4000
+  enable_metrics: true
+
+metadata:
+  biological_analogy: "Multi-modal brain networks with specialized regions"
+  justification: >
+    Like how the brain uses specialized regions for different tasks and
+    coordinates between them, this agent delegates tasks to specialized
+    agents and tools while maintaining overall conversation coherence.
+  objectives:
+    - Provide enhanced conversational AI with multi-protocol support
+    - Intelligently delegate tasks to specialized A2A agents
+    - Integrate MCP tools for structured operations
+    - Track performance and collaboration metrics
+    - Maintain conversation context across delegations
+
+config:
+  name: "EnhancedCollaborativeAgent"
+  description: "Enhanced conversational agent with collaboration capabilities"
+  model: "gpt-4-turbo"
+  temperature: 0.7
+  max_tokens: 4000
+  enable_metrics: true
+  
+  # A2A Configuration
+  a2a_config:
+    enabled: true
+    timeout: 30.0
+    retry_attempts: 3
+    
+  # MCP Configuration  
+  mcp_config:
+    enabled: true
+    timeout: 15.0
+    
+  # Delegation rules for A2A agents
+  delegation_rules:
+    - keywords: ["code", "programming", "script", "function", "class"]
+      agent: "code_specialist"
+      description: "Delegate code-related tasks to code specialist"
+      
+    - keywords: ["file", "write", "save", "create", "document"]
+      agent: "file_manager"
+      description: "Delegate file operations to file manager"
+      
+    - keywords: ["calculate", "math", "compute", "number"]
+      agent: "calculator"
+      description: "Delegate mathematical calculations"
+      
+    - keywords: ["search", "find", "lookup", "research"]
+      agent: "researcher"
+      description: "Delegate research and search tasks"
+  
+  # Tool keywords for MCP tool detection
+  tool_keywords:
+    calculator:
+      - "calculate"
+      - "math"
+      - "compute"
+      - "add"
+      - "subtract"
+      - "multiply"
+      - "divide"
+      - "equation"
+      
+    weather:
+      - "weather"
+      - "temperature"
+      - "forecast"
+      - "climate"
+      - "rain"
+      - "sunny"
+      
+    file_operations:
+      - "file"
+      - "read"
+      - "write"
+      - "save"
+      - "load"
+      - "create"
+      - "delete"
+      
+    search:
+      - "search"
+      - "find"
+      - "lookup"
+      - "query"
+      - "research"
+      
+    code_tools:
+      - "code"
+      - "program"
+      - "script"
+      - "function"
+      - "class"
+      - "debug"
+      - "compile"
+
+  system_prompt: |
+    You are an enhanced conversational AI assistant with advanced collaboration capabilities.
+
+    Your key abilities:
+    1. **Intelligent Delegation**: You can delegate specialized tasks to other AI agents
+    2. **Tool Integration**: You can use various tools for specific operations
+    3. **Context Maintenance**: You maintain conversation context across delegations
+    4. **Performance Tracking**: You monitor and optimize your performance
+
+    When processing requests:
+    - Analyze if the task would benefit from specialized agent collaboration
+    - Consider if specific tools would enhance the response
+    - Maintain conversation flow and context
+    - Provide clear attribution when using delegated responses or tools
+
+    Always be helpful, accurate, and transparent about your capabilities and limitations.
+
+  # Performance and monitoring settings
+  performance:
+    track_metrics: true
+    log_delegations: true
+    log_tool_usage: true
+    report_interval: 100  # requests
+    
+  # Error handling
+  error_handling:
+    fallback_to_base: true
+    max_delegation_retries: 2
+    max_tool_retries: 2
+    timeout_fallback: true
+
+validation:
+  required:
+    - model
+    - temperature
+  optional:
+    - max_tokens
+    - enable_metrics
+    - delegation_rules
+    - tool_keywords
+  constraints:
+    temperature:
+      min: 0.0
+      max: 1.0
+      type: float
+    max_tokens:
+      min: 100
+      max: 16000
+      type: int
+
+input_schema:
+  type: "object"
+  properties:
+    input:
+      type: "string"
+      description: >
+        Your message or question for the enhanced conversational agent.
+        
+        The agent can:
+        - Engage in natural conversation
+        - Delegate specialized tasks to other agents
+        - Use tools for specific operations
+        - Maintain context across interactions
+        
+        Examples:
+        - "Can you help me write a Python function for sorting?"
+        - "What's the weather like today?"
+        - "Calculate the compound interest for $1000 at 5% for 3 years"
+        - "Search for information about machine learning"
+      required: true
+    context:
+      type: "string"
+      description: "Additional context or background information"
+      required: false
+    preferences:
+      type: "object"
+      description: "User preferences for delegation and tool usage"
+      properties:
+        prefer_delegation:
+          type: "boolean"
+          description: "Whether to prefer delegation over direct processing"
+        allowed_tools:
+          type: "array"
+          description: "List of allowed tools for this request"
+        max_delegation_depth:
+          type: "integer"
+          description: "Maximum depth of delegation chains"
+      required: false
+
+examples:
+  basic_conversation:
+    description: "Basic conversational interaction"
+    input: "Hello, how are you today?"
+    
+  code_delegation:
+    description: "Code-related task that triggers delegation"
+    input: "Write a Python function that calculates the factorial of a number"
+    
+  tool_usage:
+    description: "Mathematical calculation using tools"
+    input: "What's 15% of 250?"
+    
+  research_task:
+    description: "Research task with delegation"
+    input: "Find information about the latest developments in quantum computing"
+    
+  file_operation:
+    description: "File operation task"
+    input: "Create a configuration file for a web server"
+
+# Integration settings
+integration:
+  compatible_agents:
+    - "CodeWriterAgent"
+    - "FileWriterAgent"
+    - "ConversationalAgent"
+    
+  required_protocols:
+    - "A2A"
+    - "MCP"
+    
+  optional_dependencies:
+    - "sqlite3"  # For conversation history
+    - "asyncio"  # For async operations 

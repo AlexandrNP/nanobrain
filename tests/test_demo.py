@@ -17,9 +17,7 @@ async def test_configuration():
     print("🔧 Testing Configuration System...")
     
     try:
-        # Add config to path
-        sys.path.insert(0, os.path.join('nanobrain', 'config'))
-        from config_manager import get_config_manager, get_api_key
+        from nanobrain.config import get_config_manager, get_api_key
         
         config_manager = get_config_manager()
         print("   ✅ Configuration manager loaded")
@@ -45,9 +43,9 @@ async def test_core_components():
     print("\n🧠 Testing Core Components...")
     
     try:
-        from core.data_unit import DataUnitMemory, DataUnitConfig
-        from core.executor import LocalExecutor, ExecutorConfig
-        from core.agent import ConversationalAgent, AgentConfig
+        from nanobrain.core.data_unit import DataUnitMemory, DataUnitConfig
+        from nanobrain.core.executor import LocalExecutor, ExecutorConfig
+        from nanobrain.core.agent import ConversationalAgent, AgentConfig
         
         # Test executor
         executor_config = ExecutorConfig(executor_type="local", max_workers=2)

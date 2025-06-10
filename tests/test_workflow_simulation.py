@@ -15,11 +15,11 @@ async def test_workflow_simulation():
     print("🔍 Testing Complete Workflow Simulation...")
     
     try:
-        from core.data_unit import DataUnitMemory, DataUnitConfig
-        from core.trigger import DataUpdatedTrigger, TriggerConfig
-        from core.link import DirectLink, LinkConfig
-        from core.step import Step, StepConfig
-        from core.executor import LocalExecutor, ExecutorConfig
+        from nanobrain.core.data_unit import DataUnitMemory, DataUnitConfig
+        from nanobrain.core.trigger import DataUpdatedTrigger, TriggerConfig
+        from nanobrain.core.link import DirectLink, LinkConfig
+        from nanobrain.core.step import Step, StepConfig
+        from nanobrain.core.executor import LocalExecutor, ExecutorConfig
         print("   ✅ Imports successful")
         
         # Create a simple test step

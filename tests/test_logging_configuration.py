@@ -49,9 +49,9 @@ class TestLoggingConfiguration:
         root_logger.handlers.clear()
         logging.basicConfig(level=logging.INFO)
     
-    @patch('config.config_manager.should_log_to_console')
-    @patch('config.config_manager.should_log_to_file')
-    @patch('config.config_manager.get_logging_config')
+    @patch('src.core.logging_system.should_log_to_console')
+    @patch('src.core.logging_system.should_log_to_file')
+    @patch('src.core.logging_system.get_logging_config')
     def test_file_mode_suppresses_console_output(self, mock_get_config, mock_should_file, mock_should_console):
         """Test that file mode suppresses console output for third-party libraries."""
         # Configure mocks for file-only mode
@@ -67,21 +67,11 @@ class TestLoggingConfiguration:
         
         # Configure global logging
         with patch('sys.stdout', console_output):
-            # Reset loggers first
+            _configure_global_logging()
+            
+            # Test third-party library logging
             openai_logger = logging.getLogger('openai')
             parsl_logger = logging.getLogger('parsl')
-            
-            # Reset logger state
-            openai_logger.handlers.clear()
-            parsl_logger.handlers.clear()
-            openai_logger.propagate = True
-            parsl_logger.propagate = True
-            openai_logger.setLevel(logging.NOTSET)
-            parsl_logger.setLevel(logging.NOTSET)
-            
-            # Call the suppression function directly since mocking doesn't work with imports
-            from src.core.logging_system import _suppress_third_party_console_logging
-            _suppress_third_party_console_logging()
             
             # These should not appear in console output
             openai_logger.info("OpenAI API call")
@@ -95,15 +85,14 @@ class TestLoggingConfiguration:
         assert "Parsl executor debug" not in output
         
         # Verify third-party loggers are configured correctly
-        # Logger level might be NOTSET (0) if it inherits from parent, check effective level
-        assert openai_logger.getEffectiveLevel() >= logging.WARNING
-        assert parsl_logger.getEffectiveLevel() >= logging.WARNING
+        assert openai_logger.level >= logging.WARNING
+        assert parsl_logger.level >= logging.WARNING
         assert not openai_logger.propagate
         assert not parsl_logger.propagate
     
-    @patch('config.config_manager.should_log_to_console')
-    @patch('config.config_manager.should_log_to_file')
-    @patch('config.config_manager.get_logging_config')
+    @patch('src.core.logging_system.should_log_to_console')
+    @patch('src.core.logging_system.should_log_to_file')
+    @patch('src.core.logging_system.get_logging_config')
     def test_console_mode_allows_output(self, mock_get_config, mock_should_file, mock_should_console):
         """Test that console mode allows third-party library output."""
         # Configure mocks for console mode
@@ -127,6 +116,33 @@ class TestLoggingConfiguration:
         assert openai_logger.propagate
         assert parsl_logger.propagate
     
+    @patch('src.core.logging_system.should_log_to_console')
+    @patch('src.core.logging_system.should_log_to_file')
+    @patch('src.core.logging_system.get_logging_config')
+    def test_both_mode_configuration(self, mock_get_config, mock_should_file, mock_should_console):
+        """Test that both mode allows console output but also enables file logging."""
+        # Configure mocks for both mode
+        mock_should_console.return_value = True
+        mock_should_file.return_value = True
+        mock_get_config.return_value = {
+            'mode': 'both',
+            'console': {'format': '%(asctime)s - %(name)s - %(levelname)s - %(message)s'}
+        }
+        
+        # Configure global logging
+        _configure_global_logging()
+        
+        # Verify root logger has console handler
+        root_logger = logging.getLogger()
+        has_console_handler = any(isinstance(h, logging.StreamHandler) for h in root_logger.handlers)
+        assert has_console_handler
+        
+        # Test third-party library logging
+        openai_logger = logging.getLogger('openai')
+        
+        # Verify third-party loggers are not suppressed in both mode
+        assert openai_logger.propagate
+    
     def test_third_party_logger_suppression(self):
         """Test direct third-party logger suppression function."""
         # Set up third-party loggers
@@ -148,6 +164,159 @@ class TestLoggingConfiguration:
             # Verify no StreamHandler
             stream_handlers = [h for h in logger.handlers if isinstance(h, logging.StreamHandler)]
             assert len(stream_handlers) == 0
+    
+    def test_configure_third_party_loggers_function(self):
+        """Test the configure_third_party_loggers utility function."""
+        # Test suppression
+        configure_third_party_loggers(console_enabled=False)
+        
+        openai_logger = logging.getLogger('openai')
+        assert openai_logger.level >= logging.WARNING
+        assert not openai_logger.propagate
+        
+        # Test re-enabling
+        configure_third_party_loggers(console_enabled=True)
+        
+        openai_logger = logging.getLogger('openai')
+        assert openai_logger.level == logging.NOTSET
+        assert openai_logger.propagate
+    
+    def test_nanobrain_logger_respects_file_mode(self):
+        """Test that NanoBrainLogger respects file-only mode."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            log_file = Path(temp_dir) / "test.log"
+            
+            # Mock file-only mode
+            with patch('src.core.logging_system.should_log_to_console', return_value=False), \
+                 patch('src.core.logging_system.should_log_to_file', return_value=True), \
+                 patch('src.core.logging_system.get_logging_config', return_value={'console': {}}):
+                
+                logger = NanoBrainLogger("test_logger", log_file=log_file)
+                
+                # Verify console is disabled, file is enabled
+                assert not logger.enable_console
+                assert logger.enable_file
+                
+                # Verify no console handlers
+                console_handlers = [h for h in logger.logger.handlers if isinstance(h, logging.StreamHandler)]
+                assert len(console_handlers) == 0
+                
+                # Verify file handler exists
+                file_handlers = [h for h in logger.logger.handlers if isinstance(h, logging.FileHandler)]
+                assert len(file_handlers) == 1
+    
+    def test_get_logging_status(self):
+        """Test the logging status utility function."""
+        with patch('src.core.logging_system.get_logging_mode', return_value='file'), \
+             patch('src.core.logging_system.should_log_to_console', return_value=False), \
+             patch('src.core.logging_system.should_log_to_file', return_value=True):
+            
+            status = get_logging_status()
+            
+            assert status['nanobrain_mode'] == 'file'
+            assert not status['console_enabled']
+            assert status['file_enabled']
+            assert 'root_logger_level' in status
+            assert 'root_logger_handlers' in status
+    
+    def test_reconfigure_global_logging(self):
+        """Test that global logging can be reconfigured dynamically."""
+        # Initial configuration
+        with patch('src.core.logging_system.should_log_to_console', return_value=True):
+            _configure_global_logging()
+            
+            root_logger = logging.getLogger()
+            initial_handler_count = len(root_logger.handlers)
+        
+        # Reconfigure to file-only mode
+        with patch('src.core.logging_system.should_log_to_console', return_value=False), \
+             patch('src.core.logging_system.should_log_to_file', return_value=True), \
+             patch('src.core.logging_system.get_logging_config', return_value={'console': {}}):
+            
+            reconfigure_global_logging()
+            
+            # Verify configuration changed
+            root_logger = logging.getLogger()
+            # In file mode, we should have a NullHandler
+            null_handlers = [h for h in root_logger.handlers if isinstance(h, logging.NullHandler)]
+            assert len(null_handlers) > 0
+
+
+class TestIntegrationWithDemos:
+    """Test integration with demo applications."""
+    
+    @patch('src.core.logging_system.should_log_to_console')
+    @patch('src.core.logging_system.should_log_to_file') 
+    @patch('src.core.logging_system.get_logging_config')
+    def test_parsl_demo_file_mode(self, mock_get_config, mock_should_file, mock_should_console):
+        """Test that Parsl demo respects file-only logging mode."""
+        # Configure file-only mode
+        mock_should_console.return_value = False
+        mock_should_file.return_value = True
+        mock_get_config.return_value = {
+            'mode': 'file',
+            'console': {'format': '%(asctime)s - %(name)s - %(levelname)s - %(message)s'}
+        }
+        
+        # Configure logging
+        _configure_global_logging()
+        
+        # Test Parsl-related loggers
+        parsl_loggers = [
+            'parsl',
+            'parsl.executors',
+            'parsl.providers',
+            'parsl.monitoring'
+        ]
+        
+        console_output = StringIO()
+        
+        with patch('sys.stdout', console_output):
+            for logger_name in parsl_loggers:
+                logger = logging.getLogger(logger_name)
+                logger.info(f"Test message from {logger_name}")
+                logger.debug(f"Debug message from {logger_name}")
+        
+        output = console_output.getvalue()
+        
+        # Verify no Parsl output in console
+        for logger_name in parsl_loggers:
+            assert f"Test message from {logger_name}" not in output
+            assert f"Debug message from {logger_name}" not in output
+    
+    @patch('src.core.logging_system.should_log_to_console')
+    @patch('src.core.logging_system.should_log_to_file')
+    @patch('src.core.logging_system.get_logging_config')
+    def test_openai_logging_suppression(self, mock_get_config, mock_should_file, mock_should_console):
+        """Test that OpenAI library logging is suppressed in file mode."""
+        # Configure file-only mode
+        mock_should_console.return_value = False
+        mock_should_file.return_value = True
+        mock_get_config.return_value = {
+            'mode': 'file',
+            'console': {'format': '%(asctime)s - %(name)s - %(levelname)s - %(message)s'}
+        }
+        
+        # Configure logging
+        _configure_global_logging()
+        
+        # Test OpenAI-related loggers
+        openai_loggers = ['openai', 'httpx', 'httpcore']
+        
+        console_output = StringIO()
+        
+        with patch('sys.stdout', console_output):
+            for logger_name in openai_loggers:
+                logger = logging.getLogger(logger_name)
+                logger.info(f"API call from {logger_name}")
+                logger.debug(f"Debug info from {logger_name}")
+        
+        output = console_output.getvalue()
+        
+        # Verify no OpenAI-related output in console
+        for logger_name in openai_loggers:
+            assert f"API call from {logger_name}" not in output
+            assert f"Debug info from {logger_name}" not in output
 
 
 if __name__ == "__main__":

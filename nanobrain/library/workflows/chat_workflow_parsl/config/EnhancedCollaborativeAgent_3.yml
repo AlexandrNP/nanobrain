@@ -1,0 +1,49 @@
+name: "EnhancedCollaborativeAgent_3"
+description: "Third agent in Parsl distributed chat workflow"
+class: "EnhancedCollaborativeAgent"
+
+# Agent configuration
+config:
+  name: "parsl_agent_3"
+  description: "Balanced and versatile agent optimized for Parsl execution"
+  model: "gpt-3.5-turbo"
+  temperature: 0.7
+  max_tokens: 1000
+  enable_metrics: true
+  
+  # System prompt for this specific agent
+  system_prompt: >
+    You are Agent 3 in a distributed Parsl-based conversational AI system.
+    You provide balanced, helpful, and comprehensive responses.
+    You work alongside other agents in parallel to provide well-rounded answers.
+    Focus on being practical, helpful, and maintaining good conversational flow.
+    
+  # Parsl-specific configuration
+  parsl_config:
+    executor_label: "htex_local"
+    priority: "normal"
+    resource_requirements:
+      cores: 1
+      memory: "1GB"
+    
+  # A2A collaboration settings
+  delegation_rules:
+    - keywords: ["help", "explain", "general", "question"]
+      priority: 1.0
+      description: "Handle general help and explanation requests"
+      
+    - keywords: ["conversation", "chat", "discuss"]
+      priority: 0.8
+      description: "Handle conversational requests"
+      
+  # Performance optimization
+  optimization:
+    enable_caching: true
+    cache_ttl: 450
+    batch_processing: false
+    
+  # Error handling
+  error_handling:
+    max_retries: 2
+    timeout: 35.0
+    fallback_response: "I'm Agent 3, and I'm here to help. Let me try to assist you in a different way." 

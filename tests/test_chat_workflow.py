@@ -22,12 +22,12 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'demo'))
 
-from core.data_unit import DataUnitMemory, DataUnitConfig
-from core.trigger import DataUpdatedTrigger, TriggerConfig
-from core.link import DirectLink, LinkConfig
-from core.step import StepConfig
-from core.agent import ConversationalAgent, AgentConfig
-from core.executor import LocalExecutor, ExecutorConfig
+from nanobrain.core.data_unit import DataUnitMemory, DataUnitConfig
+from nanobrain.core.trigger import DataUpdatedTrigger, TriggerConfig
+from nanobrain.core.link import DirectLink, LinkConfig
+from nanobrain.core.step import StepConfig
+from nanobrain.core.agent import ConversationalAgent, AgentConfig
+from nanobrain.core.executor import LocalExecutor, ExecutorConfig
 
 # Import chat workflow components
 from chat_workflow_demo import ConversationalAgentStep, CLIInterface, ChatWorkflow

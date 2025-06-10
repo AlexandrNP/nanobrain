@@ -17,7 +17,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(current_dir, '..', 'src'))
 
 from chat_workflow_parsl_demo import main as demo_main
-from core.logging_system import set_debug_mode
+from nanobrain.core.logging_system import set_debug_mode
 
 
 def parse_arguments():

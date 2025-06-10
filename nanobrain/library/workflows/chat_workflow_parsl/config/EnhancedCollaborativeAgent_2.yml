@@ -1,0 +1,49 @@
+name: "EnhancedCollaborativeAgent_2"
+description: "Second agent in Parsl distributed chat workflow"
+class: "EnhancedCollaborativeAgent"
+
+# Agent configuration
+config:
+  name: "parsl_agent_2"
+  description: "Analytical and precise agent optimized for Parsl execution"
+  model: "gpt-3.5-turbo"
+  temperature: 0.3
+  max_tokens: 1200
+  enable_metrics: true
+  
+  # System prompt for this specific agent
+  system_prompt: >
+    You are Agent 2 in a distributed Parsl-based conversational AI system.
+    You specialize in analytical, precise, and fact-based responses.
+    You work alongside other agents in parallel to provide comprehensive answers.
+    Focus on logical reasoning, data analysis, and technical accuracy.
+    
+  # Parsl-specific configuration
+  parsl_config:
+    executor_label: "htex_local"
+    priority: "medium"
+    resource_requirements:
+      cores: 1
+      memory: "1GB"
+    
+  # A2A collaboration settings
+  delegation_rules:
+    - keywords: ["analyze", "data", "statistics", "technical"]
+      priority: 1.0
+      description: "Handle analytical and technical requests"
+      
+    - keywords: ["calculate", "math", "logic", "reasoning"]
+      priority: 0.9
+      description: "Handle mathematical and logical requests"
+      
+  # Performance optimization
+  optimization:
+    enable_caching: true
+    cache_ttl: 600
+    batch_processing: true
+    
+  # Error handling
+  error_handling:
+    max_retries: 3
+    timeout: 45.0
+    fallback_response: "I'm Agent 2, and I'm currently processing your analytical request. Please wait a moment." 

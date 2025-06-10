@@ -12,11 +12,15 @@ import sys
 import os
 
 # Add the src directory to the path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+current_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in globals() else os.getcwd()
+sys.path.insert(0, os.path.join(current_dir, '..', 'src'))
 
-from core.agent import AgentConfig
-from agents.code_writer import CodeWriterAgent
-from agents.file_writer import FileWriterAgent
+from nanobrain.core.agent import AgentConfig
+import sys
+from pathlib import Path
+current_file = Path(__file__) if '__file__' in globals() else Path.cwd() / 'demo' / 'yaml_tool_loading_demo.py'
+sys.path.insert(0, str(current_file.parent.parent / "library"))
+from agents.specialized import CodeWriterAgent, FileWriterAgent
 
 
 async def demonstrate_yaml_tool_loading():

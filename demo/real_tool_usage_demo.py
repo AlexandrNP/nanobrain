@@ -12,18 +12,19 @@ import sys
 import json
 
 # Add src to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+current_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in globals() else os.getcwd()
+sys.path.insert(0, os.path.join(current_dir, '..', 'src'))
 
 # Import with try/catch for component factory
 try:
-    from config.component_factory import create_component_from_yaml
+    from nanobrain.config.component_factory import create_component_from_yaml
 except ImportError:
     def create_component_from_yaml(path):
         print(f"⚠️  Component factory not available, skipping YAML loading for {path}")
         return None
 
-from core.agent import AgentConfig, SimpleAgent, ConversationalAgent, create_langchain_agent_executor
-from core.tool import ToolConfig, ToolType, FunctionTool
+from nanobrain.core.agent import AgentConfig, SimpleAgent, ConversationalAgent, create_langchain_agent_executor
+from nanobrain.core.tool import ToolConfig, ToolType, FunctionTool
 
 # Set up OpenAI API key for testing
 if not os.getenv('OPENAI_API_KEY'):

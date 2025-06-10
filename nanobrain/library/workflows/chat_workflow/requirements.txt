@@ -1,0 +1,15 @@
+# Core dependencies for ChatWorkflow
+asyncio-mqtt>=0.11.0
+sqlite3  # Built-in Python module
+
+# Optional dependencies for enhanced features
+openai>=1.0.0  # For LLM integration
+parsl>=1.2.0   # For distributed execution (optional)
+
+# Development and testing dependencies
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.0.0
+
+# Documentation dependencies
+pyyaml>=6.0.0  # For YAML configuration files 

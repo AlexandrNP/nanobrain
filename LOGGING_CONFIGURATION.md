@@ -65,7 +65,7 @@ logging:
 You can also check and use the logging configuration programmatically:
 
 ```python
-from config_manager import get_logging_mode, should_log_to_console, should_log_to_file
+from src.config import get_logging_mode, should_log_to_console, should_log_to_file
 
 # Check current logging mode
 mode = get_logging_mode()  # Returns "console", "file", or "both"
@@ -249,7 +249,7 @@ os.environ['NANOBRAIN_LOGGING_MODE'] = 'file'
 ### Custom Logger with Mode Respect
 ```python
 from core.logging_system import NanoBrainLogger
-from config_manager import should_log_to_file, should_log_to_console
+from src.config import should_log_to_file, should_log_to_console
 
 # Create logger that respects global configuration
 logger = NanoBrainLogger(

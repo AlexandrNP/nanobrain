@@ -11,14 +11,15 @@ import os
 from pathlib import Path
 
 # Add src to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+current_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in globals() else os.getcwd()
+sys.path.insert(0, os.path.join(current_dir, '..', 'src'))
 
-from core.agent import (
+from nanobrain.core.agent import (
     Agent, AgentConfig, SimpleAgent, ConversationalAgent,
     create_langchain_agent_executor, initialize_agents_for_langchain,
     LANGCHAIN_AVAILABLE
 )
-from config.component_factory import create_component_from_yaml
+from nanobrain.config.component_factory import create_component_from_yaml
 
 async def demo_langchain_integration():
     """Demonstrate NanoBrain agents as LangChain tools."""

@@ -29,17 +29,17 @@ from typing import Dict, List, Any, Optional
 # Add the nanobrain src directory to the path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from core.agent import ConversationalAgent, AgentConfig
-from core.a2a_support import (
+from nanobrain.core.agent import ConversationalAgent, AgentConfig
+from nanobrain.core.a2a_support import (
     A2ASupportMixin, with_a2a_support, A2AClient, A2AAgentConfig,
     A2AMessage, A2APart, PartType, create_a2a_agent_config
 )
-from core.mcp_support import MCPSupportMixin
-from core.logging_system import get_logger
-from core.data_unit import DataUnitMemory, DataUnitConfig
-from core.step import Step, StepConfig
-from core.trigger import DataUpdatedTrigger, TriggerConfig
-from core.link import DirectLink, LinkConfig
+from nanobrain.core.mcp_support import MCPSupportMixin
+from nanobrain.core.logging_system import get_logger
+from nanobrain.core.data_unit import DataUnitMemory, DataUnitConfig
+from nanobrain.core.step import Step, StepConfig
+from nanobrain.core.trigger import DataUpdatedTrigger, TriggerConfig
+from nanobrain.core.link import DirectLink, LinkConfig
 
 # Try to import Parsl components
 try:
@@ -516,7 +516,7 @@ async def test_a2a_setup():
     
     try:
         # Test A2A client creation
-        from core.a2a_support import A2AClient, A2AClientConfig
+        from nanobrain.core.a2a_support import A2AClient, A2AClientConfig
         
         client_config = A2AClientConfig()
         client = A2AClient(client_config)

@@ -13,8 +13,8 @@ from pathlib import Path
 # Add src to path for imports
 sys.path.append('src')
 
-from config import ComponentFactory, ComponentType, get_factory
-from core.logging_system import get_logger, set_debug_mode
+from src.config import ComponentFactory, ComponentType, get_factory
+from nanobrain.core.logging_system import get_logger, set_debug_mode
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

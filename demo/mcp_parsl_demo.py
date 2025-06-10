@@ -23,7 +23,7 @@ from pathlib import Path
 nanobrain_src = Path(__file__).parent.parent / "src"
 sys.path.insert(0, str(nanobrain_src))
 
-from core.mcp_support import (
+from nanobrain.core.mcp_support import (
     MCPSupportMixin, 
     with_mcp_support, 
     MCPServerConfig, 
@@ -31,8 +31,8 @@ from core.mcp_support import (
     create_mcp_server_config,
     MCPConfigurationError
 )
-from core.agent import ConversationalAgent, AgentConfig
-from core.logging_system import get_logger, set_debug_mode
+from nanobrain.core.agent import ConversationalAgent, AgentConfig
+from nanobrain.core.logging_system import get_logger, set_debug_mode
 
 # Enable debug logging
 set_debug_mode(True)

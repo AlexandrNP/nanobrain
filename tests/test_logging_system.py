@@ -23,7 +23,7 @@ import sys
 import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from core.logging_system import (
+from nanobrain.core.logging_system import (
     NanoBrainLogger, get_logger, set_debug_mode, trace_function_calls,
     LogLevel, OperationType, ExecutionContext, ToolCallLog, 
     AgentConversationLog

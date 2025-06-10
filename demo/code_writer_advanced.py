@@ -25,7 +25,8 @@ import sys
 from pathlib import Path
 
 # Add the nanobrain package to the path
-sys.path.insert(0, str(Path(__file__).parent.parent))
+current_file = Path(__file__) if '__file__' in globals() else Path.cwd() / 'demo' / 'code_writer_advanced.py'
+sys.path.insert(0, str(current_file.parent.parent))
 
 from src.core.agent import AgentConfig, create_agent
 from src.core.step import StepConfig, create_step
@@ -33,8 +34,8 @@ from src.core.executor import ExecutorConfig, ExecutorType
 from src.core.data_unit import DataUnitConfig, DataUnitType
 from src.core.trigger import TriggerConfig, TriggerType
 from src.core.link import LinkConfig, LinkType, create_link
-from src.agents.code_writer import CodeWriterAgent
-from src.agents.file_writer import FileWriterAgent
+from library.agents.specialized.code_writer import CodeWriterAgent
+from library.agents.specialized.file_writer import FileWriterAgent
 from src.config.yaml_config import WorkflowConfig, create_example_config, save_config
 from src.config.schema_generator import generate_all_schemas
 from src.config.component_factory import create_component_from_yaml

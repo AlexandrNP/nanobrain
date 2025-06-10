@@ -10,9 +10,10 @@ import sys
 import os
 
 # Add the src directory to the path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+current_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in globals() else os.getcwd()
+sys.path.insert(0, os.path.join(current_dir, '..', 'src'))
 
-from core.agent import Agent, AgentConfig
+from nanobrain.core.agent import Agent, AgentConfig
 
 
 class SimpleAgent(Agent):

@@ -11,15 +11,14 @@ import os
 # Add paths for imports from tests directory
 parent_dir = os.path.dirname(os.path.dirname(__file__))  # nanobrain directory
 sys.path.insert(0, os.path.join(parent_dir, 'src'))     # for src modules
-sys.path.insert(0, os.path.join(parent_dir, 'config'))    # for config modules
 
 async def test_data_flow():
     """Test basic data flow through triggers and links."""
     print("🔍 Testing Data Flow...")
     
-    from core.data_unit import DataUnitMemory, DataUnitConfig
-    from core.trigger import DataUpdatedTrigger, TriggerConfig
-    from core.link import DirectLink, LinkConfig
+    from nanobrain.core.data_unit import DataUnitMemory, DataUnitConfig
+    from nanobrain.core.trigger import DataUpdatedTrigger, TriggerConfig
+    from nanobrain.core.link import DirectLink, LinkConfig
     
     # Create data units
     input_du = DataUnitMemory(DataUnitConfig(name="input"))
@@ -63,11 +62,11 @@ async def test_agent_step():
     """Test agent step processing."""
     print("\n🤖 Testing Agent Step...")
     
-    from core.data_unit import DataUnitMemory, DataUnitConfig
-    from core.executor import LocalExecutor, ExecutorConfig
-    from core.agent import ConversationalAgent, AgentConfig
-    from core.step import Step, StepConfig
-    from config_manager import get_api_key
+    from nanobrain.core.data_unit import DataUnitMemory, DataUnitConfig
+    from nanobrain.core.executor import LocalExecutor, ExecutorConfig
+    from nanobrain.core.agent import ConversationalAgent, AgentConfig
+    from nanobrain.core.step import Step, StepConfig
+    from src.config import get_api_key
     
     # Check if we have API key
     if not get_api_key('openai'):
@@ -110,8 +109,8 @@ async def test_step_execution():
     """Test step execution with data units."""
     print("\n⚙️  Testing Step Execution...")
     
-    from core.data_unit import DataUnitMemory, DataUnitConfig
-    from core.step import Step, StepConfig
+    from nanobrain.core.data_unit import DataUnitMemory, DataUnitConfig
+    from nanobrain.core.step import Step, StepConfig
     
     # Create a simple test step
     class TestStep(Step):

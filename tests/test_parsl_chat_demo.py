@@ -25,9 +25,9 @@ from demo.chat_workflow_parsl_demo import (
 )
 
 # Import NanoBrain components for testing
-from core.executor import ParslExecutor, LocalExecutor, ExecutorConfig, ExecutorType
-from core.agent import ConversationalAgent, AgentConfig
-from core.logging_system import get_logger
+from nanobrain.core.executor import ParslExecutor, LocalExecutor, ExecutorConfig, ExecutorType
+from nanobrain.core.agent import ConversationalAgent, AgentConfig
+from nanobrain.core.logging_system import get_logger
 
 
 class TestChatRequest:

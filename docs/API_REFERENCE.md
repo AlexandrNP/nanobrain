@@ -2,6 +2,25 @@
 
 This document provides comprehensive API documentation for all core classes in the NanoBrain framework. It is designed to be understandable by both humans and LLMs for automatic code generation.
 
+## Import Structure
+
+All NanoBrain components are now available through the `nanobrain` package:
+
+```python
+# Core components
+from nanobrain.core.agent import ConversationalAgent, AgentConfig
+from nanobrain.core.data_unit import DataUnitMemory, DataUnitConfig
+from nanobrain.core.executor import ParslExecutor, ExecutorConfig
+from nanobrain.core.logging_system import get_logger
+
+# Library components
+from nanobrain.library.agents.conversational import EnhancedCollaborativeAgent
+from nanobrain.library.workflows.chat_workflow import ChatWorkflowOrchestrator
+
+# Configuration
+from nanobrain.config import get_config_manager
+```
+
 ## Table of Contents
 
 1. [Data Units](#data-units)

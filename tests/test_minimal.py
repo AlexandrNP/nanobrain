@@ -14,8 +14,8 @@ async def test_minimal():
     print("🔍 Minimal Trigger Test...")
     
     try:
-        from core.data_unit import DataUnitMemory, DataUnitConfig
-        from core.trigger import DataUpdatedTrigger, TriggerConfig
+        from nanobrain.core.data_unit import DataUnitMemory, DataUnitConfig
+        from nanobrain.core.trigger import DataUpdatedTrigger, TriggerConfig
         print("   ✅ Imports successful")
         
         # Create data unit

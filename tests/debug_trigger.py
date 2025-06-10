@@ -15,7 +15,7 @@ async def debug_trigger():
     print("🔍 Debug Trigger Monitoring...")
     
     try:
-        from core.data_unit import DataUnitMemory, DataUnitConfig
+        from nanobrain.core.data_unit import DataUnitMemory, DataUnitConfig
         print("   ✅ Imports successful")
         
         # Create data unit

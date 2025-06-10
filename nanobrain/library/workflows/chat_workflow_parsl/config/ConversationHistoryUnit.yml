@@ -1,0 +1,41 @@
+name: "ConversationHistoryUnit"
+description: "Conversation history storage with Parsl execution metadata"
+class: "ConversationHistoryUnit"
+
+# Data unit configuration
+config:
+  name: "conversation_history"
+  description: "Persistent conversation history with Parsl metadata tracking"
+  data_type: "conversation_history"
+  
+  # Database configuration
+  database:
+    db_path: "parsl_chat_workflow_history.db"
+    table_name: "conversations"
+    auto_create: true
+    
+  # Storage settings
+  storage:
+    max_messages_per_conversation: 1000
+    auto_cleanup: true
+    cleanup_days: 30
+    enable_compression: false
+    
+  # Parsl-specific metadata tracking
+  parsl_metadata:
+    track_execution_time: true
+    track_agent_distribution: true
+    track_resource_usage: true
+    track_performance_metrics: true
+    
+  # Performance optimization
+  performance:
+    enable_indexing: true
+    batch_size: 100
+    cache_recent_messages: 50
+    
+  # Backup and recovery
+  backup:
+    enable_backup: false
+    backup_interval_hours: 24
+    backup_retention_days: 7 

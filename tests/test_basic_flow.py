@@ -11,8 +11,8 @@ async def test_basic_flow():
     print("🔍 Testing Basic Data Flow...")
     
     try:
-        from core.data_unit import DataUnitMemory, DataUnitConfig
-        from core.link import DirectLink, LinkConfig
+        from nanobrain.core.data_unit import DataUnitMemory, DataUnitConfig
+        from nanobrain.core.link import DirectLink, LinkConfig
         print("   ✅ Imports successful")
         
         # Create data units

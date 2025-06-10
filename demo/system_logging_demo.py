@@ -17,15 +17,15 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(current_dir, '..', 'src'))
 
 # Import NanoBrain components
-from core.data_unit import DataUnitMemory, DataUnitConfig
-from core.trigger import DataUpdatedTrigger, TriggerConfig
-from core.link import DirectLink, LinkConfig
-from core.step import Step, StepConfig
-from core.agent import ConversationalAgent, AgentConfig
-from core.executor import LocalExecutor, ExecutorConfig
+from nanobrain.core.data_unit import DataUnitMemory, DataUnitConfig
+from nanobrain.core.trigger import DataUpdatedTrigger, TriggerConfig
+from nanobrain.core.link import DirectLink, LinkConfig
+from nanobrain.core.step import Step, StepConfig
+from nanobrain.core.agent import ConversationalAgent, AgentConfig
+from nanobrain.core.executor import LocalExecutor, ExecutorConfig
 
 # Import comprehensive logging system
-from core.logging_system import (
+from nanobrain.core.logging_system import (
     get_logger, get_system_log_manager, set_debug_mode,
     log_component_lifecycle, register_component, log_workflow_event,
     log_data_unit_operation, log_trigger_event, log_link_operation,

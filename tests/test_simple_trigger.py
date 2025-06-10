@@ -15,9 +15,9 @@ async def test_trigger_and_link():
     print("🔍 Testing Trigger and Link Isolation...")
     
     try:
-        from core.data_unit import DataUnitMemory, DataUnitConfig
-        from core.trigger import DataUpdatedTrigger, TriggerConfig
-        from core.link import DirectLink, LinkConfig
+        from nanobrain.core.data_unit import DataUnitMemory, DataUnitConfig
+        from nanobrain.core.trigger import DataUpdatedTrigger, TriggerConfig
+        from nanobrain.core.link import DirectLink, LinkConfig
         print("   ✅ Imports successful")
         
         # Create data units

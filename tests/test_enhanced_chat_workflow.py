@@ -31,9 +31,9 @@ from enhanced_chat_workflow_demo import (
     PerformanceTracker, EnhancedConversationalAgentStep, EnhancedCLIInterface,
     EnhancedChatWorkflow
 )
-from core.data_unit import DataUnitMemory, DataUnitConfig
-from core.step import StepConfig
-from core.agent import ConversationalAgent, AgentConfig
+from nanobrain.core.data_unit import DataUnitMemory, DataUnitConfig
+from nanobrain.core.step import StepConfig
+from nanobrain.core.agent import ConversationalAgent, AgentConfig
 
 
 class TestConversationMessage:
