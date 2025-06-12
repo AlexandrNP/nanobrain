@@ -13,6 +13,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Streaming response capabilities
 - Web-based monitoring dashboard
 
+### Updated
+- **Chat Workflow**: Updated `nanobrain/library/workflows/chat_workflow/chat_workflow.py` to work with latest nanobrain structure
+  - Fixed import paths to use proper nanobrain package structure
+  - Updated agent configuration to use current AgentConfig parameters
+  - Fixed data unit configuration to use string-based data types
+  - Updated ConversationHistoryUnit initialization to match current API
+  - Added async conversation statistics method
+  - Maintained original workflow architecture and functionality
+  - Added comprehensive test scripts and demo applications
+
+### Fixed
+- Import path issues in chat workflow preventing execution with latest nanobrain structure
+- Data unit configuration compatibility with current core framework
+- Agent configuration parameters alignment with current AgentConfig class
+- Async method calls for conversation statistics
+
 ## [1.1.0] - 2024-01-20
 
 ### Added

@@ -284,4 +284,146 @@ For questions or issues:
 1. Check the main workflow README: `library/workflows/chat_workflow_parsl/README.md`
 2. Review the NanoBrain documentation
 3. Examine the Parsl documentation for distributed computing concepts
-4. Look at the source code for implementation details 
+4. Look at the source code for implementation details
+
+## Recent Fixes
+
+### Parsl Workflow Logging Configuration Fix
+
+**Issue**: Parsl workflow and debug information was being displayed in the CLI/console even when global configuration was set to `mode: "file"`.
+
+**Root Cause**: The Parsl workflow was not respecting the global logging configuration and Parsl itself was outputting debug information to the console.
+
+**Fix Applied**:
+- Updated `ParslChatWorkflow.__init__()` to load and respect global logging configuration
+- Added `_setup_logging()` method to configure logging based on global settings
+- Added `_configure_parsl_logging()` method to suppress Parsl console output when in file-only mode
+- Updated `ParslDistributedAgent` to respect global logging configuration
+- Modified Parsl apps to suppress all console output in remote workers
+- Updated agent configuration to disable debug/logging for remote workers based on global settings
+
+**Files Modified**:
+- `nanobrain/library/workflows/chat_workflow_parsl/workflow.py`
+
+**Key Changes**:
+1. **Global Configuration Loading**: Workflow now loads global config and checks `logging.mode` setting
+2. **Parsl Logger Configuration**: Removes console handlers from Parsl loggers when `mode: "file"`
+3. **Remote Worker Silence**: Parsl apps redirect stdout/stderr to suppress console output
+4. **Agent Configuration**: Agents are configured with appropriate logging settings based on global config
+
+**Verification**: Run `python test_parsl_logging.py` to verify the logging configuration works correctly.
+
+### ConversationHistoryUnit Initialization Fix
+
+**Issue**: `TypeError: ConversationHistoryUnit.__init__() got an unexpected keyword argument 'db_path'`
+
+**Root Cause**: The `ConversationHistoryUnit` constructor expects a `config` parameter (dict) containing the configuration, not direct keyword arguments like `db_path`.
+
+**Fix Applied**:
+- Updated `nanobrain/library/workflows/chat_workflow/chat_workflow.py` line 129
+- Changed from: `ConversationHistoryUnit(db_path="chat_workflow_history.db")`
+- Changed to: `ConversationHistoryUnit(config={'db_path': 'chat_workflow_history.db'})`
+
+**Files Fixed**:
+- `nanobrain/library/workflows/chat_workflow/chat_workflow.py`
+- `nanobrain/library/test_library_structure.py`
+
+**Verification**: Run `python test_fix_simple.py` to verify the fix works correctly.
+
+## Files in this Directory
+
+### Test Files
+- `test_fix_simple.py` - Simple test to verify ConversationHistoryUnit fix
+- `test_parsl_logging.py` - Test to verify Parsl workflow logging configuration
+- `test_workflow_with_config.py` - Comprehensive test of Parsl workflow with configuration
+- `test_chat_workflow_import.py` - Test chat workflow imports
+- `test_updated_chat_workflow.py` - Test updated chat workflow functionality
+- `run_chat_workflow_demo.py` - Demo script for chat workflow
+
+### Parsl-Specific Files
+- `run_parsl_chat_demo.py` - Parsl chat workflow demo
+- `run_parsl_chat_demo_fixed.py` - Fixed version of Parsl demo
+- `test_parsl_agent_direct.py` - Direct test of Parsl agent functionality
+
+### Logging and Debug Files
+- `test_centralized_logging.py` - Test centralized logging configuration
+- `test_logging_fix.py` - Test logging fixes
+- `test_workflow_quiet.py` - Test workflow with quiet logging
+- `debug_test.py` - Simple debug test
+
+### Comprehensive Tests
+- `run_comprehensive_demo.py` - Comprehensive workflow demonstration
+- `test_refactored_workflow.py` - Test refactored workflow components
+- `test_simple_workflow.py` - Simple workflow test
+- `test_workflow_simple.py` - Another simple workflow test
+
+### Directories
+- `logs/` - Log files from workflow runs
+- `runinfo/` - Parsl run information and metadata
+
+## Usage
+
+### Basic Chat Workflow Test
+```bash
+python test_fix_simple.py
+```
+
+### Test Parsl Logging Configuration
+```bash
+python test_parsl_logging.py
+```
+
+### Run Chat Workflow Demo
+```bash
+python run_chat_workflow_demo.py
+```
+
+### Run Parsl Chat Demo
+```bash
+python run_parsl_chat_demo.py
+```
+
+## Architecture
+
+The chat workflow demonstrates proper NanoBrain architecture with:
+
+1. **Modular Components**: Agents, data units, executors
+2. **Configuration-Driven**: YAML-based configuration files
+3. **Proper Initialization**: Correct parameter passing to constructors
+4. **Error Handling**: Graceful handling of missing dependencies
+5. **Logging Integration**: Centralized logging configuration
+
+## Configuration
+
+The workflow uses the global configuration from `config/global_config.yml` for:
+- Logging settings (file vs console output)
+- API key management
+- Performance monitoring settings
+
+## Dependencies
+
+- NanoBrain framework (installed as package)
+- Optional: Parsl for distributed processing
+- Optional: OpenAI API key for actual LLM responses
+
+## Troubleshooting
+
+### ConversationHistoryUnit Errors
+If you see `TypeError: ConversationHistoryUnit.__init__() got an unexpected keyword argument`, ensure you're using the correct initialization pattern:
+
+```python
+# Correct
+history_unit = ConversationHistoryUnit(config={'db_path': 'path/to/db.db'})
+
+# Incorrect
+history_unit = ConversationHistoryUnit(db_path='path/to/db.db')
+```
+
+### Import Errors
+Ensure the NanoBrain package is properly installed:
+```bash
+pip install -e .
+```
+
+### Logging Issues
+Check `config/global_config.yml` for logging configuration. Set `mode: "file"` to suppress console output. 

@@ -17,13 +17,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from dataclasses import dataclass, asdict
 from enum import Enum
+import sys
 
 # Configure structured logging conditionally based on global configuration
 def _configure_global_logging():
     """Configure global logging based on NanoBrain configuration."""
     try:
         # Check if config module is already loaded to avoid circular imports
-        import sys
         if 'config' in sys.modules:
             config_module = sys.modules['config']
             should_log_to_console = getattr(config_module, 'should_log_to_console', None)
@@ -109,32 +109,36 @@ def _suppress_third_party_console_logging():
     """Suppress console logging for common third-party libraries when in file-only mode."""
     # List of common third-party libraries that might log to console
     third_party_loggers = [
-        'openai',
+        # Standard HTTP libraries
         'httpx',
         'httpcore', 
         'urllib3',
         'requests',
+        
+        # API client libraries
+        'openai',
+        'anthropic',
+        'google.cloud',
+        'azure',
+        'cohere',
+        
+        # Python standard libraries that may log
         'asyncio',
         'concurrent.futures',
-        'config.config_manager',  # Our own config manager
-        'workflows.parsl_workflow'  # Parsl workflow logger
-    ]
-    
-    for logger_name in third_party_loggers:
-        logger = logging.getLogger(logger_name)
-        # Clear all handlers to prevent any console output
-        logger.handlers.clear()
-        # Add null handler to prevent "No handlers found" warnings
-        logger.addHandler(logging.NullHandler())
-        # Set level to CRITICAL to suppress almost everything
-        logger.setLevel(logging.CRITICAL)
-        # Prevent propagation to root logger
-        logger.propagate = False
-
-def _configure_comprehensive_parsl_logging():
-    """Configure comprehensive Parsl logging suppression for file-only mode."""
-    # Comprehensive list of Parsl loggers
-    parsl_loggers = [
+        'multiprocessing',
+        'threading',
+        
+        # NanoBrain specific
+        'config.config_manager',
+        'workflows',
+        'nanobrain',
+        'agent',
+        'enhanced',
+        'workflow',
+        'library',
+        'src',
+        
+        # Parsl and distributed computing
         'parsl',
         'parsl.dataflow.dflow',
         'parsl.executors',
@@ -156,31 +160,110 @@ def _configure_comprehensive_parsl_logging():
         'parsl.dataflow.futures'
     ]
     
-    for logger_name in parsl_loggers:
+    # Aggressively suppress all console output for these loggers
+    for logger_name in third_party_loggers:
         logger = logging.getLogger(logger_name)
-        # Set to WARNING level to reduce verbosity
-        logger.setLevel(logging.WARNING)
-        # Prevent propagation to root logger to avoid console output
-        logger.propagate = False
         
-        # Remove any existing console handlers
-        for handler in logger.handlers[:]:
-            if isinstance(handler, logging.StreamHandler) and hasattr(handler, 'stream'):
-                if hasattr(handler.stream, 'name') and handler.stream.name in ['<stdout>', '<stderr>']:
-                    logger.removeHandler(handler)
+        # Critical: clear all handlers to prevent any console output
+        logger.handlers.clear()
         
         # Add null handler to prevent "No handlers found" warnings
-        if not logger.handlers:
-            logger.addHandler(logging.NullHandler())
-    
-    # Also suppress Parsl's default logging setup
+        logger.addHandler(logging.NullHandler())
+        
+        # Set level to CRITICAL to suppress almost everything
+        logger.setLevel(logging.CRITICAL)
+        
+        # Most important: prevent propagation to root logger which might have console handlers
+        logger.propagate = False
+
+def _configure_comprehensive_parsl_logging():
+    """Configure Parsl logging to redirect all output to semantic directory structure."""
     try:
-        import parsl.log_utils
-        if hasattr(parsl.log_utils, 'set_stream_logger'):
-            # Disable Parsl's default stream logging
-            parsl.log_utils.set_stream_logger(name='parsl', level=logging.CRITICAL)
-    except ImportError:
-        pass
+        # Import here to avoid circular imports
+        global _system_log_manager
+        
+        # Only configure if we have a system log manager
+        if _system_log_manager is None:
+            return  # Don't interfere with normal logging initialization
+        
+        # Get the parsl directory from the existing session
+        if hasattr(_system_log_manager, 'semantic_structure'):
+            parsl_dir_name = _system_log_manager.semantic_structure.get('distributed_processing', 'parsl')
+            parsl_log_dir = _system_log_manager.session_dir / parsl_dir_name
+        else:
+            parsl_log_dir = _system_log_manager.session_dir / "parsl"
+        
+        # Create parsl log directory
+        parsl_log_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Create individual log files for different Parsl components as per documentation
+        parsl_loggers = {
+            'parsl': 'parsl.log',
+            'parsl.dataflow.dflow': 'parsl_dataflow_dflow.log',
+            'parsl.executors': 'parsl_executors.log',
+            'parsl.monitoring': 'parsl_monitoring.log',
+            'parsl.dataflow.memoization': 'parsl_dataflow_memoization.log',
+        }
+        
+        # Check if we should log to console
+        try:
+            from ..config import should_log_to_console
+            console_enabled = should_log_to_console()
+        except ImportError:
+            console_enabled = True
+        
+        # Configure each Parsl logger with its own file
+        for logger_name, log_filename in parsl_loggers.items():
+            logger = logging.getLogger(logger_name)
+            
+            # Create file handler for this specific logger
+            try:
+                log_file = parsl_log_dir / log_filename
+                file_handler = logging.FileHandler(str(log_file))
+                file_formatter = logging.Formatter(
+                    '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+                )
+                file_handler.setFormatter(file_formatter)
+                
+                # Set appropriate log level
+                logger.setLevel(logging.INFO)
+                
+                # Remove existing handlers to avoid duplicates
+                for handler in logger.handlers[:]:
+                    logger.removeHandler(handler)
+                
+                # Add the file handler
+                logger.addHandler(file_handler)
+                
+                # Add console handler only if console logging is enabled
+                if console_enabled:
+                    console_handler = logging.StreamHandler()
+                    console_formatter = logging.Formatter(
+                        'PARSL - %(name)s - %(levelname)s - %(message)s'
+                    )
+                    console_handler.setFormatter(console_formatter)
+                    logger.addHandler(console_handler)
+                
+                # Prevent propagation to avoid duplicate messages
+                logger.propagate = False
+                
+            except Exception as e:
+                # If file handler creation fails, use null handler
+                logger.addHandler(logging.NullHandler())
+                logger.propagate = False
+        
+        # Configure Parsl's runinfo directory to use our semantic structure
+        import os
+        os.environ['PARSL_RUNINFO_DIR'] = str(parsl_log_dir / "runinfo")
+            
+    except Exception as e:
+        # Fallback: if configuration fails, use basic suppression
+        for logger_name in ['parsl', 'parsl.dataflow', 'parsl.executors']:
+            logger = logging.getLogger(logger_name)
+            logger.setLevel(logging.WARNING)
+            logger.propagate = False
+            if not logger.handlers:
+                logger.addHandler(logging.NullHandler())
 
 # Initialize global logging configuration
 _configure_global_logging()
@@ -265,208 +348,141 @@ class NanoBrainLogger:
     
     def __init__(self, name: str, log_file: Optional[Path] = None, 
                  enable_console: Optional[bool] = None, enable_file: Optional[bool] = None,
-                 debug_mode: bool = False):
+                 debug_mode: bool = False, create_on_first_message: bool = True):
         self.name = name
         self.debug_mode = debug_mode
-        self.logger = logging.getLogger(name)
-        
-        # Get global logging configuration if available
-        try:
-            # Check if config module is already loaded to avoid circular imports
-            import sys
-            if 'config' in sys.modules:
-                config_module = sys.modules['config']
-                should_log_to_console_func = getattr(config_module, 'should_log_to_console', None)
-                should_log_to_file_func = getattr(config_module, 'should_log_to_file', None)
-                get_logging_config_func = getattr(config_module, 'get_logging_config', None)
-                
-                if should_log_to_console_func and should_log_to_file_func and get_logging_config_func:
-                    # Use global configuration if local parameters not specified
-                    if enable_console is None:
-                        enable_console = should_log_to_console_func()
-                    if enable_file is None:
-                        enable_file = should_log_to_file_func()
-                        
-                    # Get logging configuration
-                    logging_config = get_logging_config_func()
-                    console_config = logging_config.get('console', {})
-                    file_config = logging_config.get('file', {})
-                    
-                    # Auto-create session directory and log file if file logging is enabled but no log_file provided
-                    if enable_file and log_file is None:
-                        base_log_dir = Path(file_config.get('base_directory', 'logs'))
-                        use_session_directories = file_config.get('use_session_directories', True)
-                        
-                        if use_session_directories:
-                            # Create session directory with current timestamp
-                            session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
-                            session_dir = base_log_dir / f"session_{session_id}"
-                            session_dir.mkdir(parents=True, exist_ok=True)
-                            log_file = session_dir / f"{name.replace('.', '_')}.log"
-                        else:
-                            # Use base directory directly
-                            base_log_dir.mkdir(parents=True, exist_ok=True)
-                            log_file = base_log_dir / f"{name.replace('.', '_')}.log"
-                else:
-                    # Config module loaded but functions not available, use defaults
-                    print(f"DEBUG: NanoBrainLogger {name} - config module loaded but functions not available")
-                    if enable_console is None:
-                        enable_console = True
-                    if enable_file is None:
-                        enable_file = True
-                    console_config = {}
-                    file_config = {}
-            else:
-                # Try to import config manager
-                from ..config import should_log_to_console, should_log_to_file, get_logging_config
-                
-                # Use global configuration if local parameters not specified
-                if enable_console is None:
-                    enable_console = should_log_to_console()
-                if enable_file is None:
-                    enable_file = should_log_to_file()
-                    
-                # Get logging configuration
-                logging_config = get_logging_config()
-                console_config = logging_config.get('console', {})
-                file_config = logging_config.get('file', {})
-                
-                # Auto-create session directory and log file if file logging is enabled but no log_file provided
-                if enable_file and log_file is None:
-                    base_log_dir = Path(file_config.get('base_directory', 'logs'))
-                    use_session_directories = file_config.get('use_session_directories', True)
-                    
-                    if use_session_directories:
-                        # Create session directory with current timestamp
-                        session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
-                        session_dir = base_log_dir / f"session_{session_id}"
-                        session_dir.mkdir(parents=True, exist_ok=True)
-                        log_file = session_dir / f"{name.replace('.', '_')}.log"
-                    else:
-                        # Use base directory directly
-                        base_log_dir.mkdir(parents=True, exist_ok=True)
-                        log_file = base_log_dir / f"{name.replace('.', '_')}.log"
-            
-        except ImportError:
-            # Fallback to defaults if config manager not available
-            print(f"DEBUG: NanoBrainLogger {name} - ImportError, using defaults")
-            if enable_console is None:
-                enable_console = True
-            if enable_file is None:
-                enable_file = True
-            console_config = {}
-            file_config = {}
-        
-        # Set log level based on debug mode
-        if debug_mode:
-            self.logger.setLevel(logging.DEBUG)
-        else:
-            self.logger.setLevel(logging.INFO)
-        
-        # Clear existing handlers
-        self.logger.handlers.clear()
-        
-        # Console handler
-        if enable_console:
-            console_handler = logging.StreamHandler()
-            
-            # Use configured format or default
-            console_format = console_config.get('format', '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-            console_formatter = logging.Formatter(console_format)
-            console_handler.setFormatter(console_formatter)
-            self.logger.addHandler(console_handler)
-        
-        # File handler
-        if enable_file and log_file:
-            log_file.parent.mkdir(parents=True, exist_ok=True)
-            file_handler = logging.FileHandler(log_file)
-            file_formatter = logging.Formatter(
-                '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-            )
-            file_handler.setFormatter(file_formatter)
-            self.logger.addHandler(file_handler)
-            
-            # Log the session creation for debugging
-            if enable_console:
-                print(f"📝 Created log session: {log_file.parent.name if log_file.parent.name.startswith('session_') else log_file}")
-        
-        # Store configuration for reference
-        self.enable_console = enable_console
-        self.enable_file = enable_file
         self.log_file = log_file
+        self.create_on_first_message = create_on_first_message
+        self.file_created = False  # Track if file has been created
+        self.file_handler = None  # Initialize file_handler attribute
         
-        # Configure propagation based on logging mode
-        # In file-only mode, prevent propagation to avoid console output
-        if not enable_console and enable_file:
-            self.logger.propagate = False
-        else:
-            self.logger.propagate = True
+        # Get global logging configuration
+        try:
+            # Check if sys.modules contains the config module to avoid circular imports
+            if 'nanobrain.config' in sys.modules:
+                from ..config import should_log_to_console, should_log_to_file
+                self.enable_console = should_log_to_console() if enable_console is None else enable_console
+                self.enable_file = should_log_to_file() if enable_file is None else enable_file
+            else:
+                # Default behavior if config module not available
+                self.enable_console = True if enable_console is None else enable_console
+                self.enable_file = True if enable_file is None else enable_file
+        except ImportError:
+            # Fallback configuration
+            self.enable_console = True if enable_console is None else enable_console
+            self.enable_file = True if enable_file is None else enable_file
         
-        # Execution context stack
-        self._context_stack: List[ExecutionContext] = []
+        # Setup base logger
+        self.logger = logging.getLogger(name)
+        if not self.logger.handlers:
+            self.logger.setLevel(logging.DEBUG if debug_mode else logging.INFO)
+            
+            # Console handler
+            if self.enable_console:
+                console_handler = logging.StreamHandler()
+                console_formatter = logging.Formatter(
+                    '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+                )
+                console_handler.setFormatter(console_formatter)
+                self.logger.addHandler(console_handler)
+            
+            # File handler (created lazily if create_on_first_message is True)
+            if self.enable_file and self.log_file and not self.create_on_first_message:
+                self._create_file_handler()
+        
+        # Performance tracking
+        self._execution_contexts: Dict[str, ExecutionContext] = {}
         self._performance_metrics: Dict[str, List[float]] = {}
         self._conversation_logs: List[AgentConversationLog] = []
         self._tool_call_logs: List[ToolCallLog] = []
         
         # Configure Parsl logging if needed
         self._configure_parsl_logging()
+        
+        # Additional parameters
+        self.create_on_first_message = create_on_first_message
     
+    def _create_file_handler(self):
+        """Create the file handler for logging."""
+        if self.log_file and not self.file_created:
+            # Ensure parent directory exists
+            self.log_file.parent.mkdir(parents=True, exist_ok=True)
+            
+            # Create file handler
+            self.file_handler = logging.FileHandler(str(self.log_file))
+            file_formatter = logging.Formatter(
+                '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+            )
+            self.file_handler.setFormatter(file_formatter)
+            self.logger.addHandler(self.file_handler)
+            self.file_created = True
+    
+    def _ensure_file_handler(self):
+        """Ensure file handler exists and is properly configured."""
+        if not self.file_handler and self.enable_file and self.log_file:
+            # Create parent directories if they don't exist
+            self.log_file.parent.mkdir(parents=True, exist_ok=True)
+            
+            # Create file handler with JSON formatter
+            self.file_handler = logging.FileHandler(self.log_file)
+            formatter = logging.Formatter('%(message)s')  # Raw message for JSON
+            self.file_handler.setFormatter(formatter)
+            self.logger.addHandler(self.file_handler)
+            
+            # Log initialization message
+            init_message = {
+                'timestamp': datetime.now(timezone.utc).isoformat(),
+                'level': 'INFO',
+                'logger': self.name,
+                'message': 'Logger initialized',
+                'log_file': str(self.log_file),
+                'debug_mode': self.debug_mode
+            }
+            self.logger.info(json.dumps(init_message))
+
     def _configure_parsl_logging(self):
-        """Configure Parsl logging to respect global logging configuration."""
+        """Configure Parsl logging if needed."""
         try:
-            # Only configure Parsl logging if we're in file-only mode
             if not self.enable_console and self.enable_file:
-                # Configure Parsl-specific loggers for file-only mode
-                parsl_loggers = [
-                    'parsl',
-                    'parsl.dataflow.dflow',
-                    'parsl.executors.high_throughput.executor',
-                    'parsl.executors.high_throughput.zmq_pipes',
-                    'parsl.jobs.strategy',
-                    'parsl.jobs.job_status_poller',
-                    'parsl.executors.status_handling',
-                    'parsl.providers.local.local',
-                    'parsl.utils',
-                    'parsl.process_loggers',
-                    'parsl.dataflow.memoization',
-                    'parsl.usage_tracking.usage'
-                ]
+                # In file-only mode, suppress all console output from Parsl
                 
-                for logger_name in parsl_loggers:
-                    parsl_logger = logging.getLogger(logger_name)
-                    # Set to WARNING level to reduce verbosity
-                    parsl_logger.setLevel(logging.WARNING)
-                    # Prevent propagation to root logger to avoid console output
+                # First, specifically suppress httpx logger which is noisy
+                httpx_logger = logging.getLogger('httpx')
+                httpx_logger.handlers.clear()
+                httpx_logger.addHandler(logging.NullHandler())
+                httpx_logger.propagate = False
+                httpx_logger.setLevel(logging.CRITICAL)
+                
+                # Also suppress other HTTP client loggers
+                for logger_name in ['urllib3', 'requests', 'httpcore']:
+                    http_logger = logging.getLogger(logger_name)
+                    http_logger.handlers.clear()
+                    http_logger.addHandler(logging.NullHandler())
+                    http_logger.propagate = False
+                    http_logger.setLevel(logging.CRITICAL)
+                
+                # Then suppress the Parsl loggers
+                if 'parsl' in sys.modules:
+                    parsl_logger = logging.getLogger('parsl')
+                    parsl_logger.handlers.clear()
+                    parsl_logger.addHandler(logging.NullHandler())
                     parsl_logger.propagate = False
+                    parsl_logger.setLevel(logging.CRITICAL)
                     
-                    # Remove any existing console handlers
-                    for handler in parsl_logger.handlers[:]:
-                        if isinstance(handler, logging.StreamHandler) and hasattr(handler, 'stream'):
-                            if hasattr(handler.stream, 'name') and handler.stream.name in ['<stdout>', '<stderr>']:
-                                parsl_logger.removeHandler(handler)
-                    
-                    # Add file handler if we have a log file and logs directory exists
-                    if self.log_file and self.log_file.parent.exists():
-                        log_file_path = self.log_file.parent / f'{logger_name.replace(".", "_")}.log'
-                        file_handler = logging.FileHandler(log_file_path)
-                        file_handler.setLevel(logging.DEBUG)
-                        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-                        file_handler.setFormatter(formatter)
-                        parsl_logger.addHandler(file_handler)
-                
-                # Also suppress Parsl's default logging setup
-                try:
-                    import parsl.log_utils
-                    if hasattr(parsl.log_utils, 'set_stream_logger'):
-                        # Disable Parsl's default stream logging
-                        parsl.log_utils.set_stream_logger(name='parsl', level=logging.CRITICAL)
-                except ImportError:
-                    pass
-                    
+                    # Also suppress specific Parsl submodules
+                    for parsl_submodule in [
+                        'parsl.dataflow', 
+                        'parsl.executors',
+                        'parsl.providers'
+                    ]:
+                        sub_logger = logging.getLogger(parsl_submodule)
+                        sub_logger.handlers.clear()
+                        sub_logger.addHandler(logging.NullHandler())
+                        sub_logger.propagate = False
+                        sub_logger.setLevel(logging.CRITICAL)
         except Exception as e:
-            # If configuration fails, just log the error and continue
-            if self.enable_console:
-                self.warning(f"Failed to configure Parsl logging: {e}")
+            # Don't let logging configuration issues break functionality
+            pass
 
     def _generate_request_id(self) -> str:
         """Generate a unique request ID."""
@@ -474,7 +490,7 @@ class NanoBrainLogger:
     
     def _get_current_context(self) -> Optional[ExecutionContext]:
         """Get the current execution context."""
-        return self._context_stack[-1] if self._context_stack else None
+        return self._execution_contexts.get(self._generate_request_id())
     
     def _serialize_data_for_logging(self, data: Any, max_length: int = 1000, max_depth: int = 3) -> Any:
         """
@@ -544,52 +560,66 @@ class NanoBrainLogger:
 
     def _log_structured(self, level: LogLevel, message: str, 
                        context: Optional[ExecutionContext] = None, **kwargs):
-        """Log a structured message with context."""
-        log_data = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "level": level.value,
-            "message": message,
-            "logger": self.name
-        }
-        
-        if context:
-            log_data["context"] = asdict(context)
-        
-        # Process kwargs to make data more readable
-        processed_kwargs = {}
-        for key, value in kwargs.items():
-            if key in ['inputs', 'outputs', 'data', 'result', 'parameters']:
-                # Special handling for data-heavy fields
-                processed_kwargs[key] = self._serialize_data_for_logging(value)
-            elif key in ['conversation', 'tool_call']:
-                # These are already structured, keep as-is but limit size
-                processed_kwargs[key] = self._serialize_data_for_logging(value, max_length=2000)
-            else:
-                # Regular fields
-                processed_kwargs[key] = value
-        
-        log_data.update(processed_kwargs)
-        
-        # Create a more readable log format
+        """Log a structured message with context and metadata."""
         try:
-            # Try to create a clean JSON representation
-            json_str = json.dumps(log_data, indent=2, default=str, ensure_ascii=False)
-        except Exception:
-            # Fallback to basic representation
-            json_str = json.dumps(log_data, default=str)
-        
-        # Log to appropriate level
-        if level == LogLevel.TRACE or level == LogLevel.DEBUG:
-            self.logger.debug(json_str)
-        elif level == LogLevel.INFO:
-            self.logger.info(json_str)
-        elif level == LogLevel.WARNING:
-            self.logger.warning(json_str)
-        elif level == LogLevel.ERROR:
-            self.logger.error(json_str)
-        elif level == LogLevel.CRITICAL:
-            self.logger.critical(json_str)
-    
+            # Ensure file handler exists if needed
+            if self.enable_file and not self.file_handler:
+                self._ensure_file_handler()
+            
+            # Get current execution context if not provided
+            if context is None:
+                context = self._get_current_context()
+            
+            # Build structured log entry
+            log_entry = {
+                'timestamp': datetime.now(timezone.utc).isoformat(),
+                'level': level.value,
+                'logger': self.name,
+                'message': message
+            }
+            
+            # Add execution context if available
+            if context:
+                log_entry.update({
+                    'request_id': context.request_id,
+                    'operation_type': context.operation_type.value,
+                    'component_name': context.component_name,
+                    'parent_request_id': context.parent_request_id,
+                    'duration_ms': context.duration_ms,
+                    'success': context.success,
+                    'error_message': context.error_message
+                })
+                
+                # Add context metadata if available
+                if context.metadata:
+                    log_entry['context'] = self._serialize_data_for_logging(context.metadata)
+            
+            # Add any additional kwargs
+            if kwargs:
+                log_entry['metadata'] = self._serialize_data_for_logging(kwargs)
+            
+            # Convert to string for logging
+            log_message = json.dumps(log_entry)
+            
+            # Log using appropriate level
+            if level == LogLevel.TRACE:
+                self.logger.debug(log_message)  # Map TRACE to DEBUG
+            elif level == LogLevel.DEBUG:
+                self.logger.debug(log_message)
+            elif level == LogLevel.INFO:
+                self.logger.info(log_message)
+            elif level == LogLevel.WARNING:
+                self.logger.warning(log_message)
+            elif level == LogLevel.ERROR:
+                self.logger.error(log_message)
+            elif level == LogLevel.CRITICAL:
+                self.logger.critical(log_message)
+                
+        except Exception as e:
+            # Fallback to basic logging if structured logging fails
+            basic_message = f"{message} (Logging error: {str(e)})"
+            self.logger.error(basic_message)
+
     @contextmanager
     def execution_context(self, operation_type: OperationType, 
                          component_name: str, **metadata):
@@ -605,7 +635,7 @@ class NanoBrainLogger:
             metadata=metadata
         )
         
-        self._context_stack.append(context)
+        self._execution_contexts[request_id] = context
         
         self._log_structured(
             LogLevel.DEBUG,
@@ -649,7 +679,7 @@ class NanoBrainLogger:
                 success=context.success
             )
             
-            self._context_stack.pop()
+            del self._execution_contexts[request_id]
     
     @asynccontextmanager
     async def async_execution_context(self, operation_type: OperationType, 
@@ -666,7 +696,7 @@ class NanoBrainLogger:
             metadata=metadata
         )
         
-        self._context_stack.append(context)
+        self._execution_contexts[request_id] = context
         
         self._log_structured(
             LogLevel.DEBUG,
@@ -710,7 +740,7 @@ class NanoBrainLogger:
                 success=context.success
             )
             
-            self._context_stack.pop()
+            del self._execution_contexts[request_id]
     
     def log_tool_call(self, tool_name: str, parameters: Dict[str, Any], 
                      result: Any = None, error: Optional[str] = None,
@@ -971,7 +1001,21 @@ class SystemLogManager:
             file_config = self.logging_config.get('file', {})
             if base_log_dir is None:
                 base_log_dir = file_config.get('base_directory', 'logs')
+            
+            # Check if we should use semantic directories instead of timestamped sessions
             self.use_session_directories = file_config.get('use_session_directories', True)
+            self.use_semantic_directories = file_config.get('use_semantic_directories', True)
+            self.semantic_structure = file_config.get('semantic_structure', {
+                'nanobrain_components': 'nanobrain',
+                'distributed_processing': 'parsl', 
+                'workflows': 'workflows',
+                'agents': 'agents',
+                'data_units': 'data'
+            })
+            
+            # File creation settings
+            self.create_on_first_message = file_config.get('create_on_first_message', True)
+            self.avoid_empty_files = file_config.get('avoid_empty_files', True)
             
         except ImportError:
             self.logging_config = {}
@@ -980,14 +1024,33 @@ class SystemLogManager:
             if base_log_dir is None:
                 base_log_dir = "logs"
             self.use_session_directories = True
+            self.use_semantic_directories = True
+            self.semantic_structure = {
+                'nanobrain_components': 'nanobrain',
+                'distributed_processing': 'parsl',
+                'workflows': 'workflows', 
+                'agents': 'agents',
+                'data_units': 'data'
+            }
+            self.create_on_first_message = True
+            self.avoid_empty_files = True
         
         self.base_log_dir = Path(base_log_dir)
         self.session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.session_start_time = datetime.now().isoformat()
         
-        if self.use_session_directories:
+        # Set up base directory structure
+        if self.use_session_directories and self.use_semantic_directories:
+            # Use both: logs/session_YYYYMMDD_HHMMSS/nanobrain/, etc.
+            self.session_dir = self.base_log_dir / f"session_{self.session_id}"
+        elif self.use_semantic_directories:
+            # Use semantic organization only: logs/nanobrain/, logs/parsl/, etc.
+            self.session_dir = self.base_log_dir
+        elif self.use_session_directories:
+            # Use timestamped sessions only: logs/session_YYYYMMDD_HHMMSS/
             self.session_dir = self.base_log_dir / f"session_{self.session_id}"
         else:
+            # Use direct logging: logs/
             self.session_dir = self.base_log_dir
             
         self.loggers_created = []
@@ -995,67 +1058,110 @@ class SystemLogManager:
         self.component_registry = {}
         
         if self.should_log_to_file:
-            self._setup_session_directories()
+            self._setup_directories()
         
-    def _setup_session_directories(self):
-        """Create organized session directory structure."""
-        directories = [
-            self.session_dir,
-            self.session_dir / "components",
-            self.session_dir / "agents", 
-            self.session_dir / "steps",
-            self.session_dir / "triggers",
-            self.session_dir / "links",
-            self.session_dir / "data_units",
-            self.session_dir / "executors",
-            self.session_dir / "workflows"
-        ]
+    def _setup_directories(self):
+        """Set up the logging directory structure."""
+        # Get configuration - self.logging_config already contains the logging section
+        file_config = self.logging_config.get('file', {})
         
-        for directory in directories:
-            directory.mkdir(parents=True, exist_ok=True)
+        # Create base log directory if it doesn't exist
+        self.base_log_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Create session directory if enabled
+        if file_config.get('use_session_directories', True):
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            self.session_dir = self.base_log_dir / f"session_{timestamp}"
+            self.session_dir.mkdir(parents=True, exist_ok=True)
             
-        if self.should_log_to_console:
-            print(f"📝 Created system log session: {self.session_dir}")
+            # Create session info file
+            session_info = {
+                'start_time': datetime.now().isoformat(),
+                'framework_version': '1.0.0',
+                'python_version': sys.version,
+                'platform': sys.platform,
+                'semantic_directories': file_config.get('use_semantic_directories', True)
+            }
+            with open(self.session_dir / 'session_info.yml', 'w') as f:
+                import yaml
+                yaml.dump(session_info, f)
+        else:
+            self.session_dir = self.base_log_dir
         
-    def get_logger(self, name: str, category: str = "components", 
-                   debug_mode: bool = True) -> NanoBrainLogger:
-        """Get or create a categorized logger for system components."""
-        logger_key = f"{category}_{name}"
+        # Create semantic directories if enabled
+        if file_config.get('use_semantic_directories', True):
+            semantic_structure = file_config.get('semantic_structure', {})
+            self.semantic_structure = semantic_structure
+            
+            # Create semantic directories inside session directory
+            for component_type, dir_name in semantic_structure.items():
+                component_dir = self.session_dir / dir_name
+                component_dir.mkdir(parents=True, exist_ok=True)
+                
+                # Create subdirectories for data units
+                if component_type == 'data_units':
+                    for subdir in ['memory', 'file', 'stream', 'history']:
+                        (component_dir / subdir).mkdir(parents=True, exist_ok=True)
+
+    def get_logger(self, name: str, category: str = "components", debug_mode: bool = True) -> NanoBrainLogger:
+        """Get a logger for a specific component."""
+        # Get configuration - self.logging_config already contains the logging section
+        file_config = self.logging_config.get('file', {})
         
-        # Check if logger already exists in global registry
-        global _global_loggers
-        if logger_key in _global_loggers:
-            return _global_loggers[logger_key]
+        # Determine log file path based on category and semantic structure
+        if file_config.get('use_semantic_directories', True):
+            semantic_structure = file_config.get('semantic_structure', {})
+            
+            # Map category to semantic directory
+            category_mapping = {
+                'components': 'nanobrain_components',
+                'parsl': 'distributed_processing',
+                'workflows': 'workflows',
+                'agents': 'agents',
+                'data': 'data_units',  # Map 'data' category to 'data_units'
+                'data_units': 'data_units',
+                'steps': 'steps',
+                'triggers': 'triggers',
+                'links': 'links',
+                'executors': 'executors'
+            }
+            
+            mapped_category = category_mapping.get(category, 'nanobrain_components')
+            dir_name = semantic_structure.get(mapped_category)
+            
+            if not dir_name:
+                # If no mapping found in semantic structure, use the mapped category
+                dir_name = mapped_category
+            
+            # Create log file path inside appropriate semantic directory
+            log_dir = self.session_dir / dir_name
+            log_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Create subdirectories for data units
+            if mapped_category == 'data_units':
+                for subdir in ['memory', 'file', 'stream', 'history']:
+                    (log_dir / subdir).mkdir(parents=True, exist_ok=True)
+            
+            # Create log file in appropriate directory
+            if mapped_category == 'data_units':
+                # For data units, put log files in appropriate subdirectory
+                data_type = name.split('_')[0] if '_' in name else 'memory'
+                log_file = log_dir / data_type / f"{name}.log"
+            else:
+                log_file = log_dir / f"{name}.log"
+        else:
+            # Default to simple log file in session directory
+            log_file = self.session_dir / f"{name}.log"
         
-        log_file = None
-        if self.should_log_to_file:
-            log_file = self.session_dir / category / f"{name}.log"
-        
+        # Create logger with appropriate handlers
         logger = NanoBrainLogger(
-            name=f"{category}.{name}",
+            name=name,
             log_file=log_file,
-            debug_mode=debug_mode
+            enable_console=self.logging_config.get('mode') in ['console', 'both'],
+            enable_file=self.logging_config.get('mode') in ['file', 'both'],
+            debug_mode=debug_mode,
+            create_on_first_message=file_config.get('create_on_first_message', True)
         )
-        
-        # Register in global and local registries
-        _global_loggers[logger_key] = logger
-        self.loggers_created.append(logger_key)
-        
-        if log_file:
-            self.log_files.append({
-                "name": f"{name}.log",
-                "path": f"{category}/{name}.log",
-                "size_bytes": 0,
-                "category": category
-            })
-        
-        # Log the logger creation
-        logger.info(f"Logger initialized for {name}", 
-                   category=category, 
-                   log_file=str(log_file) if log_file else None,
-                   session_id=self.session_id,
-                   console_enabled=self.should_log_to_console,
-                   file_enabled=self.should_log_to_file)
         
         return logger
     
@@ -1180,6 +1286,30 @@ class SystemLogManager:
 def get_system_log_manager() -> SystemLogManager:
     """Get or create the global system log manager."""
     global _system_log_manager
+    
+    # Always check if we need to recreate based on current configuration
+    try:
+        from ..config import get_logging_config
+        current_config = get_logging_config()
+        file_config = current_config.get('file', {})
+        
+        # Check if we should use semantic directories
+        use_semantic = file_config.get('use_semantic_directories', True)
+        use_session = file_config.get('use_session_directories', True)
+        
+        # If we have an existing manager but the configuration has changed, recreate it
+        if _system_log_manager is not None:
+            existing_semantic = getattr(_system_log_manager, 'use_semantic_directories', False)
+            existing_session = getattr(_system_log_manager, 'use_session_directories', True)
+            
+            # Recreate if configuration changed
+            if existing_semantic != use_semantic or existing_session != use_session:
+                _system_log_manager = None
+                
+    except ImportError:
+        # If config not available, proceed with existing manager
+        pass
+    
     if _system_log_manager is None:
         _system_log_manager = SystemLogManager()
     return _system_log_manager
@@ -1219,8 +1349,42 @@ def set_debug_mode(enabled: bool = True):
             logger.logger.setLevel(logging.INFO)
 
 def reconfigure_global_logging():
-    """Reconfigure global logging based on current NanoBrain configuration."""
+    """Reconfigure global logging based on current configuration.
+    This is called when configuration changes to update logging settings.
+    """
+    # Run the global logging configuration
     _configure_global_logging()
+    
+    try:
+        # Check if config is available and if we're in file-only mode
+        from ..config import should_log_to_console
+        
+        if not should_log_to_console():
+            # We're in file-only mode, so aggressively suppress console output
+            _suppress_third_party_console_logging()
+            # Note: Parsl logging will be configured when workflows are initialized
+            
+            # Also apply specific fixes for known noisy loggers
+            httpx_logger = logging.getLogger('httpx')
+            httpx_logger.handlers.clear()
+            httpx_logger.addHandler(logging.NullHandler())
+            httpx_logger.propagate = False
+            httpx_logger.setLevel(logging.CRITICAL)
+            
+            # Disable propagation for root logger children
+            for name in logging.root.manager.loggerDict:
+                logger = logging.getLogger(name)
+                if '.' not in name:  # Top-level loggers only
+                    logger.propagate = False
+                    
+            # Configure root logger to prevent any output
+            root_logger = logging.getLogger()
+            root_logger.handlers.clear()
+            root_logger.addHandler(logging.NullHandler())
+            root_logger.setLevel(logging.CRITICAL)
+    except Exception as e:
+        # Config not available or error occurred
+        pass
 
 def configure_third_party_loggers(console_enabled: bool = None):
     """Configure third-party library loggers based on logging mode.
@@ -1238,8 +1402,7 @@ def configure_third_party_loggers(console_enabled: bool = None):
     
     if not console_enabled:
         _suppress_third_party_console_logging()
-        # Also configure comprehensive Parsl logging suppression
-        _configure_comprehensive_parsl_logging()
+        # Note: Parsl logging will be configured when workflows are initialized
     else:
         # Re-enable console logging for third-party libraries
         third_party_loggers = [
@@ -1304,39 +1467,76 @@ def create_session_summary():
     return system_manager.create_session_summary()
 
 def get_logging_status():
-    """Get current logging configuration status for debugging.
-    
-    Returns:
-        Dict containing current logging configuration details.
-    """
+    """Get comprehensive logging status information."""
     try:
-        from ..config import get_logging_mode, should_log_to_console, should_log_to_file
+        from ..config import get_logging_config, should_log_to_file, should_log_to_console
         
-        root_logger = logging.getLogger()
+        config = get_logging_config()
+        file_config = config.get('file', {})
+        
+        system_manager = get_system_log_manager()
         
         status = {
-            'nanobrain_mode': get_logging_mode(),
-            'console_enabled': should_log_to_console(),
-            'file_enabled': should_log_to_file(),
-            'root_logger_level': logging.getLevelName(root_logger.level),
-            'root_logger_handlers': [type(h).__name__ for h in root_logger.handlers],
-            'nanobrain_loggers': list(_global_loggers.keys())
+            "logging_mode": config.get('mode', 'unknown'),
+            "console_enabled": should_log_to_console(),
+            "file_enabled": should_log_to_file(),
+            "use_semantic_directories": system_manager.use_semantic_directories,
+            "use_session_directories": system_manager.use_session_directories,
+            "base_log_dir": str(system_manager.base_log_dir),
+            "semantic_structure": getattr(system_manager, 'semantic_structure', {}),
+            "loggers_created": len(system_manager.loggers_created),
+            "components_registered": len(system_manager.component_registry)
         }
         
-        # Add system log manager info if available
-        global _system_log_manager
-        if _system_log_manager:
-            status['system_log_manager'] = {
-                'session_id': _system_log_manager.session_id,
-                'session_dir': str(_system_log_manager.session_dir),
-                'loggers_created': len(_system_log_manager.loggers_created),
-                'components_registered': len(_system_log_manager.component_registry)
-            }
-        
         return status
-    except ImportError:
-        return {
-            'error': 'Configuration manager not available',
-            'root_logger_level': logging.getLevelName(logging.getLogger().level),
-            'nanobrain_loggers': list(_global_loggers.keys())
-        } 
+        
+    except Exception as e:
+        return {"error": str(e)}
+
+def cleanup_empty_logs(base_dir: str = "logs") -> Dict[str, int]:
+    """
+    Clean up empty log files and optionally old session directories.
+    
+    Args:
+        base_dir: Base logging directory
+        
+    Returns:
+        Dictionary with cleanup statistics
+    """
+    from pathlib import Path
+    
+    base_path = Path(base_dir)
+    if not base_path.exists():
+        return {"empty_files_removed": 0, "empty_dirs_removed": 0, "session_dirs_found": 0}
+    
+    stats = {
+        "empty_files_removed": 0,
+        "empty_dirs_removed": 0, 
+        "session_dirs_found": 0
+    }
+    
+    # Remove empty log files
+    for log_file in base_path.rglob("*.log"):
+        if log_file.stat().st_size == 0:
+            try:
+                log_file.unlink()
+                stats["empty_files_removed"] += 1
+            except Exception:
+                pass
+    
+    # Count session directories (for information)
+    session_dirs = list(base_path.glob("session_*"))
+    stats["session_dirs_found"] = len(session_dirs)
+    
+    # Remove empty directories
+    for dir_path in base_path.rglob("*"):
+        if dir_path.is_dir():
+            try:
+                # Try to remove if empty
+                dir_path.rmdir()
+                stats["empty_dirs_removed"] += 1
+            except OSError:
+                # Directory not empty, that's fine
+                pass
+    
+    return stats 

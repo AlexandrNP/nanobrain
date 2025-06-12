@@ -149,7 +149,7 @@ class ParslAgent(ConversationalAgent):
                         reason="parsl_not_available" if not PARSL_AVAILABLE else "parsl_not_configured"
                     )
                 
-                return await super().process(message, context)
+                return await super().process(message)
                 
         except Exception as e:
             processing_time = time.time() - start_time
@@ -163,7 +163,7 @@ class ParslAgent(ConversationalAgent):
                 )
             
             # Fallback to parent class on error
-            return await super().process(message, context)
+            return await super().process(message)
     
     async def _setup_parsl_apps(self):
         """Setup Parsl applications for distributed processing."""
@@ -263,7 +263,7 @@ class ParslAgent(ConversationalAgent):
                 )
             
             # Fallback to local processing
-            return await super().process(message, context)
+            return await super().process(message)
     
     async def shutdown(self):
         """Shutdown the agent and cleanup resources."""
@@ -339,7 +339,7 @@ def process_agent_message_distributed(agent_config: Dict, message: str, context:
             loop.run_until_complete(agent.initialize())
             
             # Process message using real agent
-            response = loop.run_until_complete(agent.process(message, context))
+            response = loop.run_until_complete(agent.process(message))
             
             # Cleanup
             loop.run_until_complete(agent.shutdown())

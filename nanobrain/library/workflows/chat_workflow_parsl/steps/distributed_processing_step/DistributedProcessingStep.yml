@@ -1,0 +1,46 @@
+name: "DistributedProcessingStep"
+description: "Step for distributed processing of multiple messages across agents"
+class: "DistributedProcessingStep"
+
+metadata:
+  biological_analogy: "Parallel neural processing across multiple brain regions"
+  justification: >
+    Like how the brain processes different types of information in parallel
+    across specialized regions, this step distributes different messages
+    to different agents for concurrent processing.
+  objectives:
+    - Distribute messages across multiple agents efficiently
+    - Coordinate parallel execution using Parsl
+    - Aggregate results from distributed processing
+    - Maintain proper logging and error handling
+    - Follow NanoBrain architecture principles
+
+config:
+  name: "distributed_processing_step"
+  description: "Handles distributed processing of multiple messages"
+  
+  # Processing configuration
+  processing:
+    distribution_method: "round_robin"  # round_robin, load_balanced, specialized
+    timeout_seconds: 30.0
+    retry_attempts: 2
+    enable_parallel_execution: true
+    
+  # Data unit configuration
+  data_units:
+    input:
+      type: "memory"
+      description: "Input messages for distributed processing"
+      cache_size: 100
+      
+    output:
+      type: "memory" 
+      description: "Results from distributed processing"
+      cache_size: 100
+      
+  # Logging configuration
+  logging:
+    log_distribution_plan: true
+    log_individual_results: true
+    log_aggregated_summary: true
+    debug_mode: true 

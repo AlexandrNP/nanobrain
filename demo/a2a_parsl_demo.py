@@ -26,28 +26,37 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 
-# Add the nanobrain src directory to the path
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+# Add the nanobrain package to the path
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
 
 from nanobrain.core.agent import ConversationalAgent, AgentConfig
 from nanobrain.core.a2a_support import (
     A2ASupportMixin, with_a2a_support, A2AClient, A2AAgentConfig,
     A2AMessage, A2APart, PartType, create_a2a_agent_config
 )
-from nanobrain.core.mcp_support import MCPSupportMixin
 from nanobrain.core.logging_system import get_logger
 from nanobrain.core.data_unit import DataUnitMemory, DataUnitConfig
-from nanobrain.core.step import Step, StepConfig
-from nanobrain.core.trigger import DataUpdatedTrigger, TriggerConfig
-from nanobrain.core.link import DirectLink, LinkConfig
 
-# Try to import Parsl components
+# Try to import MCP support
 try:
-    from demo.chat_workflow_parsl_demo import ParslLogManager, LoadBalancedCLIInterface
-    PARSL_AVAILABLE = True
+    from nanobrain.core.mcp_support import MCPSupportMixin
+    MCP_AVAILABLE = True
 except ImportError:
-    PARSL_AVAILABLE = False
-    print("⚠️  Parsl components not available, using simplified demo")
+    MCP_AVAILABLE = False
+    # Create dummy mixin if MCP not available
+    class MCPSupportMixin:
+        pass
+
+# Try to import Step components
+try:
+    from nanobrain.core.step import Step, StepConfig
+    from nanobrain.core.trigger import DataUpdatedTrigger, TriggerConfig
+    from nanobrain.core.link import DirectLink, LinkConfig
+    STEP_COMPONENTS_AVAILABLE = True
+except ImportError:
+    STEP_COMPONENTS_AVAILABLE = False
+    print("⚠️  Step components not available, using simplified demo")
 
 
 class A2AEnabledConversationalAgent(A2ASupportMixin, MCPSupportMixin, ConversationalAgent):
@@ -92,9 +101,7 @@ class A2AEnabledConversationalAgent(A2ASupportMixin, MCPSupportMixin, Conversati
                         self.collaboration_count += 1
                         
                         # Log delegation
-                        self.nb_logger.info(f"Delegating to A2A agent: {agent_name}",
-                                          rule_description=rule.get('description', ''),
-                                          collaboration_count=self.collaboration_count)
+                        self.logger.info(f"Delegating to A2A agent: {agent_name}")
                         
                         # Call A2A agent
                         result = await self.call_a2a_agent(agent_name, input_text)
@@ -103,48 +110,32 @@ class A2AEnabledConversationalAgent(A2ASupportMixin, MCPSupportMixin, Conversati
                         return f"🤝 Collaborated with {agent_name}:\n\n{result}"
                         
                     except Exception as e:
-                        self.nb_logger.error(f"A2A delegation failed: {e}")
+                        self.logger.error(f"A2A delegation failed: {e}")
                         # Continue with normal processing
                         break
         
         return None
 
 
-class A2ACollaborativeStep(Step):
+class A2ACollaborativeStep:
     """
     Step that can collaborate with A2A agents for enhanced processing.
     """
     
-    def __init__(self, config: StepConfig, agent: A2AEnabledConversationalAgent, log_manager):
-        super().__init__(config)
+    def __init__(self, agent: A2AEnabledConversationalAgent):
         self.agent = agent
-        self.log_manager = log_manager
-        self.step_logger = log_manager.get_logger("a2a_collaborative_step", "steps")
+        self.logger = get_logger("a2a_collaborative_step")
         self.collaboration_count = 0
     
-    async def process(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
+    async def process(self, user_input: str) -> str:
         """Process inputs with potential A2A collaboration."""
-        # Extract user input
-        user_input_data = inputs.get('user_input', '')
-        
-        if isinstance(user_input_data, dict):
-            user_input = user_input_data.get('user_input', '')
-        else:
-            user_input = user_input_data
-        
-        if not isinstance(user_input, str):
-            user_input = str(user_input) if user_input else ''
-        
         if not user_input or user_input.strip() == '':
-            self.step_logger.warning("Empty user input received")
-            return {'agent_response': ''}
+            self.logger.warning("Empty user input received")
+            return ''
         
         self.collaboration_count += 1
         
-        self.step_logger.info(f"Processing with A2A collaboration #{self.collaboration_count}",
-                             user_input_preview=user_input[:100] + "..." if len(user_input) > 100 else user_input,
-                             a2a_enabled=self.agent.a2a_enabled,
-                             available_agents=len(self.agent.a2a_agents))
+        self.logger.info(f"Processing with A2A collaboration #{self.collaboration_count}")
         
         try:
             start_time = time.time()
@@ -154,17 +145,13 @@ class A2ACollaborativeStep(Step):
             
             processing_time = (time.time() - start_time) * 1000
             
-            self.step_logger.info(f"Completed A2A collaboration #{self.collaboration_count}",
-                                 processing_time_ms=processing_time,
-                                 response_length=len(response) if response else 0,
-                                 agent_collaborations=self.agent.collaboration_count)
+            self.logger.info(f"Completed A2A collaboration #{self.collaboration_count} in {processing_time:.2f}ms")
             
-            return {'agent_response': response or 'I apologize, but I could not generate a response.'}
+            return response or 'I apologize, but I could not generate a response.'
             
         except Exception as e:
-            self.step_logger.error(f"Error in A2A collaborative processing: {e}",
-                                  collaboration_id=self.collaboration_count)
-            return {'agent_response': f'Sorry, I encountered an error during collaboration: {str(e)}'}
+            self.logger.error(f"Error in A2A collaborative processing: {e}")
+            return f'Sorry, I encountered an error during collaboration: {str(e)}'
 
 
 class A2AParslWorkflow:
@@ -173,52 +160,19 @@ class A2AParslWorkflow:
     """
     
     def __init__(self, config_path: Optional[str] = None):
-        self.config_path = config_path or "config/agent_with_a2a.yaml"
+        self.config_path = config_path or "config/a2a_config.yaml"
         self.components = {}
-        self.main_logger = get_logger("a2a_parsl_workflow")
-        
-        # Initialize log manager
-        if PARSL_AVAILABLE:
-            self.log_manager = ParslLogManager()
-        else:
-            # Simple log manager for demo
-            self.log_manager = SimpleLogManager()
+        self.logger = get_logger("a2a_parsl_workflow")
+        self.running = False
     
     async def setup(self):
         """Set up the A2A-enabled workflow."""
-        self.main_logger.info("Setting up A2A Parsl Workflow")
+        self.logger.info("Setting up A2A Parsl Workflow")
         
-        # 1. Create data units
-        print("   Creating data units...")
+        print("🚀 Setting up A2A Protocol Demo")
+        print("=" * 50)
         
-        # User input data unit
-        user_input_config = DataUnitConfig(
-            name="user_input",
-            data_type="memory",
-            persistent=False,
-            cache_size=100
-        )
-        self.components['user_input_du'] = DataUnitMemory(user_input_config)
-        
-        # Agent input data unit
-        agent_input_config = DataUnitConfig(
-            name="agent_input",
-            data_type="memory",
-            persistent=False,
-            cache_size=100
-        )
-        self.components['agent_input_du'] = DataUnitMemory(agent_input_config)
-        
-        # Agent output data unit
-        agent_output_config = DataUnitConfig(
-            name="agent_output",
-            data_type="memory",
-            persistent=False,
-            cache_size=100
-        )
-        self.components['agent_output_du'] = DataUnitMemory(agent_output_config)
-        
-        # 2. Create A2A-enabled agent
+        # 1. Create A2A-enabled agent
         print("   Creating A2A-enabled conversational agent...")
         
         agent_config = AgentConfig(
@@ -251,17 +205,17 @@ Always be transparent about when you're collaborating with other agents.""",
         # Create delegation rules
         delegation_rules = [
             {
-                'keywords': ['flight', 'hotel', 'travel', 'trip', 'vacation'],
+                'keywords': ['flight', 'hotel', 'travel', 'trip', 'vacation', 'book'],
                 'agent': 'travel_agent',
                 'description': 'Delegate travel-related requests'
             },
             {
-                'keywords': ['code', 'program', 'function', 'algorithm', 'debug'],
+                'keywords': ['code', 'program', 'function', 'algorithm', 'debug', 'python', 'javascript'],
                 'agent': 'code_agent', 
                 'description': 'Delegate programming tasks'
             },
             {
-                'keywords': ['data', 'analyze', 'chart', 'graph', 'statistics'],
+                'keywords': ['data', 'analyze', 'chart', 'graph', 'statistics', 'csv'],
                 'agent': 'data_agent',
                 'description': 'Delegate data analysis tasks'
             }
@@ -271,9 +225,7 @@ Always be transparent about when you're collaborating with other agents.""",
         agent = A2AEnabledConversationalAgent(
             agent_config,
             a2a_enabled=True,
-            a2a_config_path="config/a2a_config.yaml",
-            mcp_enabled=True,
-            mcp_config_path="config/mcp_config.yaml",
+            a2a_config_path=self.config_path,
             delegation_rules=delegation_rules
         )
         
@@ -282,118 +234,10 @@ Always be transparent about when you're collaborating with other agents.""",
         
         self.components['agent'] = agent
         
-        # 3. Create collaborative step
+        # 2. Create collaborative step
         print("   Creating A2A collaborative step...")
         
-        step_config = StepConfig(
-            name="a2a_collaborative_step",
-            description="Step with A2A collaboration capabilities",
-            debug_mode=True
-        )
-        
-        self.components['collaborative_step'] = A2ACollaborativeStep(
-            step_config,
-            agent,
-            self.log_manager
-        )
-        
-        # Set up step with data units
-        self.components['collaborative_step'].register_input_data_unit(
-            'user_input',
-            self.components['agent_input_du']
-        )
-        self.components['collaborative_step'].register_output_data_unit(
-            self.components['agent_output_du']
-        )
-        
-        await self.components['collaborative_step'].initialize()
-        
-        # 4. Create triggers
-        print("   Creating triggers...")
-        
-        # User input trigger
-        user_trigger_config = TriggerConfig(
-            name="user_input_trigger",
-            trigger_type="data_updated"
-        )
-        self.components['user_trigger'] = DataUpdatedTrigger(
-            [self.components['user_input_du']],
-            user_trigger_config
-        )
-        
-        # Agent input trigger
-        agent_trigger_config = TriggerConfig(
-            name="agent_input_trigger", 
-            trigger_type="data_updated"
-        )
-        self.components['agent_trigger'] = DataUpdatedTrigger(
-            [self.components['agent_input_du']],
-            agent_trigger_config
-        )
-        
-        # 5. Create links
-        print("   Creating data flow links...")
-        
-        # User to agent input link
-        user_to_agent_config = LinkConfig(
-            name="user_to_agent_link",
-            link_type="direct"
-        )
-        self.components['user_to_agent_link'] = DirectLink(
-            self.components['user_input_du'],
-            self.components['agent_input_du'],
-            user_to_agent_config
-        )
-        
-        # Agent input to step link
-        agent_to_step_config = LinkConfig(
-            name="agent_to_step_link",
-            link_type="direct"
-        )
-        self.components['agent_to_step_link'] = DirectLink(
-            self.components['agent_input_du'],
-            self.components['collaborative_step'],
-            agent_to_step_config
-        )
-        
-        # Step to output link
-        step_to_output_config = LinkConfig(
-            name="step_to_output_link",
-            link_type="direct"
-        )
-        self.components['step_to_output_link'] = DirectLink(
-            self.components['collaborative_step'],
-            self.components['agent_output_du'],
-            step_to_output_config
-        )
-        
-        # 6. Set up trigger callbacks
-        print("   Setting up trigger callbacks...")
-        
-        async def user_input_callback(data_units, trigger):
-            await self.components['user_to_agent_link'].activate()
-        
-        async def agent_input_callback(data_units, trigger):
-            await self.components['agent_to_step_link'].activate()
-            await self.components['step_to_output_link'].activate()
-        
-        self.components['user_trigger'].set_callback(user_input_callback)
-        self.components['agent_trigger'].set_callback(agent_input_callback)
-        
-        # 7. Create CLI interface
-        print("   Creating CLI interface...")
-        
-        if PARSL_AVAILABLE:
-            self.components['cli'] = LoadBalancedCLIInterface(
-                self.components['user_input_du'],
-                self.components['agent_output_du'],
-                self.log_manager
-            )
-        else:
-            self.components['cli'] = SimpleCLIInterface(
-                self.components['user_input_du'],
-                self.components['agent_output_du']
-            )
+        self.components['collaborative_step'] = A2ACollaborativeStep(agent)
         
         print("✅ A2A Parsl Workflow setup complete!")
         
@@ -415,99 +259,121 @@ Always be transparent about when you're collaborating with other agents.""",
                 print(f"   Configured Agents:")
                 for name, info in status['agents'].items():
                     print(f"     - {name}: {info['description']}")
-                    print(f"       Skills: {info['skills_count']}")
-                    print(f"       Streaming: {info['capabilities']['streaming']}")
+                    if 'skills_count' in info:
+                        print(f"       Skills: {info['skills_count']}")
+                    if 'capabilities' in info:
+                        print(f"       Streaming: {info['capabilities'].get('streaming', False)}")
+            else:
+                print("   No agents configured - using mock agents for demo")
     
     async def run(self):
         """Run the A2A workflow."""
-        self.main_logger.info("Starting A2A Parsl Workflow")
+        self.logger.info("Starting A2A Parsl Workflow")
         
         try:
             # Start CLI interface
-            await self.components['cli'].start()
+            await self._run_cli()
             
         except KeyboardInterrupt:
-            self.main_logger.info("Workflow interrupted by user")
+            self.logger.info("Workflow interrupted by user")
         except Exception as e:
-            self.main_logger.error(f"Workflow error: {e}")
+            self.logger.error(f"Workflow error: {e}")
             raise
     
-    async def shutdown(self):
-        """Shutdown the workflow."""
-        self.main_logger.info("Shutting down A2A Parsl Workflow")
-        
-        # Shutdown CLI
-        if 'cli' in self.components:
-            await self.components['cli'].shutdown()
-        
-        # Shutdown agent
-        if 'agent' in self.components:
-            await self.components['agent'].shutdown()
-        
-        # Shutdown log manager
-        if hasattr(self.log_manager, 'shutdown'):
-            await self.log_manager.shutdown()
-
-
-class SimpleLogManager:
-    """Simple log manager for when Parsl is not available."""
-    
-    def __init__(self):
-        self.should_log_to_console = True
-    
-    def get_logger(self, name: str, category: str = "general"):
-        return get_logger(f"{category}.{name}")
-    
-    async def shutdown(self):
-        pass
-
-
-class SimpleCLIInterface:
-    """Simple CLI interface for when Parsl CLI is not available."""
-    
-    def __init__(self, input_du, output_du):
-        self.input_du = input_du
-        self.output_du = output_du
-        self.running = False
-    
-    async def start(self):
-        """Start the simple CLI interface."""
+    async def _run_cli(self):
+        """Run the CLI interface."""
         self.running = True
-        print("\n🤖 A2A Demo CLI (Simplified)")
-        print("Type 'quit' to exit")
-        print("Try: 'book a flight to Paris' or 'write a Python function'")
+        
+        print("\n🤖 A2A Protocol Demo CLI")
+        print("=" * 40)
+        print("This demo showcases A2A agent collaboration.")
+        print("Try these examples:")
+        print("  • 'book a flight to Paris'")
+        print("  • 'write a Python function to sort a list'")
+        print("  • 'analyze sales data trends'")
+        print("  • 'help me plan a vacation to Japan'")
+        print("\nType 'quit' to exit, 'status' for A2A status, 'help' for more commands")
+        print("=" * 40)
         
         while self.running:
             try:
-                user_input = input("\nYou: ").strip()
+                user_input = input("\n🗣️  You: ").strip()
                 
                 if user_input.lower() in ['quit', 'exit', 'q']:
+                    print("👋 Goodbye!")
                     break
+                elif user_input.lower() == 'status':
+                    await self._display_a2a_status()
+                    continue
+                elif user_input.lower() == 'help':
+                    self._show_help()
+                    continue
+                elif user_input.lower() == 'test':
+                    await self._run_test_scenarios()
+                    continue
                 
                 if user_input:
-                    # Send input
-                    await self.input_du.write({'user_input': user_input})
+                    print("⚡ Processing with A2A collaboration...")
                     
-                    # Wait a bit for processing
-                    await asyncio.sleep(1.0)
+                    # Process through collaborative step
+                    response = await self.components['collaborative_step'].process(user_input)
                     
-                    # Get response
-                    response_data = await self.output_du.read()
-                    if response_data and 'agent_response' in response_data:
-                        print(f"\n🤖 Bot: {response_data['agent_response']}")
-                    else:
-                        print("\n🤖 Bot: No response received")
+                    print(f"\n🤖 Bot: {response}")
+                else:
+                    print("Please enter a message.")
             
             except KeyboardInterrupt:
+                print("\n👋 Goodbye!")
                 break
             except Exception as e:
                 print(f"\nError: {e}")
         
         self.running = False
     
+    def _show_help(self):
+        """Show help information."""
+        print("\n📋 Available Commands:")
+        print("  • quit/exit/q - Exit the demo")
+        print("  • status - Show A2A protocol status")
+        print("  • help - Show this help")
+        print("  • test - Run test scenarios")
+        print("\n🎯 Example Queries:")
+        print("  • Travel: 'book a flight to Tokyo', 'find hotels in Paris'")
+        print("  • Code: 'write a function to calculate fibonacci', 'debug this Python code'")
+        print("  • Data: 'analyze this dataset', 'create a chart from CSV data'")
+        print("  • General: Any other question or request")
+    
+    async def _run_test_scenarios(self):
+        """Run predefined test scenarios."""
+        print("\n🧪 Running A2A Test Scenarios...")
+        
+        test_scenarios = [
+            "book a flight from NYC to London",
+            "write a Python function to reverse a string",
+            "analyze quarterly sales data",
+            "help me plan a weekend trip"
+        ]
+        
+        for i, scenario in enumerate(test_scenarios, 1):
+            print(f"\n📝 Test {i}: {scenario}")
+            print("   Processing...")
+            
+            try:
+                response = await self.components['collaborative_step'].process(scenario)
+                print(f"   ✅ Response: {response[:100]}..." if len(response) > 100 else f"   ✅ Response: {response}")
+            except Exception as e:
+                print(f"   ❌ Error: {e}")
+        
+        print("\n✅ Test scenarios completed!")
+    
     async def shutdown(self):
-        """Shutdown the CLI interface."""
+        """Shutdown the workflow."""
+        self.logger.info("Shutting down A2A Parsl Workflow")
         self.running = False
+        
+        # Shutdown agent
+        if 'agent' in self.components:
+            await self.components['agent'].shutdown()
 
 
 async def test_a2a_setup():
@@ -552,6 +418,8 @@ async def test_a2a_setup():
         
     except Exception as e:
         print(f"\n❌ A2A setup test failed: {e}")
+        import traceback
+        traceback.print_exc()
         raise
 
 
@@ -559,7 +427,7 @@ async def main():
     """Main function."""
     parser = argparse.ArgumentParser(description="A2A Protocol Demo with Parsl Integration")
     parser.add_argument("--test-setup", action="store_true", help="Test A2A setup only")
-    parser.add_argument("--config", help="Configuration file path")
+    parser.add_argument("--config", help="A2A configuration file path")
     
     args = parser.parse_args()
     
@@ -567,9 +435,18 @@ async def main():
         await test_a2a_setup()
         return
     
-    print("🚀 A2A Protocol Demo")
-    print("This demo shows A2A integration with NanoBrain agents")
-    print("Full workflow demo coming soon...")
+    # Create and run the workflow
+    workflow = A2AParslWorkflow(config_path=args.config)
+    
+    try:
+        await workflow.setup()
+        await workflow.run()
+    except Exception as e:
+        print(f"❌ Workflow error: {e}")
+        import traceback
+        traceback.print_exc()
+    finally:
+        await workflow.shutdown()
 
 
 if __name__ == "__main__":

@@ -269,8 +269,11 @@ class ParslExecutor(ExecutorBase):
                     executors = []
                     for executor_config in parsl_config_dict['executors']:
                         if isinstance(executor_config, dict):
+                            # Make a copy to avoid modifying the original
+                            exec_config = executor_config.copy()
+                            
                             # Extract class name and parameters
-                            executor_class_name = executor_config.pop('class', 'parsl.executors.HighThroughputExecutor')
+                            executor_class_name = exec_config.pop('class', 'parsl.executors.HighThroughputExecutor')
                             
                             # Import the executor class
                             if executor_class_name == 'parsl.executors.HighThroughputExecutor':
@@ -281,15 +284,50 @@ class ParslExecutor(ExecutorBase):
                                 module = __import__(module_name, fromlist=[class_name])
                                 executor_class = getattr(module, class_name)
                             
-                            # Add worker initialization if not present
-                            if 'provider' in executor_config:
-                                if isinstance(executor_config['provider'], dict):
-                                    executor_config['provider']['worker_init'] = worker_init
-                                elif hasattr(executor_config['provider'], 'worker_init'):
-                                    executor_config['provider'].worker_init = worker_init
+                            # Handle provider configuration
+                            if 'provider_config' in exec_config:
+                                provider_config = exec_config.pop('provider_config')
+                                provider_class_name = provider_config.pop('class', 'parsl.providers.LocalProvider')
+                                
+                                # Import provider class
+                                if provider_class_name == 'parsl.providers.LocalProvider':
+                                    provider_class = LocalProvider
+                                else:
+                                    # Dynamic import for other provider types
+                                    module_name, class_name = provider_class_name.rsplit('.', 1)
+                                    module = __import__(module_name, fromlist=[class_name])
+                                    provider_class = getattr(module, class_name)
+                                
+                                # Add worker initialization
+                                provider_config['worker_init'] = worker_init
+                                
+                                # Create provider instance
+                                provider = provider_class(**provider_config)
+                                exec_config['provider'] = provider
+                            
+                            elif 'provider' in exec_config:
+                                # Handle existing provider configuration
+                                if isinstance(exec_config['provider'], dict):
+                                    provider_config = exec_config['provider']
+                                    provider_config['worker_init'] = worker_init
+                                    # Create LocalProvider as default
+                                    provider = LocalProvider(**provider_config)
+                                    exec_config['provider'] = provider
+                                elif hasattr(exec_config['provider'], 'worker_init'):
+                                    exec_config['provider'].worker_init = worker_init
+                            
+                            else:
+                                # Create default provider if none specified
+                                provider = LocalProvider(
+                                    worker_init=worker_init,
+                                    init_blocks=1,
+                                    max_blocks=1,
+                                    min_blocks=0
+                                )
+                                exec_config['provider'] = provider
                             
                             # Create executor instance
-                            executor = executor_class(**executor_config)
+                            executor = executor_class(**exec_config)
                             executors.append(executor)
                         else:
                             # Already an executor object

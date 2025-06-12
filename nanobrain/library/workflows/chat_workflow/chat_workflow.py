@@ -24,20 +24,16 @@ import asyncio
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 
-# Add src to path for core imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', 'src'))
-
-# Core framework imports
+# Core framework imports with proper nanobrain package structure
 from nanobrain.core.data_unit import DataUnitMemory, DataUnitConfig, DataUnitType
 from nanobrain.core.trigger import DataUpdatedTrigger, TriggerConfig, TriggerType
 from nanobrain.core.link import DirectLink, LinkConfig, LinkType
 from nanobrain.core.executor import LocalExecutor, ExecutorConfig
 from nanobrain.core.logging_system import get_logger, OperationType
+from nanobrain.core.agent import AgentConfig
 
-# Library imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
-from agents.conversational.enhanced_collaborative_agent import EnhancedCollaborativeAgent
-from agents.conversational.enhanced_collaborative_agent import AgentConfig
+# Library imports with updated paths
+from nanobrain.library.agents.conversational import EnhancedCollaborativeAgent
 from nanobrain.library.infrastructure.data import ConversationHistoryUnit
 
 
@@ -101,7 +97,6 @@ class ChatWorkflow:
         self.logger.info("Setting up executor")
         
         executor_config = ExecutorConfig(
-            name="chat_workflow_executor",
             executor_type="local",
             max_workers=2
         )
@@ -117,7 +112,7 @@ class ChatWorkflow:
         self.data_units['user_input'] = DataUnitMemory(
             DataUnitConfig(
                 name="user_input",
-                data_type=DataUnitType.MEMORY,
+                data_type="memory",
                 description="User input messages"
             )
         )
@@ -126,19 +121,14 @@ class ChatWorkflow:
         self.data_units['agent_output'] = DataUnitMemory(
             DataUnitConfig(
                 name="agent_output",
-                data_type=DataUnitType.MEMORY,
+                data_type="memory",
                 description="Agent response output"
             )
         )
         
-        # Conversation history data unit (using memory type for now)
+        # Conversation history data unit
         self.conversation_history = ConversationHistoryUnit(
-            DataUnitConfig(
-                name="conversation_history",
-                data_type=DataUnitType.MEMORY,  # Use MEMORY type instead of custom type
-                description="Persistent conversation history"
-            ),
-            db_path="chat_workflow_history.db"
+            config={'db_path': 'chat_workflow_history.db'}
         )
         self.data_units['conversation_history'] = self.conversation_history
         
@@ -153,11 +143,14 @@ class ChatWorkflow:
         
         agent_config = AgentConfig(
             name="chat_assistant",
-            description="Enhanced collaborative chat assistant",
             model="gpt-3.5-turbo",
             temperature=0.7,
             max_tokens=2000,
-            system_prompt="You are a helpful and friendly AI assistant."
+            system_prompt="You are a helpful and friendly AI assistant.",
+            auto_initialize=False,
+            debug_mode=True,
+            enable_logging=True,
+            log_conversations=True
         )
         
         self.agent = EnhancedCollaborativeAgent(
@@ -208,7 +201,8 @@ class ChatWorkflow:
             
             # Shutdown data units
             for data_unit in self.data_units.values():
-                await data_unit.shutdown()
+                if hasattr(data_unit, 'shutdown'):
+                    await data_unit.shutdown()
             
             # Shutdown executor
             if self.executor:
@@ -237,11 +231,19 @@ class ChatWorkflow:
                 'executor': self.executor is not None
             },
             'agent_status': self.agent.get_enhanced_status() if self.agent else None,
-            'conversation_stats': (
-                self.conversation_history.get_statistics() 
-                if self.conversation_history else None
-            )
+            'conversation_stats': "Available (call get_conversation_stats() for details)"
         }
+    
+    async def get_conversation_stats(self) -> Optional[Dict[str, Any]]:
+        """
+        Get conversation statistics asynchronously.
+        
+        Returns:
+            Optional[Dict[str, Any]]: Conversation statistics or None
+        """
+        if self.conversation_history:
+            return await self.conversation_history.get_statistics()
+        return None
 
 
 # Factory function for easy workflow creation

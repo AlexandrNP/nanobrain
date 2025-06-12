@@ -137,8 +137,7 @@ async def test_data_unit_functionality():
         )
         
         data_unit = ConversationHistoryUnit(
-            config,
-            db_path="test_conversation_history.db"
+            config={'db_path': 'test_conversation_history.db'}
         )
         print("✓ Data unit created")
         

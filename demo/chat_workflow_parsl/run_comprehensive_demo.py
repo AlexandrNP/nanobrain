@@ -17,7 +17,26 @@ demo_dir = Path(__file__).parent if '__file__' in globals() else Path.cwd() / 'd
 project_root = demo_dir.parent.parent
 sys.path.insert(0, str(project_root))
 
-# Configure logging using the centralized logging system
+# Import logging functions
+from nanobrain.core.logging_system import get_logger, reconfigure_global_logging, get_system_log_manager
+
+# Ensure proper logging system initialization
+try:
+    # Force recreation of the system log manager to ensure fresh session
+    import nanobrain.core.logging_system
+    nanobrain.core.logging_system._system_log_manager = None
+    
+    # Reconfigure global logging
+    reconfigure_global_logging()
+    
+    # Initialize the system log manager explicitly
+    log_manager = get_system_log_manager()
+    print(f"📋 Logging system initialized - Session: {log_manager.session_dir}")
+    
+except Exception as e:
+    print(f"⚠️  Warning: Logging initialization issue: {e}")
+
+# Configure third-party loggers
 try:
     from nanobrain.core.logging_system import configure_third_party_loggers
     configure_third_party_loggers()
@@ -34,11 +53,14 @@ class ParslChatDemo:
     def __init__(self):
         self.workflow = None
         self.config_path = project_root / 'nanobrain' / 'library' / 'workflows' / 'chat_workflow_parsl' / 'ParslChatWorkflow.yml'
+        self.logger = get_logger("parsl_chat_demo", category="workflows")
         
     async def initialize(self):
         """Initialize the workflow."""
         print("🚀 Initializing NanoBrain Parsl Chat Workflow")
         print("=" * 60)
+        
+        self.logger.info("Starting workflow initialization")
         
         print(f"📁 Config path: {self.config_path}")
         self.workflow = await create_parsl_chat_workflow(str(self.config_path))
@@ -48,6 +70,8 @@ class ParslChatDemo:
         print(f"✅ Workflow initialized successfully!")
         print(f"   📊 Status: {status}")
         print()
+        
+        self.logger.info(f"Workflow initialized with status: {status}")
         
     async def run_performance_benchmark(self):
         """Run a performance benchmark with multiple messages."""
@@ -145,6 +169,8 @@ class ParslChatDemo:
         print("🌐 Distributed Processing Demonstration")
         print("-" * 40)
         
+        self.logger.info("Starting distributed processing demonstration")
+        
         # Test concurrent processing
         print("🔄 Testing concurrent message processing...")
         
@@ -158,20 +184,45 @@ class ParslChatDemo:
         print(f"📤 Submitting {len(messages)} messages concurrently...")
         start_time = time.time()
         
-        # Use submit_message for async processing
-        futures = []
-        for msg in messages:
-            future = await self.workflow.submit_message(msg)
-            futures.append(future)
+        self.logger.info(f"Submitting {len(messages)} messages for concurrent processing")
         
-        # Wait for all to complete
-        responses = await asyncio.gather(*futures)
+        # Use distributed processing for multiple messages
+        result = await self.workflow.process_messages_distributed(messages)
+        
+        # Extract responses from the result
+        if result.get('success', False):
+            responses = [r['response'] for r in result.get('successful_results', [])]
+        else:
+            responses = [f"Error: {result.get('error', 'Unknown error')}" for _ in messages]
         end_time = time.time()
         
         print(f"✅ All messages processed in {end_time - start_time:.2f}s")
         
-        for i, (msg, resp) in enumerate(zip(messages, responses), 1):
-            print(f"   {i}. {msg[:30]}... → {resp[:50]}...")
+        # Show detailed results
+        if result.get('success', False):
+            successful_count = result.get('successful_count', 0)
+            failed_count = result.get('failed_count', 0)
+            print(f"   📊 Results: {successful_count} successful, {failed_count} failed")
+            
+            # Show successful results
+            for i, result_item in enumerate(result.get('successful_results', []), 1):
+                msg = result_item['message']
+                resp = result_item['response']
+                agent = result_item['agent']
+                duration = result_item.get('duration_seconds', 0)
+                print(f"   {i}. [{agent}] {msg[:30]}... → {resp[:50]}... ({duration:.2f}s)")
+                self.logger.info(f"Message {i}: {msg} -> {resp[:100]} (Agent: {agent})")
+                
+            # Show failed results if any
+            for i, failed_item in enumerate(result.get('failed_results', []), 1):
+                msg = failed_item['message']
+                error = failed_item['error']
+                agent = failed_item['agent']
+                print(f"   ❌ [{agent}] {msg[:30]}... → Error: {error}")
+        else:
+            print(f"   ❌ Processing failed: {result.get('error', 'Unknown error')}")
+        
+        self.logger.info(f"Distributed processing completed in {end_time - start_time:.2f}s with result: {result}")
         
         print()
         

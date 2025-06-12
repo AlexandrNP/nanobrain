@@ -203,10 +203,10 @@ logging:
   # - "console": Log only to console/terminal (no file output)
   # - "file": Log only to files (no console output, silent mode)
   # - "both": Log to both console and files (default behavior)
-  mode: "file"
+  mode: file
   
   # Log level for configuration loading
-  level: "INFO"
+  level: DEBUG
   
   # Whether to log successful configuration loading
   log_config_loading: true
@@ -215,15 +215,39 @@ logging:
   log_env_loading: false  # Set to false to avoid logging sensitive info
   
   # Whether to log missing API keys as warnings
-  log_missing_keys: true
+  log_missing_keys: false  # Reduce noise during demos
+  
+  # Only create log files when there's actual content to log
+  lazy_file_creation: false
   
   # File logging specific settings (when mode is "file" or "both")
   file:
     # Base directory for log files
-    base_directory: "logs"
+    base_directory: logs
     
-    # Whether to create timestamped session directories
-    use_session_directories: true
+    # Use both session and semantic organization
+    use_session_directories: true   # Enable timestamped sessions
+    use_semantic_directories: true  # Enable semantic organization within sessions
+    
+    # Semantic directory structure (inside session directories)
+    semantic_structure:
+      nanobrain_components: nanobrain
+      distributed_processing: parsl
+      workflows: workflows
+      agents: agents
+      data_units: data
+      steps: steps
+      triggers: triggers
+      links: links
+      executors: executors
+    
+    # Data unit tracking settings
+    track_data_unit_values: true    # Enable detailed value tracking
+    max_data_value_size: 10000      # Maximum size to log (avoid huge logs)
+    
+    # File creation settings
+    create_on_first_message: true   # Create log files when first message is logged
+    lazy_file_creation: false       # Don't delay file creation
     
     # Log file rotation settings
     max_file_size_mb: 10
@@ -238,10 +262,10 @@ logging:
     use_colors: true
     
     # Whether to show timestamps in console output
-    show_timestamps: true
+    show_timestamps: false  # Cleaner console output for demos
     
-    # Console log format
-    format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    # Console log format - cleaner for demos
+    format: "%(name)s - %(levelname)s - %(message)s"
 
 # Development Settings
 development:

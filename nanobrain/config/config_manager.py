@@ -90,13 +90,48 @@ class ConfigManager:
         # Reconfigure logging system now that configuration is loaded
         # Import locally to avoid circular imports
         try:
-            import importlib
-            logging_module = importlib.import_module('core.logging_system')
-            if hasattr(logging_module, 'reconfigure_global_logging'):
-                logging_module.reconfigure_global_logging()
-        except (ImportError, AttributeError):
-            # If logging system not available or function not found, skip reconfiguration
-            pass
+            # Try both possible import paths to handle package restructuring
+            try:
+                from nanobrain.core.logging_system import reconfigure_global_logging
+                reconfigure_global_logging()
+                self.logger.debug("Reconfigured global logging from nanobrain.core")
+            except ImportError:
+                # Try relative import
+                from ..core.logging_system import reconfigure_global_logging
+                reconfigure_global_logging()
+                self.logger.debug("Reconfigured global logging from relative path")
+        except Exception as e:
+            # Fallback to importlib if direct imports fail
+            try:
+                import sys
+                import importlib
+                
+                # Try multiple possible paths to find the logging system
+                possible_modules = [
+                    'nanobrain.core.logging_system',
+                    'core.logging_system',
+                    'src.core.logging_system',
+                    'library.core.logging_system'
+                ]
+                
+                for module_name in possible_modules:
+                    if module_name in sys.modules:
+                        module = sys.modules[module_name]
+                        if hasattr(module, 'reconfigure_global_logging'):
+                            module.reconfigure_global_logging()
+                            self.logger.debug(f"Reconfigured logging from existing module: {module_name}")
+                            break
+                    try:
+                        module = importlib.import_module(module_name)
+                        if hasattr(module, 'reconfigure_global_logging'):
+                            module.reconfigure_global_logging()
+                            self.logger.debug(f"Reconfigured logging from imported module: {module_name}")
+                            break
+                    except ImportError:
+                        continue
+            except Exception as inner_e:
+                # If all else fails, at least log the issue
+                self.logger.debug(f"Could not reconfigure logging: {e}, {inner_e}")
     
     def _get_default_config(self) -> Dict[str, Any]:
         """Get default configuration when file is not available."""

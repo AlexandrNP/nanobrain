@@ -19,17 +19,20 @@ config:
   name: "ParslChatWorkflow"
   description: "Distributed chat workflow using ParslExecutor"
   
-  # Parsl executor configuration using existing ParslExecutor
+  # Optimized executor configuration - Enable Parsl for distributed processing
   executor:
     type: "parsl"
-    max_workers: 8
-    timeout: 60.0
+    prefer_thread: false  # Use Parsl for distributed processing demonstration
+    max_workers: 4       # Reduced for efficiency
+    timeout: 15.0        # Shorter timeout for responsiveness
     parsl_config:
       executors:
         - class: "parsl.executors.HighThroughputExecutor"
-          label: "htex_local"
-          max_workers_per_node: 4
+          label: "htex_local_fast"
+          max_workers_per_node: 2
           cores_per_worker: 1
+          heartbeat_period: 5
+          heartbeat_threshold: 10
   
   # Multiple agents for parallel processing
   agents:
