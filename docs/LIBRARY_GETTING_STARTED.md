@@ -81,6 +81,97 @@ async def test_installation():
 asyncio.run(test_installation())
 ```
 
+## Installation and Basic Usage
+
+### Quick Start
+
+To get started with NanoBrain, you can import core components directly:
+
+```python
+# Core imports (work directly)
+from nanobrain import ConversationalAgent, AgentConfig
+from nanobrain import DataUnitMemory, DataUnitConfig
+from nanobrain import LocalExecutor, ParslExecutor
+
+# Or import from core modules
+from nanobrain.core.agent import ConversationalAgent, AgentConfig
+from nanobrain.core.data_unit import DataUnitMemory, DataUnitConfig
+from nanobrain.core.executor import LocalExecutor, ParslExecutor, ExecutorConfig
+```
+
+**Important Note About Library Components**: The `nanobrain.library` module is currently disabled in the main package. To use library components, you must use full module paths:
+
+```python
+# Library components require full paths
+from nanobrain.library.agents.conversational import EnhancedCollaborativeAgent
+from nanobrain.library.workflows.chat_workflow.chat_workflow import ChatWorkflow
+
+# These imports will NOT work currently:
+# from nanobrain.library.agents.conversational import EnhancedCollaborativeAgent  # This works
+# from nanobrain.library.workflows.chat_workflow import ChatWorkflow  # This fails
+```
+
+### Current Import Status
+
+**✅ Working Imports:**
+- All `nanobrain.core.*` imports
+- Direct imports from `nanobrain` package (core components only)
+- Full path imports to `nanobrain.library.*` modules
+
+**❌ Currently Disabled:**
+- `from nanobrain.library import *` (disabled in `__init__.py`)
+- Short library imports like `from nanobrain.library.workflows.chat_workflow import ChatWorkflow`
+
+### Basic Example with YAML Configuration (Recommended Approach)
+
+```python
+import asyncio
+from nanobrain.config.component_factory import create_component_from_yaml
+
+async def basic_yaml_example():
+    # Load agent from YAML configuration (recommended approach)
+    # Using SimpleAgent which is available in component factory
+    agent = create_component_from_yaml("docs/simple_agent_config.yml")
+    
+    await agent.initialize()
+    
+    response = await agent.process("How can you help me today?")
+    print(response)
+    
+    await agent.shutdown()
+
+# Run the example
+asyncio.run(basic_yaml_example())
+```
+
+### Basic Example with Manual Configuration (Alternative)
+
+```python
+import asyncio
+from nanobrain import ConversationalAgent, AgentConfig
+from nanobrain.library.agents.conversational import EnhancedCollaborativeAgent
+
+async def basic_manual_example():
+    # Manual configuration approach (less preferred)
+    config = AgentConfig(
+        name="my_agent",
+        model="gpt-3.5-turbo",
+        temperature=0.7
+    )
+
+    # Use core agent
+    agent = ConversationalAgent(config)
+    await agent.initialize()
+    
+    response = await agent.process("Hello!")
+    print(response)
+    
+    await agent.shutdown()
+
+# Run the example
+asyncio.run(basic_manual_example())
+```
+
 ## Core Concepts
 
 ### 1. Data Units
@@ -195,39 +286,18 @@ await executor.shutdown()
 Orchestrate complex workflows with all components:
 
 ```python
-from nanobrain.library.workflows.chat_workflow import ChatWorkflowOrchestrator, ChatWorkflowConfig
-
-# Configure the workflow
-config = ChatWorkflowConfig(
-    name="my_chat_workflow",
-    agents=[
-        {
-            'name': 'primary_agent',
-            'model': 'gpt-3.5-turbo',
-            'temperature': 0.7
-        }
-    ],
-    enable_parallel_processing=True,
-    max_parallel_requests=5,
-    database_config={
-        'adapter': 'sqlite',
-        'connection_string': 'chat.db'
-    }
-)
+# Note: Using the actual working import paths
+from nanobrain.library.workflows.chat_workflow.chat_workflow import ChatWorkflow, create_chat_workflow
 
 # Create and run the workflow
-orchestrator = ChatWorkflowOrchestrator(config)
-await orchestrator.initialize()
+workflow = await create_chat_workflow()
+await workflow.initialize()
 
-# Process chat messages
-response = await orchestrator.process_chat(
-    message="Hello, I need help with Python programming",
-    user_id="user_123",
-    session_id="session_456"
-)
+# Process chat messages using the simple interface
+response = await workflow.process_user_input("Hello, I need help with Python programming")
 
-print(response.content)
-await orchestrator.shutdown()
+print(response)
+await workflow.shutdown()
 ```
 
 ## Quick Start Examples
@@ -238,19 +308,12 @@ Create a basic chat bot in under 20 lines:
 
 ```python
 import asyncio
-from library.agents.enhanced import CollaborativeAgent
-from core.agent import AgentConfig
+from nanobrain.config.component_factory import create_component_from_yaml
 
 async def simple_chatbot():
-    # Configure agent
-    config = AgentConfig(
-        name="chatbot",
-        model="gpt-3.5-turbo",
-        system_prompt="You are a friendly chatbot."
-    )
+    # Load agent from YAML configuration (recommended approach)
+    agent = create_component_from_yaml("docs/simple_agent_config.yml")
     
-    # Create agent
-    agent = CollaborativeAgent(config)
     await agent.initialize()
     
     # Chat loop

@@ -4,21 +4,72 @@ This document provides comprehensive API documentation for all core classes in t
 
 ## Import Structure
 
-All NanoBrain components are now available through the `nanobrain` package:
+All NanoBrain core components are available through the `nanobrain` package:
 
 ```python
-# Core components
+# Core components (currently available)
 from nanobrain.core.agent import ConversationalAgent, AgentConfig
 from nanobrain.core.data_unit import DataUnitMemory, DataUnitConfig
-from nanobrain.core.executor import ParslExecutor, ExecutorConfig
+from nanobrain.core.executor import ParslExecutor, LocalExecutor, ExecutorConfig
 from nanobrain.core.logging_system import get_logger
 
-# Library components
+# Direct imports from nanobrain package
+from nanobrain import ConversationalAgent, AgentConfig, DataUnitMemory, DataUnitConfig
+from nanobrain import LocalExecutor, ParslExecutor, ExecutorConfig
+
+# Library components (require explicit full paths due to disabled imports)
+# Note: Library imports are currently disabled in nanobrain.__init__.py
 from nanobrain.library.agents.conversational import EnhancedCollaborativeAgent
-from nanobrain.library.workflows.chat_workflow import ChatWorkflowOrchestrator
+from nanobrain.library.workflows.chat_workflow.chat_workflow import ChatWorkflow
 
 # Configuration
 from nanobrain.config import get_config_manager
+```
+
+**Important Note**: The `nanobrain.library` module is currently disabled in the main package imports. To use library components, you must import them using their full module paths as shown above.
+
+### Recommended Approach: YAML-Based Configuration
+
+The NanoBrain framework follows a **YAML-first configuration philosophy**. Instead of manual configuration, use the component factory:
+
+```python
+from nanobrain.config.component_factory import create_component_from_yaml, create_workflow_from_yaml
+
+# Load agent from YAML (recommended)
+agent = create_component_from_yaml("docs/simple_agent_config.yml")
+
+# Load complete workflow from YAML
+workflow_components = create_workflow_from_yaml(
+    "nanobrain/library/workflows/chat_workflow/chat_workflow.yml"
+)
+```
+
+**Benefits:**
+- Consistent configuration across all components
+- Built-in validation and schema checking
+- Reusable and shareable configurations
+- Self-documenting YAML files
+
+## Current Package Structure
+
+The actual package structure is:
+
+```
+nanobrain/
+├── core/                    # Core framework components (available)
+│   ├── agent.py            # Base agent classes
+│   ├── data_unit.py        # Data management
+│   ├── executor.py         # Execution engines
+│   ├── logging_system.py   # Logging and monitoring
+│   └── ...
+├── library/                # Library components (imports disabled)
+│   ├── agents/             # Enhanced agent implementations
+│   │   └── conversational/ # EnhancedCollaborativeAgent
+│   ├── workflows/          # Workflow implementations
+│   │   └── chat_workflow/  # ChatWorkflow class
+│   └── infrastructure/     # Infrastructure components
+├── config/                 # Configuration management
+└── __init__.py            # Main package exports (library disabled)
 ```
 
 ## Table of Contents

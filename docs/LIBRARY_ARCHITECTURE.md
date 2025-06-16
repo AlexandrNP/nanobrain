@@ -38,7 +38,7 @@ nanobrain/
 │   ├── executor.py         # Execution engines (including ParslExecutor)
 │   ├── logging_system.py   # Logging and monitoring
 │   └── ...
-├── library/                # High-level library components
+├── library/                # High-level library components (imports disabled)
 │   ├── agents/             # Enhanced agent implementations
 │   │   ├── conversational/ # Conversational agents
 │   │   └── specialized/    # Specialized agents
@@ -47,11 +47,30 @@ nanobrain/
 ├── config/                 # Configuration management
 └── __init__.py            # Main package exports
 
-# Import examples:
+# Import examples (current working imports):
 from nanobrain.core.agent import ConversationalAgent
-from nanobrain.library.agents.conversational import EnhancedCollaborativeAgent
 from nanobrain.core.executor import ParslExecutor
+
+# Library imports require full paths (library imports disabled in __init__.py):
+from nanobrain.library.agents.conversational import EnhancedCollaborativeAgent
+from nanobrain.library.workflows.chat_workflow.chat_workflow import ChatWorkflow
 ```
+
+**Important**: The `nanobrain.library` imports are currently disabled in the main `__init__.py` file. To use library components, you must import them using their full module paths.
+
+### Currently Available Components
+
+**Core Components (directly importable from nanobrain):**
+- `ConversationalAgent`, `AgentConfig`
+- `DataUnitMemory`, `DataUnitConfig`
+- `LocalExecutor`, `ParslExecutor`, `ExecutorConfig`
+- `Step`, `StepConfig`
+- `DataUpdatedTrigger`, `TriggerConfig`
+- `DirectLink`, `LinkConfig`
+
+**Library Components (require full module paths):**
+- `nanobrain.library.agents.conversational.EnhancedCollaborativeAgent`
+- `nanobrain.library.workflows.chat_workflow.chat_workflow.ChatWorkflow`
 
 ### Architectural Principles
 

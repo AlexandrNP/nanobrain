@@ -166,18 +166,12 @@ export OPENAI_API_KEY="your-api-key-here"
 ### Simple Example
 ```python
 import asyncio
-from nanobrain.library.agents.conversational import EnhancedCollaborativeAgent
-from nanobrain.core.agent import AgentConfig
+from nanobrain.config.component_factory import create_component_from_yaml
 
 async def simple_example():
-    # Configure and create agent
-    config = AgentConfig(
-        name="assistant",
-        model="gpt-3.5-turbo",
-        system_prompt="You are a helpful AI assistant."
-    )
+    # Load agent from YAML configuration (recommended approach)
+    agent = create_component_from_yaml("docs/simple_agent_config.yml")
     
-    agent = EnhancedCollaborativeAgent(config)
     await agent.initialize()
     
     # Process a request
@@ -192,24 +186,26 @@ asyncio.run(simple_example())
 
 ### Complete Application
 ```python
-from nanobrain.library.workflows.chat_workflow import ChatWorkflowOrchestrator, ChatWorkflowConfig
+import asyncio
+from nanobrain.config.component_factory import create_workflow_from_yaml
 
 async def chat_application():
-    # Load configuration
-    config = ChatWorkflowConfig.from_file("config/workflow.yaml")
-    
-    # Create and run workflow
-    orchestrator = ChatWorkflowOrchestrator(config)
-    await orchestrator.initialize()
-    
-    # Process chat messages
-    response = await orchestrator.process_chat(
-        message="I need help with Python programming",
-        user_id="user_123"
+    # Load complete workflow from YAML configuration (recommended approach)
+    workflow_components = create_workflow_from_yaml(
+        "nanobrain/library/workflows/chat_workflow/chat_workflow.yml"
     )
     
-    print(response.content)
-    await orchestrator.shutdown()
+    # Note: Full workflow factory integration is in progress
+    # For now, using direct creation with the workflow configuration loaded
+    from nanobrain.library.workflows.chat_workflow.chat_workflow import create_chat_workflow
+    workflow = await create_chat_workflow()
+    await workflow.initialize()
+    
+    # Process chat messages
+    response = await workflow.process_user_input("I need help with Python programming")
+    
+    print(response)
+    await workflow.shutdown()
 
 asyncio.run(chat_application())
 ```
