@@ -515,7 +515,7 @@ def create_step(step_type: str, config: StepConfig, **kwargs) -> Step:
     Factory function to create steps of different types.
     
     Args:
-        step_type: Type of step ('simple' or 'transform')
+        step_type: Type of step ('simple', 'transform', or 'workflow')
         config: Step configuration
         **kwargs: Additional arguments
         
@@ -531,5 +531,14 @@ def create_step(step_type: str, config: StepConfig, **kwargs) -> Step:
         return SimpleStep(config, **kwargs)
     elif step_type.lower() == "transform":
         return TransformStep(config, **kwargs)
+    elif step_type.lower() == "workflow":
+        # Import here to avoid circular imports
+        from .workflow import Workflow, WorkflowConfig
+        if isinstance(config, WorkflowConfig):
+            return Workflow(config, **kwargs)
+        else:
+            # Convert StepConfig to WorkflowConfig
+            workflow_config = WorkflowConfig(**config.model_dump())
+            return Workflow(workflow_config, **kwargs)
     else:
         raise ValueError(f"Unknown step type: {step_type}") 

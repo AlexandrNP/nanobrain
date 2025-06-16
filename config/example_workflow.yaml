@@ -1,0 +1,41 @@
+name: "example_workflow"
+description: "A simple example workflow demonstrating the base Workflow class"
+debug_mode: true
+execution_strategy: "sequential"
+error_handling: "continue"
+validate_graph: true
+allow_cycles: false
+require_connected_graph: true
+
+steps:
+  - step_id: "input_step"
+    class: "SimpleStep"
+    config:
+      name: "input_step"
+      description: "Input processing step"
+      debug_mode: true
+  
+  - step_id: "processing_step"
+    class: "SimpleStep"
+    config:
+      name: "processing_step"
+      description: "Main processing step"
+      debug_mode: true
+  
+  - step_id: "output_step"
+    class: "SimpleStep"
+    config:
+      name: "output_step"
+      description: "Output generation step"
+      debug_mode: true
+
+links:
+  - link_id: "input_to_processing"
+    source: "input_step"
+    target: "processing_step"
+    link_type: "direct"
+  
+  - link_id: "processing_to_output"
+    source: "processing_step"
+    target: "output_step"
+    link_type: "direct" 

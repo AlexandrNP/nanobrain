@@ -62,6 +62,7 @@ logger = logging.getLogger(__name__)
 class ComponentType(Enum):
     """Types of components that can be created."""
     STEP = "step"
+    WORKFLOW = "workflow"
     AGENT = "agent"
     DATA_UNIT = "data_unit"
     TRIGGER = "trigger"
@@ -251,6 +252,8 @@ class ComponentFactory:
             component = self._create_agent(validated_config, name)
         elif component_type == ComponentType.STEP:
             component = self._create_step(validated_config, name)
+        elif component_type == ComponentType.WORKFLOW:
+            component = self._create_workflow(validated_config, name)
         elif component_type == ComponentType.DATA_UNIT:
             component = self._create_data_unit(validated_config, name)
         elif component_type == ComponentType.TRIGGER:
@@ -341,6 +344,22 @@ class ComponentFactory:
             step.register_output_data_unit(output_data_unit)
 
         return step
+    
+    def _create_workflow(self, config: Dict[str, Any], name: Optional[str] = None) -> Any:
+        """Create a workflow from configuration."""
+        from ..workflow import Workflow, WorkflowConfig
+        
+        # Create WorkflowConfig object
+        if name and 'name' not in config:
+            config['name'] = name
+        
+        workflow_config = WorkflowConfig(**config)
+        
+        # Create workflow instance
+        workflow = Workflow(workflow_config)
+        
+        logger.debug(f"Created workflow: {workflow_config.name}")
+        return workflow
     
     def _create_data_unit(self, config: Dict[str, Any], name: Optional[str] = None) -> Any:
         """Create a data unit from configuration."""
@@ -543,6 +562,8 @@ class ComponentFactory:
             return ComponentType.AGENT
         elif class_name in ['SimpleStep', 'Step', 'TransformStep']:
             return ComponentType.STEP
+        elif class_name in ['Workflow'] or 'steps' in config or 'execution_strategy' in config:
+            return ComponentType.WORKFLOW
         elif 'data_type' in config:
             return ComponentType.DATA_UNIT
         elif 'trigger_type' in config:

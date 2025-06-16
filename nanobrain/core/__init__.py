@@ -32,6 +32,11 @@ from .step import (
     Step, SimpleStep, TransformStep, StepConfig, create_step
 )
 
+from .workflow import (
+    Workflow, WorkflowConfig, WorkflowGraph, ConfigLoader, 
+    ExecutionStrategy, ErrorHandlingStrategy, create_workflow
+)
+
 from .agent import (
     Agent, SimpleAgent, ConversationalAgent, AgentConfig, create_agent
 )
@@ -66,6 +71,10 @@ __all__ = [
     
     # Steps
     'Step', 'SimpleStep', 'TransformStep', 'StepConfig', 'create_step',
+    
+    # Workflows
+    'Workflow', 'WorkflowConfig', 'WorkflowGraph', 'ConfigLoader', 
+    'ExecutionStrategy', 'ErrorHandlingStrategy', 'create_workflow',
     
     # Agents
     'Agent', 'SimpleAgent', 'ConversationalAgent', 'AgentConfig', 'create_agent',
