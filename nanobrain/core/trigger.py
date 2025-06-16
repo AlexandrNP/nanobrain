@@ -6,10 +6,14 @@ Provides event-driven processing capabilities for Steps.
 
 import asyncio
 import logging
+import time
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional, List, Callable, Set, Union
 from enum import Enum
 from pydantic import BaseModel, Field, ConfigDict
+
+# Import logging system
+from .logging_system import get_logger, get_system_log_manager
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +36,7 @@ class TriggerConfig(BaseModel):
     max_frequency_hz: float = Field(default=10.0, gt=0)
     condition: Optional[str] = None
     timer_interval_ms: Optional[int] = None
+    name: str = ""
 
 
 class TriggerBase(ABC):
@@ -45,12 +50,56 @@ class TriggerBase(ABC):
     
     def __init__(self, config: Optional[TriggerConfig] = None, **kwargs):
         self.config = config or TriggerConfig()
-        self.name = kwargs.get('name', self.__class__.__name__)
+        self.name = kwargs.get('name', self.config.name or self.__class__.__name__)
         self._is_active = False
         self._callbacks: List[Callable] = []
         self._last_trigger_time = 0.0
         self._debounce_task: Optional[asyncio.Task] = None
         
+        # Internal state tracking
+        self._creation_time = time.time()
+        self._trigger_count = 0
+        self._rate_limited_count = 0
+        self._callback_error_count = 0
+        self._total_callback_time = 0.0
+        
+        # Initialize centralized logging system
+        self.enable_logging = kwargs.get('enable_logging', True)
+        if self.enable_logging:
+            # Use centralized logging system
+            self.nb_logger = get_logger(self.name, category="triggers", debug_mode=kwargs.get('debug_mode', False))
+            
+            # Register with system log manager
+            system_manager = get_system_log_manager()
+            system_manager.register_component("triggers", self.name, self, {
+                "trigger_type": self.config.trigger_type.value if hasattr(self.config.trigger_type, 'value') else str(self.config.trigger_type),
+                "debounce_ms": self.config.debounce_ms,
+                "max_frequency_hz": self.config.max_frequency_hz,
+                "enable_logging": True
+            })
+        else:
+            self.nb_logger = None
+        
+    def _get_internal_state(self) -> Dict[str, Any]:
+        """Get comprehensive internal state for logging."""
+        uptime = time.time() - self._creation_time
+        avg_callback_time = self._total_callback_time / max(self._trigger_count, 1)
+        
+        return {
+            "is_active": self._is_active,
+            "trigger_count": self._trigger_count,
+            "rate_limited_count": self._rate_limited_count,
+            "callback_error_count": self._callback_error_count,
+            "callback_count": len(self._callbacks),
+            "uptime_seconds": uptime,
+            "last_trigger_time": self._last_trigger_time,
+            "avg_callback_time_ms": avg_callback_time * 1000 if self._trigger_count > 0 else 0,
+            "trigger_type": self.config.trigger_type.value if hasattr(self.config.trigger_type, 'value') else str(self.config.trigger_type),
+            "debounce_ms": self.config.debounce_ms,
+            "max_frequency_hz": self.config.max_frequency_hz,
+            "success_rate": (self._trigger_count - self._callback_error_count) / max(self._trigger_count, 1)
+        }
+    
     @abstractmethod
     async def start_monitoring(self) -> None:
         """Start monitoring for trigger conditions."""
@@ -65,11 +114,27 @@ class TriggerBase(ABC):
         """Add a callback to be executed when triggered."""
         if callback not in self._callbacks:
             self._callbacks.append(callback)
+            
+            # Log callback addition
+            if self.enable_logging and self.nb_logger:
+                self.nb_logger.info(f"Callback added to trigger: {self.name}",
+                                   operation="add_callback",
+                                   callback_count=len(self._callbacks),
+                                   callback_name=getattr(callback, '__name__', str(callback)),
+                                   internal_state=self._get_internal_state())
     
     async def remove_callback(self, callback: Callable) -> None:
         """Remove a callback."""
         if callback in self._callbacks:
             self._callbacks.remove(callback)
+            
+            # Log callback removal
+            if self.enable_logging and self.nb_logger:
+                self.nb_logger.info(f"Callback removed from trigger: {self.name}",
+                                   operation="remove_callback",
+                                   callback_count=len(self._callbacks),
+                                   callback_name=getattr(callback, '__name__', str(callback)),
+                                   internal_state=self._get_internal_state())
     
     async def trigger(self, data: Any = None) -> None:
         """Execute trigger with rate limiting and debouncing."""
@@ -80,7 +145,16 @@ class TriggerBase(ABC):
         min_interval = 1.0 / self.config.max_frequency_hz
         
         if time_since_last < min_interval:
+            self._rate_limited_count += 1
             logger.debug(f"Trigger {self.name} rate limited")
+            
+            # Log rate limiting
+            if self.enable_logging and self.nb_logger:
+                self.nb_logger.debug(f"Trigger rate limited: {self.name}",
+                                   operation="rate_limited",
+                                   time_since_last=time_since_last,
+                                   min_interval=min_interval,
+                                   rate_limited_count=self._rate_limited_count)
             return
         
         # Cancel previous debounce task
@@ -102,19 +176,76 @@ class TriggerBase(ABC):
             await self._execute_callbacks(data)
         except asyncio.CancelledError:
             logger.debug(f"Debounced execution cancelled for {self.name}")
+            
+            # Log debounce cancellation
+            if self.enable_logging and self.nb_logger:
+                self.nb_logger.debug(f"Debounced execution cancelled: {self.name}",
+                                   operation="debounce_cancelled")
     
     async def _execute_callbacks(self, data: Any) -> None:
         """Execute all registered callbacks."""
         self._last_trigger_time = asyncio.get_event_loop().time()
+        self._trigger_count += 1
         
-        for callback in self._callbacks:
+        start_time = time.time()
+        successful_callbacks = 0
+        
+        # Log trigger activation
+        if self.enable_logging and self.nb_logger:
+            self.nb_logger.log_trigger_activation(
+                trigger_name=self.name,
+                trigger_type=self.config.trigger_type.value if hasattr(self.config.trigger_type, 'value') else str(self.config.trigger_type),
+                conditions={"data_type": type(data).__name__ if data is not None else "None"},
+                activated=True
+            )
+            
+            self.nb_logger.info(f"Trigger activated: {self.name}",
+                               operation="trigger_activated",
+                               callback_count=len(self._callbacks),
+                               data_type=type(data).__name__ if data is not None else "None",
+                               trigger_count=self._trigger_count)
+        
+        for i, callback in enumerate(self._callbacks):
             try:
+                callback_start = time.time()
                 if asyncio.iscoroutinefunction(callback):
                     await callback(data)
                 else:
                     callback(data)
+                callback_duration = time.time() - callback_start
+                self._total_callback_time += callback_duration
+                successful_callbacks += 1
+                
+                # Log successful callback execution
+                if self.enable_logging and self.nb_logger:
+                    self.nb_logger.debug(f"Callback executed successfully: {self.name}[{i}]",
+                                       operation="callback_success",
+                                       callback_index=i,
+                                       callback_name=getattr(callback, '__name__', str(callback)),
+                                       duration_ms=callback_duration * 1000)
+                
             except Exception as e:
+                self._callback_error_count += 1
                 logger.error(f"Error in trigger callback: {e}")
+                
+                # Log callback error
+                if self.enable_logging and self.nb_logger:
+                    self.nb_logger.error(f"Callback error in trigger: {self.name}[{i}]",
+                                       operation="callback_error",
+                                       callback_index=i,
+                                       callback_name=getattr(callback, '__name__', str(callback)),
+                                       error=str(e),
+                                       error_type=type(e).__name__)
+        
+        # Log execution summary
+        total_duration = time.time() - start_time
+        if self.enable_logging and self.nb_logger:
+            self.nb_logger.info(f"Trigger execution completed: {self.name}",
+                               operation="trigger_completed",
+                               successful_callbacks=successful_callbacks,
+                               total_callbacks=len(self._callbacks),
+                               total_duration_ms=total_duration * 1000,
+                               internal_state=self._get_internal_state())
     
     @property
     def is_active(self) -> bool:
@@ -146,6 +277,14 @@ class DataUpdatedTrigger(TriggerBase):
             self._monitoring_tasks.append(task)
         
         logger.debug(f"DataUpdatedTrigger {self.name} started monitoring {len(self.data_units)} data units")
+        
+        # Log monitoring start
+        if self.enable_logging and self.nb_logger:
+            self.nb_logger.info(f"Monitoring started: {self.name}",
+                               operation="start_monitoring",
+                               data_units_count=len(self.data_units),
+                               data_unit_names=[getattr(du, 'name', str(du)) for du in self.data_units],
+                               internal_state=self._get_internal_state())
     
     async def stop_monitoring(self) -> None:
         """Stop monitoring data units."""
@@ -162,10 +301,31 @@ class DataUpdatedTrigger(TriggerBase):
         
         self._monitoring_tasks.clear()
         logger.debug(f"DataUpdatedTrigger {self.name} stopped monitoring")
+        
+        # Log monitoring stop with statistics
+        if self.enable_logging and self.nb_logger:
+            uptime = time.time() - self._creation_time
+            self.nb_logger.info(f"Monitoring stopped: {self.name}",
+                               operation="stop_monitoring",
+                               uptime_seconds=uptime,
+                               final_stats={
+                                   "total_triggers": self._trigger_count,
+                                   "rate_limited": self._rate_limited_count,
+                                   "callback_errors": self._callback_error_count
+                               },
+                               internal_state=self._get_internal_state())
     
     async def _monitor_data_unit(self, data_unit: Any) -> None:
         """Monitor a single data unit for changes."""
         last_update_time = 0.0
+        data_unit_name = getattr(data_unit, 'name', str(data_unit))
+        
+        # Log monitoring start for this data unit
+        if self.enable_logging and self.nb_logger:
+            self.nb_logger.debug(f"Started monitoring data unit: {data_unit_name}",
+                               operation="start_data_unit_monitoring",
+                               data_unit_name=data_unit_name,
+                               trigger_name=self.name)
         
         try:
             while self._is_active:
@@ -176,6 +336,16 @@ class DataUpdatedTrigger(TriggerBase):
                     if current_update_time > last_update_time:
                         last_update_time = current_update_time
                         data = await data_unit.get()
+                        
+                        # Log data change detection
+                        if self.enable_logging and self.nb_logger:
+                            self.nb_logger.info(f"Data change detected: {data_unit_name}",
+                                               operation="data_change_detected",
+                                               data_unit_name=data_unit_name,
+                                               trigger_name=self.name,
+                                               update_time=current_update_time,
+                                               data_type=type(data).__name__ if data is not None else "None")
+                        
                         await self.trigger(data)
                 
                 # Small delay to prevent busy waiting
@@ -183,8 +353,24 @@ class DataUpdatedTrigger(TriggerBase):
                 
         except asyncio.CancelledError:
             logger.debug(f"Monitoring cancelled for data unit in {self.name}")
+            
+            # Log monitoring cancellation
+            if self.enable_logging and self.nb_logger:
+                self.nb_logger.debug(f"Data unit monitoring cancelled: {data_unit_name}",
+                                   operation="data_unit_monitoring_cancelled",
+                                   data_unit_name=data_unit_name,
+                                   trigger_name=self.name)
         except Exception as e:
             logger.error(f"Error monitoring data unit in {self.name}: {e}")
+            
+            # Log monitoring error
+            if self.enable_logging and self.nb_logger:
+                self.nb_logger.error(f"Error monitoring data unit: {data_unit_name}",
+                                   operation="data_unit_monitoring_error",
+                                   data_unit_name=data_unit_name,
+                                   trigger_name=self.name,
+                                   error=str(e),
+                                   error_type=type(e).__name__)
 
 
 class AllDataReceivedTrigger(TriggerBase):

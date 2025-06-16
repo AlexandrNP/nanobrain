@@ -84,12 +84,12 @@ class DataUnitLogger:
                     if session_dirs:
                         # Sort by creation time, newest first
                         latest_session = sorted(session_dirs, key=lambda d: d.stat().st_ctime, reverse=True)[0]
-                        data_units_dir = latest_session / "data_units" / self.data_unit_type
+                        data_units_dir = latest_session / "data"
                         data_units_dir.mkdir(parents=True, exist_ok=True)
                         return data_units_dir
             
             # If session directories not used or not found, use direct path
-            data_units_dir = Path(base_dir) / "data_units" / self.data_unit_type
+            data_units_dir = Path(base_dir) / "data"
             data_units_dir.mkdir(parents=True, exist_ok=True)
             return data_units_dir
             

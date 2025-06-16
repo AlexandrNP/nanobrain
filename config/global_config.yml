@@ -231,7 +231,6 @@ logging:
     
     # Semantic directory structure (inside session directories)
     semantic_structure:
-      nanobrain_components: nanobrain
       distributed_processing: parsl
       workflows: workflows
       agents: agents

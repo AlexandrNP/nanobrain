@@ -7,10 +7,14 @@ Links define how information flows between system components.
 
 import asyncio
 import logging
+import time
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional, List, Callable, Union
 from enum import Enum
 from pydantic import BaseModel, Field, ConfigDict
+
+# Import logging system
+from .logging_system import get_logger, get_system_log_manager
 
 logger = logging.getLogger(__name__)
 
@@ -48,10 +52,31 @@ class LinkBase(ABC):
         self.config = config or LinkConfig()
         self.source = source
         self.target = target
-        self.name = kwargs.get('name', f"{source.name}->{target.name}")
+        self.name = kwargs.get('name', f"{getattr(source, 'name', 'unknown')}->{getattr(target, 'name', 'unknown')}")
         self._is_active = False
         self._transfer_count = 0
         self._error_count = 0
+        self._creation_time = time.time()
+        self._last_transfer_time = None
+        self._total_transfer_time = 0.0
+        
+        # Initialize centralized logging system
+        self.enable_logging = kwargs.get('enable_logging', True)
+        if self.enable_logging:
+            # Use centralized logging system
+            self.nb_logger = get_logger(self.name, category="links", debug_mode=kwargs.get('debug_mode', False))
+            
+            # Register with system log manager
+            system_manager = get_system_log_manager()
+            system_manager.register_component("links", self.name, self, {
+                "link_type": self.config.link_type.value if hasattr(self.config.link_type, 'value') else str(self.config.link_type),
+                "source": getattr(source, 'name', str(source)),
+                "target": getattr(target, 'name', str(target)),
+                "buffer_size": self.config.buffer_size,
+                "enable_logging": True
+            })
+        else:
+            self.nb_logger = None
         
     @abstractmethod
     async def transfer(self, data: Any) -> None:
@@ -68,6 +93,24 @@ class LinkBase(ABC):
         """Stop the link."""
         pass
     
+    def _get_internal_state(self) -> Dict[str, Any]:
+        """Get comprehensive internal state for logging."""
+        uptime = time.time() - self._creation_time
+        avg_transfer_time = self._total_transfer_time / max(self._transfer_count, 1)
+        
+        return {
+            "is_active": self._is_active,
+            "transfer_count": self._transfer_count,
+            "error_count": self._error_count,
+            "success_rate": self._transfer_count / max(self._transfer_count + self._error_count, 1),
+            "uptime_seconds": uptime,
+            "last_transfer_time": self._last_transfer_time,
+            "avg_transfer_time_ms": avg_transfer_time * 1000 if self._transfer_count > 0 else 0,
+            "link_type": self.config.link_type.value if hasattr(self.config.link_type, 'value') else str(self.config.link_type),
+            "source": getattr(self.source, 'name', str(self.source)),
+            "target": getattr(self.target, 'name', str(self.target))
+        }
+    
     @property
     def is_active(self) -> bool:
         """Check if link is active."""
@@ -83,12 +126,33 @@ class LinkBase(ABC):
         """Get number of transfer errors."""
         return self._error_count
     
-    async def _record_transfer(self, success: bool = True) -> None:
-        """Record transfer statistics."""
+    async def _record_transfer(self, success: bool = True, duration_ms: float = None, data_info: Dict[str, Any] = None) -> None:
+        """Record transfer statistics with comprehensive logging."""
+        transfer_time = time.time()
+        
         if success:
             self._transfer_count += 1
+            self._last_transfer_time = transfer_time
+            if duration_ms:
+                self._total_transfer_time += duration_ms / 1000.0
         else:
             self._error_count += 1
+        
+        # Log transfer event
+        if self.enable_logging and self.nb_logger:
+            self.nb_logger.log_data_transfer(
+                source=getattr(self.source, 'name', str(self.source)),
+                destination=getattr(self.target, 'name', str(self.target)),
+                data_type=data_info.get('data_type', 'unknown') if data_info else 'unknown',
+                size_bytes=data_info.get('size_bytes', 0) if data_info else 0
+            )
+            
+            self.nb_logger.info(f"Link transfer {'succeeded' if success else 'failed'}: {self.name}",
+                               operation="transfer",
+                               success=success,
+                               duration_ms=duration_ms,
+                               data_info=data_info or {},
+                               internal_state=self._get_internal_state())
 
 
 class DirectLink(LinkBase):
@@ -104,47 +168,111 @@ class DirectLink(LinkBase):
         """Start the direct link."""
         self._is_active = True
         logger.debug(f"DirectLink {self.name} started")
+        
+        # Log start event
+        if self.enable_logging and self.nb_logger:
+            self.nb_logger.info(f"Link started: {self.name}",
+                               operation="start",
+                               internal_state=self._get_internal_state())
     
     async def stop(self) -> None:
         """Stop the direct link."""
         self._is_active = False
         logger.debug(f"DirectLink {self.name} stopped")
+        
+        # Log stop event with final statistics
+        if self.enable_logging and self.nb_logger:
+            uptime = time.time() - self._creation_time
+            self.nb_logger.info(f"Link stopped: {self.name}",
+                               operation="stop",
+                               uptime_seconds=uptime,
+                               final_stats={
+                                   "total_transfers": self._transfer_count,
+                                   "total_errors": self._error_count,
+                                   "success_rate": self._transfer_count / max(self._transfer_count + self._error_count, 1)
+                               },
+                               internal_state=self._get_internal_state())
     
     async def transfer(self, data: Any) -> None:
         """Transfer data directly to target."""
         if not self._is_active:
             logger.warning(f"DirectLink {self.name} not active")
             return
-            
+        
+        start_time = time.time()
+        transfer_method = None
+        
         try:
+            # Prepare data info for logging
+            data_info = {
+                "data_type": type(data).__name__ if data is not None else "None",
+                "size_bytes": len(str(data)) if data is not None else 0,
+                "data_value": data if self.enable_logging else None
+            }
+            
             # Handle different target types
             if hasattr(self.target, 'set') and callable(getattr(self.target, 'set')):
                 # Target is a DataUnit - call set method directly
+                transfer_method = "DataUnit.set"
                 await self.target.set(data)
                 logger.debug(f"DirectLink {self.name} transferred data to DataUnit")
             elif hasattr(self.target, 'input_data_units') and self.target.input_data_units:
                 # Target is a Step with input data units
+                transfer_method = "Step.input_data_units"
                 for input_unit in self.target.input_data_units.values():
                     await input_unit.set(data)
                 logger.debug(f"DirectLink {self.name} transferred data to Step input units")
             elif hasattr(self.target, 'execute') and callable(getattr(self.target, 'execute')):
                 # Target is a Step - trigger execution
+                transfer_method = "Step.execute"
                 await self.target.execute(data)
                 logger.debug(f"DirectLink {self.name} executed target Step")
             elif hasattr(self.target, 'set_input'):
                 # Direct method call
+                transfer_method = "set_input"
                 await self.target.set_input(data)
                 logger.debug(f"DirectLink {self.name} called set_input on target")
             else:
                 logger.warning(f"Target {getattr(self.target, 'name', str(self.target))} has no compatible input mechanism")
-                return
                 
-            await self._record_transfer(True)
+                # Log failed transfer attempt
+                if self.enable_logging and self.nb_logger:
+                    self.nb_logger.warning(f"Transfer failed - no compatible target mechanism: {self.name}",
+                                         operation="transfer_failed",
+                                         reason="no_compatible_mechanism",
+                                         target_type=type(self.target).__name__,
+                                         data_info=data_info)
+                return
+            
+            # Calculate duration and record success
+            duration_ms = (time.time() - start_time) * 1000
+            data_info["transfer_method"] = transfer_method
+            await self._record_transfer(True, duration_ms, data_info)
             logger.debug(f"DirectLink {self.name} transferred data successfully")
             
         except Exception as e:
-            await self._record_transfer(False)
+            # Calculate duration and record failure
+            duration_ms = (time.time() - start_time) * 1000
+            data_info = {
+                "data_type": type(data).__name__ if data is not None else "None",
+                "size_bytes": len(str(data)) if data is not None else 0,
+                "transfer_method": transfer_method,
+                "error": str(e),
+                "error_type": type(e).__name__
+            }
+            
+            await self._record_transfer(False, duration_ms, data_info)
             logger.error(f"DirectLink {self.name} transfer failed: {e}")
+            
+            # Log detailed error information
+            if self.enable_logging and self.nb_logger:
+                self.nb_logger.error(f"Transfer error in link: {self.name}",
+                                   operation="transfer_error",
+                                   error=str(e),
+                                   error_type=type(e).__name__,
+                                   duration_ms=duration_ms,
+                                   data_info=data_info,
+                                   internal_state=self._get_internal_state())
             raise
 
 

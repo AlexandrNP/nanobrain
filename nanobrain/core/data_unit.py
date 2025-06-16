@@ -15,7 +15,7 @@ import json
 import time
 
 # Import logging system
-from .logging_system import NanoBrainLogger, get_logger
+from .logging_system import get_logger, get_system_log_manager
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +39,7 @@ class DataUnitConfig(BaseModel):
     file_path: Optional[str] = None
     encoding: str = "utf-8"
     initial_value: Optional[str] = None  # For string data units
+    name: str = ""
 
 
 class DataUnitBase(ABC):
@@ -52,23 +53,33 @@ class DataUnitBase(ABC):
     
     def __init__(self, config: Optional[DataUnitConfig] = None, **kwargs):
         self.config = config or DataUnitConfig()
-        self.name = kwargs.get('name', self.__class__.__name__)
+        self.name = kwargs.get('name', self.config.name or self.__class__.__name__)
         self._data: Any = None
         self._metadata: Dict[str, Any] = {}
         self._is_initialized = False
         self._lock = asyncio.Lock()
         
-        # Initialize logging
+        # Initialize centralized logging system
         self.enable_logging = kwargs.get('enable_logging', True)
         if self.enable_logging:
-            log_file = kwargs.get('log_file')
-            self.nb_logger = NanoBrainLogger(
-                name=f"data_units.{self.name}",
-                log_file=log_file,
-                debug_mode=kwargs.get('debug_mode', False)
-            )
+            # Use centralized logging system
+            self.nb_logger = get_logger(self.name, category="data_units", debug_mode=kwargs.get('debug_mode', False))
+            
+            # Register with system log manager
+            system_manager = get_system_log_manager()
+            system_manager.register_component("data_units", self.name, self, {
+                "data_type": self.config.data_type.value if hasattr(self.config.data_type, 'value') else str(self.config.data_type),
+                "persistent": self.config.persistent,
+                "enable_logging": True
+            })
         else:
             self.nb_logger = None
+            
+        # Internal state tracking
+        self._operation_count = 0
+        self._last_operation = None
+        self._creation_time = time.time()
+        self._access_count = {"get": 0, "set": 0, "clear": 0}
         
     @abstractmethod
     async def get(self) -> Any:
@@ -89,35 +100,57 @@ class DataUnitBase(ABC):
         """Initialize the data unit."""
         if not self._is_initialized:
             self._is_initialized = True
+            self._last_operation = "initialize"
+            self._operation_count += 1
             logger.debug(f"DataUnit {self.name} initialized")
             
-            # Log initialization
+            # Log initialization with comprehensive state
             if self.enable_logging and self.nb_logger:
                 self.nb_logger.log_data_unit_operation(
                     operation="initialize",
                     data_unit_name=self.name,
                     metadata={
                         "data_unit_type": type(self).__name__,
-                        "config": self.config.model_dump() if hasattr(self.config, 'model_dump') else str(self.config)
+                        "config": self.config.model_dump() if hasattr(self.config, 'model_dump') else str(self.config),
+                        "creation_time": self._creation_time,
+                        "internal_state": self._get_internal_state()
                     }
                 )
     
     async def shutdown(self) -> None:
         """Shutdown the data unit."""
-        # Log shutdown
+        # Log shutdown with final state
         if self.enable_logging and self.nb_logger:
+            uptime = time.time() - self._creation_time
             self.nb_logger.log_data_unit_operation(
                 operation="shutdown",
                 data_unit_name=self.name,
                 metadata={
                     "data_unit_type": type(self).__name__,
-                    "final_metadata": self._metadata
+                    "final_metadata": self._metadata,
+                    "uptime_seconds": uptime,
+                    "total_operations": self._operation_count,
+                    "access_counts": self._access_count.copy(),
+                    "final_state": self._get_internal_state()
                 }
             )
         
         await self.clear()
         self._is_initialized = False
         logger.debug(f"DataUnit {self.name} shutdown")
+    
+    def _get_internal_state(self) -> Dict[str, Any]:
+        """Get comprehensive internal state for logging."""
+        return {
+            "is_initialized": self._is_initialized,
+            "operation_count": self._operation_count,
+            "last_operation": self._last_operation,
+            "access_counts": self._access_count.copy(),
+            "metadata_keys": list(self._metadata.keys()),
+            "has_data": self._data is not None,
+            "data_type": type(self._data).__name__ if self._data is not None else "None",
+            "uptime_seconds": time.time() - self._creation_time
+        }
     
     @property
     def is_initialized(self) -> bool:
@@ -132,17 +165,44 @@ class DataUnitBase(ABC):
     async def set_metadata(self, key: str, value: Any) -> None:
         """Set metadata."""
         async with self._lock:
+            old_value = self._metadata.get(key)
             self._metadata[key] = value
+            
+            # Log metadata change
+            if self.enable_logging and self.nb_logger:
+                self.nb_logger.log_data_unit_operation(
+                    operation="set_metadata",
+                    data_unit_name=self.name,
+                    metadata={
+                        "key": key,
+                        "old_value": old_value,
+                        "new_value": value,
+                        "internal_state": self._get_internal_state()
+                    }
+                )
     
     async def get_metadata(self, key: str, default: Any = None) -> Any:
         """Get metadata value."""
-        return self._metadata.get(key, default)
+        value = self._metadata.get(key, default)
+        
+        # Log metadata access
+        if self.enable_logging and self.nb_logger:
+            self.nb_logger.debug(f"Metadata accessed: {key}",
+                               key=key,
+                               value=value,
+                               data_unit=self.name)
+        
+        return value
 
     async def read(self) -> Any:
         """Read data from the unit (alias for get)."""
+        self._access_count["get"] += 1
+        self._last_operation = "read"
+        self._operation_count += 1
+        
         data = await self.get()
         
-        # Log the read operation
+        # Log the read operation with state
         if self.enable_logging and self.nb_logger:
             self.nb_logger.log_data_unit_operation(
                 operation="read",
@@ -151,7 +211,8 @@ class DataUnitBase(ABC):
                 metadata={
                     "data_unit_type": type(self).__name__,
                     "config": self.config.model_dump() if hasattr(self.config, 'model_dump') else str(self.config),
-                    "metadata": self._metadata
+                    "metadata": self._metadata.copy(),
+                    "internal_state": self._get_internal_state()
                 }
             )
         
@@ -159,8 +220,15 @@ class DataUnitBase(ABC):
     
     async def write(self, data: Any) -> None:
         """Write data to the unit (alias for set)."""
-        # Log the write operation
+        self._access_count["set"] += 1
+        self._last_operation = "write"
+        self._operation_count += 1
+        
+        # Log the write operation with state change
         if self.enable_logging and self.nb_logger:
+            old_data_type = type(self._data).__name__ if self._data is not None else "None"
+            new_data_type = type(data).__name__ if data is not None else "None"
+            
             self.nb_logger.log_data_unit_operation(
                 operation="write",
                 data_unit_name=self.name,
@@ -168,11 +236,22 @@ class DataUnitBase(ABC):
                 metadata={
                     "data_unit_type": type(self).__name__,
                     "config": self.config.model_dump() if hasattr(self.config, 'model_dump') else str(self.config),
-                    "metadata": self._metadata
+                    "metadata": self._metadata.copy(),
+                    "old_data_type": old_data_type,
+                    "new_data_type": new_data_type,
+                    "state_change": {
+                        "before": self._get_internal_state(),
+                    }
                 }
             )
         
         await self.set(data)
+        
+        # Log state after change
+        if self.enable_logging and self.nb_logger:
+            self.nb_logger.debug(f"Write completed for {self.name}",
+                               operation="write_complete",
+                               internal_state=self._get_internal_state())
 
 
 class DataUnitMemory(DataUnitBase):
@@ -200,9 +279,33 @@ class DataUnitMemory(DataUnitBase):
     
     async def clear(self) -> None:
         """Clear data from memory."""
+        self._access_count["clear"] += 1
+        self._last_operation = "clear"
+        self._operation_count += 1
+        
+        # Log before clearing
+        if self.enable_logging and self.nb_logger:
+            had_data = self._data is not None
+            self.nb_logger.log_data_unit_operation(
+                operation="clear",
+                data_unit_name=self.name,
+                metadata={
+                    "had_data": had_data,
+                    "previous_data_type": type(self._data).__name__ if self._data is not None else "None",
+                    "metadata_count": len(self._metadata),
+                    "state_before": self._get_internal_state()
+                }
+            )
+        
         async with self._lock:
             self._data = None
             self._metadata.clear()
+            
+        # Log after clearing
+        if self.enable_logging and self.nb_logger:
+            self.nb_logger.debug(f"Clear completed for {self.name}",
+                               operation="clear_complete",
+                               internal_state=self._get_internal_state())
 
 
 class DataUnitFile(DataUnitBase):

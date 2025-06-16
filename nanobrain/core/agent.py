@@ -79,9 +79,18 @@ class Agent(ABC):
         self.name = config.name
         self.description = config.description
         
-        # Initialize logging system
-        self.nb_logger = get_logger(f"agent.{self.name}", debug_mode=config.debug_mode)
-        self.nb_logger.info(f"Initializing agent: {self.name}", agent_name=self.name, config=config.model_dump())
+        # Initialize specialized agent logging (automatically detects concrete instances)
+        from nanobrain.core.agent_logging import create_agent_logger
+        self.agent_logger = create_agent_logger(self)
+        
+        # Log agent lifecycle event for concrete instances only
+        self.agent_logger.log_lifecycle_event("initialize", {
+            "agent_type": self.__class__.__name__,
+            "model": config.model,
+            "description": config.description,
+            "log_conversations": config.log_conversations,
+            "enable_logging": config.enable_logging
+        })
         
         # Executor for running the agent
         self.executor = executor or LocalExecutor(config.executor_config)
@@ -107,76 +116,75 @@ class Agent(ABC):
     async def initialize(self) -> None:
         """Initialize the agent and its components."""
         if self._is_initialized:
-            self.nb_logger.debug(f"Agent {self.name} already initialized")
+            self.agent_logger.log_debug(f"Agent {self.name} already initialized")
             return
         
-        async with self.nb_logger.async_execution_context(
-            OperationType.AGENT_PROCESS, 
-            f"{self.name}.initialize"
-        ) as context:
-            # Initialize executor
-            self.nb_logger.debug(f"Initializing executor for agent {self.name}")
-            await self.executor.initialize()
+        # Initialize executor
+        self.agent_logger.log_debug(f"Initializing executor for agent {self.name}")
+        await self.executor.initialize()
+        
+        # Initialize LLM client
+        self.agent_logger.log_debug(f"Initializing LLM client for agent {self.name}")
+        await self._initialize_llm_client()
+        
+        # Load tools from YAML configuration if specified
+        if self.config.tools_config_path:
+            self.agent_logger.log_debug(f"Loading tools from YAML config: {self.config.tools_config_path}")
+            await self._load_tools_from_yaml_config()
+        
+        # Register tools from configuration
+        self.agent_logger.log_debug(f"Registering {len(self.config.tools)} tools for agent {self.name}")
+        for i, tool_config in enumerate(self.config.tools):
+            try:
+                await self._register_tool_from_config(tool_config)
+                self.agent_logger.log_debug(f"Registered tool {i+1}/{len(self.config.tools)}")
+            except Exception as e:
+                self.agent_logger.log_error(f"Failed to register tool {i+1}: {e}", 
+                                          error_type="tool_registration_error",
+                                          context={"tool_config": tool_config})
+        
+        # Initialize all tools
+        self.agent_logger.log_debug(f"Initializing all tools for agent {self.name}")
+        await self.tool_registry.initialize_all()
+        
+        self._is_initialized = True
             
-            # Initialize LLM client
-            self.nb_logger.debug(f"Initializing LLM client for agent {self.name}")
-            await self._initialize_llm_client()
-            
-            # Load tools from YAML configuration if specified
-            if self.config.tools_config_path:
-                self.nb_logger.debug(f"Loading tools from YAML config: {self.config.tools_config_path}")
-                await self._load_tools_from_yaml_config()
-            
-            # Register tools from configuration
-            self.nb_logger.debug(f"Registering {len(self.config.tools)} tools for agent {self.name}")
-            for i, tool_config in enumerate(self.config.tools):
-                try:
-                    await self._register_tool_from_config(tool_config)
-                    self.nb_logger.debug(f"Registered tool {i+1}/{len(self.config.tools)}")
-                except Exception as e:
-                    self.nb_logger.error(f"Failed to register tool {i+1}: {e}", tool_config=tool_config)
-            
-            # Initialize all tools
-            self.nb_logger.debug(f"Initializing all tools for agent {self.name}")
-            await self.tool_registry.initialize_all()
-            
-            self._is_initialized = True
-            context.metadata['tools_count'] = len(self.tool_registry.list_tools())
-            context.metadata['llm_client_type'] = type(self.llm_client).__name__ if self.llm_client else None
-            
-        self.nb_logger.info(f"Agent {self.name} initialized successfully", 
-                           tools_count=len(self.tool_registry.list_tools()),
-                           has_llm_client=self.llm_client is not None)
+        # Log agent lifecycle event
+        self.agent_logger.log_lifecycle_event("initialized", {
+            "agent_type": self.__class__.__name__,
+            "model": self.config.model,
+            "tools_count": len(self.tool_registry.list_tools()),
+            "has_llm_client": self.llm_client is not None,
+            "log_conversations": self.config.log_conversations,
+            "enable_logging": self.config.enable_logging
+        })
     
     async def shutdown(self) -> None:
         """Shutdown the agent and cleanup resources."""
-        async with self.nb_logger.async_execution_context(
-            OperationType.AGENT_PROCESS, 
-            f"{self.name}.shutdown"
-        ) as context:
-            # Log final statistics
-            uptime_seconds = time.time() - self._start_time
-            self.nb_logger.info(f"Agent {self.name} shutting down", 
-                               uptime_seconds=uptime_seconds,
-                               execution_count=self._execution_count,
-                               error_count=self._error_count,
-                               total_tokens_used=self._total_tokens_used,
-                               total_llm_calls=self._total_llm_calls)
-            
-            # Shutdown tools
-            await self.tool_registry.shutdown_all()
-            
-            # Shutdown executor
-            await self.executor.shutdown()
-            
-            self._is_initialized = False
-            context.metadata['final_stats'] = {
-                'uptime_seconds': uptime_seconds,
-                'execution_count': self._execution_count,
-                'error_count': self._error_count,
-                'total_tokens_used': self._total_tokens_used,
-                'total_llm_calls': self._total_llm_calls
-            }
+        # Log final statistics
+        uptime_seconds = time.time() - self._start_time
+        
+        # Shutdown tools
+        await self.tool_registry.shutdown_all()
+        
+        # Shutdown executor
+        await self.executor.shutdown()
+        
+        self._is_initialized = False
+        
+        # Log agent lifecycle event with final stats
+        self.agent_logger.log_lifecycle_event("shutdown", {
+            "agent_type": self.__class__.__name__,
+            "uptime_seconds": uptime_seconds,
+            "execution_count": self._execution_count,
+            "error_count": self._error_count,
+            "total_tokens_used": self._total_tokens_used,
+            "total_llm_calls": self._total_llm_calls,
+            "tools_used": len(self.tool_registry.list_tools())
+        })
+        
+        # Shutdown agent logger
+        self.agent_logger.shutdown()
     
     async def _initialize_llm_client(self) -> None:
         """Initialize the LLM client."""
@@ -188,13 +196,14 @@ class Agent(ABC):
             # Check if API key is available
             api_key = os.getenv('OPENAI_API_KEY')
             if not api_key:
-                self.nb_logger.warning(f"No OpenAI API key found for agent {self.name}. Set OPENAI_API_KEY environment variable.")
+                self.agent_logger.log_error(f"No OpenAI API key found for agent {self.name}. Set OPENAI_API_KEY environment variable.",
+                                          error_type="missing_api_key")
                 self.llm_client = None
                 return
             
             # Create OpenAI client with API key
             self.llm_client = AsyncOpenAI(api_key=api_key)
-            self.nb_logger.debug(f"Agent {self.name} initialized with OpenAI client")
+            self.agent_logger.log_debug(f"Agent {self.name} initialized with OpenAI client")
             
             # Test the client with a simple call to verify it works
             try:
@@ -204,17 +213,20 @@ class Agent(ABC):
                     messages=[{"role": "user", "content": "test"}],
                     max_tokens=1
                 )
-                self.nb_logger.debug(f"Agent {self.name} OpenAI client test successful")
+                self.agent_logger.log_debug(f"Agent {self.name} OpenAI client test successful")
             except Exception as e:
-                self.nb_logger.warning(f"OpenAI client test failed for agent {self.name}: {e}")
+                self.agent_logger.log_error(f"OpenAI client test failed for agent {self.name}: {e}",
+                                          error_type="llm_client_test_failed")
                 self.llm_client = None
                 
         except ImportError:
-            self.nb_logger.warning("OpenAI client not available. Install with: pip install openai")
+            self.agent_logger.log_error("OpenAI client not available. Install with: pip install openai",
+                                      error_type="missing_dependency")
             # Could add other LLM clients here (Anthropic, etc.)
             self.llm_client = None
         except Exception as e:
-            self.nb_logger.error(f"Failed to initialize LLM client for agent {self.name}: {e}")
+            self.agent_logger.log_error(f"Failed to initialize LLM client for agent {self.name}: {e}",
+                                      error_type=type(e).__name__)
             self.llm_client = None
 
     async def _load_tools_from_yaml_config(self) -> None:
@@ -226,7 +238,7 @@ class Agent(ABC):
             # Resolve the config path
             config_path = self._resolve_config_path(self.config.tools_config_path)
             
-            self.nb_logger.debug(f"Loading tools from YAML file: {config_path}")
+            self.agent_logger.log_debug(f"Loading tools from YAML file: {config_path}")
             
             # Load YAML file
             with open(config_path, 'r') as file:
@@ -234,12 +246,13 @@ class Agent(ABC):
             
             # Check if 'tools' key exists
             if 'tools' not in tools_config:
-                self.nb_logger.warning(f"No 'tools' key found in config: {config_path}")
+                self.agent_logger.log_error(f"No 'tools' key found in config: {config_path}",
+                                          error_type="config_validation_error")
                 return
             
             # Add tools from YAML to the agent's tools list
             yaml_tools = tools_config['tools']
-            self.nb_logger.info(f"Found {len(yaml_tools)} tools in YAML config")
+            self.agent_logger.log_debug(f"Found {len(yaml_tools)} tools in YAML config")
             
             # Convert YAML tool configs to the format expected by _register_tool_from_config
             for tool_config in yaml_tools:
@@ -248,13 +261,16 @@ class Agent(ABC):
                 self.config.tools.append(standardized_config)
                 
         except FileNotFoundError:
-            self.nb_logger.error(f"Tools config file not found: {self.config.tools_config_path}")
+            self.agent_logger.log_error(f"Tools config file not found: {self.config.tools_config_path}",
+                                      error_type="file_not_found")
             raise
         except yaml.YAMLError as e:
-            self.nb_logger.error(f"Error parsing YAML config: {e}")
+            self.agent_logger.log_error(f"Error parsing YAML config: {e}",
+                                      error_type="yaml_parse_error")
             raise
         except Exception as e:
-            self.nb_logger.error(f"Error loading tools from YAML config: {e}")
+            self.agent_logger.log_error(f"Error loading tools from YAML config: {e}",
+                                      error_type=type(e).__name__)
             raise
 
     def _resolve_config_path(self, config_path: str) -> str:
@@ -321,9 +337,7 @@ class Agent(ABC):
         """Register a tool from configuration."""
         tool_type = ToolType(tool_config.get('tool_type', 'function'))
         
-        self.nb_logger.debug(f"Registering tool from config", 
-                            tool_type=tool_type.value, 
-                            tool_name=tool_config.get('name', 'unnamed'))
+        self.agent_logger.log_debug(f"Registering tool from config: {tool_config.get('name', 'unnamed')}")
         
         # Create tool configuration
         config = ToolConfig(**{k: v for k, v in tool_config.items() 
@@ -332,7 +346,8 @@ class Agent(ABC):
         # Create and register tool based on type
         if tool_type == ToolType.FUNCTION:
             # Function tools need to be provided externally
-            self.nb_logger.warning(f"Function tool {config.name} needs to be registered manually")
+            self.agent_logger.log_error(f"Function tool {config.name} needs to be registered manually",
+                                      error_type="manual_registration_required")
         elif tool_type == ToolType.AGENT:
             # Create agent instance from class path
             await self._register_agent_tool_from_config(tool_config, config)
@@ -340,14 +355,15 @@ class Agent(ABC):
             # Other tool types can be created from config
             tool = create_tool(tool_type, config, **tool_config)
             self.tool_registry.register(tool)
-            self.nb_logger.debug(f"Successfully registered tool: {config.name}")
+            self.agent_logger.log_debug(f"Successfully registered tool: {config.name}")
 
     async def _register_agent_tool_from_config(self, tool_config: Dict[str, Any], config: ToolConfig) -> None:
         """Register an agent tool from configuration by creating the agent instance."""
         class_path = tool_config.get('class_path', tool_config.get('class', ''))
         
         if not class_path:
-            self.nb_logger.error(f"No class path specified for agent tool: {config.name}")
+            self.agent_logger.log_error(f"No class path specified for agent tool: {config.name}",
+                                      error_type="missing_class_path")
             return
         
         try:
@@ -372,10 +388,11 @@ class Agent(ABC):
             tool = create_tool(ToolType.AGENT, config, agent=agent_instance)
             self.tool_registry.register(tool)
             
-            self.nb_logger.info(f"Successfully registered agent tool: {config.name} ({class_path})")
+            self.agent_logger.log_debug(f"Successfully registered agent tool: {config.name} ({class_path})")
             
         except Exception as e:
-            self.nb_logger.error(f"Failed to register agent tool {config.name}: {e}")
+            self.agent_logger.log_error(f"Failed to register agent tool {config.name}: {e}",
+                                      error_type=type(e).__name__)
             raise
 
     def _import_class_from_path(self, class_path: str):
@@ -406,13 +423,7 @@ class Agent(ABC):
     def register_tool(self, tool: ToolBase) -> None:
         """Register a tool with the agent."""
         self.tool_registry.register(tool)
-        self.nb_logger.info(f"Agent {self.name} registered tool: {tool.name}", 
-                           tool_name=tool.name, 
-                           tool_type=type(tool).__name__)
-    
-
-    
-
+        self.agent_logger.log_debug(f"Agent {self.name} registered tool: {tool.name}")
     
     @abstractmethod
     async def process(self, input_text: str, **kwargs) -> str:
@@ -433,12 +444,12 @@ class Agent(ABC):
         if not self._is_initialized:
             await self.initialize()
         
-        async with self.nb_logger.async_execution_context(
-            OperationType.AGENT_PROCESS, 
-            f"{self.name}.execute",
-            input_length=len(input_text),
-            kwargs_keys=list(kwargs.keys())
-        ) as context:
+        # Use the special interaction context to ensure I/O is ALWAYS logged
+        async with self.agent_logger.interaction_context(input_text) as context:
+            # Store initial state for tracking
+            initial_llm_calls = self._total_llm_calls
+            initial_total_tokens = self._total_tokens_used
+            
             try:
                 # Process using executor
                 result = await self.executor.execute(self._execute_process, input_text=input_text, **kwargs)
@@ -446,20 +457,21 @@ class Agent(ABC):
                 self._execution_count += 1
                 self._last_activity_time = time.time()
                 
-                context.metadata['result_length'] = len(result) if isinstance(result, str) else None
-                context.metadata['execution_count'] = self._execution_count
+                # Update context with result for logging
+                if context:
+                    context['response_text'] = result
+                    context['llm_calls'] = self._total_llm_calls - initial_llm_calls
+                    context['total_tokens'] = self._total_tokens_used - initial_total_tokens
                 
-                self.nb_logger.debug(f"Agent {self.name} executed successfully", 
-                                   execution_count=self._execution_count,
-                                   result_length=len(result) if isinstance(result, str) else None)
                 return result
                 
             except Exception as e:
                 self._error_count += 1
-                context.metadata['error_count'] = self._error_count
-                self.nb_logger.error(f"Agent {self.name} execution failed: {e}", 
-                                   error_type=type(e).__name__,
-                                   error_count=self._error_count)
+                
+                # Log error with agent logger
+                self.agent_logger.log_error(f"Agent {self.name} execution failed: {e}", 
+                                          error_type=type(e).__name__,
+                                          context={"error_count": self._error_count, "input_length": len(input_text)})
                 raise
     
     async def _execute_process(self, input_text: str, **kwargs) -> str:
@@ -471,86 +483,85 @@ class Agent(ABC):
         if not self.llm_client:
             raise RuntimeError("LLM client not initialized")
         
-        async with self.nb_logger.async_execution_context(
-            OperationType.LLM_CALL, 
-            f"{self.name}.llm_call",
-            message_count=len(messages),
-            has_tools=tools is not None,
-            tool_count=len(tools) if tools else 0
-        ) as context:
-            try:
-                # Prepare the request
-                request_params = {
-                    "model": self.config.model,
-                    "messages": messages,
-                    "temperature": self.config.temperature,
-                }
-                
-                if self.config.max_tokens:
-                    request_params["max_tokens"] = self.config.max_tokens
-                
-                if tools:
-                    request_params["tools"] = tools
-                    request_params["tool_choice"] = "auto"
-                
-                self.nb_logger.debug(f"Making LLM call", 
-                                   model=self.config.model,
-                                   message_count=len(messages),
-                                   tool_count=len(tools) if tools else 0)
-                
-                # Make the API call
-                response = await self.llm_client.chat.completions.create(**request_params)
-                
-                # Track usage
-                if hasattr(response, 'usage') and response.usage:
-                    tokens_used = response.usage.total_tokens
-                    self._total_tokens_used += tokens_used
-                    context.metadata['tokens_used'] = tokens_used
-                    context.metadata['total_tokens_used'] = self._total_tokens_used
-                
-                self._total_llm_calls += 1
-                context.metadata['total_llm_calls'] = self._total_llm_calls
-                
-                # Convert response to dict
-                response_dict = {
-                    "id": response.id,
-                    "model": response.model,
-                    "choices": [
-                        {
-                            "message": {
-                                "role": choice.message.role,
-                                "content": choice.message.content,
-                                "tool_calls": [
-                                    {
-                                        "id": tc.id,
-                                        "type": tc.type,
-                                        "function": {
-                                            "name": tc.function.name,
-                                            "arguments": tc.function.arguments
-                                        }
-                                    } for tc in (choice.message.tool_calls or [])
-                                ] if choice.message.tool_calls else None
-                            },
-                            "finish_reason": choice.finish_reason
-                        } for choice in response.choices
-                    ],
-                    "usage": {
-                        "prompt_tokens": response.usage.prompt_tokens,
-                        "completion_tokens": response.usage.completion_tokens,
-                        "total_tokens": response.usage.total_tokens
-                    } if response.usage else None
-                }
-                
-                self.nb_logger.debug(f"LLM call completed", 
-                                   tokens_used=tokens_used if 'tokens_used' in locals() else None,
-                                   finish_reason=response_dict["choices"][0]["finish_reason"] if response_dict["choices"] else None)
-                
-                return response_dict
-                
-            except Exception as e:
-                self.nb_logger.error(f"LLM call failed: {e}", 
-                                   error_type=type(e).__name__)
-                raise
+        start_time = time.time()
+        try:
+            # Prepare the request
+            request_params = {
+                "model": self.config.model,
+                "messages": messages,
+                "temperature": self.config.temperature,
+            }
+            
+            if self.config.max_tokens:
+                request_params["max_tokens"] = self.config.max_tokens
+            
+            if tools:
+                request_params["tools"] = tools
+                request_params["tool_choice"] = "auto"
+            
+            self.agent_logger.log_debug(f"Making LLM call with {len(messages)} messages")
+            
+            # Make the API call
+            response = await self.llm_client.chat.completions.create(**request_params)
+            
+            # Track usage
+            tokens_used = 0
+            if hasattr(response, 'usage') and response.usage:
+                tokens_used = response.usage.total_tokens
+                self._total_tokens_used += tokens_used
+            
+            self._total_llm_calls += 1
+            
+            # Convert response to dict
+            response_dict = {
+                "id": response.id,
+                "model": response.model,
+                "choices": [
+                    {
+                        "message": {
+                            "role": choice.message.role,
+                            "content": choice.message.content,
+                            "tool_calls": [
+                                {
+                                    "id": tc.id,
+                                    "type": tc.type,
+                                    "function": {
+                                        "name": tc.function.name,
+                                        "arguments": tc.function.arguments
+                                    }
+                                } for tc in (choice.message.tool_calls or [])
+                            ] if choice.message.tool_calls else None
+                        },
+                        "finish_reason": choice.finish_reason
+                    } for choice in response.choices
+                ],
+                "usage": {
+                    "prompt_tokens": response.usage.prompt_tokens,
+                    "completion_tokens": response.usage.completion_tokens,
+                    "total_tokens": response.usage.total_tokens
+                } if response.usage else None
+            }
+            
+            # Log LLM interaction details
+            first_choice = response_dict["choices"][0] if response_dict["choices"] else {}
+            message_content = first_choice.get("message", {}).get("content", "")
+            duration_ms = (time.time() - start_time) * 1000
+            
+            self.agent_logger.log_llm_call(
+                model=response_dict.get("model", "unknown"),
+                messages_count=len(messages),
+                response_content=message_content,
+                tokens_used=tokens_used,
+                finish_reason=first_choice.get("finish_reason", "unknown"),
+                duration_ms=duration_ms
+            )
+            
+            return response_dict
+            
+        except Exception as e:
+            self.agent_logger.log_error(f"LLM call failed: {e}", 
+                                      error_type=type(e).__name__)
+            raise
     
     async def _execute_tool_calls(self, tool_calls: List[Any]) -> List[Dict[str, Any]]:
         """Execute tool calls and return results."""
@@ -560,87 +571,56 @@ class Agent(ABC):
             tool_name = tool_call["function"]["name"]
             tool_args_str = tool_call["function"]["arguments"]
             
-            async with self.nb_logger.async_execution_context(
-                OperationType.TOOL_CALL, 
-                f"{self.name}.tool_call.{tool_name}",
-                tool_name=tool_name,
-                arguments_length=len(tool_args_str)
-            ) as context:
-                try:
-                    # Parse arguments
-                    tool_args = json.loads(tool_args_str)
-                    context.metadata['parsed_args'] = tool_args
-                    
-                    self.nb_logger.debug(f"Executing tool call: {tool_name}", 
-                                       tool_name=tool_name,
-                                       arguments=tool_args)
-                    
-                    # Get tool from registry
-                    tool = self.tool_registry.get(tool_name)
-                    if not tool:
-                        raise ValueError(f"Tool '{tool_name}' not found")
-                    
-                    # Execute tool
-                    start_time = time.time()
-                    result = await tool.execute(**tool_args)
-                    duration_ms = (time.time() - start_time) * 1000
-                    
-                    # Log tool call
-                    if self.config.log_tool_calls:
-                        self.nb_logger.log_tool_call(
-                            tool_name=tool_name,
-                            parameters=tool_args,
-                            result=result,
-                            duration_ms=duration_ms
-                        )
-                    
-                    context.metadata['result_type'] = type(result).__name__
-                    context.metadata['duration_ms'] = duration_ms
-                    
-                    results.append({
-                        "tool_call_id": tool_call["id"],
-                        "role": "tool",
-                        "name": tool_name,
-                        "content": str(result)
-                    })
-                    
-                    self.nb_logger.debug(f"Tool call completed: {tool_name}", 
-                                       duration_ms=duration_ms,
-                                       result_type=type(result).__name__)
-                    
-                except Exception as e:
-                    error_msg = f"Tool call failed: {e}"
-                    context.metadata['error'] = str(e)
-                    
-                    # Log failed tool call
-                    if self.config.log_tool_calls:
-                        self.nb_logger.log_tool_call(
-                            tool_name=tool_name,
-                            parameters=tool_args if 'tool_args' in locals() else {},
-                            error=str(e)
-                        )
-                    
-                    results.append({
-                        "tool_call_id": tool_call["id"],
-                        "role": "tool",
-                        "name": tool_name,
-                        "content": error_msg
-                    })
-                    
-                    self.nb_logger.error(f"Tool call failed: {tool_name}", 
-                                       error=str(e),
-                                       error_type=type(e).__name__)
+            try:
+                # Parse arguments
+                tool_args = json.loads(tool_args_str)
+                
+                self.agent_logger.log_debug(f"Executing tool call: {tool_name}")
+                
+                # Get tool from registry
+                tool = self.tool_registry.get(tool_name)
+                if not tool:
+                    raise ValueError(f"Tool '{tool_name}' not found")
+                
+                # Execute tool
+                start_time = time.time()
+                result = await tool.execute(**tool_args)
+                duration_ms = (time.time() - start_time) * 1000
+                
+                results.append({
+                    "tool_call_id": tool_call["id"],
+                    "role": "tool",
+                    "name": tool_name,
+                    "content": str(result)
+                })
+                
+                self.agent_logger.log_debug(f"Tool call completed: {tool_name} in {duration_ms:.1f}ms")
+                
+            except Exception as e:
+                error_msg = f"Tool call failed: {e}"
+                
+                results.append({
+                    "tool_call_id": tool_call["id"],
+                    "role": "tool",
+                    "name": tool_name,
+                    "content": error_msg
+                })
+                
+                self.agent_logger.log_error(f"Tool call failed: {tool_name}", 
+                                          error_type=type(e).__name__,
+                                          context={"tool_name": tool_name, "error": str(e)})
         
         return results
     
     def _setup_agent_executor(self):
         """Set up LangChain agent executor for tool calling."""
         if not LANGCHAIN_AVAILABLE:
-            self.nb_logger.warning("LangChain not available, cannot set up agent executor")
+            self.agent_logger.log_error("LangChain not available, cannot set up agent executor",
+                                      error_type="missing_dependency")
             return
         
         if not self.tool_registry.list_tools():
-            self.nb_logger.debug("No tools available, skipping agent executor setup")
+            self.agent_logger.log_debug("No tools available, skipping agent executor setup")
             return
         
         try:
@@ -665,7 +645,8 @@ class Agent(ABC):
                         langchain_tools.append(langchain_tool)
             
             if not langchain_tools:
-                self.nb_logger.warning("No LangChain-compatible tools found")
+                self.agent_logger.log_error("No LangChain-compatible tools found",
+                                          error_type="no_compatible_tools")
                 return
             
             # Create prompt template
@@ -685,10 +666,11 @@ class Agent(ABC):
                 verbose=self.config.debug_mode
             )
             
-            self.nb_logger.info(f"Agent executor set up with {len(langchain_tools)} tools")
+            self.agent_logger.log_debug(f"Agent executor set up with {len(langchain_tools)} tools")
             
         except Exception as e:
-            self.nb_logger.error(f"Failed to set up agent executor: {e}")
+            self.agent_logger.log_error(f"Failed to set up agent executor: {e}",
+                                      error_type=type(e).__name__)
             self.agent_executor = None
     
     async def process_with_tools(self, input_text: str, **kwargs) -> str:
@@ -714,7 +696,8 @@ class Agent(ABC):
                 return str(result)
                 
         except Exception as e:
-            self.nb_logger.error(f"Error in process_with_tools: {e}")
+            self.agent_logger.log_error(f"Error in process_with_tools: {e}",
+                                      error_type=type(e).__name__)
             # Fallback to regular processing
             return await self.process(input_text, **kwargs)
     
@@ -722,17 +705,13 @@ class Agent(ABC):
         """Add a message to the conversation history."""
         message = {"role": role, "content": content, "timestamp": time.time()}
         self._conversation_history.append(message)
-        self.nb_logger.debug(f"Added message to conversation", 
-                           role=role, 
-                           content_length=len(content),
-                           conversation_length=len(self._conversation_history))
+        self.agent_logger.log_debug(f"Added message to conversation: {role} ({len(content)} chars)")
     
     def clear_conversation(self) -> None:
         """Clear the conversation history."""
         old_length = len(self._conversation_history)
         self._conversation_history.clear()
-        self.nb_logger.debug(f"Cleared conversation history", 
-                           previous_length=old_length)
+        self.agent_logger.log_debug(f"Cleared conversation history ({old_length} messages)")
     
     @property
     def is_initialized(self) -> bool:
@@ -819,20 +798,17 @@ class AgentLangChainTool(BaseTool if LANGCHAIN_AVAILABLE else object):
 
 
 class SimpleAgent(Agent):
-    """Simple agent that processes input without conversation history."""
+    """Simple agent implementation without conversation history."""
     
     async def process(self, input_text: str, **kwargs) -> str:
         """Process input text and return response."""
-        async with self.nb_logger.async_execution_context(
-            OperationType.AGENT_PROCESS, 
-            f"{self.name}.process",
-            input_length=len(input_text),
-            agent_type="SimpleAgent"
-        ) as context:
+        # Use the special interaction context to ensure I/O is ALWAYS logged
+        async with self.agent_logger.interaction_context(input_text) as context:
             if not self.llm_client:
                 # Fallback for when LLM is not available
                 response = f"Echo from {self.name}: {input_text}"
-                self.nb_logger.warning(f"No LLM client available, using echo response")
+                self.agent_logger.log_error("No LLM client available, using echo response",
+                                          error_type="missing_llm_client")
             else:
                 # Prepare messages
                 messages = []
@@ -869,18 +845,10 @@ class SimpleAgent(Agent):
                 else:
                     response = message["content"]
             
-            # Log conversation if enabled
-            if self.config.log_conversations:
-                self.nb_logger.log_agent_conversation(
-                    agent_name=self.name,
-                    input_text=input_text,
-                    response_text=response,
-                    llm_calls=self._total_llm_calls,
-                    total_tokens=self._total_tokens_used,
-                    duration_ms=context.duration_ms
-                )
+            # Update context with response for logging
+            if context:
+                context['response_text'] = response
             
-            context.metadata['response_length'] = len(response) if response else 0
             return response or ""
 
 
@@ -893,17 +861,13 @@ class ConversationalAgent(Agent):
     
     async def process(self, input_text: str, **kwargs) -> str:
         """Process input text with conversation history."""
-        async with self.nb_logger.async_execution_context(
-            OperationType.AGENT_PROCESS, 
-            f"{self.name}.process",
-            input_length=len(input_text),
-            agent_type="ConversationalAgent",
-            history_length=len(self._conversation_history)
-        ) as context:
+        # Use the special interaction context to ensure I/O is ALWAYS logged
+        async with self.agent_logger.interaction_context(input_text) as context:
             if not self.llm_client:
                 # Fallback for when LLM is not available
                 response = f"Conversational echo from {self.name}: {input_text}"
-                self.nb_logger.warning(f"No LLM client available, using echo response")
+                self.agent_logger.log_error("No LLM client available, using echo response",
+                                          error_type="missing_llm_client")
             else:
                 # Prepare messages with history
                 messages = []
@@ -952,19 +916,11 @@ class ConversationalAgent(Agent):
                 if response:
                     self.add_to_conversation("assistant", response)
             
-            # Log conversation if enabled
-            if self.config.log_conversations:
-                self.nb_logger.log_agent_conversation(
-                    agent_name=self.name,
-                    input_text=input_text,
-                    response_text=response,
-                    llm_calls=self._total_llm_calls,
-                    total_tokens=self._total_tokens_used,
-                    duration_ms=context.duration_ms
-                )
+            # Update context with response for logging
+            if context:
+                context['response_text'] = response
+                context['history_length'] = len(self._conversation_history)
             
-            context.metadata['response_length'] = len(response) if response else 0
-            context.metadata['final_history_length'] = len(self._conversation_history)
             return response or ""
 
 

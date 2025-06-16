@@ -505,16 +505,64 @@ class NanoBrainLogger:
             Serialized data suitable for logging
         """
         def _serialize_recursive(obj: Any, current_depth: int = 0) -> Any:
-            if current_depth > max_depth:
-                return f"<max_depth_exceeded: {type(obj).__name__}>"
-            
             if obj is None:
                 return None
             elif isinstance(obj, (str, int, float, bool)):
                 if isinstance(obj, str) and len(obj) > max_length:
                     return f"{obj[:max_length]}... <truncated, total_length: {len(obj)}>"
                 return obj
-            elif isinstance(obj, dict):
+            
+            # Handle enums and other important objects with critical attributes BEFORE depth check
+            # This ensures name and value are always extracted for enums, data units, etc.
+            critical_attrs = []
+            if hasattr(obj, 'name') or hasattr(obj, 'value'):
+                # This is likely an enum or similar important object
+                try:
+                    obj_dict = {
+                        "__type__": type(obj).__name__,
+                        "__module__": getattr(type(obj), '__module__', 'unknown')
+                    }
+                    
+                    # Extract critical attributes directly (not recursively to avoid depth issues)
+                    for attr in ['name', 'value']:
+                        if hasattr(obj, attr):
+                            attr_value = getattr(obj, attr)
+                            # For critical attributes, serialize directly without depth recursion
+                            if isinstance(attr_value, (str, int, float, bool, type(None))):
+                                obj_dict[attr] = attr_value
+                            else:
+                                # Convert to string for complex critical attributes
+                                obj_dict[attr] = str(attr_value)
+                    
+                    # If we have critical attributes, return early
+                    if 'name' in obj_dict or 'value' in obj_dict:
+                        return obj_dict
+                except Exception:
+                    pass  # Fall through to normal processing
+            
+            # Now check depth limit for other processing
+            if current_depth > max_depth:
+                # Even at max depth, try to extract basic info for important objects
+                try:
+                    if hasattr(obj, '__dict__'):
+                        obj_dict = {
+                            "__type__": type(obj).__name__,
+                            "__module__": getattr(type(obj), '__module__', 'unknown')
+                        }
+                        # Try to get name/value even at max depth
+                        for attr in ['name', 'value']:
+                            if hasattr(obj, attr):
+                                attr_value = getattr(obj, attr)
+                                if isinstance(attr_value, (str, int, float, bool, type(None))):
+                                    obj_dict[attr] = attr_value
+                                else:
+                                    obj_dict[attr] = str(attr_value)[:100]  # Truncate but include
+                        return obj_dict
+                except Exception:
+                    pass
+                return f"<max_depth_exceeded: {type(obj).__name__}>"
+            
+            if isinstance(obj, dict):
                 if len(obj) == 0:
                     return {}
                 # Limit number of keys shown
@@ -542,7 +590,7 @@ class NanoBrainLogger:
                         "__type__": type(obj).__name__,
                         "__module__": getattr(type(obj), '__module__', 'unknown')
                     }
-                    # Add a few key attributes
+                    # Add key attributes with recursive serialization
                     for attr in ['name', 'id', 'value', 'data', 'content'][:3]:
                         if hasattr(obj, attr):
                             obj_dict[attr] = _serialize_recursive(getattr(obj, attr), current_depth + 1)
@@ -1006,7 +1054,6 @@ class SystemLogManager:
             self.use_session_directories = file_config.get('use_session_directories', True)
             self.use_semantic_directories = file_config.get('use_semantic_directories', True)
             self.semantic_structure = file_config.get('semantic_structure', {
-                'nanobrain_components': 'nanobrain',
                 'distributed_processing': 'parsl', 
                 'workflows': 'workflows',
                 'agents': 'agents',
@@ -1026,7 +1073,6 @@ class SystemLogManager:
             self.use_session_directories = True
             self.use_semantic_directories = True
             self.semantic_structure = {
-                'nanobrain_components': 'nanobrain',
                 'distributed_processing': 'parsl',
                 'workflows': 'workflows', 
                 'agents': 'agents',
@@ -1041,10 +1087,10 @@ class SystemLogManager:
         
         # Set up base directory structure
         if self.use_session_directories and self.use_semantic_directories:
-            # Use both: logs/session_YYYYMMDD_HHMMSS/nanobrain/, etc.
+            # Use both: logs/session_YYYYMMDD_HHMMSS/workflows/, etc.
             self.session_dir = self.base_log_dir / f"session_{self.session_id}"
         elif self.use_semantic_directories:
-            # Use semantic organization only: logs/nanobrain/, logs/parsl/, etc.
+            # Use semantic organization only: logs/workflows/, logs/parsl/, etc.
             self.session_dir = self.base_log_dir
         elif self.use_session_directories:
             # Use timestamped sessions only: logs/session_YYYYMMDD_HHMMSS/
@@ -1097,11 +1143,6 @@ class SystemLogManager:
             for component_type, dir_name in semantic_structure.items():
                 component_dir = self.session_dir / dir_name
                 component_dir.mkdir(parents=True, exist_ok=True)
-                
-                # Create subdirectories for data units
-                if component_type == 'data_units':
-                    for subdir in ['memory', 'file', 'stream', 'history']:
-                        (component_dir / subdir).mkdir(parents=True, exist_ok=True)
 
     def get_logger(self, name: str, category: str = "components", debug_mode: bool = True) -> NanoBrainLogger:
         """Get a logger for a specific component."""
@@ -1114,7 +1155,7 @@ class SystemLogManager:
             
             # Map category to semantic directory
             category_mapping = {
-                'components': 'nanobrain_components',
+                'components': 'workflows',  # Default components to workflows folder
                 'parsl': 'distributed_processing',
                 'workflows': 'workflows',
                 'agents': 'agents',
@@ -1126,7 +1167,7 @@ class SystemLogManager:
                 'executors': 'executors'
             }
             
-            mapped_category = category_mapping.get(category, 'nanobrain_components')
+            mapped_category = category_mapping.get(category, 'workflows')  # Default to workflows
             dir_name = semantic_structure.get(mapped_category)
             
             if not dir_name:
@@ -1137,18 +1178,8 @@ class SystemLogManager:
             log_dir = self.session_dir / dir_name
             log_dir.mkdir(parents=True, exist_ok=True)
             
-            # Create subdirectories for data units
-            if mapped_category == 'data_units':
-                for subdir in ['memory', 'file', 'stream', 'history']:
-                    (log_dir / subdir).mkdir(parents=True, exist_ok=True)
-            
             # Create log file in appropriate directory
-            if mapped_category == 'data_units':
-                # For data units, put log files in appropriate subdirectory
-                data_type = name.split('_')[0] if '_' in name else 'memory'
-                log_file = log_dir / data_type / f"{name}.log"
-            else:
-                log_file = log_dir / f"{name}.log"
+            log_file = log_dir / f"{name}.log"
         else:
             # Default to simple log file in session directory
             log_file = self.session_dir / f"{name}.log"
