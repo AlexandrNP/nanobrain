@@ -1,0 +1,54 @@
+web_interface:
+  name: "nanobrain_web_interface"
+  version: "1.0.0"
+  description: "NanoBrain Web Interface for Chat Workflows"
+  
+  server:
+    host: "0.0.0.0"
+    port: 8000
+    workers: 1
+    reload: false
+    access_log: true
+    
+  api:
+    prefix: "/api/v1"
+    title: "NanoBrain Chat API"
+    description: "REST API for NanoBrain Chat System"
+    version: "1.0.0"
+    docs_url: "/docs"
+    redoc_url: "/redoc"
+    
+  cors:
+    allow_origins: ["*"]
+    allow_methods: ["GET", "POST", "OPTIONS"]
+    allow_headers: ["*"]
+    allow_credentials: false
+    
+  chat:
+    default_temperature: 0.7
+    default_max_tokens: 2000
+    default_use_rag: false
+    enable_streaming: false
+    conversation_timeout_seconds: 3600
+    max_conversation_length: 100
+    
+  logging:
+    enable_request_logging: true
+    enable_response_logging: true
+    log_level: "INFO"
+    log_requests_body: false
+    log_responses_body: false
+    
+  security:
+    enable_rate_limiting: false
+    rate_limit_per_minute: 60
+    enable_auth: false
+    auth_secret_key: null
+    cors_enabled: true
+    
+  # Integration with NanoBrain workflows
+  workflow_config_path: null
+  enable_workflow_metrics: true
+  
+  # Custom settings for extensibility
+  custom_settings: {} 

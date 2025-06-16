@@ -1,28 +1,91 @@
 """
 NanoBrain Library
 
-A collection of reusable components, workflows, and infrastructure elements
-built on top of the NanoBrain framework core.
+A comprehensive library of reusable components for the NanoBrain framework.
 
 This library provides:
-- Specialized agents for common tasks
-- Infrastructure components for advanced workflows
-- Complete workflow implementations with proper step interconnections
-- Templates and examples for building custom components
+- Agents and agent configurations
+- Workflows and workflow orchestration
+- Infrastructure components (data units, steps, interfaces)
+- Pre-built integrations and utilities
 
-Organization:
-- agents/: Specialized agent implementations
-- infrastructure/: Custom data units, triggers, links, and steps
-- workflows/: Complete workflow implementations with step hierarchies
+The library follows modular design principles and provides both
+high-level orchestration tools and low-level building blocks.
 """
 
-from .agents import *
-from .infrastructure import *
-from .workflows import *
+# Agent components
+from .agents import (
+    EnhancedCollaborativeAgent,
+)
 
-__version__ = "1.0.0"
-__author__ = "NanoBrain Framework"
-__description__ = "Reusable components and workflows for the NanoBrain framework"
+# Workflow components  
+from .workflows import (
+    ChatWorkflow
+)
+
+# Infrastructure components
+from .infrastructure import (
+    # Data components
+    ConversationHistoryUnit,
+    DataUnitMemory,
+    
+    # Step components
+    ParallelConversationalAgentStep,
+    ParallelAgentStep,
+)
+
+# Try to import web interface components
+try:
+    from .interfaces.web import (
+        WebInterface,
+        WebInterfaceConfig,
+        ChatRequest,
+        ChatOptions,
+        ChatResponse,
+        ChatMetadata
+    )
+    WEB_INTERFACE_AVAILABLE = True
+except ImportError:
+    WEB_INTERFACE_AVAILABLE = False
+    # Define placeholder exports
+    WebInterface = None
+    WebInterfaceConfig = None
+    ChatRequest = None
+    ChatOptions = None
+    ChatResponse = None
+    ChatMetadata = None
+
+__all__ = [
+    # Agents
+    'EnhancedCollaborativeAgent',
+    
+    # Workflows
+    'ChatWorkflow',
+    
+    # Infrastructure - Data
+    'ConversationHistoryUnit',
+    'DataUnitMemory',
+    
+    # Infrastructure - Steps
+    'ParallelConversationalAgentStep',
+    'ParallelAgentStep',
+    
+    # Web Interface (if available)
+    'WebInterface',
+    'WebInterfaceConfig',
+    'ChatRequest',
+    'ChatOptions',
+    'ChatResponse',
+    'ChatMetadata',
+    
+    # Utility
+    'WEB_INTERFACE_AVAILABLE'
+]
+
+# Version information
+__version__ = "2.0.0"
+__author__ = "NanoBrain Team"
+__description__ = "Comprehensive library for NanoBrain framework components"
 
 # Library metadata
 LIBRARY_INFO = {

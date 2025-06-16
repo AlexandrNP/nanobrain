@@ -9,16 +9,14 @@ Available workflows:
 """
 
 # Import available workflows
-try:
-    from .chat_workflow.chat_workflow import ChatWorkflow, create_chat_workflow
-except ImportError:
-    # Chat workflow not yet fully implemented
-    pass
+from .chat_workflow.chat_workflow import ChatWorkflow, create_chat_workflow
 
 # Import Parsl chat workflow
 from .chat_workflow_parsl.workflow import ParslChatWorkflow, create_parsl_chat_workflow
 
 __all__ = [
+    'ChatWorkflow',
+    'create_chat_workflow',
     'ParslChatWorkflow',
     'create_parsl_chat_workflow',
 ] 
