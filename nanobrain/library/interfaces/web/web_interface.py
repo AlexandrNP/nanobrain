@@ -32,6 +32,8 @@ from .config.web_interface_config import WebInterfaceConfig
 from .models.response_models import ErrorResponse
 from .api.chat_router import chat_router, get_chat_workflow
 from .api.health_router import health_router, get_web_interface
+from .api.websocket_router import websocket_router, get_connection_manager
+from .api.frontend_router import frontend_router
 from .middleware.cors_middleware import setup_cors
 from .middleware.logging_middleware import LoggingMiddleware
 
@@ -185,6 +187,8 @@ class WebInterface:
         # Include routers
         self.app.include_router(chat_router, prefix=self.config.api.prefix)
         self.app.include_router(health_router, prefix=self.config.api.prefix)
+        self.app.include_router(websocket_router, prefix=self.config.api.prefix)
+        self.app.include_router(frontend_router, prefix=self.config.api.prefix)
         
         self.logger.info("API routers configured")
     

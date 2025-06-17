@@ -1,0 +1,258 @@
+# Production Configuration for NanoBrain Viral Protein Analysis
+# Docker Deployment Environment
+
+# =============================================================================
+# Application Configuration
+# =============================================================================
+application:
+  name: "NanoBrain Viral Protein Analysis"
+  version: "4.0.0"
+  environment: "production"
+  debug: false
+  
+  # Server configuration
+  server:
+    host: "0.0.0.0"
+    port: 8000
+    workers: 4
+    max_connections: 1000
+    keepalive_timeout: 65
+    
+  # Security settings
+  security:
+    allowed_hosts: ["*"]  # Configure with actual domains in production
+    cors_enabled: true
+    cors_origins: ["https://your-domain.com"]
+    api_rate_limit: "100/hour"
+    
+# =============================================================================
+# Database Configuration
+# =============================================================================
+database:
+  postgres:
+    host: "postgres"
+    port: 5432
+    database: "nanobrain_viral"
+    username: "nanobrain"
+    password: "${POSTGRES_PASSWORD}"
+    pool_size: 20
+    max_overflow: 10
+    pool_timeout: 30
+    
+# =============================================================================
+# Cache Configuration
+# =============================================================================
+cache:
+  redis:
+    host: "redis"
+    port: 6379
+    database: 0
+    max_connections: 50
+    socket_timeout: 5
+    
+  # Cache strategies for production
+  strategies:
+    pubmed_references:
+      ttl_hours: 168  # 1 week
+      max_size_mb: 500
+      compression: true
+      
+    bvbrc_data:
+      ttl_hours: 72   # 3 days
+      max_size_mb: 1000
+      compression: true
+      
+    workflow_results:
+      ttl_hours: 24   # 1 day
+      max_size_mb: 200
+      
+# =============================================================================
+# EEEV Workflow Configuration
+# =============================================================================
+eeev_workflow:
+  # Data acquisition settings
+  data_acquisition:
+    max_genomes: 100
+    batch_size: 20
+    timeout_seconds: 300
+    retry_attempts: 3
+    
+  # Clustering parameters
+  clustering:
+    mmseqs2:
+      min_seq_id: 0.7
+      coverage: 0.8
+      sensitivity: 7.5
+      max_sequences: 1000
+      
+  # Literature integration
+  literature:
+    pubmed:
+      max_references_per_protein: 10
+      min_relevance_score: 0.5
+      cache_duration_days: 7
+      
+  # Performance optimization
+  performance:
+    max_memory_gb: 4
+    max_cpu_cores: 8
+    parallel_jobs: 4
+    
+# =============================================================================
+# External API Configuration
+# =============================================================================
+external_apis:
+  bvbrc:
+    base_url: "https://www.bv-brc.org/api"
+    timeout_seconds: 30
+    rate_limit: "10/second"
+    retry_attempts: 3
+    anonymous_access: true
+    
+  pubmed:
+    base_url: "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
+    email: "onarykov@anl.gov"
+    tool: "nanobrain"
+    timeout_seconds: 15
+    rate_limit: "3/second"
+    retry_attempts: 3
+    
+# =============================================================================
+# Logging Configuration
+# =============================================================================
+logging:
+  level: "INFO"
+  format: "detailed"
+  
+  # File logging
+  file_logging:
+    enabled: true
+    directory: "/app/logs"
+    max_size_mb: 100
+    backup_count: 5
+    rotation: "daily"
+    
+  # Structured logging for monitoring
+  structured_logging:
+    enabled: true
+    format: "json"
+    include_request_id: true
+    
+  # Application-specific loggers
+  loggers:
+    nanobrain.workflows: "INFO"
+    nanobrain.external_tools: "INFO"
+    nanobrain.api_clients: "WARNING"
+    nanobrain.cache: "WARNING"
+    
+# =============================================================================
+# Monitoring Configuration
+# =============================================================================
+monitoring:
+  # Prometheus metrics
+  prometheus:
+    enabled: true
+    port: 8001
+    path: "/metrics"
+    
+  # Health checks
+  health_checks:
+    enabled: true
+    path: "/health"
+    database_check: true
+    cache_check: true
+    external_api_check: false  # Disable for performance
+    
+  # Performance metrics
+  metrics:
+    workflow_execution_time: true
+    api_response_time: true
+    cache_hit_rate: true
+    memory_usage: true
+    error_rate: true
+    
+# =============================================================================
+# Data Storage Configuration
+# =============================================================================
+storage:
+  # Workflow data storage
+  data_directory: "/app/data"
+  results_directory: "/app/data/results"
+  cache_directory: "/app/cache"
+  
+  # File management
+  cleanup:
+    enabled: true
+    retain_days: 30
+    max_storage_gb: 50
+    
+  # Backup configuration
+  backup:
+    enabled: true
+    schedule: "0 2 * * *"  # Daily at 2 AM
+    retention_days: 7
+    compression: true
+    
+# =============================================================================
+# Security Configuration
+# =============================================================================
+security:
+  # API security
+  api_security:
+    require_authentication: false  # Set to true for production
+    jwt_secret: "${JWT_SECRET}"
+    token_expiry_hours: 24
+    
+  # Data security
+  data_encryption:
+    enabled: false  # Enable for sensitive data
+    algorithm: "AES-256-GCM"
+    key_rotation_days: 90
+    
+  # Network security
+  network:
+    trusted_proxies: ["172.20.0.0/16"]
+    max_request_size_mb: 100
+    
+# =============================================================================
+# Resource Limits
+# =============================================================================
+resources:
+  # Memory limits
+  memory:
+    workflow_max_gb: 4
+    cache_max_gb: 2
+    api_max_gb: 1
+    
+  # CPU limits
+  cpu:
+    workflow_max_cores: 8
+    api_max_cores: 4
+    
+  # Disk space
+  disk:
+    warning_threshold_gb: 5
+    critical_threshold_gb: 2
+    cleanup_threshold_gb: 1
+    
+# =============================================================================
+# Error Handling
+# =============================================================================
+error_handling:
+  # Retry configuration
+  retry:
+    max_attempts: 3
+    backoff_multiplier: 2
+    max_delay_seconds: 60
+    
+  # Error reporting
+  reporting:
+    enabled: true
+    include_stacktrace: false
+    notify_admin: true
+    
+  # Graceful degradation
+  degradation:
+    enable_partial_results: true
+    cache_fallback: true
+    timeout_handling: "user_notification" 

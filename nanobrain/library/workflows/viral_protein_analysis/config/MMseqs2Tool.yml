@@ -1,0 +1,68 @@
+# MMseqs2 Tool Configuration for NanoBrain Framework
+#
+# This configuration defines settings for MMseqs2 clustering tool with
+# automated conda environment management and progressive scaling.
+
+tool_name: "mmseqs2"
+
+# Installation Configuration
+installation:
+  type: "conda"
+  conda_package: "mmseqs2"
+  conda_channel: "bioconda"
+  git_repository: "https://github.com/soedinglab/MMseqs2.git"
+  environment_name: "nanobrain-viral_protein-mmseqs2"
+  verify_on_init: true
+
+# Clustering Parameters
+clustering:
+  min_seq_id: 0.3
+  coverage: 0.8
+  cluster_mode: 0
+  sensitivity: 7.5
+
+# Progressive Scaling Configuration
+progressive_scaling:
+  level_1:
+    max_sequences: 50
+    sensitivity: 4.0
+    description: "Fast test - 50 sequences"
+  level_2:
+    max_sequences: 100
+    sensitivity: 5.5
+    description: "Basic validation - 100 sequences"
+  level_3:
+    max_sequences: 500
+    sensitivity: 7.0
+    description: "Medium scale - 500 sequences"
+  level_4:
+    max_sequences: 2000
+    sensitivity: 7.5
+    description: "Full scale - 2000 sequences"
+
+# Performance Settings
+performance:
+  threads: 4
+  memory_limit: "8G"
+  tmp_dir: null
+
+# Error Handling Configuration
+error_handling:
+  detailed_diagnostics: true
+  suggest_fixes: true
+  auto_retry: true
+  max_retries: 3
+  use_real_data: true
+  mock_fallback: false
+
+# Alternative Installation Methods
+alternatives:
+  docker_image: "soedinglab/mmseqs2"
+  homebrew_formula: "mmseqs2"
+  build_from_source: true
+
+# Quality Control
+quality_control:
+  min_sequence_length: 10
+  validate_clustering: true
+  report_statistics: true 

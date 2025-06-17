@@ -1,0 +1,200 @@
+# Prometheus Configuration for NanoBrain Viral Protein Analysis
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'nanobrain-viral-protein'
+    environment: 'production'
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          # - alertmanager:9093
+
+# Rules for alerting
+rule_files:
+  - "alert_rules.yml"
+  # - "first_rules.yml"
+  # - "second_rules.yml"
+
+# Scrape configurations
+scrape_configs:
+  # ==========================================================================
+  # NanoBrain Application Metrics
+  # ==========================================================================
+  - job_name: 'nanobrain-app'
+    static_configs:
+      - targets: ['nanobrain-app:8001']
+    scrape_interval: 15s
+    metrics_path: '/metrics'
+    scrape_timeout: 10s
+    
+  # ==========================================================================
+  # System Metrics
+  # ==========================================================================
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    scrape_interval: 15s
+    
+  # ==========================================================================
+  # PostgreSQL Metrics
+  # ==========================================================================
+  - job_name: 'postgres-exporter'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+    scrape_interval: 30s
+    
+  # ==========================================================================
+  # Redis Metrics
+  # ==========================================================================
+  - job_name: 'redis-exporter'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+    scrape_interval: 30s
+    
+  # ==========================================================================
+  # Docker Container Metrics
+  # ==========================================================================
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+    scrape_interval: 30s
+    
+  # ==========================================================================
+  # Nginx Metrics
+  # ==========================================================================
+  - job_name: 'nginx'
+    static_configs:
+      - targets: ['nginx:9113']
+    scrape_interval: 30s
+    
+  # ==========================================================================
+  # Prometheus Self-Monitoring
+  # ==========================================================================
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    scrape_interval: 30s
+
+# =============================================================================
+# Recording Rules for Performance Analysis
+# =============================================================================
+recording_rules:
+  - name: nanobrain_performance
+    rules:
+      # Workflow execution rate
+      - record: nanobrain:workflow_execution_rate
+        expr: rate(nanobrain_workflow_executions_total[5m])
+        
+      # Average workflow duration
+      - record: nanobrain:workflow_duration_avg
+        expr: rate(nanobrain_workflow_duration_seconds_sum[5m]) / rate(nanobrain_workflow_duration_seconds_count[5m])
+        
+      # API response time percentiles
+      - record: nanobrain:api_response_time_p95
+        expr: histogram_quantile(0.95, rate(nanobrain_api_response_time_seconds_bucket[5m]))
+        
+      # Cache hit rate
+      - record: nanobrain:cache_hit_rate
+        expr: rate(nanobrain_cache_hits_total[5m]) / (rate(nanobrain_cache_hits_total[5m]) + rate(nanobrain_cache_misses_total[5m]))
+        
+      # Error rate
+      - record: nanobrain:error_rate
+        expr: rate(nanobrain_errors_total[5m]) / rate(nanobrain_requests_total[5m])
+        
+      # Memory usage percentage
+      - record: nanobrain:memory_usage_percent
+        expr: (nanobrain_memory_usage_bytes / nanobrain_memory_limit_bytes) * 100
+        
+      # CPU usage percentage
+      - record: nanobrain:cpu_usage_percent
+        expr: rate(nanobrain_cpu_usage_seconds_total[5m]) * 100
+
+# =============================================================================
+# Alert Rules for Production Monitoring
+# =============================================================================
+alert_rules:
+  - name: nanobrain_alerts
+    rules:
+      # High error rate
+      - alert: HighErrorRate
+        expr: nanobrain:error_rate > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value }} which is above the threshold of 5%"
+          
+      # Workflow execution failure
+      - alert: WorkflowExecutionFailure
+        expr: increase(nanobrain_workflow_failures_total[10m]) > 3
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Multiple workflow execution failures"
+          description: "{{ $value }} workflow failures in the last 10 minutes"
+          
+      # High memory usage
+      - alert: HighMemoryUsage
+        expr: nanobrain:memory_usage_percent > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value }}% which is above 85%"
+          
+      # Database connection issues
+      - alert: DatabaseConnectionFailure
+        expr: nanobrain_database_connections_failed_total > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Database connection failures"
+          description: "Database connection failures detected"
+          
+      # Cache performance degradation
+      - alert: LowCacheHitRate
+        expr: nanobrain:cache_hit_rate < 0.7
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low cache hit rate"
+          description: "Cache hit rate is {{ $value }} which is below 70%"
+          
+      # API response time too high
+      - alert: HighAPIResponseTime
+        expr: nanobrain:api_response_time_p95 > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High API response time"
+          description: "95th percentile API response time is {{ $value }}s"
+          
+      # Disk space low
+      - alert: LowDiskSpace
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 10
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Low disk space"
+          description: "Disk space is below 10%"
+          
+      # Service down
+      - alert: ServiceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          description: "Service {{ $labels.job }} has been down for more than 1 minute" 
