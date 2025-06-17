@@ -1,0 +1,136 @@
+# Cache Configuration for Viral Protein Analysis Workflow
+# Aggressive Caching Configuration for Viral Protein Analysis
+# Phase 3 Implementation - Multi-tier Caching System
+
+cache_config:
+  # Storage configuration
+  storage:
+    memory_cache:
+      max_size_mb: 512
+      ttl_hours: 24
+      eviction_policy: "lru"  # Least Recently Used
+      compression: true
+      
+    disk_cache:
+      directory: "data/cache"
+      max_size_gb: 5
+      ttl_days: 7
+      compression: true
+      index_optimization: true
+      cleanup_interval_hours: 6
+      
+    distributed_cache:
+      enabled: false  # For future multi-node deployments
+      redis_url: "redis://localhost:6379"
+      default_ttl_hours: 168
+      
+  # Service-specific caching strategies
+  strategies:
+    pubmed_references:
+      aggressive_caching: true
+      cache_duration_days: 30
+      pre_warm_common_queries: true
+      deduplicate_similar: true
+      similarity_threshold: 0.95
+      max_cache_entries: 10000
+      
+    bvbrc_data:
+      cache_duration_hours: 168  # 1 week
+      invalidate_on_version_change: true
+      compress_large_responses: true
+      batch_cache_updates: true
+      max_response_size_mb: 100
+      
+    ncbi_entrez:
+      cache_duration_hours: 72  # 3 days
+      respect_api_limits: true
+      batch_requests: true
+      max_concurrent_requests: 3
+      
+    sequence_analysis:
+      cache_duration_hours: 48
+      include_intermediate_results: true
+      compress_alignments: true
+      index_by_md5: true
+      
+  # EEEV-specific cache warming
+  eeev_preload:
+    enabled: true
+    warm_on_startup: true
+    
+    organisms:
+      - "Eastern equine encephalitis virus"
+      - "EEEV"
+      - "Alphavirus"
+      
+    protein_types:
+      - "capsid"
+      - "envelope" 
+      - "structural"
+      - "E1"
+      - "E2"
+      - "6K"
+      
+    common_searches:
+      - "EEEV structural proteins"
+      - "alphavirus capsid boundary"
+      - "envelope protein cleavage"
+      - "EEEV protein processing"
+      - "Eastern equine encephalitis virus genome"
+      
+    literature_terms:
+      - "EEEV capsid protein structure"
+      - "alphavirus envelope protein boundaries"
+      - "Eastern equine encephalitis protein cleavage"
+      - "EEEV structural polyprotein"
+      
+  # Cache optimization settings
+  optimization:
+    enable_prefetching: true
+    predictive_caching: true
+    background_refresh: true
+    
+    performance:
+      max_concurrent_operations: 10
+      batch_write_size: 100
+      async_write_enabled: true
+      
+    monitoring:
+      enable_statistics: true
+      log_cache_hits: false  # Set to true for debugging
+      track_performance_metrics: true
+      alert_on_low_hit_ratio: true
+      min_acceptable_hit_ratio: 0.7
+      
+  # Cache invalidation rules
+  invalidation:
+    automatic_cleanup: true
+    orphan_detection: true
+    
+    triggers:
+      - event: "workflow_version_change"
+        action: "invalidate_analysis_results"
+      - event: "pubmed_database_update"
+        action: "refresh_literature_cache"
+      - event: "bvbrc_data_update"
+        action: "invalidate_genome_data"
+        
+    manual_controls:
+      enable_manual_invalidation: true
+      enable_selective_refresh: true
+      enable_cache_warming_api: true
+
+# Cache key naming conventions
+key_conventions:
+  pubmed: "pubmed_{search_terms_hash}_{date}"
+  bvbrc: "bvbrc_{api_endpoint}_{params_hash}"
+  sequence: "seq_{algorithm}_{sequence_md5}_{params}"
+  analysis: "analysis_{workflow}_{version}_{input_hash}"
+  
+# Error handling for cache operations
+error_handling:
+  on_cache_miss: "fetch_and_cache"
+  on_cache_error: "bypass_cache"
+  on_storage_full: "cleanup_oldest"
+  retry_failed_operations: true
+  max_retry_attempts: 3 

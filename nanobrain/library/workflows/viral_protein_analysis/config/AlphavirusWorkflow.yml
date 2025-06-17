@@ -1,0 +1,98 @@
+# Alphavirus Analysis Workflow Configuration
+# Based on PHASE2_IMPLEMENTATION_PLAN.md and BV-BRC CLI documentation
+
+workflow:
+  name: "alphavirus_analysis"
+  version: "1.0.0"
+  description: "Comprehensive Alphavirus protein analysis using BV-BRC and MMseqs2"
+  
+  # BV-BRC configuration - corrected path from testing
+  bvbrc:
+    installation_path: "/Applications/BV-BRC.app/"
+    executable_path: "/Applications/BV-BRC.app/deployment/bin/"
+    
+    # Genome filtering parameters
+    genome_filters:
+      genus: "Alphavirus"
+      min_length: 8000
+      max_length: 15000
+      exclude_incomplete: true
+      
+    # Batch processing settings
+    batch_sizes:
+      genome_batch: 100
+      md5_batch: 50
+      
+    # Connection settings
+    timeout_seconds: 300
+    retry_attempts: 3
+    verify_on_init: false  # Skip verification during workflow init
+    
+  # MMseqs2 clustering parameters
+  clustering:
+    min_seq_id: 0.7      # -c parameter: minimum identity
+    coverage: 0.8        # -f parameter: coverage fraction
+    sensitivity: 7.5     # -n parameter: sensitivity
+    coverage_mode: 1     # Bidirectional coverage
+    cluster_mode: 0      # Greedy clustering
+    prefer_short_conserved: true
+    
+    # Quality control
+    min_cluster_size: 3
+    max_cluster_size: 1000
+    
+  # MUSCLE alignment parameters
+  alignment:
+    max_iterations: 16
+    gap_open_penalty: -12
+    gap_extend_penalty: -1
+    diagonal_optimization: true
+    
+  # Quality control thresholds
+  quality_control:
+    min_alignment_conservation: 0.5
+    max_ambiguous_aa_percent: 5
+    min_sequence_length: 10
+    max_sequence_length: 10000
+    
+    # Length validation ranges for Alphavirus proteins
+    expected_lengths:
+      nsP1: [500, 600]    # ~535 aa
+      nsP2: [750, 850]    # ~800 aa  
+      nsP3: [480, 580]    # ~530 aa
+      nsP4: [560, 660]    # ~610 aa
+      capsid: [200, 320]  # ~260 aa
+      E3: [40, 80]        # ~60 aa
+      E2: [370, 470]      # ~420 aa
+      6K: [40, 70]        # ~55 aa
+      E1: [390, 490]      # ~440 aa
+    
+  # Output settings
+  output:
+    base_directory: "data/alphavirus_analysis"
+    create_html_report: true
+    create_summary_plots: true
+    save_intermediate_files: true
+    
+    # File naming
+    output_files:
+      filtered_genomes: "alphavirus_filtered_genomes.json"
+      unique_proteins: "alphavirus_unique_proteins.fasta"
+      clusters: "alphavirus_clusters.json"
+      pssm_matrices: "alphavirus_pssm_matrices.json"
+      curation_report: "alphavirus_curation_report.json"
+      viral_pssm_json: "alphavirus_viral_pssm.json"
+      
+  # Resource monitoring
+  resources:
+    disk_warning_gb: 1.0    # Warn when < 1GB free
+    disk_critical_gb: 0.5   # Pause when < 500MB free
+    memory_limit_gb: 8.0    # Memory usage limit
+    
+  # Logging configuration
+  logging:
+    level: "INFO"
+    log_to_file: true
+    log_file: "logs/alphavirus_workflow.log"
+    include_timestamps: true
+    include_step_timing: true 

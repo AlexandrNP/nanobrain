@@ -1,0 +1,471 @@
+"""
+MUSCLE Multiple Sequence Alignment Tool
+
+This module provides a wrapper for MUSCLE multiple sequence alignment tool,
+used to prepare clustered sequences for PSSM generation in the Alphavirus workflow.
+"""
+
+import asyncio
+import os
+import tempfile
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Union
+
+from nanobrain.library.tools.bioinformatics.base_external_tool import (
+    BioinformaticsExternalTool, 
+    BioinformaticsToolConfig,
+    BiologicalData
+)
+from nanobrain.core.external_tool import ToolResult, ToolExecutionError
+
+
+@dataclass
+class MUSCLEConfig(BioinformaticsToolConfig):
+    """Configuration for MUSCLE alignment"""
+    tool_name: str = "muscle"
+    installation_path: Optional[str] = None
+    executable_path: Optional[str] = None
+    
+    # Alignment parameters
+    max_iterations: int = 16
+    diagonal_optimization: bool = True
+    gap_open_penalty: float = -12.0
+    gap_extend_penalty: float = -1.0
+    
+    # Quality parameters
+    min_sequences: int = 3
+    max_sequences: int = 1000
+    
+    # Output format
+    output_format: str = "fasta"  # or "clustal", "msf", "phylip"
+
+
+@dataclass
+class AlignedSequence:
+    """Single sequence in an alignment"""
+    sequence_id: str
+    aligned_sequence: str
+    original_sequence: str
+    gaps_count: int
+    
+    def __post_init__(self):
+        self.gaps_count = self.aligned_sequence.count('-')
+
+
+@dataclass
+class MultipleSeqAlignment:
+    """Multiple sequence alignment result"""
+    sequences: List[AlignedSequence]
+    alignment_length: int
+    sequence_count: int
+    gap_percentage: float
+    conservation_profile: List[float]
+    
+    def __post_init__(self):
+        self.sequence_count = len(self.sequences)
+        if self.sequences:
+            self.alignment_length = len(self.sequences[0].aligned_sequence)
+            total_positions = self.alignment_length * self.sequence_count
+            total_gaps = sum(seq.gaps_count for seq in self.sequences)
+            self.gap_percentage = (total_gaps / total_positions) * 100 if total_positions > 0 else 0
+        else:
+            self.alignment_length = 0
+            self.gap_percentage = 0
+
+
+@dataclass
+class AlignmentQuality:
+    """Quality metrics for alignment"""
+    mean_conservation: float
+    highly_conserved_positions: int
+    alignment_length: int
+    sequence_count: int
+    gap_percentage: float
+    quality_score: float
+    
+    def __post_init__(self):
+        # Calculate overall quality score
+        conservation_score = self.mean_conservation * 0.5
+        gap_penalty = (self.gap_percentage / 100) * 0.3
+        size_bonus = min(self.sequence_count / 10, 1.0) * 0.2
+        
+        self.quality_score = max(0, conservation_score - gap_penalty + size_bonus)
+
+
+@dataclass
+class AlignmentResult:
+    """Result of MUSCLE alignment"""
+    alignment: MultipleSeqAlignment
+    quality: AlignmentQuality
+    execution_time: float
+    parameters: MUSCLEConfig
+
+
+class MUSCLETool(BioinformaticsExternalTool):
+    """
+    MUSCLE multiple sequence alignment tool wrapper.
+    
+    Provides high-quality multiple sequence alignments for PSSM generation
+    in the Alphavirus protein analysis workflow.
+    """
+    
+    def __init__(self, config: Optional[MUSCLEConfig] = None):
+        if config is None:
+            config = MUSCLEConfig(
+                tool_name="muscle",
+                max_iterations=16,
+                diagonal_optimization=True,
+                gap_open_penalty=-12.0,
+                gap_extend_penalty=-1.0
+            )
+        
+        super().__init__(config)
+        self.muscle_config = config
+        
+    async def verify_installation(self) -> bool:
+        """Verify MUSCLE installation"""
+        try:
+            result = await self.execute_command(["muscle", "-version"])
+            if result.success:
+                version = result.stdout_text.strip()
+                self.logger.info(f"MUSCLE version detected: {version}")
+                return True
+            return False
+        except Exception as e:
+            self.logger.error(f"MUSCLE verification failed: {e}")
+            return False
+    
+    async def execute_command(self, command: List[str], **kwargs) -> ToolResult:
+        """Execute MUSCLE command with retry logic"""
+        return await self._execute_with_retry(command, **kwargs)
+    
+    async def parse_output(self, raw_output: str) -> Dict[str, Any]:
+        """Parse MUSCLE alignment output"""
+        return await self._parse_fasta_output(raw_output)
+    
+    async def align_sequences(self, sequences: Dict[str, str], 
+                            custom_params: Optional[Dict[str, Any]] = None) -> AlignmentResult:
+        """
+        Align sequences using MUSCLE
+        
+        Args:
+            sequences: Dictionary of {seq_id: sequence}
+            custom_params: Optional custom parameters
+            
+        Returns:
+            AlignmentResult: Alignment with quality metrics
+        """
+        import time
+        start_time = time.time()
+        
+        # Validate input
+        if len(sequences) < self.muscle_config.min_sequences:
+            raise ValueError(f"Need at least {self.muscle_config.min_sequences} sequences for alignment")
+        
+        if len(sequences) > self.muscle_config.max_sequences:
+            self.logger.warning(f"Too many sequences ({len(sequences)}), truncating to {self.muscle_config.max_sequences}")
+            sequences = dict(list(sequences.items())[:self.muscle_config.max_sequences])
+        
+        # Apply custom parameters if provided
+        config = self._merge_params(custom_params) if custom_params else self.muscle_config
+        
+        # Create temporary files
+        input_fasta = await self._create_input_fasta(sequences)
+        output_fasta = await self._get_output_file()
+        
+        try:
+            # Run MUSCLE alignment
+            result = await self._run_muscle_alignment(input_fasta, output_fasta, config)
+            
+            if not result.success:
+                raise ToolExecutionError(f"MUSCLE alignment failed: {result.stderr_text}")
+            
+            # Parse alignment results
+            alignment = await self._parse_alignment_output(output_fasta, sequences)
+            
+            # Calculate quality metrics
+            quality = await self._assess_alignment_quality(alignment)
+            
+            execution_time = time.time() - start_time
+            
+            return AlignmentResult(
+                alignment=alignment,
+                quality=quality,
+                execution_time=execution_time,
+                parameters=config
+            )
+            
+        finally:
+            # Cleanup temporary files
+            await self._cleanup_temp_files([input_fasta, output_fasta])
+    
+    async def _run_muscle_alignment(self, input_file: str, output_file: str, 
+                                   config: MUSCLEConfig) -> ToolResult:
+        """Run MUSCLE alignment command"""
+        command = [
+            "muscle",
+            "-in", input_file,
+            "-out", output_file,
+            "-maxiters", str(config.max_iterations)
+        ]
+        
+        # Add diagonal optimization if enabled
+        if config.diagonal_optimization:
+            command.append("-diags")
+        
+        # Add gap penalties
+        command.extend([
+            "-gapopen", str(config.gap_open_penalty),
+            "-gapextend", str(config.gap_extend_penalty)
+        ])
+        
+        # Set output format
+        if config.output_format.lower() == "clustal":
+            command.extend(["-clw"])
+        elif config.output_format.lower() == "msf":
+            command.extend(["-msf"])
+        elif config.output_format.lower() == "phylip":
+            command.extend(["-phyi"])
+        # Default is FASTA, no additional flag needed
+        
+        self.logger.info(f"Running MUSCLE alignment: {' '.join(command)}")
+        return await self.execute_command(command)
+    
+    async def _create_input_fasta(self, sequences: Dict[str, str]) -> str:
+        """Create input FASTA file from sequences"""
+        fasta_content = []
+        for seq_id, sequence in sequences.items():
+            fasta_content.append(f">{seq_id}")
+            fasta_content.append(sequence)
+        
+        temp_file = await self.create_temp_file("\n".join(fasta_content), suffix=".fasta")
+        return temp_file
+    
+    async def _get_output_file(self) -> str:
+        """Get temporary output file path"""
+        fd, temp_file = tempfile.mkstemp(suffix=".aln", prefix="muscle_output_")
+        os.close(fd)  # Close the file descriptor, keep the path
+        return temp_file
+    
+    async def _parse_alignment_output(self, output_file: str, 
+                                    original_sequences: Dict[str, str]) -> MultipleSeqAlignment:
+        """Parse MUSCLE alignment output"""
+        aligned_sequences = []
+        
+        try:
+            with open(output_file, 'r') as f:
+                content = f.read()
+            
+            # Parse FASTA format alignment
+            sequences_data = await self._parse_fasta_output(content)
+            
+            for seq_id, aligned_seq in sequences_data.get("sequences", {}).items():
+                original_seq = original_sequences.get(seq_id, "")
+                
+                aligned_sequence = AlignedSequence(
+                    sequence_id=seq_id,
+                    aligned_sequence=aligned_seq,
+                    original_sequence=original_seq,
+                    gaps_count=aligned_seq.count('-')
+                )
+                aligned_sequences.append(aligned_sequence)
+            
+        except FileNotFoundError:
+            self.logger.error(f"Alignment output file not found: {output_file}")
+            return MultipleSeqAlignment([], 0, 0, 0, [])
+        
+        # Calculate conservation profile
+        conservation_profile = await self._calculate_conservation_profile(aligned_sequences)
+        
+        alignment = MultipleSeqAlignment(
+            sequences=aligned_sequences,
+            alignment_length=len(aligned_sequences[0].aligned_sequence) if aligned_sequences else 0,
+            sequence_count=len(aligned_sequences),
+            gap_percentage=0,  # Will be calculated in __post_init__
+            conservation_profile=conservation_profile
+        )
+        
+        return alignment
+    
+    async def _calculate_conservation_profile(self, aligned_sequences: List[AlignedSequence]) -> List[float]:
+        """Calculate conservation score for each position in the alignment"""
+        if not aligned_sequences:
+            return []
+        
+        alignment_length = len(aligned_sequences[0].aligned_sequence)
+        conservation_scores = []
+        
+        for pos in range(alignment_length):
+            # Get residues at this position (excluding gaps)
+            residues = []
+            for seq in aligned_sequences:
+                if pos < len(seq.aligned_sequence):
+                    residue = seq.aligned_sequence[pos]
+                    if residue != '-':
+                        residues.append(residue.upper())
+            
+            if not residues:
+                conservation_scores.append(0.0)
+                continue
+            
+            # Calculate conservation as frequency of most common residue
+            from collections import Counter
+            residue_counts = Counter(residues)
+            most_common_count = residue_counts.most_common(1)[0][1]
+            conservation = most_common_count / len(residues)
+            
+            conservation_scores.append(conservation)
+        
+        return conservation_scores
+    
+    async def _assess_alignment_quality(self, alignment: MultipleSeqAlignment) -> AlignmentQuality:
+        """Assess the quality of the multiple sequence alignment"""
+        if not alignment.sequences:
+            return AlignmentQuality(0, 0, 0, 0, 0, 0)
+        
+        # Calculate mean conservation
+        mean_conservation = sum(alignment.conservation_profile) / len(alignment.conservation_profile) if alignment.conservation_profile else 0
+        
+        # Count highly conserved positions (>80% conservation)
+        highly_conserved = sum(1 for score in alignment.conservation_profile if score > 0.8)
+        
+        return AlignmentQuality(
+            mean_conservation=mean_conservation,
+            highly_conserved_positions=highly_conserved,
+            alignment_length=alignment.alignment_length,
+            sequence_count=alignment.sequence_count,
+            gap_percentage=alignment.gap_percentage,
+            quality_score=0  # Will be calculated in __post_init__
+        )
+    
+    def _merge_params(self, custom_params: Dict[str, Any]) -> MUSCLEConfig:
+        """Merge custom parameters with default config"""
+        config_dict = self.muscle_config.__dict__.copy()
+        config_dict.update(custom_params)
+        return MUSCLEConfig(**config_dict)
+    
+    async def _cleanup_temp_files(self, file_paths: List[str]) -> None:
+        """Clean up temporary files"""
+        for path in file_paths:
+            try:
+                if os.path.isfile(path):
+                    os.unlink(path)
+            except Exception as e:
+                self.logger.warning(f"Failed to cleanup {path}: {e}")
+    
+    async def align_cluster_sequences(self, cluster_sequences: List[Dict[str, str]]) -> List[AlignmentResult]:
+        """
+        Align multiple clusters of sequences
+        
+        Args:
+            cluster_sequences: List of sequence dictionaries for each cluster
+            
+        Returns:
+            List[AlignmentResult]: Alignment results for each cluster
+        """
+        alignment_results = []
+        
+        for i, sequences in enumerate(cluster_sequences):
+            if len(sequences) >= self.muscle_config.min_sequences:
+                try:
+                    self.logger.info(f"Aligning cluster {i+1}/{len(cluster_sequences)} with {len(sequences)} sequences")
+                    result = await self.align_sequences(sequences)
+                    alignment_results.append(result)
+                except Exception as e:
+                    self.logger.warning(f"Failed to align cluster {i+1}: {e}")
+                    continue
+            else:
+                self.logger.warning(f"Cluster {i+1} has too few sequences ({len(sequences)}) for alignment")
+        
+        return alignment_results
+    
+    async def get_alignment_statistics(self, results: List[AlignmentResult]) -> Dict[str, Any]:
+        """Get detailed statistics about alignment results"""
+        if not results:
+            return {"error": "No alignment results"}
+        
+        # Collect quality metrics
+        quality_scores = [r.quality.quality_score for r in results]
+        conservation_scores = [r.quality.mean_conservation for r in results]
+        gap_percentages = [r.quality.gap_percentage for r in results]
+        sequence_counts = [r.quality.sequence_count for r in results]
+        execution_times = [r.execution_time for r in results]
+        
+        # High-quality alignments (quality score > 0.7)
+        high_quality = [r for r in results if r.quality.quality_score > 0.7]
+        
+        stats = {
+            "total_alignments": len(results),
+            "high_quality_alignments": len(high_quality),
+            "quality_stats": {
+                "min": min(quality_scores),
+                "max": max(quality_scores),
+                "mean": sum(quality_scores) / len(quality_scores),
+                "median": sorted(quality_scores)[len(quality_scores) // 2]
+            },
+            "conservation_stats": {
+                "min": min(conservation_scores),
+                "max": max(conservation_scores),
+                "mean": sum(conservation_scores) / len(conservation_scores)
+            },
+            "gap_stats": {
+                "min": min(gap_percentages),
+                "max": max(gap_percentages),
+                "mean": sum(gap_percentages) / len(gap_percentages)
+            },
+            "sequence_count_stats": {
+                "min": min(sequence_counts),
+                "max": max(sequence_counts),
+                "mean": sum(sequence_counts) / len(sequence_counts)
+            },
+            "performance": {
+                "total_time": sum(execution_times),
+                "avg_time_per_alignment": sum(execution_times) / len(execution_times)
+            }
+        }
+        
+        return stats
+    
+    async def export_alignment(self, alignment: MultipleSeqAlignment, 
+                             output_file: str, format: str = "fasta") -> str:
+        """
+        Export alignment to file in specified format
+        
+        Args:
+            alignment: Multiple sequence alignment
+            output_file: Output file path
+            format: Output format (fasta, clustal, phylip)
+            
+        Returns:
+            str: Path to exported file
+        """
+        if format.lower() == "fasta":
+            content = []
+            for seq in alignment.sequences:
+                content.append(f">{seq.sequence_id}")
+                content.append(seq.aligned_sequence)
+            
+            with open(output_file, 'w') as f:
+                f.write("\n".join(content))
+                
+        elif format.lower() == "clustal":
+            # Basic Clustal format export
+            content = ["CLUSTAL W (1.83) multiple sequence alignment\n"]
+            
+            # Write sequences in blocks
+            block_size = 60
+            for start in range(0, alignment.alignment_length, block_size):
+                for seq in alignment.sequences:
+                    seq_block = seq.aligned_sequence[start:start+block_size]
+                    content.append(f"{seq.sequence_id:<16} {seq_block}")
+                content.append("")  # Empty line between blocks
+            
+            with open(output_file, 'w') as f:
+                f.write("\n".join(content))
+                
+        else:
+            raise ValueError(f"Unsupported export format: {format}")
+        
+        self.logger.info(f"Exported alignment to {output_file} in {format} format")
+        return output_file 

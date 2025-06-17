@@ -47,6 +47,19 @@ from .logging_system import (
     AgentConversationLog
 )
 
+from .bioinformatics import (
+    BioinformaticsConfig, CoordinateSystem, SequenceType,
+    SequenceCoordinate, SequenceRegion, BioinformaticsDataUnit,
+    ExternalToolManager, BioinformaticsStep, BioinformaticsAgent, BioinformaticsTool,
+    create_bioinformatics_data_unit, create_sequence_coordinate, create_sequence_region
+)
+
+from .sequence_manager import (
+    SequenceManager, SequenceValidator, FastaParser, SequenceFormat,
+    SequenceStats, SequenceValidationError,
+    create_sequence_manager, create_fasta_parser, create_sequence_validator
+)
+
 __all__ = [
     # Executors
     'ExecutorBase', 'LocalExecutor', 'ThreadExecutor', 'ProcessExecutor', 
@@ -82,5 +95,16 @@ __all__ = [
     # Logging
     'NanoBrainLogger', 'get_logger', 'set_debug_mode', 'trace_function_calls',
     'LogLevel', 'OperationType', 'ExecutionContext', 'ToolCallLog', 
-    'AgentConversationLog'
+    'AgentConversationLog',
+    
+    # Bioinformatics
+    'BioinformaticsConfig', 'CoordinateSystem', 'SequenceType',
+    'SequenceCoordinate', 'SequenceRegion', 'BioinformaticsDataUnit',
+    'ExternalToolManager', 'BioinformaticsStep', 'BioinformaticsAgent', 'BioinformaticsTool',
+    'create_bioinformatics_data_unit', 'create_sequence_coordinate', 'create_sequence_region',
+    
+    # Sequence Management
+    'SequenceManager', 'SequenceValidator', 'FastaParser', 'SequenceFormat',
+    'SequenceStats', 'SequenceValidationError',
+    'create_sequence_manager', 'create_fasta_parser', 'create_sequence_validator'
 ] 
