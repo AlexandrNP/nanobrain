@@ -1,98 +1,581 @@
-# Alphavirus Analysis Workflow Configuration
-# Based on PHASE2_IMPLEMENTATION_PLAN.md and BV-BRC CLI documentation
+# Alphavirus Protein Analysis Workflow Configuration
+# Author: NanoBrain Development Team
+# Date: December 2024
+# Version: 4.2.0
 
-workflow:
-  name: "alphavirus_analysis"
-  version: "1.0.0"
-  description: "Comprehensive Alphavirus protein analysis using BV-BRC and MMseqs2"
+name: "AlphavirusWorkflow"
+description: "Comprehensive 14-step Alphavirus protein analysis workflow"
+version: "4.2.0"
+execution_strategy: "sequential"
+error_handling: "continue"
+enable_monitoring: true
+workflow_directory: "nanobrain/library/workflows/viral_protein_analysis"
+
+# Progress reporting configuration
+enable_progress_reporting: true
+progress_batch_interval: 3.0
+progress_collapsed_by_default: true
+progress_show_technical_errors: true
+progress_preserve_session_history: true
+
+# Execution configuration
+max_parallel_steps: 2
+step_timeout: 1800.0  # 30 minutes per step
+retry_attempts: 2
+retry_delay: 5.0
+
+# Graph validation
+validate_graph: true
+allow_cycles: false
+require_connected_graph: true
+
+# Workflow steps definition (14 main steps)
+steps:
+  - step_id: "data_acquisition"
+    name: "BV-BRC Data Acquisition"
+    description: "Acquire and filter alphavirus genome data from BV-BRC database"
+    class: "BVBRCDataAcquisitionStep"
+    estimated_time: 120.0
+    config:
+      # BV-BRC API configuration
+      api_base_url: "https://www.bv-brc.org/api"
+      api_endpoints:
+        genome_search: "/genome/"
+        feature_search: "/genome_feature/"
+        sequence_data: "/genome_sequence/"
+      
+      # Search parameters
+      target_genus: "Alphavirus"
+      genome_status: "Complete"
+      annotation_source: "RefSeq"
+      
+      # Quality filters
+      min_genome_length: 10000
+      max_genome_length: 15000
+      exclude_partial: true
+      exclude_synthetic: true
+      
+      # Rate limiting
+      requests_per_second: 2
+      max_concurrent_requests: 3
+      request_timeout: 30
+      
+      # Caching
+      enable_caching: true
+      cache_duration_hours: 24
+      cache_directory: "data/bvbrc_cache"
+      
+      # Progress reporting
+      report_progress_interval: 10.0
+      detailed_logging: true
+
+  - step_id: "genome_filtering"
+    name: "Genome Quality Filtering"
+    description: "Apply quality filters to acquired genome data"
+    class: "GenomeFilteringStep"
+    estimated_time: 30.0
+    config:
+      # Quality thresholds
+      min_annotation_completeness: 0.95
+      max_ambiguous_bases: 50
+      min_protein_count: 8
+      max_protein_count: 15
+      
+      # Taxonomic validation
+      validate_taxonomy: true
+      required_lineage: ["Viruses", "Togaviridae", "Alphavirus"]
+      
+      # Duplicate removal
+      remove_duplicates: true
+      similarity_threshold: 0.99
+      
+      # Output validation
+      min_filtered_genomes: 50
+      max_filtered_genomes: 1000
+
+  - step_id: "protein_extraction"
+    name: "Protein Sequence Extraction"
+    description: "Extract protein sequences from filtered genomes"
+    class: "ProteinExtractionStep"
+    estimated_time: 60.0
+    config:
+      # Protein types to extract
+      target_proteins:
+        - "structural proteins"
+        - "non-structural proteins"
+        - "polyprotein"
+      
+      # Sequence validation
+      min_protein_length: 50
+      max_protein_length: 3000
+      validate_start_codon: true
+      validate_stop_codon: true
+      
+      # Quality filters
+      max_ambiguous_residues: 10
+      remove_fragments: true
+      
+      # Output format
+      output_format: "fasta"
+      include_annotations: true
+      include_genome_metadata: true
+
+  - step_id: "sequence_annotation"
+    name: "Sequence Annotation Enhancement"
+    description: "Enhance protein annotations with functional information"
+    class: "SequenceAnnotationStep"
+    estimated_time: 90.0
+    config:
+      # Annotation sources
+      annotation_databases:
+        - "UniProt"
+        - "InterPro"
+        - "Pfam"
+        - "GO"
+      
+      # Functional annotation
+      predict_domains: true
+      predict_motifs: true
+      predict_localization: true
+      
+      # Homology searches
+      blast_evalue_threshold: 1e-5
+      blast_identity_threshold: 30.0
+      max_blast_hits: 10
+      
+      # Quality control
+      validate_annotations: true
+      confidence_threshold: 0.7
+
+  - step_id: "annotation_standardization"
+    name: "Annotation Standardization"
+    description: "Standardize protein annotations across genomes"
+    class: "AnnotationStandardizationStep"
+    estimated_time: 45.0
+    config:
+      # Standardization rules
+      protein_name_mapping:
+        "capsid": ["capsid protein", "structural protein C"]
+        "envelope": ["envelope protein", "E1", "E2"]
+        "replicase": ["RNA-dependent RNA polymerase", "nsP1", "nsP2", "nsP3", "nsP4"]
+      
+      # Functional categories
+      functional_groups:
+        structural: ["capsid", "envelope", "E1", "E2"]
+        replication: ["nsP1", "nsP2", "nsP3", "nsP4"]
+        processing: ["protease", "methyltransferase"]
+      
+      # Quality validation
+      check_annotation_consistency: true
+      flag_unusual_annotations: true
+
+  - step_id: "genome_schematic"
+    name: "Genome Organization Analysis"
+    description: "Analyze and visualize alphavirus genome organization"
+    class: "GenomeSchematicStep"
+    estimated_time: 30.0
+    config:
+      # Visualization settings
+      create_genome_maps: true
+      highlight_conserved_regions: true
+      show_protein_domains: true
+      
+      # Analysis parameters
+      identify_conserved_motifs: true
+      calculate_gc_content: true
+      analyze_codon_usage: true
+      
+      # Output formats
+      output_formats: ["svg", "png", "pdf"]
+      include_annotations: true
+
+  - step_id: "length_analysis"
+    name: "Sequence Length Analysis"
+    description: "Analyze protein sequence length distributions"
+    class: "LengthAnalysisStep"
+    estimated_time: 20.0
+    config:
+      # Statistical analysis
+      calculate_length_stats: true
+      identify_outliers: true
+      outlier_threshold: 2.5  # standard deviations
+      
+      # Visualization
+      create_length_histograms: true
+      create_boxplots: true
+      
+      # Quality control
+      flag_unusual_lengths: true
+      min_expected_length: 100
+      max_expected_length: 2500
+
+  - step_id: "sequence_curation"
+    name: "Sequence Curation"
+    description: "Curate sequences based on quality metrics"
+    class: "SequenceCurationStep"
+    estimated_time: 60.0
+    config:
+      # Curation criteria
+      quality_thresholds:
+        min_length: 50
+        max_length: 3000
+        max_ambiguous_percent: 5.0
+        min_annotation_confidence: 0.6
+      
+      # Duplicate handling
+      remove_exact_duplicates: true
+      cluster_similar_sequences: true
+      similarity_threshold: 0.95
+      
+      # Quality reporting
+      generate_curation_report: true
+      include_statistics: true
+      flag_problematic_sequences: true
+
+  - step_id: "clustering_analysis"
+    name: "Protein Clustering Analysis"
+    description: "Cluster proteins by sequence similarity"
+    class: "ClusteringStep"
+    estimated_time: 180.0
+    config:
+      # Clustering algorithm
+      clustering_method: "mmseqs2"
+      mmseqs_config:
+        sensitivity: 7.5
+        cluster_mode: 0  # Set-Cover
+        coverage: 0.8
+        min_seq_id: 0.7
+        
+      # Cluster validation
+      min_cluster_size: 3
+      max_cluster_size: 1000
+      validate_cluster_coherence: true
+      
+      # Representative selection
+      select_representatives: true
+      representative_method: "centroid"
+      
+      # Output formats
+      output_cluster_fasta: true
+      output_cluster_tsv: true
+      create_cluster_visualization: true
+
+  - step_id: "multiple_alignment"
+    name: "Multiple Sequence Alignment"
+    description: "Create multiple sequence alignments for each cluster"
+    class: "AlignmentStep"
+    estimated_time: 240.0
+    config:
+      # Alignment algorithm
+      alignment_method: "muscle"
+      muscle_config:
+        max_iterations: 16
+        diagonal_optimization: true
+        
+      # Quality control
+      min_alignment_length: 100
+      max_gap_percentage: 50.0
+      validate_alignment_quality: true
+      
+      # Refinement
+      refine_alignments: true
+      remove_gappy_columns: true
+      gap_threshold: 0.8
+      
+      # Output formats
+      output_formats: ["fasta", "clustal", "phylip"]
+      include_consensus: true
+
+  - step_id: "pssm_generation"
+    name: "PSSM Matrix Generation"
+    description: "Generate Position-Specific Scoring Matrices"
+    class: "PSSMGenerationStep"
+    estimated_time: 120.0
+    config:
+      # PSSM parameters
+      pseudocount: 0.1
+      background_frequencies: "uniform"
+      normalize_scores: true
+      
+      # Quality filters
+      min_sequences_for_pssm: 10
+      max_sequences_for_pssm: 1000
+      min_alignment_coverage: 0.7
+      
+      # Conservation analysis
+      calculate_conservation_scores: true
+      identify_conserved_positions: true
+      conservation_threshold: 0.8
+      
+      # Output formats
+      output_pssm_format: "json"
+      include_logo_plots: true
+      create_heatmaps: true
+
+  - step_id: "conservation_analysis"
+    name: "Conservation Pattern Analysis"
+    description: "Analyze conservation patterns across alignments"
+    class: "ConservationAnalysisStep"
+    estimated_time: 90.0
+    config:
+      # Conservation metrics
+      conservation_methods:
+        - "shannon_entropy"
+        - "relative_entropy"
+        - "sum_of_pairs"
+      
+      # Pattern identification
+      identify_conserved_blocks: true
+      min_block_length: 5
+      conservation_cutoff: 0.7
+      
+      # Functional annotation
+      map_to_protein_domains: true
+      identify_functional_sites: true
+      
+      # Visualization
+      create_conservation_plots: true
+      highlight_important_positions: true
+
+  - step_id: "quality_assessment"
+    name: "Final Quality Assessment"
+    description: "Comprehensive quality assessment of results"
+    class: "QualityAssessmentStep"
+    estimated_time: 60.0
+    config:
+      # Assessment criteria
+      quality_metrics:
+        - "alignment_quality"
+        - "cluster_coherence"
+        - "annotation_completeness"
+        - "conservation_consistency"
+      
+      # Validation tests
+      run_validation_tests: true
+      statistical_tests: ["chi_square", "kolmogorov_smirnov"]
+      
+      # Reporting
+      generate_qa_report: true
+      include_recommendations: true
+      flag_quality_issues: true
+
+  - step_id: "report_generation"
+    name: "Comprehensive Report Generation"
+    description: "Generate final analysis report with all results"
+    class: "ReportGenerationStep"
+    estimated_time: 45.0
+    config:
+      # Report sections
+      include_sections:
+        - "executive_summary"
+        - "methodology"
+        - "data_statistics"
+        - "clustering_results"
+        - "conservation_analysis"
+        - "quality_assessment"
+        - "recommendations"
+      
+      # Output formats
+      report_formats: ["html", "pdf", "json"]
+      include_interactive_plots: true
+      
+      # Data export
+      export_final_datasets: true
+      create_supplementary_files: true
+      
+      # Visualization
+      create_summary_figures: true
+      include_workflow_diagram: true
+
+# Workflow links definition
+links:
+  - link_id: "acquisition_to_filtering"
+    source: "data_acquisition"
+    target: "genome_filtering"
+    link_type: "direct"
+    data_mapping:
+      genomes: "original_genomes"
+      metadata: "acquisition_metadata"
+
+  - link_id: "filtering_to_extraction"
+    source: "genome_filtering"
+    target: "protein_extraction"
+    link_type: "direct"
+    data_mapping:
+      filtered_genomes: "filtered_genomes"
+      quality_report: "filtering_report"
+
+  - link_id: "extraction_to_annotation"
+    source: "protein_extraction"
+    target: "sequence_annotation"
+    link_type: "direct"
+    data_mapping:
+      protein_sequences: "protein_sequences"
+      extraction_metadata: "extraction_metadata"
+
+  - link_id: "annotation_to_standardization"
+    source: "sequence_annotation"
+    target: "annotation_standardization"
+    link_type: "direct"
+    data_mapping:
+      annotated_sequences: "annotated_sequences"
+      annotation_data: "annotation_data"
+
+  - link_id: "standardization_to_schematic"
+    source: "annotation_standardization"
+    target: "genome_schematic"
+    link_type: "direct"
+    data_mapping:
+      standardized_annotations: "standardized_annotations"
+      genome_data: "genome_data"
+
+  - link_id: "schematic_to_length"
+    source: "genome_schematic"
+    target: "length_analysis"
+    link_type: "direct"
+    data_mapping:
+      protein_data: "protein_data"
+      genome_organization: "genome_organization"
+
+  - link_id: "length_to_curation"
+    source: "length_analysis"
+    target: "sequence_curation"
+    link_type: "direct"
+    data_mapping:
+      length_analysis: "length_analysis"
+      sequences: "sequences"
+
+  - link_id: "curation_to_clustering"
+    source: "sequence_curation"
+    target: "clustering_analysis"
+    link_type: "direct"
+    data_mapping:
+      curated_sequences: "curated_sequences"
+      curation_report: "curation_report"
+
+  - link_id: "clustering_to_alignment"
+    source: "clustering_analysis"
+    target: "multiple_alignment"
+    link_type: "direct"
+    data_mapping:
+      clusters: "clusters"
+      cluster_representatives: "cluster_representatives"
+
+  - link_id: "alignment_to_pssm"
+    source: "multiple_alignment"
+    target: "pssm_generation"
+    link_type: "direct"
+    data_mapping:
+      alignments: "alignments"
+      alignment_quality: "alignment_quality"
+
+  - link_id: "pssm_to_conservation"
+    source: "pssm_generation"
+    target: "conservation_analysis"
+    link_type: "direct"
+    data_mapping:
+      pssm_matrices: "pssm_matrices"
+      alignments: "alignments"
+
+  - link_id: "conservation_to_qa"
+    source: "conservation_analysis"
+    target: "quality_assessment"
+    link_type: "direct"
+    data_mapping:
+      conservation_data: "conservation_data"
+      analysis_results: "analysis_results"
+
+  - link_id: "qa_to_report"
+    source: "quality_assessment"
+    target: "report_generation"
+    link_type: "direct"
+    data_mapping:
+      quality_metrics: "quality_metrics"
+      all_results: "workflow_results"
+
+# Data units for workflow state management
+data_units:
+  - name: "GenomeData"
+    type: "genomic_sequences"
+    persistence: "persistent"
+    
+  - name: "ProteinData"
+    type: "protein_sequences"
+    persistence: "persistent"
+    
+  - name: "AnnotationData"
+    type: "functional_annotations"
+    persistence: "persistent"
+    
+  - name: "ClusterData"
+    type: "sequence_clusters"
+    persistence: "persistent"
+    
+  - name: "AlignmentData"
+    type: "multiple_alignments"
+    persistence: "persistent"
+    
+  - name: "PSSMData"
+    type: "scoring_matrices"
+    persistence: "persistent"
+
+# Monitoring and metrics
+monitoring:
+  enabled: true
+  metrics:
+    - "step_execution_time"
+    - "data_quality_scores"
+    - "sequence_count_tracking"
+    - "memory_usage"
+    - "disk_usage"
   
-  # BV-BRC configuration - corrected path from testing
-  bvbrc:
-    installation_path: "/Applications/BV-BRC.app/"
-    executable_path: "/Applications/BV-BRC.app/deployment/bin/"
-    
-    # Genome filtering parameters
-    genome_filters:
-      genus: "Alphavirus"
-      min_length: 8000
-      max_length: 15000
-      exclude_incomplete: true
-      
-    # Batch processing settings
-    batch_sizes:
-      genome_batch: 100
-      md5_batch: 50
-      
-    # Connection settings
-    timeout_seconds: 300
-    retry_attempts: 3
-    verify_on_init: false  # Skip verification during workflow init
-    
-  # MMseqs2 clustering parameters
-  clustering:
-    min_seq_id: 0.7      # -c parameter: minimum identity
-    coverage: 0.8        # -f parameter: coverage fraction
-    sensitivity: 7.5     # -n parameter: sensitivity
-    coverage_mode: 1     # Bidirectional coverage
-    cluster_mode: 0      # Greedy clustering
-    prefer_short_conserved: true
-    
-    # Quality control
-    min_cluster_size: 3
-    max_cluster_size: 1000
-    
-  # MUSCLE alignment parameters
-  alignment:
-    max_iterations: 16
-    gap_open_penalty: -12
-    gap_extend_penalty: -1
-    diagonal_optimization: true
-    
-  # Quality control thresholds
-  quality_control:
-    min_alignment_conservation: 0.5
-    max_ambiguous_aa_percent: 5
-    min_sequence_length: 10
-    max_sequence_length: 10000
-    
-    # Length validation ranges for Alphavirus proteins
-    expected_lengths:
-      nsP1: [500, 600]    # ~535 aa
-      nsP2: [750, 850]    # ~800 aa  
-      nsP3: [480, 580]    # ~530 aa
-      nsP4: [560, 660]    # ~610 aa
-      capsid: [200, 320]  # ~260 aa
-      E3: [40, 80]        # ~60 aa
-      E2: [370, 470]      # ~420 aa
-      6K: [40, 70]        # ~55 aa
-      E1: [390, 490]      # ~440 aa
-    
-  # Output settings
-  output:
-    base_directory: "data/alphavirus_analysis"
-    create_html_report: true
-    create_summary_plots: true
-    save_intermediate_files: true
-    
-    # File naming
-    output_files:
-      filtered_genomes: "alphavirus_filtered_genomes.json"
-      unique_proteins: "alphavirus_unique_proteins.fasta"
-      clusters: "alphavirus_clusters.json"
-      pssm_matrices: "alphavirus_pssm_matrices.json"
-      curation_report: "alphavirus_curation_report.json"
-      viral_pssm_json: "alphavirus_viral_pssm.json"
-      
-  # Resource monitoring
-  resources:
-    disk_warning_gb: 1.0    # Warn when < 1GB free
-    disk_critical_gb: 0.5   # Pause when < 500MB free
-    memory_limit_gb: 8.0    # Memory usage limit
-    
-  # Logging configuration
-  logging:
-    level: "INFO"
-    log_to_file: true
-    log_file: "logs/alphavirus_workflow.log"
-    include_timestamps: true
-    include_step_timing: true 
+  alerts:
+    - condition: "step_execution_time > 1800"
+      action: "log_warning"
+    - condition: "memory_usage > 8GB"
+      action: "notify_admin"
+    - condition: "sequence_count < 100"
+      action: "quality_warning"
+
+# Quality assurance
+quality_checks:
+  - step: "data_acquisition"
+    checks:
+      - "genome_count >= 50"
+      - "api_response_time < 30"
+  
+  - step: "clustering_analysis"
+    checks:
+      - "cluster_count >= 5"
+      - "largest_cluster_size < 500"
+  
+  - step: "multiple_alignment"
+    checks:
+      - "alignment_quality_score > 0.7"
+      - "gap_percentage < 50"
+
+# Resource management
+resources:
+  memory_limit: "16GB"
+  disk_space_limit: "100GB"
+  cpu_cores: 4
+  temporary_directory: "/tmp/alphavirus_workflow"
+  
+  # Cleanup settings
+  cleanup_intermediate_files: true
+  keep_final_results: true
+  retention_days: 30
+
+# Testing configuration
+testing:
+  mock_backend_responses: false
+  use_real_data: true
+  test_datasets:
+    - "small_alphavirus_set"
+    - "representative_genomes"
+    - "quality_control_set"
+  
+  validation_tests:
+    - "end_to_end_execution"
+    - "data_integrity_checks"
+    - "performance_benchmarks" 

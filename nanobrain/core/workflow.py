@@ -3,18 +3,23 @@ Workflow System for NanoBrain Framework
 
 Provides graph-based workflow orchestration extending the Step system.
 Workflows can contain multiple steps connected by links, with support for
-hierarchical configuration and various execution strategies.
+hierarchical configuration, various execution strategies, and comprehensive
+progress reporting with persistent checkpoints.
 """
 
 import asyncio
 import logging
 import time
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Union, Set, Tuple
+from typing import Any, Dict, List, Optional, Union, Set, Tuple, Callable
 from pathlib import Path
 from enum import Enum
 from pydantic import BaseModel, Field, ConfigDict
 import yaml
+import json
+from datetime import datetime, timezone
+from dataclasses import dataclass, asdict, field
+from collections import defaultdict
 
 from .step import Step, StepConfig
 from .data_unit import DataUnitBase, DataUnitConfig
@@ -42,6 +47,239 @@ class ErrorHandlingStrategy(Enum):
     ROLLBACK = "rollback"
 
 
+@dataclass
+class ProgressStep:
+    """Individual step progress information."""
+    step_id: str
+    name: str
+    description: str
+    status: str  # 'pending', 'running', 'completed', 'failed', 'skipped'
+    progress_percentage: int = 0
+    start_time: Optional[float] = None
+    end_time: Optional[float] = None
+    elapsed_time: float = 0.0
+    estimated_time: Optional[float] = None
+    error_message: Optional[str] = None
+    technical_details: Optional[Dict[str, Any]] = None
+    checkpoint_data: Optional[Dict[str, Any]] = None
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        return asdict(self)
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'ProgressStep':
+        """Create from dictionary."""
+        return cls(**data)
+
+
+@dataclass 
+class WorkflowProgress:
+    """Complete workflow progress information."""
+    workflow_id: str
+    workflow_name: str
+    session_id: Optional[str] = None
+    overall_progress: int = 0
+    status: str = 'pending'  # 'pending', 'running', 'completed', 'failed', 'paused'
+    start_time: Optional[float] = None
+    end_time: Optional[float] = None
+    estimated_total_time: Optional[float] = None
+    steps: List[ProgressStep] = field(default_factory=list)
+    current_step_index: int = 0
+    error_message: Optional[str] = None
+    last_updated: float = field(default_factory=time.time)
+    
+    # Progress reporting configuration
+    batch_interval: float = 3.0  # Batch progress every 3 seconds
+    collapsed_by_default: bool = True
+    show_technical_errors: bool = True
+    preserve_session_history: bool = True
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        data = asdict(self)
+        data['steps'] = [step.to_dict() if isinstance(step, ProgressStep) else step for step in self.steps]
+        return data
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'WorkflowProgress':
+        """Create from dictionary."""
+        steps_data = data.pop('steps', [])
+        progress = cls(**data)
+        progress.steps = [ProgressStep.from_dict(step) if isinstance(step, dict) else step for step in steps_data]
+        return progress
+    
+    def get_current_step(self) -> Optional[ProgressStep]:
+        """Get currently executing step."""
+        if 0 <= self.current_step_index < len(self.steps):
+            return self.steps[self.current_step_index]
+        return None
+    
+    def update_step_progress(self, step_id: str, progress: int, status: str = None, 
+                           error: str = None, technical_details: Dict[str, Any] = None) -> None:
+        """Update progress for a specific step."""
+        for step in self.steps:
+            if step.step_id == step_id:
+                step.progress_percentage = progress
+                if status:
+                    step.status = status
+                if error:
+                    step.error_message = error
+                if technical_details:
+                    step.technical_details = technical_details
+                
+                # Update timing
+                current_time = time.time()
+                if status == 'running' and not step.start_time:
+                    step.start_time = current_time
+                elif status in ['completed', 'failed'] and step.start_time:
+                    step.end_time = current_time
+                    step.elapsed_time = current_time - step.start_time
+                
+                self.last_updated = current_time
+                break
+    
+    def calculate_overall_progress(self) -> int:
+        """Calculate overall workflow progress."""
+        if not self.steps:
+            return 0
+        
+        total_progress = sum(step.progress_percentage for step in self.steps)
+        return min(100, total_progress // len(self.steps))
+
+
+class ProgressReporter:
+    """Handles progress reporting for workflows."""
+    
+    def __init__(self, workflow_id: str, workflow_name: str, session_id: str = None):
+        self.workflow_progress = WorkflowProgress(
+            workflow_id=workflow_id,
+            workflow_name=workflow_name,
+            session_id=session_id
+        )
+        self.progress_callbacks: List[Callable] = []
+        self.last_batch_time = 0.0
+        self.progress_history: List[Dict[str, Any]] = []
+        self.checkpoint_storage: Dict[str, Any] = {}
+        
+    def add_progress_callback(self, callback: Callable) -> None:
+        """Add callback for progress updates."""
+        self.progress_callbacks.append(callback)
+    
+    def initialize_steps(self, step_configs: List[Dict[str, Any]]) -> None:
+        """Initialize progress steps from configuration."""
+        self.workflow_progress.steps = []
+        
+        for i, step_config in enumerate(step_configs):
+            step = ProgressStep(
+                step_id=step_config.get('step_id', f'step_{i}'),
+                name=step_config.get('name', f'Step {i+1}'),
+                description=step_config.get('description', ''),
+                status='pending',
+                estimated_time=step_config.get('estimated_time')
+            )
+            self.workflow_progress.steps.append(step)
+    
+    async def update_progress(self, step_id: str, progress: int, status: str = None,
+                            message: str = None, error: str = None,
+                            technical_details: Dict[str, Any] = None,
+                            force_emit: bool = False) -> None:
+        """Update step progress with batched reporting."""
+        
+        # Update step progress
+        self.workflow_progress.update_step_progress(
+            step_id, progress, status, error, technical_details
+        )
+        
+        # Update overall progress
+        self.workflow_progress.overall_progress = self.workflow_progress.calculate_overall_progress()
+        
+        # Store checkpoint data
+        if status in ['completed', 'failed'] or progress == 100:
+            await self._save_checkpoint(step_id)
+        
+        # Emit progress updates (batched)
+        current_time = time.time()
+        should_emit = (
+            force_emit or 
+            (current_time - self.last_batch_time) >= self.workflow_progress.batch_interval or
+            status in ['completed', 'failed'] or
+            progress == 100
+        )
+        
+        if should_emit:
+            await self._emit_progress_update()
+            self.last_batch_time = current_time
+    
+    async def _emit_progress_update(self) -> None:
+        """Emit progress update to all callbacks."""
+        progress_data = self.workflow_progress.to_dict()
+        
+        # Add to history if preserving session history
+        if self.workflow_progress.preserve_session_history:
+            self.progress_history.append({
+                'timestamp': time.time(),
+                'progress': progress_data.copy()
+            })
+        
+        # Call all registered callbacks
+        for callback in self.progress_callbacks:
+            try:
+                if asyncio.iscoroutinefunction(callback):
+                    await callback(progress_data)
+                else:
+                    callback(progress_data)
+            except Exception as e:
+                logger.error(f"Progress callback failed: {e}")
+    
+    async def _save_checkpoint(self, step_id: str) -> None:
+        """Save checkpoint data for step recovery."""
+        step = next((s for s in self.workflow_progress.steps if s.step_id == step_id), None)
+        if step and step.checkpoint_data:
+            self.checkpoint_storage[step_id] = {
+                'timestamp': time.time(),
+                'step_data': step.to_dict(),
+                'checkpoint_data': step.checkpoint_data
+            }
+    
+    async def restore_from_checkpoint(self, step_id: str) -> Optional[Dict[str, Any]]:
+        """Restore checkpoint data for step recovery."""
+        return self.checkpoint_storage.get(step_id)
+    
+    def get_progress_summary(self) -> Dict[str, Any]:
+        """Get condensed progress summary for UI."""
+        current_step = self.workflow_progress.get_current_step()
+        
+        return {
+            'workflow_id': self.workflow_progress.workflow_id,
+            'workflow_name': self.workflow_progress.workflow_name,
+            'overall_progress': self.workflow_progress.overall_progress,
+            'status': self.workflow_progress.status,
+            'current_step': {
+                'name': current_step.name if current_step else None,
+                'progress': current_step.progress_percentage if current_step else 0,
+                'status': current_step.status if current_step else 'pending'
+            } if current_step else None,
+            'collapsed': self.workflow_progress.collapsed_by_default,
+            'estimated_time_remaining': self._calculate_estimated_time_remaining(),
+            'last_updated': self.workflow_progress.last_updated
+        }
+    
+    def _calculate_estimated_time_remaining(self) -> Optional[float]:
+        """Calculate estimated time remaining."""
+        if not self.workflow_progress.steps:
+            return None
+        
+        completed_steps = [s for s in self.workflow_progress.steps if s.status == 'completed']
+        if not completed_steps:
+            return None
+        
+        avg_time_per_step = sum(s.elapsed_time for s in completed_steps) / len(completed_steps)
+        remaining_steps = len([s for s in self.workflow_progress.steps if s.status == 'pending'])
+        
+        return avg_time_per_step * remaining_steps
+
+
 class WorkflowConfig(StepConfig):
     """Configuration for workflows extending StepConfig."""
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -64,6 +302,13 @@ class WorkflowConfig(StepConfig):
     validate_graph: bool = True
     allow_cycles: bool = False
     require_connected_graph: bool = True
+    
+    # Progress reporting configuration
+    enable_progress_reporting: bool = True
+    progress_batch_interval: float = 3.0
+    progress_collapsed_by_default: bool = True
+    progress_show_technical_errors: bool = True
+    progress_preserve_session_history: bool = True
 
 
 class WorkflowGraph:
@@ -522,6 +767,19 @@ class Workflow(Step):
         self.workflow_start_time: Optional[float] = None
         self.workflow_end_time: Optional[float] = None
         
+        # Progress reporting
+        self.progress_reporter: Optional[ProgressReporter] = None
+        if config.enable_progress_reporting:
+            self.progress_reporter = ProgressReporter(
+                workflow_id=f"{self.name}_{int(time.time())}",
+                workflow_name=self.name,
+                session_id=kwargs.get('session_id')
+            )
+            self.progress_reporter.workflow_progress.batch_interval = config.progress_batch_interval
+            self.progress_reporter.workflow_progress.collapsed_by_default = config.progress_collapsed_by_default
+            self.progress_reporter.workflow_progress.show_technical_errors = config.progress_show_technical_errors
+            self.progress_reporter.workflow_progress.preserve_session_history = config.progress_preserve_session_history
+        
         # Workflow-specific logger
         self.workflow_logger = get_logger(f"workflow.{self.name}", debug_mode=config.debug_mode)
         
@@ -555,6 +813,14 @@ class Workflow(Step):
             
             # Determine execution order
             self._determine_execution_order()
+            
+            # Initialize progress reporting
+            if self.progress_reporter:
+                self.progress_reporter.initialize_steps(self.workflow_config.steps)
+                await self.progress_reporter.update_progress(
+                    'workflow_init', 100, 'completed', 
+                    message="Workflow initialized successfully"
+                )
             
             context.metadata['num_steps'] = len(self.child_steps)
             context.metadata['num_links'] = len(self.step_links)
@@ -659,7 +925,7 @@ class Workflow(Step):
             # Create step instance
             step = await self._create_step_instance(step_id, step_config, step_config_dict)
             
-            # Add to workflow graph
+            # Add to workflow
             self.child_steps[step_id] = step
             self.workflow_graph.add_step(step_id, step)
             
@@ -874,13 +1140,37 @@ class Workflow(Step):
         return await self._execute_sequential(input_data, **kwargs)
     
     async def _execute_step_with_tracking(self, step_id: str, step: Step, **kwargs) -> Any:
-        """Execute a single step with performance tracking."""
+        """Execute a single step with performance tracking and progress reporting."""
         step_start_time = time.time()
         
+        # Update progress: step started
+        if self.progress_reporter:
+            await self.progress_reporter.update_progress(
+                step_id, 0, 'running', 
+                message=f"Starting {step_id}"
+            )
+        
         try:
-            result = await step.execute(**kwargs)
+            # Execute step with progress updates
+            if hasattr(step, 'execute_with_progress') and self.progress_reporter:
+                # Step supports progress reporting
+                result = await step.execute_with_progress(
+                    progress_callback=lambda p, m=None: self._update_step_progress(step_id, p, message=m),
+                    **kwargs
+                )
+            else:
+                # Standard execution
+                result = await step.execute(**kwargs)
+            
             step_end_time = time.time()
             self.step_execution_times[step_id] = step_end_time - step_start_time
+            
+            # Update progress: step completed
+            if self.progress_reporter:
+                await self.progress_reporter.update_progress(
+                    step_id, 100, 'completed',
+                    message=f"Completed {step_id}"
+                )
             
             self.workflow_logger.debug(
                 f"Step {step_id} completed",
@@ -893,6 +1183,19 @@ class Workflow(Step):
             step_end_time = time.time()
             self.step_execution_times[step_id] = step_end_time - step_start_time
             
+            # Update progress: step failed
+            if self.progress_reporter:
+                technical_details = {
+                    'error_type': type(e).__name__,
+                    'execution_time': self.step_execution_times[step_id],
+                    'stack_trace': str(e) if self.workflow_config.progress_show_technical_errors else None
+                }
+                await self.progress_reporter.update_progress(
+                    step_id, 0, 'failed',
+                    error=str(e),
+                    technical_details=technical_details
+                )
+            
             self.workflow_logger.error(
                 f"Step {step_id} failed",
                 execution_time_seconds=self.step_execution_times[step_id],
@@ -900,6 +1203,13 @@ class Workflow(Step):
             )
             
             raise
+    
+    async def _update_step_progress(self, step_id: str, progress: int, message: str = None) -> None:
+        """Update step progress during execution."""
+        if self.progress_reporter:
+            await self.progress_reporter.update_progress(
+                step_id, progress, message=message
+            )
     
     async def _propagate_step_data(self, step_id: str, step_result: Any) -> None:
         """Propagate step result data through connected links."""
@@ -1084,6 +1394,30 @@ class Workflow(Step):
     def list_links(self) -> List[str]:
         """Get list of all link IDs."""
         return list(self.step_links.keys())
+    
+    # Progress reporting methods
+    def add_progress_callback(self, callback: Callable) -> None:
+        """Add callback for progress updates."""
+        if self.progress_reporter:
+            self.progress_reporter.add_progress_callback(callback)
+    
+    def get_progress_summary(self) -> Optional[Dict[str, Any]]:
+        """Get current progress summary."""
+        if self.progress_reporter:
+            return self.progress_reporter.get_progress_summary()
+        return None
+    
+    def get_progress_history(self) -> List[Dict[str, Any]]:
+        """Get progress history for session."""
+        if self.progress_reporter:
+            return self.progress_reporter.progress_history
+        return []
+    
+    async def restore_from_checkpoint(self, step_id: str) -> Optional[Dict[str, Any]]:
+        """Restore step from checkpoint."""
+        if self.progress_reporter:
+            return await self.progress_reporter.restore_from_checkpoint(step_id)
+        return None
 
 
 # Factory function for creating workflows

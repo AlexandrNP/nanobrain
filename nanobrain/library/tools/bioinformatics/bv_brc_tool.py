@@ -293,11 +293,10 @@ class BVBRCTool(BioinformaticsExternalTool):
             
             verification_result["diagnostics"].append("✅ CLI tools accessible")
             
-            # Test actual API call
+            # Test actual API call with a known genome ID (E. coli K-12)
             result = await self.execute_p3_command("p3-all-genomes", [
                 "--eq", "genome_id,511145.12",
-                "--attr", "genome_id,genome_name",
-                "--limit", "1"
+                "--attr", "genome_id,genome_name"
             ])
             
             if result.success and result.stdout:
@@ -352,6 +351,7 @@ class BVBRCTool(BioinformaticsExternalTool):
         try:
             # Real API call - no mocks
             # Note: p3-all-genomes doesn't support --limit, we'll limit during parsing
+            # Use correct query that we know works
             command_args = [
                 "--eq", "taxon_lineage_names,Alphavirus",
                 "--attr", "genome_id,genome_length,genome_name,taxon_lineage_names,genome_status"
@@ -621,12 +621,25 @@ class BVBRCTool(BioinformaticsExternalTool):
             genomes = []
             for row in reader:
                 try:
+                    # Handle BV-BRC field name prefixes (genome.field_name)
+                    genome_id = row.get('genome.genome_id', row.get('genome_id', ''))
+                    genome_length = row.get('genome.genome_length', row.get('genome_length', '0'))
+                    genome_name = row.get('genome.genome_name', row.get('genome_name', ''))
+                    taxon_lineage = row.get('genome.taxon_lineage_names', row.get('taxon_lineage_names', ''))
+                    genome_status = row.get('genome.genome_status', row.get('genome_status', None))
+                    
+                    # Convert genome_length to int
+                    try:
+                        genome_length = int(genome_length) if genome_length else 0
+                    except ValueError:
+                        genome_length = 0
+                    
                     genome = GenomeData(
-                        genome_id=row.get('genome_id', ''),
-                        genome_length=int(row.get('genome_length', 0)),
-                        genome_name=row.get('genome_name', ''),
-                        taxon_lineage=row.get('taxon_lineage_names', ''),
-                        genome_status=row.get('genome_status', None)
+                        genome_id=genome_id,
+                        genome_length=genome_length,
+                        genome_name=genome_name,
+                        taxon_lineage=taxon_lineage,
+                        genome_status=genome_status
                     )
                     
                     if genome.genome_id and genome.genome_length > 0:
@@ -650,12 +663,19 @@ class BVBRCTool(BioinformaticsExternalTool):
             proteins = []
             for row in reader:
                 try:
+                    # Handle BV-BRC field name prefixes (feature.field_name or genome.field_name)
+                    patric_id = row.get('feature.patric_id', row.get('patric_id', ''))
+                    aa_sequence_md5 = row.get('feature.aa_sequence_md5', row.get('aa_sequence_md5', ''))
+                    product = row.get('feature.product', row.get('product', ''))
+                    aa_sequence = row.get('feature.aa_sequence', row.get('aa_sequence', ''))
+                    genome_id = row.get('feature.genome_id', row.get('genome_id', ''))
+                    
                     protein = ProteinData(
-                        patric_id=row.get('patric_id', ''),
-                        aa_sequence_md5=row.get('aa_sequence_md5', ''),
-                        product=row.get('product', ''),
-                        aa_sequence=row.get('aa_sequence', ''),
-                        genome_id=row.get('genome_id', '')
+                        patric_id=patric_id,
+                        aa_sequence_md5=aa_sequence_md5,
+                        product=product,
+                        aa_sequence=aa_sequence,
+                        genome_id=genome_id
                     )
                     
                     if protein.aa_sequence_md5:  # MD5 is required

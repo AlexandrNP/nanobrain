@@ -2,7 +2,8 @@
 Alphavirus Protein Analysis Workflow
 
 Main orchestrator for the 14-step Alphavirus protein analysis workflow
-as defined in PHASE2_IMPLEMENTATION_PLAN.md.
+with comprehensive progress reporting, YAML-configurable steps, and
+proper NanoBrain framework integration.
 
 This workflow integrates:
 - BV-BRC data acquisition (Steps 1-7)
@@ -11,14 +12,20 @@ This workflow integrates:
 - Clustering analysis (Step 12)
 - Multiple sequence alignment (Step 13)
 - PSSM analysis and reporting (Step 14)
+
+Author: NanoBrain Development Team
+Date: December 2024
+Version: 4.2.0
 """
 
 import asyncio
 import time
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Callable
 from pathlib import Path
 import json
+import yaml
 
+from nanobrain.core.workflow import Workflow, WorkflowConfig
 from nanobrain.core.logging_system import get_logger
 
 from .steps.bv_brc_data_acquisition_step import BVBRCDataAcquisitionStep
@@ -118,301 +125,352 @@ class WorkflowResult:
         self.viral_pssm_json = None
 
 
-class AlphavirusWorkflow:
+class AlphavirusWorkflow(Workflow):
     """
     Main orchestrator for Alphavirus protein analysis workflow
     
     Executes all 14 steps in sequence with proper error handling,
-    checkpointing, and progress tracking.
-    
-    Note: This is a standalone workflow that doesn't inherit from the core Workflow class
-    to maintain compatibility with the existing AlphavirusWorkflowConfig structure.
+    checkpointing, progress tracking, and YAML-configurable steps
+    following NanoBrain framework patterns.
     """
     
-    def __init__(self, config: Optional[AlphavirusWorkflowConfig] = None):
-        # Load default config if none provided
-        if config is None:
+    def __init__(self, config_path: Optional[str] = None, session_id: Optional[str] = None, **kwargs):
+        # Load YAML configuration
+        if config_path is None:
             config_path = Path(__file__).parent / "config" / "AlphavirusWorkflow.yml"
-            config = AlphavirusWorkflowConfig.from_file(str(config_path))
-        self.config = config
-        self.logger = get_logger("alphavirus_workflow")
         
-        # Initialize workflow steps
-        self.steps = self._initialize_workflow_steps()
+        with open(config_path, 'r') as f:
+            yaml_config = yaml.safe_load(f)
         
-        # Execution tracking
-        self.current_step = 0
+        # Create WorkflowConfig from YAML
+        workflow_config = WorkflowConfig(**yaml_config)
+        
+        # Initialize with session ID for progress tracking
+        super().__init__(workflow_config, session_id=session_id, **kwargs)
+        
+        # Store YAML config for step initialization
+        self.yaml_config = yaml_config
+        
+        # Initialize workflow data container
+        self.workflow_data = WorkflowData()
+        
+        # Progress tracking callbacks
+        self.progress_callbacks: List[Callable] = []
+        
+        # Initialize execution timing
         self.execution_start_time = None
-        self.progress_callback = None
         
-    def _initialize_workflow_steps(self) -> Dict[str, Any]:
-        """Initialize all workflow steps with proper configuration"""
-        
-        return {
-            'data_acquisition': BVBRCDataAcquisitionStep(
-                bvbrc_config=self.config.bvbrc,
-                step_config=self.config.bvbrc.__dict__
-            ),
-            'annotation_mapping': AnnotationMappingStep(
-                step_config=self.config.quality_control.__dict__
-            ),
-            'sequence_curation': SequenceCurationStep(
-                step_config=self.config.quality_control.__dict__
-            ),
-            'clustering': ClusteringStep(
-                mmseqs_config=self.config.clustering,
-                step_config=self.config.clustering.__dict__
-            ),
-            'alignment': AlignmentStep(
-                muscle_config=self.config.alignment,
-                step_config=self.config.alignment.__dict__
-            ),
-            'pssm_analysis': PSSMAnalysisStep(
-                pssm_config=self.config.quality_control,
-                step_config=self.config.output.__dict__
-            )
-        }
+        self.workflow_logger.info("🧬 Alphavirus Workflow initialized with progress reporting")
         
     async def execute_full_workflow(self, input_params: Optional[Dict[str, Any]] = None) -> WorkflowResult:
         """
-        Execute complete 14-step Alphavirus analysis workflow
+        Execute complete 14-step Alphavirus analysis workflow with progress tracking
         
         Args:
             input_params: Optional input parameters for the workflow
             
         Returns:
-            WorkflowResult: Complete workflow results
+            WorkflowResult: Complete workflow results with progress information
         """
         
         self.execution_start_time = time.time()
-        workflow_data = WorkflowData()
         
         # Set default input params
         if input_params is None:
             input_params = {
                 "target_genus": "Alphavirus",
-                "output_directory": self.config.output.base_directory
+                "output_directory": self.yaml_config.get('resources', {}).get('temporary_directory', 'data/alphavirus_analysis')
             }
             
         try:
-            self.logger.info("🧬 Starting Alphavirus protein analysis workflow")
-            await self._update_progress("Initializing workflow", 0)
+            self.workflow_logger.info("🧬 Starting Alphavirus protein analysis workflow with progress tracking")
             
-            # Steps 1-7: BV-BRC Data Acquisition
-            self.logger.info("📊 Starting BV-BRC data acquisition (Steps 1-7)")
-            await self._update_progress("BV-BRC data acquisition", 10)
+            # Update progress: workflow started
+            if self.progress_reporter:
+                await self.progress_reporter.update_progress(
+                    'workflow_init', 0, 'running',
+                    message="Initializing Alphavirus analysis workflow"
+                )
             
-            step_start = time.time()
-            acquisition_result = await self.steps['data_acquisition'].execute(input_params)
-            workflow_data.update_from_acquisition(acquisition_result)
-            workflow_data.step_timings['data_acquisition'] = time.time() - step_start
+            # Execute the workflow using the parent class method
+            result = await self.process(input_params)
             
-            self.logger.info(f"✅ Acquired {len(workflow_data.unique_proteins)} unique proteins from {len(workflow_data.filtered_genomes)} genomes")
-            
-            # Step 8: Annotation Mapping
-            self.logger.info("🔍 Starting annotation mapping (Step 8)")
-            await self._update_progress("Annotation mapping and ICTV integration", 25)
-            
-            step_start = time.time()
-            mapping_result = await self.steps['annotation_mapping'].execute({
-                'annotations': workflow_data.protein_annotations,
-                'genome_data': workflow_data.filtered_genomes
-            })
-            workflow_data.update_from_mapping(mapping_result)
-            workflow_data.step_timings['annotation_mapping'] = time.time() - step_start
-            
-            # Steps 9-11: Sequence Curation
-            self.logger.info("🧹 Starting sequence curation (Steps 9-11)")
-            await self._update_progress("Sequence curation and quality control", 40)
-            
-            step_start = time.time()
-            curation_result = await self.steps['sequence_curation'].execute({
-                'sequences': workflow_data.protein_sequences,
-                'annotations': workflow_data.standardized_annotations
-            })
-            workflow_data.update_from_curation(curation_result)
-            workflow_data.step_timings['sequence_curation'] = time.time() - step_start
-            
-            # Step 12: Clustering
-            self.logger.info("🗂️ Starting MMseqs2 clustering (Step 12)")
-            await self._update_progress("Sequence clustering with conservation focus", 55)
-            
-            step_start = time.time()
-            clustering_result = await self.steps['clustering'].execute({
-                'curated_sequences': workflow_data.protein_sequences,
-                'curation_report': workflow_data.curation_report
-            })
-            workflow_data.update_from_clustering(clustering_result)
-            workflow_data.step_timings['clustering'] = time.time() - step_start
-            
-            self.logger.info(f"✅ Generated {len(workflow_data.clusters)} protein clusters")
-            
-            # Step 13: Alignment
-            self.logger.info("📏 Starting multiple sequence alignment (Step 13)")
-            await self._update_progress("Multiple sequence alignment", 70)
-            
-            step_start = time.time()
-            alignment_result = await self.steps['alignment'].execute({
-                'clusters': workflow_data.clusters
-            })
-            workflow_data.update_from_alignment(alignment_result)
-            workflow_data.step_timings['alignment'] = time.time() - step_start
-            
-            # Step 14: PSSM Analysis
-            self.logger.info("🎯 Starting PSSM analysis and curation report (Step 14)")
-            await self._update_progress("PSSM generation and final analysis", 85)
-            
-            step_start = time.time()
-            pssm_result = await self.steps['pssm_analysis'].execute({
-                'aligned_clusters': workflow_data.aligned_clusters,
-                'workflow_data': workflow_data
-            })
-            workflow_data.update_from_pssm(pssm_result)
-            workflow_data.step_timings['pssm_analysis'] = time.time() - step_start
-            
-            # Generate final results
-            await self._update_progress("Generating final outputs", 95)
-            
+            # Calculate execution time
             execution_time = time.time() - self.execution_start_time
-            output_files = await self._collect_output_files(workflow_data)
             
-            # Generate Viral_PSSM.json format output
-            viral_pssm_json = await self._generate_viral_pssm_json(workflow_data)
+            # Collect output files
+            output_files = await self._collect_output_files(self.workflow_data)
             
-            final_result = WorkflowResult(
+            # Generate viral PSSM JSON
+            viral_pssm_json = await self._generate_viral_pssm_json(self.workflow_data)
+            
+            # Create final result
+            workflow_result = WorkflowResult(
                 success=True,
-                workflow_data=workflow_data,
+                workflow_data=self.workflow_data,
                 execution_time=execution_time,
                 output_files=output_files
             )
-            final_result.viral_pssm_json = viral_pssm_json
+            workflow_result.viral_pssm_json = viral_pssm_json
             
-            await self._update_progress("Workflow completed successfully", 100)
-            self.logger.info(f"🎉 Alphavirus workflow completed successfully in {execution_time:.2f} seconds")
+            # Update progress: workflow completed
+            if self.progress_reporter:
+                await self.progress_reporter.update_progress(
+                    'workflow_complete', 100, 'completed',
+                    message=f"Alphavirus analysis completed in {execution_time:.1f}s"
+                )
             
-            return final_result
+            self.workflow_logger.info(f"✅ Alphavirus workflow completed successfully in {execution_time:.1f}s")
+            
+            return workflow_result
             
         except Exception as e:
-            execution_time = time.time() - self.execution_start_time if self.execution_start_time else 0
-            self.logger.error(f"❌ Workflow failed after {execution_time:.2f} seconds: {e}")
+            execution_time = time.time() - self.execution_start_time
+            
+            # Update progress: workflow failed
+            if self.progress_reporter:
+                await self.progress_reporter.update_progress(
+                    'workflow_error', 0, 'failed',
+                    error=str(e),
+                    technical_details={
+                        'execution_time': execution_time,
+                        'error_type': type(e).__name__
+                    }
+                )
+            
+            self.workflow_logger.error(f"❌ Alphavirus workflow failed after {execution_time:.1f}s: {e}")
             
             return WorkflowResult(
                 success=False,
                 error=str(e),
-                execution_time=execution_time,
-                workflow_data=workflow_data  # Return partial data
+                execution_time=execution_time
             )
-            
-    async def _update_progress(self, message: str, percentage: int) -> None:
-        """Update workflow progress"""
-        self.logger.info(f"Progress: {percentage}% - {message}")
+    
+    async def process(self, input_data: Dict[str, Any], **kwargs) -> Any:
+        """
+        Execute the alphavirus workflow with progress reporting.
         
-        if self.progress_callback:
-            await self.progress_callback({
-                'percentage': percentage,
-                'message': message,
-                'current_step': self.current_step,
-                'total_steps': 14
-            })
-            
+        This method routes through the workflow steps based on YAML configuration
+        and provides comprehensive progress tracking.
+        """
+        # Update progress: workflow processing started
+        if self.progress_reporter:
+            await self.progress_reporter.update_progress(
+                'workflow_processing', 5, 'running',
+                message="Starting alphavirus protein analysis steps"
+            )
+        
+        # Execute the workflow using the parent class method
+        result = await super().process(input_data, **kwargs)
+        
+        # Update progress: workflow processing completed
+        if self.progress_reporter:
+            await self.progress_reporter.update_progress(
+                'workflow_processing', 95, 'completed',
+                message="Alphavirus protein analysis steps completed"
+            )
+        
+        return result
+    
     async def _collect_output_files(self, workflow_data: WorkflowData) -> Dict[str, str]:
-        """Collect and organize output files"""
-        base_dir = Path(self.config.output.base_directory)
-        base_dir.mkdir(parents=True, exist_ok=True)
+        """
+        Collect and organize output files from the workflow execution
+        
+        Args:
+            workflow_data: Container with all workflow results
+            
+        Returns:
+            Dictionary mapping file types to file paths
+        """
         
         output_files = {}
         
-        # Save filtered genomes
-        genomes_file = base_dir / "alphavirus_filtered_genomes.json"
-        with open(genomes_file, 'w') as f:
-            json.dump([g.__dict__ if hasattr(g, '__dict__') else g for g in workflow_data.filtered_genomes], f, indent=2)
-        output_files['filtered_genomes'] = str(genomes_file)
-        
-        # Save unique proteins FASTA
-        if workflow_data.annotated_fasta:
-            fasta_file = base_dir / "alphavirus_unique_proteins.fasta"
-            with open(fasta_file, 'w') as f:
-                f.write(workflow_data.annotated_fasta)
-            output_files['unique_proteins_fasta'] = str(fasta_file)
-        
-        # Save clusters
-        if workflow_data.clusters:
-            clusters_file = base_dir / "alphavirus_clusters.json"
-            with open(clusters_file, 'w') as f:
-                json.dump(workflow_data.clusters, f, indent=2)
-            output_files['clusters'] = str(clusters_file)
-        
-        # Save PSSM matrices
-        if workflow_data.pssm_matrices:
-            pssm_file = base_dir / "alphavirus_pssm_matrices.json"
-            with open(pssm_file, 'w') as f:
-                json.dump(workflow_data.pssm_matrices, f, indent=2)
-            output_files['pssm_matrices'] = str(pssm_file)
-        
-        # Save final curation report
-        if workflow_data.final_curation_report:
-            report_file = base_dir / "alphavirus_curation_report.json"
-            with open(report_file, 'w') as f:
-                json.dump(workflow_data.final_curation_report, f, indent=2)
-            output_files['curation_report'] = str(report_file)
+        try:
+            # Get output directory from configuration
+            output_dir = self.yaml_config.get('resources', {}).get('temporary_directory', 'data/alphavirus_analysis')
+            output_path = Path(output_dir)
+            output_path.mkdir(parents=True, exist_ok=True)
+            
+            # Generate output files
+            if workflow_data.filtered_genomes:
+                genomes_file = output_path / "alphavirus_filtered_genomes.json"
+                with open(genomes_file, 'w') as f:
+                    json.dump(workflow_data.filtered_genomes, f, indent=2)
+                output_files['filtered_genomes'] = str(genomes_file)
+            
+            if workflow_data.unique_proteins:
+                proteins_file = output_path / "alphavirus_unique_proteins.fasta"
+                with open(proteins_file, 'w') as f:
+                    f.write(workflow_data.annotated_fasta)
+                output_files['unique_proteins'] = str(proteins_file)
+            
+            if workflow_data.clusters:
+                clusters_file = output_path / "alphavirus_clusters.json"
+                with open(clusters_file, 'w') as f:
+                    json.dump(workflow_data.clusters, f, indent=2)
+                output_files['clusters'] = str(clusters_file)
+            
+            if workflow_data.pssm_matrices:
+                pssm_file = output_path / "alphavirus_pssm_matrices.json"
+                with open(pssm_file, 'w') as f:
+                    json.dump(workflow_data.pssm_matrices, f, indent=2)
+                output_files['pssm_matrices'] = str(pssm_file)
+            
+            if workflow_data.curation_report:
+                report_file = output_path / "alphavirus_curation_report.json"
+                with open(report_file, 'w') as f:
+                    json.dump(workflow_data.curation_report, f, indent=2)
+                output_files['curation_report'] = str(report_file)
+            
+            self.workflow_logger.info(f"📁 Output files collected: {len(output_files)} files")
+            
+        except Exception as e:
+            self.workflow_logger.error(f"❌ Error collecting output files: {e}")
         
         return output_files
-        
+    
     async def _generate_viral_pssm_json(self, workflow_data: WorkflowData) -> Dict[str, Any]:
         """
-        Generate output in Viral_PSSM.json format
+        Generate the final viral PSSM JSON output for integration
         
-        Based on: https://github.com/jimdavis1/Viral_Annotation/blob/main/Viral_PSSM.json
+        Args:
+            workflow_data: Container with all workflow results
+            
+        Returns:
+            Dictionary with viral PSSM data in expected format
         """
         
-        viral_pssm_output = {
-            "metadata": {
-                "organism": "Alphavirus",
-                "analysis_date": time.strftime("%Y-%m-%d %H:%M:%S"),
-                "coordinate_system": "1-based",
-                "method": "nanobrain_alphavirus_analysis",
-                "version": "1.0.0",
-                "data_source": "BV-BRC",
-                "total_genomes_analyzed": len(workflow_data.filtered_genomes),
-                "clustering_method": "MMseqs2",
-                "alignment_method": "MUSCLE",
-                "pssm_generation_method": "custom_nanobrain"
-            },
-            "proteins": [],
-            "analysis_summary": {
-                "total_proteins": len(workflow_data.unique_proteins),
-                "clusters_generated": len(workflow_data.clusters),
-                "pssm_matrices_created": len(workflow_data.pssm_matrices),
-                "execution_time_seconds": sum(workflow_data.step_timings.values()),
-                "step_timings": workflow_data.step_timings
-            },
-            "quality_metrics": workflow_data.quality_metrics
-        }
-        
-        # Add protein entries
-        for i, cluster in enumerate(workflow_data.clusters[:10]):  # Limit for demo
-            protein_entry = {
-                "id": f"alphavirus_cluster_{i+1}",
-                "function": cluster.get('consensus_annotation', 'hypothetical protein'),
-                "protein_class": cluster.get('protein_class', 'unknown'),
-                "cluster_info": {
-                    "member_count": cluster.get('member_count', 0),
-                    "consensus_score": cluster.get('consensus_score', 0.0)
+        try:
+            viral_pssm_data = {
+                "workflow_metadata": {
+                    "workflow_name": "AlphavirusWorkflow",
+                    "version": "4.2.0",
+                    "execution_time": time.time() - self.execution_start_time,
+                    "timestamp": time.time(),
+                    "step_count": len(self.workflow_config.steps)
                 },
-                "confidence_metrics": {
-                    "overall_confidence": cluster.get('overall_confidence', 0.0)
-                }
+                "genome_statistics": {
+                    "total_genomes_acquired": len(workflow_data.original_genomes),
+                    "filtered_genomes": len(workflow_data.filtered_genomes),
+                    "unique_proteins": len(workflow_data.unique_proteins),
+                    "protein_clusters": len(workflow_data.clusters)
+                },
+                "analysis_results": {
+                    "clusters": workflow_data.clusters,
+                    "pssm_matrices": workflow_data.pssm_matrices,
+                    "alignment_statistics": workflow_data.alignment_quality_stats,
+                    "curation_report": workflow_data.curation_report
+                },
+                "quality_metrics": workflow_data.quality_metrics,
+                "step_timings": workflow_data.step_timings
             }
-            viral_pssm_output["proteins"].append(protein_entry)
-        
-        return viral_pssm_output
-        
-    def set_progress_callback(self, callback) -> None:
-        """Set callback function for progress updates"""
-        self.progress_callback = callback
-        
+            
+            # Add progress information if available
+            if self.progress_reporter:
+                progress_summary = self.get_progress_summary()
+                if progress_summary:
+                    viral_pssm_data["progress_information"] = progress_summary
+            
+            self.workflow_logger.info("📊 Viral PSSM JSON generated successfully")
+            
+            return viral_pssm_data
+            
+        except Exception as e:
+            self.workflow_logger.error(f"❌ Error generating viral PSSM JSON: {e}")
+            return {}
+    
+    def add_progress_callback(self, callback: Callable) -> None:
+        """Add progress callback for workflow updates."""
+        self.progress_callbacks.append(callback)
+        if self.progress_reporter:
+            self.progress_reporter.add_progress_callback(callback)
+    
     def get_execution_time(self) -> float:
-        """Get current execution time"""
+        """Get current execution time."""
         if self.execution_start_time:
             return time.time() - self.execution_start_time
-        return 0.0 
+        return 0.0
+    
+    async def get_workflow_status(self) -> Dict[str, Any]:
+        """Get comprehensive workflow status including progress."""
+        status = {
+            'workflow_name': 'AlphavirusWorkflow',
+            'execution_time': self.get_execution_time(),
+            'completed_steps': len(self.completed_steps),
+            'failed_steps': len(self.failed_steps),
+            'total_steps': len(self.child_steps),
+            'is_complete': self.is_workflow_complete
+        }
+        
+        # Add progress information
+        if self.progress_reporter:
+            progress_summary = self.get_progress_summary()
+            if progress_summary:
+                status['progress'] = progress_summary
+        
+        return status
+    
+    async def restore_from_checkpoint(self, checkpoint_data: Dict[str, Any]) -> bool:
+        """Restore workflow state from checkpoint."""
+        try:
+            # Restore workflow data
+            if 'workflow_data' in checkpoint_data:
+                self.workflow_data = WorkflowData()
+                # Restore specific data fields
+                for key, value in checkpoint_data['workflow_data'].items():
+                    if hasattr(self.workflow_data, key):
+                        setattr(self.workflow_data, key, value)
+            
+            # Restore execution state
+            if 'execution_state' in checkpoint_data:
+                state = checkpoint_data['execution_state']
+                self.current_step_index = state.get('current_step_index', 0)
+                self.completed_steps = set(state.get('completed_steps', []))
+                self.failed_steps = set(state.get('failed_steps', []))
+            
+            self.workflow_logger.info("🔄 Workflow state restored from checkpoint")
+            return True
+            
+        except Exception as e:
+            self.workflow_logger.error(f"❌ Failed to restore from checkpoint: {e}")
+            return False
+
+
+# Factory function for creating workflow instances
+async def create_alphavirus_workflow(config_path: Optional[str] = None,
+                                   session_id: Optional[str] = None,
+                                   **kwargs) -> AlphavirusWorkflow:
+    """
+    Factory function to create and initialize AlphavirusWorkflow.
+    
+    Args:
+        config_path: Path to YAML configuration file
+        session_id: Session ID for progress tracking
+        **kwargs: Additional workflow parameters
+        
+    Returns:
+        Initialized AlphavirusWorkflow instance
+    """
+    workflow = AlphavirusWorkflow(config_path=config_path, session_id=session_id, **kwargs)
+    await workflow.initialize()
+    return workflow
+
+
+# Legacy compatibility function
+def create_workflow_from_config(config: Optional[AlphavirusWorkflowConfig] = None) -> AlphavirusWorkflow:
+    """
+    Legacy compatibility function for creating workflow from old config format.
+    
+    Args:
+        config: Legacy AlphavirusWorkflowConfig instance
+        
+    Returns:
+        AlphavirusWorkflow instance (not initialized)
+    """
+    # Convert legacy config to new format if needed
+    if config:
+        # This would involve converting the old config format to YAML
+        # For now, use default YAML configuration
+        pass
+    
+    return AlphavirusWorkflow() 

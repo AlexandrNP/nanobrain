@@ -1,0 +1,307 @@
+# Chatbot Viral Integration Workflow Configuration
+# Author: NanoBrain Development Team
+# Date: December 2024
+# Version: 4.2.0
+
+name: "ChatbotViralWorkflow"
+description: "Intelligent chatbot integration with viral annotation backend"
+version: "4.2.0"
+execution_strategy: "sequential"
+error_handling: "continue"
+enable_monitoring: true
+workflow_directory: "nanobrain/library/workflows/chatbot_viral_integration"
+
+# Progress reporting configuration
+enable_progress_reporting: true
+progress_batch_interval: 3.0
+progress_collapsed_by_default: true
+progress_show_technical_errors: true
+progress_preserve_session_history: true
+
+# Execution configuration
+max_parallel_steps: 3
+step_timeout: 120.0
+retry_attempts: 2
+retry_delay: 1.0
+
+# Graph validation
+validate_graph: true
+allow_cycles: false
+require_connected_graph: true
+
+# Workflow steps definition
+steps:
+  - step_id: "query_classification"
+    name: "Query Classification"
+    description: "Classify user queries as annotation requests or conversational queries"
+    class: "QueryClassificationStep"
+    estimated_time: 2.0
+    config:
+      # Classification thresholds
+      annotation_confidence_threshold: 0.7
+      conversational_confidence_threshold: 0.6
+      
+      # Intent detection patterns
+      annotation_keywords:
+        - "analyze"
+        - "annotate" 
+        - "protein"
+        - "sequence"
+        - "genome"
+        - "alphavirus"
+        - "viral"
+      
+      conversational_keywords:
+        - "what is"
+        - "explain"
+        - "tell me"
+        - "how does"
+        - "describe"
+      
+      # Classification models
+      use_ml_classification: true
+      fallback_to_keyword_matching: true
+      
+      # Session context
+      consider_session_history: true
+      max_context_messages: 5
+      
+      # Output routing
+      routing_rules:
+        annotation_job:
+          min_confidence: 0.7
+          required_entities: ["sequence", "protein"]
+        conversational_response:
+          min_confidence: 0.6
+          fallback: true
+
+  - step_id: "annotation_job_processing"
+    name: "Annotation Job Processing"
+    description: "Handle viral protein annotation job requests"
+    class: "AnnotationJobStep"
+    estimated_time: 300.0
+    config:
+      # Backend configuration
+      backend_url: "http://localhost:8001"
+      api_endpoints:
+        submit_job: "/api/jobs/submit"
+        job_status: "/api/jobs/{job_id}/status"
+        job_result: "/api/jobs/{job_id}/result"
+        health_check: "/api/health"
+      
+      # Job management
+      max_concurrent_jobs: 3
+      job_timeout: 900.0  # 15 minutes
+      polling_interval: 5.0
+      max_polling_attempts: 180  # 15 minutes with 5-second intervals
+      
+      # Parameter extraction
+      sequence_extraction:
+        max_sequences: 10
+        min_sequence_length: 50
+        max_sequence_length: 10000
+        supported_formats: ["fasta", "raw"]
+      
+      genome_id_extraction:
+        pattern: "\\b[A-Z]{2}\\d{6}\\b"
+        max_ids: 5
+      
+      organism_extraction:
+        alphavirus_patterns:
+          - "chikungunya"
+          - "sindbis"
+          - "semliki"
+          - "ross river"
+          - "eastern equine"
+          - "western equine"
+          - "venezuelan equine"
+      
+      # Error handling
+      retry_on_backend_error: true
+      max_retries: 3
+      retry_delay: 5.0
+      
+      # Progress reporting
+      report_progress_interval: 10.0
+      detailed_progress_tracking: true
+
+  - step_id: "conversational_response"
+    name: "Conversational Response"
+    description: "Generate intelligent conversational responses about alphaviruses"
+    class: "ConversationalResponseStep"
+    estimated_time: 5.0
+    config:
+      # Response generation
+      response_model: "enhanced_alphavirus"
+      max_response_length: 2000
+      include_references: true
+      
+      # Knowledge base
+      knowledge_domains:
+        - "alphavirus_structure"
+        - "alphavirus_replication"
+        - "alphavirus_diseases"
+        - "alphavirus_evolution"
+        - "protein_function"
+      
+      # Literature integration
+      literature_search:
+        enabled: true
+        max_references: 5
+        prefer_recent_papers: true
+        citation_style: "brief"
+      
+      # Response formatting
+      use_markdown: true
+      include_confidence_score: true
+      add_follow_up_suggestions: true
+      
+      # Context awareness
+      maintain_conversation_context: true
+      max_context_turns: 10
+      
+      # Specialized responses
+      protein_annotation_explanations: true
+      methodology_descriptions: true
+      result_interpretation_help: true
+
+  - step_id: "response_formatting"
+    name: "Response Formatting"
+    description: "Format responses for optimal user presentation"
+    class: "ResponseFormattingStep"
+    estimated_time: 1.0
+    config:
+      # Formatting options
+      enable_markdown: true
+      enable_progress_bars: true
+      progress_bar_length: 20
+      max_response_length: 10000
+      
+      # Streaming configuration
+      streaming_chunk_size: 50
+      max_streaming_chunks: 100
+      
+      # Error formatting
+      include_troubleshooting_tips: true
+      include_fallback_suggestions: true
+      
+      # Progress display
+      show_step_details: true
+      collapse_completed_steps: true
+      highlight_current_step: true
+      
+      # Response types
+      format_annotation_jobs: true
+      format_progress_updates: true
+      format_conversational_responses: true
+      format_error_messages: true
+
+# Workflow links definition
+links:
+  - link_id: "classification_to_annotation"
+    source: "query_classification"
+    target: "annotation_job_processing"
+    link_type: "conditional"
+    condition:
+      field: "routing_decision.next_step"
+      operator: "equals"
+      value: "annotation_job"
+    data_mapping:
+      classification_data: "classification_data"
+      routing_decision: "routing_decision"
+      session_data: "session_data"
+
+  - link_id: "classification_to_conversational"
+    source: "query_classification"
+    target: "conversational_response"
+    link_type: "conditional"
+    condition:
+      field: "routing_decision.next_step"
+      operator: "equals"
+      value: "conversational_response"
+    data_mapping:
+      classification_data: "classification_data"
+      routing_decision: "routing_decision"
+      session_data: "session_data"
+
+  - link_id: "annotation_to_formatting"
+    source: "annotation_job_processing"
+    target: "response_formatting"
+    link_type: "direct"
+    data_mapping:
+      response_type: "'annotation_job'"
+      job_data: "job_data"
+      success: "success"
+      error: "error"
+      backend_available: "backend_available"
+
+  - link_id: "conversational_to_formatting"
+    source: "conversational_response"
+    target: "response_formatting"
+    link_type: "direct"
+    data_mapping:
+      response_type: "'conversational'"
+      response_data: "response_data"
+      enable_streaming: "enable_streaming"
+
+# Data units for workflow state management
+data_units:
+  - name: "ChatSessionData"
+    type: "session_data"
+    persistence: "session"
+    
+  - name: "QueryClassificationData"
+    type: "classification_result"
+    persistence: "temporary"
+    
+  - name: "AnnotationJobData"
+    type: "job_information"
+    persistence: "persistent"
+    
+  - name: "ConversationalResponseData"
+    type: "response_content"
+    persistence: "temporary"
+
+# Monitoring and metrics
+monitoring:
+  enabled: true
+  metrics:
+    - "step_execution_time"
+    - "classification_accuracy"
+    - "job_success_rate"
+    - "response_quality"
+    - "user_satisfaction"
+  
+  alerts:
+    - condition: "step_execution_time > 60"
+      action: "log_warning"
+    - condition: "job_success_rate < 0.8"
+      action: "notify_admin"
+
+# Quality assurance
+quality_checks:
+  - step: "query_classification"
+    checks:
+      - "confidence_score >= 0.6"
+      - "routing_decision is not null"
+  
+  - step: "annotation_job_processing"
+    checks:
+      - "backend_response_time < 30"
+      - "job_id is not null"
+  
+  - step: "conversational_response"
+    checks:
+      - "response_length > 50"
+      - "confidence_score >= 0.7"
+
+# Testing configuration
+testing:
+  mock_backend_responses: false
+  use_real_data: true
+  test_scenarios:
+    - "simple_annotation_request"
+    - "complex_annotation_request"
+    - "conversational_query"
+    - "ambiguous_query"
+    - "error_handling" 
