@@ -27,13 +27,8 @@ import yaml
 
 from nanobrain.core.workflow import Workflow, WorkflowConfig
 from nanobrain.core.logging_system import get_logger
+from nanobrain.core.step import Step, StepConfig
 
-from .steps.bv_brc_data_acquisition_step import BVBRCDataAcquisitionStep
-from .steps.annotation_mapping_step import AnnotationMappingStep
-from .steps.sequence_curation_step import SequenceCurationStep
-from .steps.clustering_step import ClusteringStep
-from .steps.alignment_step import AlignmentStep
-from .steps.pssm_analysis_step import PSSMAnalysisStep
 from .config.workflow_config import AlphavirusWorkflowConfig
 
 
@@ -137,31 +132,33 @@ class AlphavirusWorkflow(Workflow):
     def __init__(self, config_path: Optional[str] = None, session_id: Optional[str] = None, **kwargs):
         # Load YAML configuration
         if config_path is None:
-            config_path = Path(__file__).parent / "config" / "AlphavirusWorkflow.yml"
+            config_path = Path(__file__).parent / "config" / "CleanWorkflow.yml"
         
-        with open(config_path, 'r') as f:
-            yaml_config = yaml.safe_load(f)
+        try:
+            with open(config_path, 'r') as f:
+                yaml_config = yaml.safe_load(f)
+            self.workflow_logger = get_logger(f"alphavirus_workflow", debug_mode=True)
+            self.workflow_logger.info(f"Successfully loaded config from: {config_path}")
+        except FileNotFoundError:
+            self.workflow_logger = get_logger(f"alphavirus_workflow", debug_mode=True)
+            raise FileNotFoundError(f"CRITICAL: Real workflow config not found at {config_path}. Cannot proceed without proper configuration.")
         
-        # Create WorkflowConfig from YAML
+        # Initialize with real configuration using NanoBrain WorkflowConfig
         workflow_config = WorkflowConfig(**yaml_config)
+        super().__init__(config=workflow_config, session_id=session_id, **kwargs)
         
-        # Initialize with session ID for progress tracking
-        super().__init__(workflow_config, session_id=session_id, **kwargs)
+        self.workflow_logger.info("🧬 AlphavirusWorkflow initialized with REAL step implementations (no fallbacks)")
+        self.workflow_logger.info(f"Workflow will execute {len(yaml_config.get('steps', {}))} step groups mapping to 14 logical steps")
         
-        # Store YAML config for step initialization
-        self.yaml_config = yaml_config
-        
-        # Initialize workflow data container
         self.workflow_data = WorkflowData()
-        
-        # Progress tracking callbacks
-        self.progress_callbacks: List[Callable] = []
-        
-        # Initialize execution timing
         self.execution_start_time = None
         
-        self.workflow_logger.info("🧬 Alphavirus Workflow initialized with progress reporting")
+        # Progress reporting setup
+        self.progress_reporter = kwargs.get('progress_reporter')
+        self.progress_callbacks = []  # Initialize progress callbacks list
         
+
+    
     async def execute_full_workflow(self, input_params: Optional[Dict[str, Any]] = None) -> WorkflowResult:
         """
         Execute complete 14-step Alphavirus analysis workflow with progress tracking
@@ -175,12 +172,35 @@ class AlphavirusWorkflow(Workflow):
         
         self.execution_start_time = time.time()
         
-        # Set default input params
+        # Set default input params and handle parameter mapping
         if input_params is None:
             input_params = {
                 "target_genus": "Alphavirus",
-                "output_directory": self.yaml_config.get('resources', {}).get('temporary_directory', 'data/alphavirus_analysis')
+                "output_directory": "data/alphavirus_analysis"
             }
+        
+        # Map incoming parameters to workflow parameters
+        workflow_params = {}
+        
+        # Handle organism parameter mapping for user queries like "Create PSSM matrix for EEE virus"
+        if 'organism' in input_params:
+            organism = input_params['organism']
+            # Map specific virus names to genus for workflow processing
+            if 'equine encephalitis' in organism.lower() or 'eee' in organism.lower():
+                workflow_params['target_genus'] = 'Alphavirus'
+                workflow_params['custom_virus_name'] = organism
+            else:
+                workflow_params['target_genus'] = 'Alphavirus'
+                workflow_params['custom_virus_name'] = organism
+        else:
+            workflow_params['target_genus'] = input_params.get('target_genus', 'Alphavirus')
+        
+        # Pass through other parameters
+        for key, value in input_params.items():
+            if key not in ['organism']:  # Skip already mapped parameters
+                workflow_params[key] = value
+                
+        input_params = workflow_params
             
         try:
             self.workflow_logger.info("🧬 Starting Alphavirus protein analysis workflow with progress tracking")
@@ -435,6 +455,57 @@ class AlphavirusWorkflow(Workflow):
             self.workflow_logger.error(f"❌ Failed to restore from checkpoint: {e}")
             return False
 
+    async def _create_step_instance(self, step_id: str, step_config: StepConfig, config_dict: Dict[str, Any]) -> Step:
+        """Create a step instance from configuration using custom step types."""
+        
+        # Determine step type/class from the loaded config
+        # Check if step_config has the class attribute directly (from external config)
+        if hasattr(step_config, 'class') and getattr(step_config, 'class'):
+            step_class = getattr(step_config, 'class')
+        else:
+            # Fall back to config_dict for inline configurations
+            step_class = config_dict.get('class', 'SimpleStep')
+        
+        self.workflow_logger.info(f"🔧 Creating step instance: {step_id} ({step_class})")
+        
+        # Create step instance based on class
+        if step_class == 'BVBRCDataAcquisitionStep':
+            from .steps.bv_brc_data_acquisition_step import BVBRCDataAcquisitionStep
+            step = BVBRCDataAcquisitionStep(step_config, executor=self.executor)
+            self.workflow_logger.info(f"✅ Created BVBRCDataAcquisitionStep: {step_id}")
+            
+        elif step_class == 'AnnotationMappingStep':
+            from .steps.annotation_mapping_step import AnnotationMappingStep
+            step = AnnotationMappingStep(step_config, executor=self.executor)
+            self.workflow_logger.info(f"✅ Created AnnotationMappingStep: {step_id}")
+            
+        elif step_class == 'SequenceCurationStep':
+            from .steps.sequence_curation_step import SequenceCurationStep
+            step = SequenceCurationStep(step_config, executor=self.executor)
+            self.workflow_logger.info(f"✅ Created SequenceCurationStep: {step_id}")
+            
+        elif step_class == 'ClusteringStep':
+            from .steps.clustering_step import ClusteringStep
+            step = ClusteringStep(step_config, executor=self.executor)
+            self.workflow_logger.info(f"✅ Created ClusteringStep: {step_id}")
+            
+        elif step_class == 'AlignmentStep':
+            from .steps.alignment_step import AlignmentStep
+            step = AlignmentStep(step_config, executor=self.executor)
+            self.workflow_logger.info(f"✅ Created AlignmentStep: {step_id}")
+            
+        elif step_class == 'PSSMAnalysisStep':
+            from .steps.pssm_analysis_step import PSSMAnalysisStep
+            step = PSSMAnalysisStep(step_config, executor=self.executor)
+            self.workflow_logger.info(f"✅ Created PSSMAnalysisStep: {step_id}")
+            
+        else:
+            # Fall back to parent class for standard step types
+            self.workflow_logger.info(f"⚡ Using parent class for step creation: {step_id} ({step_class})")
+            step = await super()._create_step_instance(step_id, step_config, config_dict)
+        
+        return step
+
 
 # Factory function for creating workflow instances
 async def create_alphavirus_workflow(config_path: Optional[str] = None,
@@ -456,21 +527,24 @@ async def create_alphavirus_workflow(config_path: Optional[str] = None,
     return workflow
 
 
-# Legacy compatibility function
 def create_workflow_from_config(config: Optional[AlphavirusWorkflowConfig] = None) -> AlphavirusWorkflow:
     """
-    Legacy compatibility function for creating workflow from old config format.
+    Factory function to create an AlphavirusWorkflow instance from configuration
     
     Args:
-        config: Legacy AlphavirusWorkflowConfig instance
+        config: Optional AlphavirusWorkflowConfig object. If None, loads from default path.
         
     Returns:
-        AlphavirusWorkflow instance (not initialized)
+        AlphavirusWorkflow: Configured workflow instance
     """
-    # Convert legacy config to new format if needed
-    if config:
-        # This would involve converting the old config format to YAML
-        # For now, use default YAML configuration
-        pass
     
-    return AlphavirusWorkflow() 
+    if config is None:
+        # Load from default configuration file
+        default_config_path = Path(__file__).parent / "config" / "AlphavirusWorkflow.yml"
+        workflow = AlphavirusWorkflow(config_path=default_config_path)
+    else:
+        # Convert config object to workflow
+        workflow = AlphavirusWorkflow()
+        workflow.config = config
+    
+    return workflow 

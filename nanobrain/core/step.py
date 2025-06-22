@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 class StepConfig(BaseModel):
     """Configuration for steps."""
-    model_config = ConfigDict(arbitrary_types_allowed=True)
+    model_config = ConfigDict(arbitrary_types_allowed=True, extra="allow")
     
     name: str
     description: str = ""
@@ -255,7 +255,10 @@ class Step(ABC):
                 
                 # Process using executor
                 start_time = time.time()
-                result = await self.executor.execute(self._execute_process, input_data=input_data, **kwargs)
+                # Create a wrapper function that properly handles the input_data argument
+                async def execute_wrapper():
+                    return await self._execute_process(input_data, **kwargs)
+                result = await self.executor.execute(execute_wrapper)
                 processing_time = time.time() - start_time
                 
                 self._execution_count += 1

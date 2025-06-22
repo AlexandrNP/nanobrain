@@ -1,8 +1,7 @@
 """
-Sequence Curation Step (Steps 9-11)
+Sequence Curation Step
 
-Placeholder implementation for sequence curation and quality control.
-Steps 9-11: Sequence curation, length analysis, and mangled sequence identification.
+Re-architected to inherit from NanoBrain Step base class.
 """
 
 import asyncio
@@ -10,20 +9,45 @@ import time
 import numpy as np
 from typing import Dict, Any, List, Optional
 
+from nanobrain.core.step import Step, StepConfig
 from nanobrain.core.logging_system import get_logger
 
 
-class SequenceCurationStep:
+class SequenceCurationStep(Step):
     """
-    Steps 9-11: Sequence curation and quality control
+    Sequence curation functionality
     
-    This is a placeholder implementation that will be expanded in future phases.
+    Re-architected to inherit from NanoBrain Step base class.
     """
     
-    def __init__(self, step_config: Dict[str, Any]):
-        self.step_config = step_config
-        self.logger = get_logger("sequence_curation")
+    def __init__(self, config: StepConfig, curation_config: Optional[Dict[str, Any]] = None, **kwargs):
+        super().__init__(config, **kwargs)
         
+        # Extract configuration from step config or provided curation_config
+        step_config_dict = config.config if hasattr(config, 'config') else {}
+        if curation_config:
+            step_config_dict.update(curation_config)
+        
+        self.curation_config = step_config_dict.get('curation_config', {})
+        self.step_config = step_config_dict
+        
+        self.nb_logger.info(f"🧬 SequenceCurationStep initialized")
+        
+    async def process(self, input_data: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        """
+        Process method required by Step base class.
+        
+        This implements the NanoBrain framework interface while calling the
+        original execute method that contains the sequence curation logic.
+        """
+        self.nb_logger.info("🔄 Processing sequence curation step")
+        
+        # Call the original execute method
+        result = await self.execute(input_data)
+        
+        self.nb_logger.info(f"✅ Sequence curation step completed successfully")
+        return result
+
     async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Execute sequence curation steps
@@ -38,24 +62,24 @@ class SequenceCurationStep:
         step_start_time = time.time()
         
         try:
-            self.logger.info("🧹 Starting sequence curation and quality control")
+            self.nb_logger.info("🧹 Starting sequence curation and quality control")
             
             sequences = input_data.get('sequences', [])
             annotations = input_data.get('annotations', [])
             
             # Step 9: Create FASTA file of selected proteins (already done in data acquisition)
-            self.logger.info("Step 9: FASTA file creation completed in previous step")
+            self.nb_logger.info("Step 9: FASTA file creation completed in previous step")
             
             # Step 10: Analyze length distribution
-            self.logger.info("Step 10: Analyzing protein length distribution")
+            self.nb_logger.info("Step 10: Analyzing protein length distribution")
             length_analysis = await self._analyze_length_distribution(sequences)
             
             # Step 11: Identify mangled sequences
-            self.logger.info("Step 11: Identifying mangled or problematic sequences")
+            self.nb_logger.info("Step 11: Identifying mangled or problematic sequences")
             curation_report = await self._identify_mangled_sequences(sequences)
             
             execution_time = time.time() - step_start_time
-            self.logger.info(f"✅ Sequence curation completed in {execution_time:.2f} seconds")
+            self.nb_logger.info(f"✅ Sequence curation completed in {execution_time:.2f} seconds")
             
             return {
                 'length_analysis': length_analysis,
@@ -70,7 +94,7 @@ class SequenceCurationStep:
             }
             
         except Exception as e:
-            self.logger.error(f"❌ Sequence curation failed: {e}")
+            self.nb_logger.error(f"❌ Sequence curation failed: {e}")
             raise
             
     async def _analyze_length_distribution(self, sequences: List[Dict[str, Any]]) -> Dict[str, Any]:

@@ -31,6 +31,8 @@ class MessageType(Enum):
     ANNOTATION_RESULT = "annotation_result"
     CONVERSATIONAL = "conversational"
     ERROR = "error"
+    PROGRESS = "progress"  # General progress updates
+    INFO = "info"  # General information messages
 
 
 @dataclass

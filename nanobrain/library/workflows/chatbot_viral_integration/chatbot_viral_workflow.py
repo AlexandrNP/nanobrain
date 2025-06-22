@@ -11,7 +11,7 @@ Version: 4.2.0
 """
 
 from nanobrain.core.workflow import Workflow, WorkflowConfig
-from nanobrain.core.step import StepConfig
+from nanobrain.core.step import StepConfig, Step
 from nanobrain.library.infrastructure.data.chat_session_data import (
     ChatSessionData, ChatMessage, MessageRole, MessageType,
     QueryClassificationData, AnnotationJobData, ConversationalResponseData
@@ -127,7 +127,29 @@ class ChatbotViralWorkflow(Workflow):
                 'session_id': session_id
             }
             
-            # Process through workflow steps
+            # --- Step 1: run classification separately to emit classification chunk for tests ---
+            classification_step = self.child_steps.get('query_classification')
+            classification_result = None
+            if classification_step:
+                await classification_step.set_input(input_data)
+                classification_result = await classification_step.execute()
+
+                # Emit classification chunk for downstream consumers / tests
+                if classification_result and classification_result.get('success'):
+                    cls_data = classification_result.get('classification_data')
+                    routing_decision = classification_result.get('routing_decision', {})
+                    await asyncio.sleep(0)  # allow event loop switch
+                    yield {
+                        'type': 'classification',
+                        'intent': getattr(cls_data, 'intent', None) if cls_data else None,
+                        'confidence': getattr(cls_data, 'confidence', None) if cls_data else None,
+                        'routing': routing_decision.get('next_step'),
+                        'session_id': session_id
+                    }
+                    # Merge into input for remaining workflow
+                    input_data.update(classification_result)
+
+            # Continue with rest of workflow (conditional routing handled inside process)
             result = await self.process(input_data)
             
             # Stream any accumulated progress updates
@@ -181,39 +203,159 @@ class ChatbotViralWorkflow(Workflow):
         except Exception as e:
             self.nb_logger.error(f"❌ Workflow processing failed: {e}")
             
-            # Yield error response
+            # Log full traceback for debugging
+            import traceback
+            full_traceback = traceback.format_exc()
+            self.nb_logger.error(f"Full traceback: {full_traceback}")
+            
+            # Yield detailed error response with actual error information
             yield {
                 'type': 'error',
                 'error': str(e),
+                'error_type': type(e).__name__,
+                'traceback': full_traceback if hasattr(self.workflow_config, 'debug_mode') and self.workflow_config.debug_mode else None,
                 'session_id': session_id if 'session_id' in locals() else None,
                 'timestamp': datetime.now().isoformat()
             }
     
     async def process(self, input_data: Dict[str, Any], **kwargs) -> Any:
         """
-        Execute the chatbot viral workflow with progress reporting.
+        Execute the chatbot viral workflow with conditional routing.
         
-        This method routes through the workflow steps based on YAML configuration
-        and provides comprehensive progress tracking.
+        This method implements proper conditional routing based on query classification
+        instead of sequential execution of all steps.
         """
-        # Update progress: workflow started
-        if self.progress_reporter:
-            await self.progress_reporter.update_progress(
-                'workflow_start', 0, 'running',
-                message="Starting chatbot viral integration workflow"
-            )
-        
-        # Execute the workflow using the parent class method
-        result = await super().process(input_data, **kwargs)
-        
-        # Update progress: workflow completed
-        if self.progress_reporter:
-            await self.progress_reporter.update_progress(
-                'workflow_complete', 100, 'completed',
-                message="Chatbot viral integration workflow completed"
-            )
-        
-        return result
+        try:
+            # Update progress: workflow started
+            if self.progress_reporter:
+                await self.progress_reporter.update_progress(
+                    'workflow_start', 0, 'running',
+                    message="Starting chatbot viral integration workflow"
+                )
+            
+            current_data = input_data.copy()
+            
+            # Step 1: Query Classification (always first)
+            self.nb_logger.info("🔍 Executing query classification step")
+            query_step = self.child_steps['query_classification']
+            await query_step.set_input(current_data)
+            classification_result = await query_step.execute()
+            
+            if not classification_result.get('success'):
+                return {
+                    'success': False,
+                    'error': 'Query classification failed',
+                    'formatted_response': {
+                        'content': 'I encountered an error classifying your query. Please try again.',
+                        'message_type': 'error',
+                        'requires_markdown': True
+                    }
+                }
+            
+            current_data.update(classification_result)
+            
+            # Get routing decision
+            routing_decision = classification_result.get('routing_decision', {})
+            next_step = routing_decision.get('next_step')
+            
+            self.nb_logger.info(f"🛤️ Routing decision: {next_step}")
+            
+            # Step 2: Execute appropriate step based on routing
+            step_result = None
+            
+            if next_step == 'annotation_job':
+                self.nb_logger.info("🔬 Executing annotation job processing step")
+                annotation_step = self.child_steps['annotation_job_processing']
+                await annotation_step.set_input(current_data)
+                step_result = await annotation_step.execute()
+                
+            elif next_step == 'conversational_response':
+                self.nb_logger.info("💬 Executing conversational response step")
+                conversational_step = self.child_steps['conversational_response']
+                await conversational_step.set_input(current_data)
+                step_result = await conversational_step.execute()
+                
+            else:
+                return {
+                    'success': False,
+                    'error': f'Unknown routing decision: {next_step}',
+                    'formatted_response': {
+                        'content': 'I encountered an error routing your request. Please try again.',
+                        'message_type': 'error',
+                        'requires_markdown': True
+                    }
+                }
+            
+            if not step_result or not step_result.get('success'):
+                return {
+                    'success': False,
+                    'error': f'Step {next_step} failed',
+                    'formatted_response': {
+                        'content': 'I encountered an error processing your request. Please try again.',
+                        'message_type': 'error',
+                        'requires_markdown': True
+                    }
+                }
+            
+            current_data.update(step_result)
+            
+            # Step 3: Response Formatting (always last)
+            self.nb_logger.info("🎨 Executing response formatting step")
+            formatting_step = self.child_steps['response_formatting']
+            await formatting_step.set_input(current_data)
+            formatting_result = await formatting_step.execute()
+            
+            if not formatting_result.get('success'):
+                return {
+                    'success': False,
+                    'error': 'Response formatting failed',
+                    'formatted_response': {
+                        'content': 'I encountered an error formatting the response. Please try again.',
+                        'message_type': 'error',
+                        'requires_markdown': True
+                    }
+                }
+            
+            # Update progress: workflow completed
+            if self.progress_reporter:
+                await self.progress_reporter.update_progress(
+                    'workflow_complete', 100, 'completed',
+                    message="Chatbot viral integration workflow completed"
+                )
+            
+            self.nb_logger.info("✅ Workflow execution completed successfully")
+            return formatting_result
+            
+        except Exception as e:
+            self.nb_logger.error(f"❌ Workflow execution failed: {e}")
+            
+            # Log full traceback for debugging
+            import traceback
+            full_traceback = traceback.format_exc()
+            self.nb_logger.error(f"Workflow execution traceback: {full_traceback}")
+            
+            # Update progress: workflow failed
+            if self.progress_reporter:
+                await self.progress_reporter.update_progress(
+                    'workflow_error', 0, 'failed',
+                    message=f"Workflow failed: {str(e)}"
+                )
+            
+            return {
+                'success': False,
+                'error': str(e),
+                'error_type': type(e).__name__,
+                'traceback': full_traceback if hasattr(self.workflow_config, 'debug_mode') and self.workflow_config.debug_mode else None,
+                'formatted_response': {
+                    'content': f'I encountered an error processing your request: {str(e)}. Please check the logs for more details.',
+                    'message_type': 'error',
+                    'requires_markdown': True,
+                    'error_details': {
+                        'error_type': type(e).__name__,
+                        'error_message': str(e)
+                    }
+                }
+            }
     
     async def get_session_info(self, session_id: str) -> Optional[Dict[str, Any]]:
         """Get session information including progress history."""
@@ -279,6 +421,47 @@ class ChatbotViralWorkflow(Workflow):
     def remove_streaming_callback(self, session_id: str) -> None:
         """Remove streaming callback for a session."""
         self.streaming_callbacks.pop(session_id, None)
+
+    async def _create_step_instance(self, step_id: str, step_config: StepConfig, config_dict: Dict[str, Any]) -> Step:
+        """Create a step instance from configuration with support for custom step classes."""
+        
+        # Determine step type/class
+        step_class = config_dict.get('class', config_dict.get('step_type', 'SimpleStep'))
+        
+        # Update step config with ID and name
+        step_config.name = step_id
+        
+        # Create step instance - handle custom step classes
+        try:
+            # Check if it's one of our custom step classes
+            if step_class == 'QueryClassificationStep':
+                step = QueryClassificationStep(step_config)
+            elif step_class == 'AnnotationJobStep':
+                step = AnnotationJobStep(step_config)
+            elif step_class == 'ConversationalResponseStep':
+                step = ConversationalResponseStep(step_config)
+            elif step_class == 'ResponseFormattingStep':
+                step = ResponseFormattingStep(step_config)
+            else:
+                # Fall back to base create_step function for built-in types
+                from nanobrain.core.step import create_step
+                step = create_step(step_class, step_config)
+            
+            self.nb_logger.info(f"✅ Created step instance: {step_id} ({step_class})")
+            return step
+            
+        except ImportError as e:
+            self.workflow_logger.error(f"❌ Step class not found for {step_id} ({step_class}): {e}")
+            # Create a fallback simple step
+            from nanobrain.core.step import SimpleStep
+            step = SimpleStep(step_config)
+            self.workflow_logger.warning(f"⚠️ Using SimpleStep fallback for {step_id}")
+            return step
+        except Exception as e:
+            self.workflow_logger.error(f"❌ Failed to create step {step_id}: {e}")
+            import traceback
+            self.workflow_logger.error(f"Step creation traceback: {traceback.format_exc()}")
+            raise
 
 
 class InMemorySessionManager:

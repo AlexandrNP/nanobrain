@@ -66,9 +66,10 @@ class BVBRCConfig(BioinformaticsToolConfig):
     })
     
     # Tool-specific settings
-    timeout_seconds: int = 300
+    timeout_seconds: int = 400  # Increased to 6.7 minutes (longer than 3-5 min data cycle)
     verify_on_init: bool = False  # Disable to avoid event loop issues in tests
     use_cache: bool = True
+    retry_attempts: int = 2  # Reduced from 3 to avoid long hanging
     
     def __post_init__(self):
         # Set local installation paths for detection

@@ -44,7 +44,7 @@ class BioinformaticsToolConfig(ExternalToolConfig):
     detailed_diagnostics: bool = True
     suggest_fixes: bool = True
     auto_retry: bool = True
-    max_retries: int = 3
+    max_retries: int = 2
     
     # Real data configuration
     use_real_data: bool = True

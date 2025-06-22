@@ -37,11 +37,17 @@ steps:
     class: "QueryClassificationStep"
     estimated_time: 2.0
     config:
-      # Classification thresholds
-      annotation_confidence_threshold: 0.7
-      conversational_confidence_threshold: 0.6
+      # Classification thresholds - lowered for better detection
+      confidence_thresholds:
+        annotation: 0.45     # Optimized to catch analyze requests
+        conversational: 0.3  # Lowered to catch "What is" questions better
+        unknown: 0.25
       
-      # Intent detection patterns
+      # Enable parameter extraction and reasoning
+      enable_parameter_extraction: true
+      enable_reasoning: true
+      
+      # Intent detection patterns - enhanced keywords
       annotation_keywords:
         - "analyze"
         - "annotate" 
@@ -50,16 +56,28 @@ steps:
         - "genome"
         - "alphavirus"
         - "viral"
+        - "pssm"
+        - "matrix"
+        - "create"
+        - "generate"
+        - "build"
+        - "profile"
       
       conversational_keywords:
         - "what is"
+        - "what"
         - "explain"
         - "tell me"
         - "how does"
         - "describe"
+        - "about"
+        - "is"
+        - "help"
+        - "eeev"
+        - "eastern equine"
       
       # Classification models
-      use_ml_classification: true
+      use_ml_classification: false
       fallback_to_keyword_matching: true
       
       # Session context
@@ -69,10 +87,10 @@ steps:
       # Output routing
       routing_rules:
         annotation_job:
-          min_confidence: 0.7
-          required_entities: ["sequence", "protein"]
+          min_confidence: 0.4   # Lowered threshold
+          required_entities: []  # Removed strict requirements
         conversational_response:
-          min_confidence: 0.6
+          min_confidence: 0.3   # Lowered threshold
           fallback: true
 
   - step_id: "annotation_job_processing"

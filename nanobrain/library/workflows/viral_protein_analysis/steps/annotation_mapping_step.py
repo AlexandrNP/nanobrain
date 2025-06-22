@@ -1,28 +1,52 @@
 """
-Annotation Mapping Step (Step 8)
+Annotation Mapping Step
 
-Placeholder implementation for annotation mapping using ICTV resources.
-This step handles annotation inconsistencies using ICTV mapping.
+Re-architected to inherit from NanoBrain Step base class.
 """
 
 import asyncio
 import time
 from typing import Dict, Any, List, Optional
 
+from nanobrain.core.step import Step, StepConfig
 from nanobrain.core.logging_system import get_logger
 
 
-class AnnotationMappingStep:
+class AnnotationMappingStep(Step):
     """
-    Step 8: Handle annotation inconsistencies using ICTV mapping
+    Annotation mapping functionality
     
-    This is a placeholder implementation that will be expanded in future phases.
+    Re-architected to inherit from NanoBrain Step base class.
     """
     
-    def __init__(self, step_config: Dict[str, Any]):
-        self.step_config = step_config
-        self.logger = get_logger("annotation_mapping")
+    def __init__(self, config: StepConfig, annotation_config: Optional[Dict[str, Any]] = None, **kwargs):
+        super().__init__(config, **kwargs)
         
+        # Extract configuration from step config or provided annotation_config
+        step_config_dict = config.config if hasattr(config, 'config') else {}
+        if annotation_config:
+            step_config_dict.update(annotation_config)
+        
+        self.annotation_config = step_config_dict.get('annotation_config', {})
+        self.step_config = step_config_dict
+        
+        self.nb_logger.info(f"🧬 AnnotationMappingStep initialized")
+        
+    async def process(self, input_data: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        """
+        Process method required by Step base class.
+        
+        This implements the NanoBrain framework interface while calling the
+        original execute method that contains the annotation mapping logic.
+        """
+        self.nb_logger.info("🔄 Processing annotation mapping step")
+        
+        # Call the original execute method
+        result = await self.execute(input_data)
+        
+        self.nb_logger.info(f"✅ Annotation mapping step completed successfully")
+        return result
+
     async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Execute annotation mapping step
@@ -37,7 +61,7 @@ class AnnotationMappingStep:
         step_start_time = time.time()
         
         try:
-            self.logger.info("🔍 Starting annotation mapping with ICTV integration")
+            self.nb_logger.info("🔍 Starting annotation mapping with ICTV integration")
             
             annotations = input_data.get('annotations', [])
             genome_data = input_data.get('genome_data', [])
@@ -69,7 +93,7 @@ class AnnotationMappingStep:
             ]
             
             execution_time = time.time() - step_start_time
-            self.logger.info(f"✅ Annotation mapping completed in {execution_time:.2f} seconds")
+            self.nb_logger.info(f"✅ Annotation mapping completed in {execution_time:.2f} seconds")
             
             return {
                 'standardized_annotations': standardized_annotations,
@@ -84,7 +108,7 @@ class AnnotationMappingStep:
             }
             
         except Exception as e:
-            self.logger.error(f"❌ Annotation mapping failed: {e}")
+            self.nb_logger.error(f"❌ Annotation mapping failed: {e}")
             raise
             
     def _classify_protein(self, product: str) -> str:

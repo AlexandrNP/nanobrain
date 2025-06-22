@@ -1,29 +1,61 @@
 """
-Alignment Step (Step 13)
+Alignment Step (Steps 10-13)
 
-Placeholder implementation for multiple sequence alignment.
-Step 13: Add alignment before constructing PSSM.
+Re-architected to inherit from NanoBrain Step base class.
+Steps 10-13: Align protein clusters and prepare for PSSM analysis.
 """
 
 import asyncio
 import time
+import tempfile
+import subprocess
+from pathlib import Path
 from typing import Dict, Any, List, Optional
 
+from nanobrain.core.step import Step, StepConfig
 from nanobrain.core.logging_system import get_logger
 
 
-class AlignmentStep:
+class AlignmentStep(Step):
     """
-    Step 13: Add alignment before constructing PSSM
+    Steps 10-13: Align protein clusters and prepare for PSSM analysis
     
-    This is a placeholder implementation that will be expanded in future phases.
+    Re-architected to inherit from NanoBrain Step base class.
     """
     
-    def __init__(self, muscle_config: Any, step_config: Dict[str, Any]):
-        self.muscle_config = muscle_config
-        self.step_config = step_config
-        self.logger = get_logger("alignment")
+    def __init__(self, config: StepConfig, alignment_config: Optional[Dict[str, Any]] = None, **kwargs):
+        super().__init__(config, **kwargs)
         
+        # Extract configuration from step config or provided alignment_config
+        step_config_dict = config.config if hasattr(config, 'config') else {}
+        if alignment_config:
+            step_config_dict.update(alignment_config)
+        
+        self.alignment_config = step_config_dict.get('alignment_config', {})
+        self.step_config = step_config_dict
+        
+        # Configuration parameters
+        self.alignment_tool = self.step_config.get('alignment_tool', 'muscle')
+        self.min_cluster_size = self.step_config.get('min_cluster_size', 3)
+        self.max_cluster_size = self.step_config.get('max_cluster_size', 1000)
+        
+        self.nb_logger.info(f"🧬 AlignmentStep initialized with tool: {self.alignment_tool}")
+        
+    async def process(self, input_data: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        """
+        Process method required by Step base class.
+        
+        This implements the NanoBrain framework interface while calling the
+        original execute method that contains the alignment logic.
+        """
+        self.nb_logger.info("🔄 Processing alignment step")
+        
+        # Call the original execute method
+        result = await self.execute(input_data)
+        
+        self.nb_logger.info(f"✅ Alignment step completed successfully")
+        return result
+
     async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Execute alignment step
@@ -38,7 +70,7 @@ class AlignmentStep:
         step_start_time = time.time()
         
         try:
-            self.logger.info("📏 Starting multiple sequence alignment")
+            self.nb_logger.info("📏 Starting multiple sequence alignment")
             
             clusters = input_data.get('clusters', [])
             
@@ -52,8 +84,8 @@ class AlignmentStep:
             alignment_quality_stats = await self._calculate_alignment_statistics(aligned_clusters)
             
             execution_time = time.time() - step_start_time
-            self.logger.info(f"✅ Alignment completed in {execution_time:.2f} seconds")
-            self.logger.info(f"Aligned {len(aligned_clusters)} protein clusters")
+            self.nb_logger.info(f"✅ Alignment completed in {execution_time:.2f} seconds")
+            self.nb_logger.info(f"Aligned {len(aligned_clusters)} protein clusters")
             
             return {
                 'aligned_clusters': aligned_clusters,
@@ -72,7 +104,7 @@ class AlignmentStep:
             }
             
         except Exception as e:
-            self.logger.error(f"❌ Alignment failed: {e}")
+            self.nb_logger.error(f"❌ Alignment failed: {e}")
             raise
             
     async def _align_protein_clusters(self, clusters: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -86,13 +118,13 @@ class AlignmentStep:
             cluster_members = cluster.get('members', [])
             
             if len(cluster_members) >= 3:  # Minimum sequences for meaningful alignment
-                self.logger.debug(f"Aligning cluster {cluster.get('id')} with {len(cluster_members)} sequences")
+                self.nb_logger.debug(f"Aligning cluster {cluster.get('id')} with {len(cluster_members)} sequences")
                 
                 aligned_cluster = await self._align_cluster_sequences(cluster)
                 aligned_clusters.append(aligned_cluster)
                 
             else:
-                self.logger.warning(f"Cluster {cluster.get('id')} has too few sequences ({len(cluster_members)}) for alignment")
+                self.nb_logger.warning(f"Cluster {cluster.get('id')} has too few sequences ({len(cluster_members)}) for alignment")
                 # Still include the cluster but mark as not aligned
                 aligned_cluster = cluster.copy()
                 aligned_cluster['alignment_successful'] = False

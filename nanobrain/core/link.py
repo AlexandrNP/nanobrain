@@ -19,6 +19,81 @@ from .logging_system import get_logger, get_system_log_manager
 logger = logging.getLogger(__name__)
 
 
+def get_nested_value(data: Dict[str, Any], field_path: str) -> Any:
+    """
+    Extract nested value from dictionary using dot notation.
+    
+    Args:
+        data: Dictionary to extract from
+        field_path: Dot-separated path like "routing_decision.next_step"
+        
+    Returns:
+        The value at the specified path, or None if not found
+    """
+    try:
+        current = data
+        for key in field_path.split('.'):
+            current = current[key]
+        return current
+    except (KeyError, TypeError, AttributeError):
+        return None
+
+
+def parse_condition_from_config(condition_config: Union[str, Dict[str, Any]]) -> Callable:
+    """
+    Parse YAML condition configuration into a callable function.
+    
+    Args:
+        condition_config: Either a string expression or dictionary with field/operator/value
+        
+    Returns:
+        Callable function that evaluates the condition
+    """
+    if isinstance(condition_config, str):
+        # Simple string conditions - could be enhanced later
+        def string_condition_func(data):
+            # For now, just check if the string exists in the data representation
+            return condition_config in str(data)
+        return string_condition_func
+    
+    elif isinstance(condition_config, dict):
+        field = condition_config.get('field')
+        operator = condition_config.get('operator', 'equals')
+        value = condition_config.get('value')
+        
+        def dict_condition_func(data):
+            try:
+                field_value = get_nested_value(data, field)
+                
+                if operator == 'equals':
+                    return field_value == value
+                elif operator == 'not_equals':
+                    return field_value != value
+                elif operator == 'contains':
+                    return value in str(field_value) if field_value else False
+                elif operator == 'greater_than':
+                    return float(field_value) > float(value) if field_value is not None else False
+                elif operator == 'less_than':
+                    return float(field_value) < float(value) if field_value is not None else False
+                elif operator == 'exists':
+                    return field_value is not None
+                else:
+                    logger.warning(f"Unknown operator: {operator}, defaulting to equals")
+                    return field_value == value
+                    
+            except Exception as e:
+                logger.debug(f"Condition evaluation failed: {e}")
+                return False
+                
+        return dict_condition_func
+    
+    else:
+        # Fallback for other types
+        def default_condition_func(data):
+            return bool(condition_config)
+        return default_condition_func
+
+
 class LinkType(Enum):
     """Types of links."""
     DIRECT = "direct"
@@ -33,8 +108,9 @@ class LinkConfig(BaseModel):
     link_type: LinkType = LinkType.DIRECT
     buffer_size: int = Field(default=100, ge=1)
     transform_function: Optional[str] = None
-    condition: Optional[str] = None
+    condition: Optional[Union[str, Dict[str, Any]]] = None
     file_path: Optional[str] = None
+    data_mapping: Optional[Dict[str, str]] = None
     
     model_config = ConfigDict(use_enum_values=True)
 

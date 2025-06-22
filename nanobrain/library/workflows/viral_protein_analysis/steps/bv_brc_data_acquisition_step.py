@@ -21,6 +21,7 @@ from pathlib import Path
 import hashlib
 import re
 
+from nanobrain.core.step import Step, StepConfig
 from nanobrain.core.logging_system import get_logger
 from nanobrain.library.tools.bioinformatics.bv_brc_tool import BVBRCTool, BVBRCConfig
 
@@ -52,7 +53,7 @@ class ProteinData:
         self.patric_id = patric_id
         self.aa_sequence_md5 = aa_sequence_md5
         self.genome_id = genome_id
-        self.product = product or "hypothetical protein"
+        self.product = product or ""
         self.gene = gene or ""
         
     def to_dict(self) -> Dict[str, Any]:
@@ -105,43 +106,86 @@ class AnnotationData:
         }
 
 
-class BVBRCDataAcquisitionStep:
+class BVBRCDataAcquisitionStep(Step):
     """
     BV-BRC Data Acquisition Step implementing workflow steps 1-7
     
+    Re-architected to inherit from NanoBrain Step base class.
     Uses the corrected BV-BRC path: /Applications/BV-BRC.app/deployment/bin/
-    Implements anonymous access with proper data verification
+    Implements anonymous access with proper data verification.
     """
     
-    def __init__(self, bvbrc_config: BVBRCConfig, step_config: Dict[str, Any]):
-        self.bvbrc_config = bvbrc_config
-        self.step_config = step_config
-        self.logger = get_logger("bvbrc_data_acquisition")
+    def __init__(self, config: StepConfig, bvbrc_config: Optional[Dict[str, Any]] = None, **kwargs):
+        super().__init__(config, **kwargs)
+        
+        # Extract configuration from step config attributes
+        # StepConfig allows arbitrary fields when config has arbitrary_types_allowed=True
+        
+        # Get bvbrc_config from step config (loaded from YAML)
+        bvbrc_config_dict = getattr(config, 'bvbrc_config', {})
+        if bvbrc_config:
+            # Merge with provided override config
+            bvbrc_config_dict = {**bvbrc_config_dict, **bvbrc_config}
+        
+        # Ensure we have the correct default path
+        if 'executable_path' not in bvbrc_config_dict:
+            bvbrc_config_dict['executable_path'] = '/Applications/BV-BRC.app/deployment/bin'
+        
+        # Create BV-BRC configuration from step config
+        from nanobrain.library.workflows.viral_protein_analysis.config.workflow_config import BVBRCConfig
+        self.bvbrc_config = BVBRCConfig(**bvbrc_config_dict)
+        
+        # Store all step configuration as dict for backward compatibility
+        self.step_config = config.model_dump()
         
         # Convert workflow BVBRCConfig to tool BVBRCConfig
         from nanobrain.library.tools.bioinformatics.bv_brc_tool import BVBRCConfig as ToolBVBRCConfig
         
         tool_config = ToolBVBRCConfig(
             tool_name="bv_brc",
-            installation_path=bvbrc_config.installation_path,
-            executable_path=bvbrc_config.executable_path,
-            genome_batch_size=bvbrc_config.genome_batch,
-            md5_batch_size=bvbrc_config.md5_batch,
-            min_genome_length=bvbrc_config.min_length,
-            max_genome_length=bvbrc_config.max_length,
-            timeout_seconds=bvbrc_config.timeout_seconds,
-            retry_attempts=bvbrc_config.retry_attempts,
-            verify_on_init=bvbrc_config.verify_on_init
+            installation_path=self.bvbrc_config.installation_path,
+            executable_path=self.bvbrc_config.executable_path,
+            genome_batch_size=self.bvbrc_config.genome_batch,
+            md5_batch_size=self.bvbrc_config.md5_batch,
+            min_genome_length=self.bvbrc_config.min_length,
+            max_genome_length=self.bvbrc_config.max_length,
+            timeout_seconds=self.bvbrc_config.timeout_seconds,
+            retry_attempts=self.bvbrc_config.retry_attempts,
+            verify_on_init=self.bvbrc_config.verify_on_init
         )
         
         # Initialize BV-BRC tool with converted configuration
         self.bv_brc_tool = BVBRCTool(config=tool_config)
         
-        # Configuration parameters
-        self.min_genome_length = step_config.get('min_length', 8000)
-        self.max_genome_length = step_config.get('max_length', 15000)
-        self.genome_batch_size = step_config.get('genome_batch_size', 100)
-        self.md5_batch_size = step_config.get('md5_batch_size', 50)
+        # Configuration parameters from step config attributes
+        self.min_genome_length = getattr(config, 'min_genome_length', 8000)
+        self.max_genome_length = getattr(config, 'max_genome_length', 15000)
+        self.genome_batch_size = getattr(config, 'genome_batch_size', 100)
+        self.md5_batch_size = getattr(config, 'md5_batch_size', 50)
+        
+        self.nb_logger.info(f"🧬 BVBRCDataAcquisitionStep initialized with path: {self.bvbrc_config.executable_path}")
+    
+    async def process(self, input_data: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        """
+        Process method required by Step base class.
+        
+        This implements the NanoBrain framework interface while calling the
+        original execute method that contains the bioinformatics logic.
+        """
+        self.nb_logger.info("🔄 Processing BV-BRC data acquisition step")
+        
+        # Extract parameters from input_data
+        input_params = {
+            'target_genus': input_data.get('target_genus', 'Alphavirus'),
+            'organism': input_data.get('organism', 'Alphavirus'),
+            **input_data
+        }
+        
+        # Call the original execute method
+        result = await self.execute(input_params)
+        
+        self.nb_logger.info(f"✅ BV-BRC data acquisition completed successfully")
+        return result
         
     async def execute(self, input_params: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -159,44 +203,45 @@ class BVBRCDataAcquisitionStep:
         
         try:
             # Step 1: Download Alphavirus genomes
-            self.logger.info("🔄 Step 1: Downloading Alphavirus genomes from BV-BRC")
+            self.nb_logger.info("🔄 Step 1: Downloading Alphavirus genomes from BV-BRC")
             original_genomes = await self._download_alphavirus_genomes(target_genus)
-            self.logger.info(f"✅ Downloaded {len(original_genomes)} {target_genus} genomes")
+            self.nb_logger.info(f"✅ Downloaded {len(original_genomes)} {target_genus} genomes")
             
             # Step 2: Filter genomes by size
-            self.logger.info("🔄 Step 2: Filtering genomes by size")
+            self.nb_logger.info("🔄 Step 2: Filtering genomes by size")
             filtered_genomes = await self._filter_genomes_by_size(original_genomes)
-            self.logger.info(f"✅ Filtered to {len(filtered_genomes)} genomes within size range ({self.min_genome_length}-{self.max_genome_length} bp)")
+            self.nb_logger.info(f"✅ Filtered to {len(filtered_genomes)} genomes within size range ({self.min_genome_length}-{self.max_genome_length} bp)")
             
             if not filtered_genomes:
                 raise ValueError(f"No {target_genus} genomes found within size range")
             
             # Steps 3-4: Get unique protein MD5s
-            self.logger.info("🔄 Steps 3-4: Extracting unique protein MD5s")
+            self.nb_logger.info("🔄 Steps 3-4: Extracting unique protein MD5s")
             genome_ids = [g.genome_id for g in filtered_genomes]
             unique_proteins = await self._get_unique_protein_md5s(genome_ids)
-            self.logger.info(f"✅ Found {len(unique_proteins)} unique proteins")
+            self.nb_logger.info(f"✅ Found {len(unique_proteins)} unique proteins")
             
             # Step 5: Get feature sequences
-            self.logger.info("🔄 Step 5: Retrieving protein sequences")
+            self.nb_logger.info("🔄 Step 5: Retrieving protein sequences")
             md5_list = [p.aa_sequence_md5 for p in unique_proteins]
             protein_sequences = await self._get_feature_sequences(md5_list)
-            self.logger.info(f"✅ Retrieved {len(protein_sequences)} protein sequences")
+            self.nb_logger.info(f"✅ Retrieved {len(protein_sequences)} protein sequences")
             
             # Step 6: Get annotations
-            self.logger.info("🔄 Step 6: Retrieving protein annotations")
+            self.nb_logger.info("🔄 Step 6: Retrieving protein annotations")
             protein_annotations = await self._get_protein_annotations(md5_list)
-            self.logger.info(f"✅ Retrieved annotations for {len(protein_annotations)} proteins")
+            self.nb_logger.info(f"✅ Retrieved annotations for {len(protein_annotations)} proteins")
             
             # Step 7: Create annotated FASTA
-            self.logger.info("🔄 Step 7: Creating annotated FASTA file")
+            self.nb_logger.info("🔄 Step 7: Creating annotated FASTA file")
             annotated_fasta = await self._create_annotated_fasta(protein_sequences, protein_annotations)
-            self.logger.info("✅ Created annotated FASTA file")
+            self.nb_logger.info("✅ Created annotated FASTA file")
             
             execution_time = time.time() - step_start_time
-            self.logger.info(f"🎉 BV-BRC data acquisition completed in {execution_time:.2f} seconds")
+            self.nb_logger.info(f"🎉 BV-BRC data acquisition completed in {execution_time:.2f} seconds")
             
             return {
+                'success': True,
                 'original_genomes': [g.to_dict() for g in original_genomes],
                 'filtered_genomes': [g.to_dict() for g in filtered_genomes],
                 'unique_proteins': [p.to_dict() for p in unique_proteins],
@@ -214,8 +259,12 @@ class BVBRCDataAcquisitionStep:
             }
             
         except Exception as e:
-            self.logger.error(f"❌ BV-BRC data acquisition failed: {e}")
-            raise
+            self.nb_logger.error(f"❌ BV-BRC data acquisition failed: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'execution_time': time.time() - step_start_time
+            }
             
     async def _download_alphavirus_genomes(self, target_genus: str) -> List[GenomeData]:
         """
@@ -243,12 +292,12 @@ class BVBRCDataAcquisitionStep:
             genomes = await self._parse_genome_data(result.stdout)
             
             if not genomes:
-                self.logger.warning(f"No {target_genus} genomes found in BV-BRC")
+                self.nb_logger.warning(f"No {target_genus} genomes found in BV-BRC")
             
             return genomes
             
         except Exception as e:
-            self.logger.error(f"Failed to download {target_genus} genomes: {e}")
+            self.nb_logger.error(f"Failed to download {target_genus} genomes: {e}")
             raise
             
     async def _parse_genome_data(self, raw_data: bytes) -> List[GenomeData]:
@@ -260,7 +309,7 @@ class BVBRCDataAcquisitionStep:
         lines = raw_data.decode().strip().split('\n')
         
         if len(lines) < 2:  # Must have header + at least one data line
-            self.logger.warning("BV-BRC returned only headers, no genome data")
+            self.nb_logger.warning("BV-BRC returned only headers, no genome data")
             return []
         
         # Parse header to get field positions
@@ -292,7 +341,7 @@ class BVBRCDataAcquisitionStep:
                 try:
                     genome_length = int(genome_length_str)
                 except ValueError:
-                    self.logger.warning(f"Invalid genome length '{genome_length_str}' for {genome_id}")
+                    self.nb_logger.warning(f"Invalid genome length '{genome_length_str}' for {genome_id}")
                     continue
                 
                 # Get taxon lineage if available
@@ -310,7 +359,7 @@ class BVBRCDataAcquisitionStep:
                 genomes.append(genome)
                 
             except Exception as e:
-                self.logger.warning(f"Error parsing genome data at line {line_num}: {e}")
+                self.nb_logger.warning(f"Error parsing genome data at line {line_num}: {e}")
                 continue
         
         return genomes
@@ -329,7 +378,7 @@ class BVBRCDataAcquisitionStep:
             if self.min_genome_length <= genome.genome_length <= self.max_genome_length:
                 filtered_genomes.append(genome)
             else:
-                self.logger.debug(f"Filtered genome {genome.genome_id}: length {genome.genome_length} outside range")
+                self.nb_logger.debug(f"Filtered genome {genome.genome_id}: length {genome.genome_length} outside range")
         
         return filtered_genomes
         
@@ -346,7 +395,7 @@ class BVBRCDataAcquisitionStep:
         for i in range(0, len(genome_ids), self.genome_batch_size):
             batch = genome_ids[i:i+self.genome_batch_size]
             
-            self.logger.debug(f"Processing genome batch {i//self.genome_batch_size + 1}: {len(batch)} genomes")
+            self.nb_logger.debug(f"Processing genome batch {i//self.genome_batch_size + 1}: {len(batch)} genomes")
             
             batch_proteins = await self._get_proteins_for_genomes(batch)
             all_proteins.extend(batch_proteins)
@@ -360,7 +409,7 @@ class BVBRCDataAcquisitionStep:
         
         unique_proteins = list(unique_proteins_dict.values())
         
-        self.logger.info(f"Deduplicated {len(all_proteins)} proteins to {len(unique_proteins)} unique MD5s")
+        self.nb_logger.info(f"Deduplicated {len(all_proteins)} proteins to {len(unique_proteins)} unique MD5s")
         
         return unique_proteins
         
@@ -378,13 +427,13 @@ class BVBRCDataAcquisitionStep:
             result = await self.bv_brc_tool.execute_p3_command("p3-get-feature-data", command_args)
             
             if result.returncode != 0:
-                self.logger.warning(f"p3-get-feature-data failed for batch: {result.stderr.decode()}")
+                self.nb_logger.warning(f"p3-get-feature-data failed for batch: {result.stderr.decode()}")
                 return []
             
             return await self._parse_protein_data(result.stdout)
             
         except Exception as e:
-            self.logger.warning(f"Error getting proteins for genome batch: {e}")
+            self.nb_logger.warning(f"Error getting proteins for genome batch: {e}")
             return []
             
     async def _parse_protein_data(self, raw_data: bytes) -> List[ProteinData]:
@@ -444,7 +493,7 @@ class BVBRCDataAcquisitionStep:
                 proteins.append(protein)
                 
             except Exception as e:
-                self.logger.warning(f"Error parsing protein data: {e}")
+                self.nb_logger.warning(f"Error parsing protein data: {e}")
                 continue
         
         return proteins
@@ -462,7 +511,7 @@ class BVBRCDataAcquisitionStep:
         for i in range(0, len(md5_list), self.md5_batch_size):
             batch = md5_list[i:i+self.md5_batch_size]
             
-            self.logger.debug(f"Getting sequences for batch {i//self.md5_batch_size + 1}: {len(batch)} MD5s")
+            self.nb_logger.debug(f"Getting sequences for batch {i//self.md5_batch_size + 1}: {len(batch)} MD5s")
             
             batch_sequences = await self._get_sequences_for_md5s(batch)
             sequences.extend(batch_sequences)
@@ -482,13 +531,13 @@ class BVBRCDataAcquisitionStep:
             result = await self.bv_brc_tool.execute_p3_command("p3-get-feature-sequence", command_args)
             
             if result.returncode != 0:
-                self.logger.warning(f"p3-get-feature-sequence failed: {result.stderr.decode()}")
+                self.nb_logger.warning(f"p3-get-feature-sequence failed: {result.stderr.decode()}")
                 return []
             
             return await self._parse_sequence_data(result.stdout)
             
         except Exception as e:
-            self.logger.warning(f"Error getting sequences for MD5 batch: {e}")
+            self.nb_logger.warning(f"Error getting sequences for MD5 batch: {e}")
             return []
             
     async def _parse_sequence_data(self, raw_data: bytes) -> List[SequenceData]:
@@ -533,7 +582,7 @@ class BVBRCDataAcquisitionStep:
                 sequences.append(sequence)
                 
             except Exception as e:
-                self.logger.warning(f"Error parsing sequence data: {e}")
+                self.nb_logger.warning(f"Error parsing sequence data: {e}")
                 continue
         
         return sequences
@@ -551,7 +600,7 @@ class BVBRCDataAcquisitionStep:
         for i in range(0, len(md5_list), self.md5_batch_size):
             batch = md5_list[i:i+self.md5_batch_size]
             
-            self.logger.debug(f"Getting annotations for batch {i//self.md5_batch_size + 1}: {len(batch)} MD5s")
+            self.nb_logger.debug(f"Getting annotations for batch {i//self.md5_batch_size + 1}: {len(batch)} MD5s")
             
             batch_annotations = await self._get_annotations_for_md5s(batch)
             annotations.extend(batch_annotations)
@@ -571,13 +620,13 @@ class BVBRCDataAcquisitionStep:
             result = await self.bv_brc_tool.execute_p3_command("p3-get-feature-data", command_args)
             
             if result.returncode != 0:
-                self.logger.warning(f"p3-get-feature-data for annotations failed: {result.stderr.decode()}")
+                self.nb_logger.warning(f"p3-get-feature-data for annotations failed: {result.stderr.decode()}")
                 return []
             
             return await self._parse_annotation_data(result.stdout)
             
         except Exception as e:
-            self.logger.warning(f"Error getting annotations for MD5 batch: {e}")
+            self.nb_logger.warning(f"Error getting annotations for MD5 batch: {e}")
             return []
             
     async def _parse_annotation_data(self, raw_data: bytes) -> List[AnnotationData]:
@@ -637,7 +686,7 @@ class BVBRCDataAcquisitionStep:
                 annotations.append(annotation)
                 
             except Exception as e:
-                self.logger.warning(f"Error parsing annotation data: {e}")
+                self.nb_logger.warning(f"Error parsing annotation data: {e}")
                 continue
         
         return annotations
@@ -671,7 +720,7 @@ class BVBRCDataAcquisitionStep:
                 fasta_lines.append(seq.aa_sequence)
                 processed_count += 1
         
-        self.logger.info(f"Created FASTA with {processed_count} sequences")
+        self.nb_logger.info(f"Created FASTA with {processed_count} sequences")
         
         return "\n".join(fasta_lines)
         

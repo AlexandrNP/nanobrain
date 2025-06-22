@@ -56,7 +56,7 @@ class QueryClassificationStep(Step):
         Classify user query and extract parameters.
         
         Args:
-            input_data: Contains 'user_query' and 'session_data'
+            input_data: Contains data units with workflow input data
             
         Returns:
             Classification result with intent, confidence, and routing decision
@@ -64,8 +64,14 @@ class QueryClassificationStep(Step):
         start_time = time.time()
         
         try:
-            user_query = input_data.get('user_query', '')
-            session_data = input_data.get('session_data')
+            # Handle both direct input data and data unit structure
+            actual_data = input_data
+            if len(input_data) == 1 and 'input_0' in input_data:
+                # Data came from data unit
+                actual_data = input_data['input_0']
+            
+            user_query = actual_data.get('user_query', '')
+            session_data = actual_data.get('session_data')
             
             if not user_query:
                 raise ValueError("No user_query provided")
@@ -181,19 +187,41 @@ class QueryClassificationStep(Step):
         return min(total_score / total_weight if total_weight > 0 else 0.0, 1.0)
     
     def _determine_intent(self, annotation_score: float, conversational_score: float) -> tuple[str, float]:
-        """Determine intent and confidence from scores"""
+        """Determine intent and confidence from scores with improved logic"""
         
-        # Compare scores against thresholds
-        annotation_threshold = self.confidence_thresholds['annotation']
-        conversational_threshold = self.confidence_thresholds['conversational']
+        annotation_threshold = self.confidence_thresholds['annotation']  # 0.45
+        conversational_threshold = self.confidence_thresholds['conversational']  # 0.35
         
-        if annotation_score >= annotation_threshold and annotation_score > conversational_score:
-            return 'annotation', annotation_score
+        # Enhanced logic for PSSM and analysis requests
+        # If annotation score is reasonably high, prefer annotation even if conversational score is also high
+        if annotation_score >= annotation_threshold:
+            # Strong annotation signal
+            if annotation_score >= 0.6:
+                return 'annotation', annotation_score
+            # Moderate annotation signal - prefer if it's higher than conversational
+            elif annotation_score > conversational_score:
+                return 'annotation', annotation_score
+            # Tie-breaker: if both are high, use annotation
+            elif annotation_score >= annotation_threshold and conversational_score >= conversational_threshold:
+                # Check if it's close - if so, prefer annotation for bioinformatics requests
+                if abs(annotation_score - conversational_score) < 0.2:
+                    return 'annotation', annotation_score
+                else:
+                    return 'annotation' if annotation_score > conversational_score else 'conversational', max(annotation_score, conversational_score)
+            else:
+                return 'annotation', annotation_score
+        
+        # If annotation score is low but conversational is high
         elif conversational_score >= conversational_threshold:
             return 'conversational', conversational_score
+        
+        # Both scores are low - this is an unknown intent
         else:
-            # Default to conversational for unclear queries
-            return 'unknown', max(annotation_score, conversational_score)
+            # Return the higher of the two, but mark as unknown
+            if annotation_score > conversational_score:
+                return 'unknown', annotation_score
+            else:
+                return 'unknown', conversational_score
     
     async def _extract_parameters(self, query: str, intent: str) -> Dict[str, Any]:
         """Extract relevant parameters from query"""
@@ -424,29 +452,45 @@ class QueryClassificationStep(Step):
         
         return {
             'analysis_requests': {
-                'terms': ['analyze', 'annotate', 'process', 'run', 'execute', 'predict', 'identify', 'compute', 'find'],
-                'weight': 2.2,  # Increased weight
-                'match_score': 1.0
+                'terms': ['analyze', 'annotate', 'process', 'run', 'execute', 'predict', 
+                         'identify', 'compute', 'find', 'create', 'generate', 'build', 'make'],
+                'weight': 3.5,  # Increased weight for action words
+                'match_score': 1.3  # Increased match score
             },
             'bioinformatics_terms': {
-                'terms': ['pssm', 'blast', 'annotation', 'pipeline', 'workflow', 'algorithm', 'analysis', 'search'],
-                'weight': 2.5,
-                'match_score': 1.2
+                'terms': ['pssm', 'blast', 'annotation', 'pipeline', 'workflow', 'algorithm', 
+                         'analysis', 'search', 'matrix', 'profile', 'motif', 'hmm', 'position-specific',
+                         'position specific', 'scoring matrix', 'substitution matrix'],
+                'weight': 4.0,  # Highest weight for clear bioinformatics terms
+                'match_score': 2.0  # Very high match score for PSSM and matrix terms
+            },
+            'matrix_specific': {
+                'terms': ['matrix', 'matrices', 'pssm', 'position-specific', 'position specific',
+                         'scoring', 'substitution', 'alignment'],
+                'weight': 3.8,  # Very high weight for matrix-related terms
+                'match_score': 1.8
             },
             'sequence_terms': {
                 'terms': ['sequence', 'protein', 'genome', 'dna', 'rna', 'fasta', 'viral', 'virus'],
-                'weight': 2.0,  # Increased weight since viral sequences are key
-                'match_score': 1.0
+                'weight': 2.8,  # Increased weight since viral sequences are key
+                'match_score': 1.3  # Increased match score for protein sequences
+            },
+            'virus_specific': {
+                'terms': ['eee', 'eastern equine', 'equine encephalitis', 'alphavirus', 'viral protein',
+                         'envelope protein', 'structural protein', 'eeev'],
+                'weight': 3.2,  # High weight for virus-specific terms
+                'match_score': 1.5
             },
             'functional_terms': {
-                'terms': ['function', 'domain', 'motif', 'feature', 'structure', 'annotation', 'characterization'],
-                'weight': 1.5,
-                'match_score': 0.8
+                'terms': ['function', 'domain', 'motif', 'feature', 'structure', 'annotation', 
+                         'characterization', 'classification'],
+                'weight': 2.0,  # Moderate weight
+                'match_score': 1.1
             },
             'data_indicators': {
-                'terms': ['data', 'file', 'input', 'upload', 'my', 'this'],
-                'weight': 1.2,
-                'match_score': 0.7
+                'terms': ['data', 'file', 'input', 'upload', 'my', 'this', 'for', 'of'],
+                'weight': 1.0,  # Lower weight for generic terms
+                'match_score': 0.5
             }
         }
     
@@ -455,29 +499,31 @@ class QueryClassificationStep(Step):
         
         return {
             'question_words': {
-                'terms': ['what', 'how', 'why', 'when', 'where', 'which', 'tell', 'explain'],
-                'weight': 1.5,
+                'terms': ['what', 'how', 'why', 'when', 'where', 'which', 'tell', 'explain', 
+                         'describe', 'show', 'help'],
+                'weight': 2.0,  # Increased weight for question words
                 'match_score': 1.0
             },
             'virus_biology': {
-                'terms': ['virus', 'viral', 'alphavirus', 'replication', 'infection'],
+                'terms': ['virus', 'viral', 'alphavirus', 'replication', 'infection', 'pathogen'],
                 'weight': 2.0,
                 'match_score': 1.2
             },
             'disease_terms': {
-                'terms': ['disease', 'symptom', 'pathology', 'clinical', 'treatment'],
+                'terms': ['disease', 'symptom', 'pathology', 'clinical', 'treatment', 'syndrome'],
                 'weight': 1.8,
                 'match_score': 1.0
             },
             'educational_terms': {
-                'terms': ['learn', 'understand', 'know', 'information', 'about'],
-                'weight': 1.3,
-                'match_score': 0.9
+                'terms': ['learn', 'understand', 'know', 'information', 'about', 'is'],
+                'weight': 1.5,  # Increased weight
+                'match_score': 1.0
             },
             'specific_viruses': {
-                'terms': ['chikungunya', 'eastern equine', 'western equine', 'venezuelan equine'],
-                'weight': 2.2,
-                'match_score': 1.3
+                'terms': ['chikungunya', 'eastern equine', 'western equine', 'venezuelan equine',
+                         'eeev', 'weev', 'veev', 'chikv', 'sindbis', 'ross river', 'mayaro'],
+                'weight': 2.5,  # Increased weight
+                'match_score': 1.5
             }
         }
     

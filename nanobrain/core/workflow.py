@@ -24,7 +24,7 @@ from collections import defaultdict
 from .step import Step, StepConfig
 from .data_unit import DataUnitBase, DataUnitConfig
 from .trigger import TriggerBase, TriggerConfig
-from .link import LinkBase, DirectLink, LinkConfig, LinkType
+from .link import LinkBase, DirectLink, ConditionalLink, TransformLink, LinkConfig, LinkType
 from .executor import ExecutorBase, LocalExecutor, ExecutorConfig
 from .logging_system import get_logger, OperationType
 
@@ -920,7 +920,11 @@ class Workflow(Step):
                     raise
             else:
                 # Use inline configuration
-                step_config = StepConfig(**step_config_dict.get('config', {}))
+                config_data = step_config_dict.get('config', {})
+                # Ensure name is set for StepConfig
+                config_data['name'] = step_id
+                config_data['description'] = step_config_dict.get('description', f"Step {step_id}")
+                step_config = StepConfig(**config_data)
             
             # Create step instance
             step = await self._create_step_instance(step_id, step_config, step_config_dict)
@@ -961,6 +965,7 @@ class Workflow(Step):
             link_id = link_config_dict.get('link_id')
             source_id = link_config_dict.get('source')
             target_id = link_config_dict.get('target')
+            link_type = link_config_dict.get('link_type', 'direct')
             
             if not all([link_id, source_id, target_id]):
                 raise ValueError("Link configuration must include 'link_id', 'source', and 'target'")
@@ -971,18 +976,56 @@ class Workflow(Step):
             if target_id not in self.child_steps:
                 raise ValueError(f"Link target step not found: {target_id}")
             
+            # Get source and target steps
+            source_step = self.child_steps[source_id]
+            target_step = self.child_steps[target_id]
+            
             # Create link configuration
             link_config = LinkConfig(
-                link_type=link_config_dict.get('link_type', 'direct'),
+                link_type=link_type,
                 **{k: v for k, v in link_config_dict.items() 
                    if k not in ['link_id', 'source', 'target', 'link_type']}
             )
             
-            # Create link instance
-            source_step = self.child_steps[source_id]
-            target_step = self.child_steps[target_id]
-            
-            link = DirectLink(source_step, target_step, link_config, name=link_id)
+            # Create appropriate link instance based on type
+            if link_type == 'conditional':
+                # Handle conditional links with proper condition parsing
+                from .link import ConditionalLink, parse_condition_from_config
+                
+                condition_config = link_config_dict.get('condition')
+                if not condition_config:
+                    raise ValueError(f"Conditional link {link_id} missing condition configuration")
+                
+                condition_func = parse_condition_from_config(condition_config)
+                link = ConditionalLink(source_step, target_step, condition_func, link_config, name=link_id)
+                
+                self.workflow_logger.info(f"Created conditional link: {link_id} with condition: {condition_config}")
+                
+            elif link_type == 'transform':
+                # Handle transform links
+                from .link import TransformLink
+                
+                transform_function = link_config_dict.get('transform_function')
+                if not transform_function:
+                    raise ValueError(f"Transform link {link_id} missing transform_function")
+                
+                # For now, assume transform_function is a simple lambda or function name
+                # This could be enhanced to support more complex transformations
+                if isinstance(transform_function, str):
+                    if transform_function.startswith('lambda'):
+                        transform_func = eval(transform_function)
+                    else:
+                        # Could be enhanced to import and use named functions
+                        transform_func = lambda x: x  # Identity function as fallback
+                else:
+                    transform_func = transform_function
+                
+                link = TransformLink(source_step, target_step, transform_func, link_config, name=link_id)
+                
+            else:
+                # Default to DirectLink for 'direct' and any other types
+                from .link import DirectLink
+                link = DirectLink(source_step, target_step, link_config, name=link_id)
             
             # Add to workflow
             self.step_links[link_id] = link
@@ -991,7 +1034,7 @@ class Workflow(Step):
             # Initialize link
             await link.start()
             
-            self.workflow_logger.debug(f"Created step link: {link_id} ({source_id} -> {target_id})")
+            self.workflow_logger.debug(f"Created step link: {link_id} ({source_id} -> {target_id}) type: {link_type}")
     
     async def _build_workflow_graph(self) -> None:
         """Build the internal workflow graph representation."""
@@ -1060,6 +1103,14 @@ class Workflow(Step):
                 step_start_time = time.time()
                 
                 self.workflow_logger.debug(f"Executing step: {step_id}")
+                
+                # Set input data for the step - first step gets workflow input, 
+                # subsequent steps get output from previous step or workflow input for each step
+                if hasattr(step, 'set_input'):
+                    # Set the current data as input for this step
+                    await step.set_input(current_data)
+                
+                # Execute step with kwargs only (input data is set via set_input)
                 result = await step.execute(**kwargs)
                 
                 step_end_time = time.time()
@@ -1067,6 +1118,17 @@ class Workflow(Step):
                 
                 self.completed_steps.add(step_id)
                 final_result = result
+                
+                # Update current_data for next step - but preserve original workflow input
+                if result is not None:
+                    # Merge result with original input data for next step
+                    if isinstance(result, dict) and isinstance(current_data, dict):
+                        current_data = {**input_data, **result}  # Keep original input_data, add result
+                    else:
+                        current_data = result  # Use result as-is
+                else:
+                    # Keep original workflow input if no result
+                    current_data = input_data
                 
                 # Propagate data through links
                 await self._propagate_step_data(step_id, result)
@@ -1096,7 +1158,7 @@ class Workflow(Step):
             level_tasks = []
             for step_id in level_steps:
                 step = self.child_steps[step_id]
-                task = self._execute_step_with_tracking(step_id, step, **kwargs)
+                task = self._execute_step_with_tracking(step_id, step, input_data, **kwargs)
                 level_tasks.append(task)
             
             # Wait for all steps in this level to complete
@@ -1139,7 +1201,7 @@ class Workflow(Step):
         
         return await self._execute_sequential(input_data, **kwargs)
     
-    async def _execute_step_with_tracking(self, step_id: str, step: Step, **kwargs) -> Any:
+    async def _execute_step_with_tracking(self, step_id: str, step: Step, input_data: Dict[str, Any], **kwargs) -> Any:
         """Execute a single step with performance tracking and progress reporting."""
         step_start_time = time.time()
         
@@ -1151,6 +1213,10 @@ class Workflow(Step):
             )
         
         try:
+            # Set input data for the step
+            if hasattr(step, 'set_input'):
+                await step.set_input(input_data)
+            
             # Execute step with progress updates
             if hasattr(step, 'execute_with_progress') and self.progress_reporter:
                 # Step supports progress reporting

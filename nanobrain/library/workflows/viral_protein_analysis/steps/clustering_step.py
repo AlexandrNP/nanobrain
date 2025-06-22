@@ -1,29 +1,57 @@
 """
-Clustering Step (Step 12)
+Clustering Step (Steps 8-9)
 
-Placeholder implementation for MMseqs2 clustering.
-Step 12: Use MMseqs2 to build protein clusters.
+Re-architected to inherit from NanoBrain Step base class.
+Steps 8-9: Cluster proteins and prepare for alignment.
 """
 
 import asyncio
 import time
 from typing import Dict, Any, List, Optional
 
+from nanobrain.core.step import Step, StepConfig
 from nanobrain.core.logging_system import get_logger
 
 
-class ClusteringStep:
+class ClusteringStep(Step):
     """
-    Step 12: Use MMseqs2 to build protein clusters
+    Steps 8-9: Cluster proteins and prepare for alignment
     
-    This is a placeholder implementation that will be expanded in future phases.
+    Re-architected to inherit from NanoBrain Step base class.
     """
     
-    def __init__(self, mmseqs_config: Any, step_config: Dict[str, Any]):
-        self.mmseqs_config = mmseqs_config
-        self.step_config = step_config
-        self.logger = get_logger("clustering")
+    def __init__(self, config: StepConfig, clustering_config: Optional[Dict[str, Any]] = None, **kwargs):
+        super().__init__(config, **kwargs)
         
+        # Extract configuration from step config or provided clustering_config
+        step_config_dict = config.config if hasattr(config, 'config') else {}
+        if clustering_config:
+            step_config_dict.update(clustering_config)
+        
+        self.clustering_config = step_config_dict.get('clustering_config', {})
+        self.step_config = step_config_dict
+        
+        # Configuration parameters
+        self.similarity_threshold = self.step_config.get('similarity_threshold', 0.5)
+        self.min_cluster_size = self.step_config.get('min_cluster_size', 3)
+        
+        self.nb_logger.info(f"🧬 ClusteringStep initialized with threshold: {self.similarity_threshold}")
+        
+    async def process(self, input_data: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        """
+        Process method required by Step base class.
+        
+        This implements the NanoBrain framework interface while calling the
+        original execute method that contains the clustering logic.
+        """
+        self.nb_logger.info("🔄 Processing clustering step")
+        
+        # Call the original execute method
+        result = await self.execute(input_data)
+        
+        self.nb_logger.info(f"✅ Clustering step completed successfully")
+        return result
+
     async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Execute clustering step
@@ -38,7 +66,7 @@ class ClusteringStep:
         step_start_time = time.time()
         
         try:
-            self.logger.info("🗂️ Starting MMseqs2 clustering analysis")
+            self.nb_logger.info("🗂️ Starting MMseqs2 clustering analysis")
             
             curated_sequences = input_data.get('curated_sequences', [])
             curation_report = input_data.get('curation_report', {})
@@ -53,8 +81,8 @@ class ClusteringStep:
             clustering_analysis = await self._analyze_clusters(clusters)
             
             execution_time = time.time() - step_start_time
-            self.logger.info(f"✅ Clustering completed in {execution_time:.2f} seconds")
-            self.logger.info(f"Generated {len(clusters)} protein clusters")
+            self.nb_logger.info(f"✅ Clustering completed in {execution_time:.2f} seconds")
+            self.nb_logger.info(f"Generated {len(clusters)} protein clusters")
             
             return {
                 'clusters': clusters,
@@ -73,7 +101,7 @@ class ClusteringStep:
             }
             
         except Exception as e:
-            self.logger.error(f"❌ Clustering failed: {e}")
+            self.nb_logger.error(f"❌ Clustering failed: {e}")
             raise
             
     async def _perform_clustering(self, sequences: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -86,7 +114,7 @@ class ClusteringStep:
         - Parse clustering results
         """
         
-        self.logger.info("Performing sequence clustering (placeholder)")
+        self.nb_logger.info("Performing sequence clustering (placeholder)")
         
         # Placeholder: Create simple clusters based on sequence similarity
         clusters = []
@@ -125,8 +153,7 @@ class ClusteringStep:
                     processed_sequences.add(j)
                     
             # Only create cluster if it has multiple members or meets size criteria
-            min_cluster_size = self.step_config.get('min_cluster_size', 3)
-            if len(cluster_members) >= min_cluster_size or len(cluster_members) == 1:
+            if len(cluster_members) >= self.min_cluster_size or len(cluster_members) == 1:
                 cluster = {
                     'id': f'cluster_{cluster_id}',
                     'representative': cluster_members[0],
@@ -140,7 +167,7 @@ class ClusteringStep:
                 clusters.append(cluster)
                 cluster_id += 1
                 
-        self.logger.info(f"Created {len(clusters)} clusters from {len(sequences)} sequences")
+        self.nb_logger.info(f"Created {len(clusters)} clusters from {len(sequences)} sequences")
         return clusters
         
     def _determine_consensus_annotation(self, cluster_members: List[Dict[str, Any]]) -> str:
