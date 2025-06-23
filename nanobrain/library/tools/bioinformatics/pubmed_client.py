@@ -77,6 +77,7 @@ class PubMedError(ToolExecutionError):
 class PubMedClient(BioinformaticsExternalTool):
     """
     PubMed literature search client.
+    Enhanced with mandatory from_config pattern implementation.
     
     Provides access to NCBI PubMed database with:
     - Rate-limited API access (3 req/sec without key, 10 req/sec with key)
@@ -86,22 +87,47 @@ class PubMedClient(BioinformaticsExternalTool):
     - Academic research compliance
     """
     
-    def __init__(self, email: str = "research@nanobrain.org", api_key: Optional[str] = None, 
-                 fail_fast: bool = True, config: Optional[PubMedConfig] = None):
+    @classmethod
+    def from_config(cls, config: PubMedConfig, **kwargs) -> 'PubMedClient':
+        """Mandatory from_config implementation for PubMedClient"""
+        logger = get_logger(f"{cls.__name__}.from_config")
+        logger.info(f"Creating {cls.__name__} from configuration")
+        
+        # Step 1: Validate configuration schema
+        cls.validate_config_schema(config)
+        
+        # Step 2: Extract component-specific configuration  
+        component_config = cls.extract_component_config(config)
+        
+        # Step 3: Resolve dependencies
+        dependencies = cls.resolve_dependencies(component_config, **kwargs)
+        
+        # Step 4: Create instance
+        instance = cls.create_instance(config, component_config, dependencies)
+        
+        # Step 5: Post-creation initialization
+        instance._post_config_initialization()
+        
+        logger.info(f"Successfully created {cls.__name__}")
+        return instance
+    
+    def _init_from_config(self, config: PubMedConfig, component_config: Dict[str, Any],
+                         dependencies: Dict[str, Any]) -> None:
+        """Initialize PubMedClient with resolved dependencies"""
         if config is None:
             config = PubMedConfig(
-                email=email,
-                api_key=api_key,
-                fail_fast=fail_fast,
+                email="research@nanobrain.org",
+                api_key=None,
+                fail_fast=True,
                 verify_on_init=False  # Disable auto-initialization to avoid event loop issues
             )
         
-        super().__init__(config)
+        super()._init_from_config(config, component_config, dependencies)
         
         self.pubmed_config = config
-        self.email = email
-        self.api_key = api_key
-        self.fail_fast = fail_fast
+        self.email = config.email
+        self.api_key = config.api_key
+        self.fail_fast = config.fail_fast
         self.rate_limit = config.rate_limit
         
         self.logger = get_logger("pubmed_client")
@@ -112,6 +138,8 @@ class PubMedClient(BioinformaticsExternalTool):
         
         # Search caching
         self.search_cache: Dict[str, List[LiteratureReference]] = {}
+    
+    # PubMedClient inherits FromConfigBase.__init__ which prevents direct instantiation
         
     async def initialize_tool(self) -> InstallationStatus:
         """Initialize PubMed client (no local installation required)"""

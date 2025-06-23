@@ -20,6 +20,8 @@ import uvicorn
 import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', '..', 'src'))
 
+from nanobrain.core.component_base import FromConfigBase
+
 try:
     from nanobrain.core.logging_system import get_logger
 except ImportError:
@@ -62,7 +64,7 @@ except ImportError:
             pass
 
 
-class WebInterface:
+class WebInterface(FromConfigBase):
     """
     Web interface for NanoBrain chat workflows.
     
@@ -75,13 +77,60 @@ class WebInterface:
     - Graceful startup and shutdown
     """
     
-    def __init__(self, config: Optional[WebInterfaceConfig] = None):
-        """
-        Initialize the web interface.
+    # Component configuration
+    COMPONENT_TYPE = "web_interface"
+    REQUIRED_CONFIG_FIELDS = ['name']
+    OPTIONAL_CONFIG_FIELDS = {
+        'host': '127.0.0.1',
+        'port': 8000,
+        'api_prefix': '/api'
+    }
+    
+    @classmethod
+    def extract_component_config(cls, config: WebInterfaceConfig) -> Dict[str, Any]:
+        """Extract WebInterface configuration"""
+        return {
+            'name': getattr(config, 'name', 'web_interface'),
+            'host': getattr(config, 'host', '127.0.0.1'),
+            'port': getattr(config, 'port', 8000),
+            'api_prefix': getattr(config, 'api_prefix', '/api'),
+        }
+    
+    @classmethod  
+    def resolve_dependencies(cls, component_config: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        """Resolve WebInterface dependencies"""
+        return {
+            'config': kwargs.get('config'),
+            'chat_workflow': kwargs.get('chat_workflow'),
+        }
+    
+    @classmethod
+    def from_config(cls, config: WebInterfaceConfig, **kwargs) -> 'WebInterface':
+        """Mandatory from_config implementation for WebInterface"""
+        logger = get_logger(f"{cls.__name__}.from_config")
+        logger.info(f"Creating {cls.__name__} from configuration")
         
-        Args:
-            config: Web interface configuration
-        """
+        # Step 1: Validate configuration (minimal validation for config object)
+        # config is already an object, not a dict
+        
+        # Step 2: Extract component-specific configuration  
+        component_config = cls.extract_component_config(config)
+        
+        # Step 3: Resolve dependencies
+        dependencies = cls.resolve_dependencies(component_config, **kwargs)
+        
+        # Step 4: Create instance
+        instance = cls.create_instance(config, component_config, dependencies)
+        
+        # Step 5: Post-creation initialization
+        instance._post_config_initialization()
+        
+        logger.info(f"Successfully created {cls.__name__}")
+        return instance
+        
+    def _init_from_config(self, config: WebInterfaceConfig, component_config: Dict[str, Any],
+                         dependencies: Dict[str, Any]) -> None:
+        """Initialize WebInterface with resolved dependencies"""
         self.config = config or WebInterfaceConfig()
         self.logger = get_logger("web_interface", "interfaces")
         
@@ -92,10 +141,10 @@ class WebInterface:
         
         # Components
         self.app: Optional[FastAPI] = None
-        self.chat_workflow: Optional[ChatWorkflow] = None
+        self.chat_workflow: Optional[ChatWorkflow] = dependencies.get('chat_workflow')
         self.server = None
         
-        self.logger.info("Web interface created", config_name=self.config.name)
+        self.logger.info("Web interface created", config_name=getattr(self.config, 'name', 'web_interface'))
     
     async def initialize(self) -> None:
         """Initialize the web interface and its components."""

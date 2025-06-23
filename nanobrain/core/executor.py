@@ -2,6 +2,7 @@
 Executor System for NanoBrain Framework
 
 Provides configurable execution backends including local and Parsl-based HPC execution.
+Enhanced with mandatory from_config pattern implementation.
 """
 
 import asyncio
@@ -10,6 +11,8 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional, Set, Union
 from enum import Enum
 from pydantic import BaseModel, Field, ConfigDict
+
+from .component_base import FromConfigBase, ComponentConfigurationError, ComponentDependencyError
 
 logger = logging.getLogger(__name__)
 
@@ -32,9 +35,10 @@ class ExecutorConfig(BaseModel):
     parsl_config: Optional[Dict[str, Any]] = None
 
 
-class ExecutorBase(ABC):
+class ExecutorBase(FromConfigBase, ABC):
     """
     Base executor class for running tasks.
+    Enhanced with mandatory from_config pattern implementation.
     
     Biological analogy: Neurotransmitter systems controlling neural activation.
     Justification: Like how different neurotransmitter systems control the 
@@ -42,11 +46,38 @@ class ExecutorBase(ABC):
     activation of different types of tasks.
     """
     
-    def __init__(self, config: Optional[ExecutorConfig] = None):
-        self.config = config or ExecutorConfig()
+    COMPONENT_TYPE = "executor"
+    REQUIRED_CONFIG_FIELDS = ['executor_type']
+    OPTIONAL_CONFIG_FIELDS = {
+        'max_workers': 4,
+        'timeout': None,
+        'parsl_config': None
+    }
+    
+    @classmethod
+    def extract_component_config(cls, config: ExecutorConfig) -> Dict[str, Any]:
+        """Extract Executor configuration"""
+        return {
+            'executor_type': config.executor_type,
+            'max_workers': getattr(config, 'max_workers', 4),
+            'timeout': getattr(config, 'timeout', None),
+            'parsl_config': getattr(config, 'parsl_config', None)
+        }
+    
+    @classmethod  
+    def resolve_dependencies(cls, component_config: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        """Resolve Executor dependencies"""
+        return {}
+    
+    def _init_from_config(self, config: ExecutorConfig, component_config: Dict[str, Any],
+                         dependencies: Dict[str, Any]) -> None:
+        """Initialize Executor with resolved dependencies"""
+        self.config = config
         self.name = self.__class__.__name__
         self._energy_level = 1.0
         self._is_initialized = False
+    
+    # ExecutorBase inherits FromConfigBase.__init__ which prevents direct instantiation
         
     @abstractmethod
     async def execute(self, task: Any, **kwargs) -> Any:
@@ -83,8 +114,34 @@ class LocalExecutor(ExecutorBase):
     Local async executor for lightweight tasks.
     """
     
-    def __init__(self, config: Optional[ExecutorConfig] = None):
-        super().__init__(config)
+    @classmethod
+    def from_config(cls, config: ExecutorConfig, **kwargs) -> 'LocalExecutor':
+        """Mandatory from_config implementation for LocalExecutor"""
+        logger = logging.getLogger(f"{cls.__name__}.from_config")
+        logger.info(f"Creating {cls.__name__} from configuration")
+        
+        # Step 1: Validate configuration schema
+        cls.validate_config_schema(config)
+        
+        # Step 2: Extract component-specific configuration  
+        component_config = cls.extract_component_config(config)
+        
+        # Step 3: Resolve dependencies
+        dependencies = cls.resolve_dependencies(component_config, **kwargs)
+        
+        # Step 4: Create instance
+        instance = cls.create_instance(config, component_config, dependencies)
+        
+        # Step 5: Post-creation initialization
+        instance._post_config_initialization()
+        
+        logger.info(f"Successfully created {cls.__name__}")
+        return instance
+    
+    def _init_from_config(self, config: ExecutorConfig, component_config: Dict[str, Any],
+                         dependencies: Dict[str, Any]) -> None:
+        """Initialize LocalExecutor with resolved dependencies"""
+        super()._init_from_config(config, component_config, dependencies)
         self._semaphore: Optional[asyncio.Semaphore] = None
         
     async def initialize(self) -> None:
@@ -131,8 +188,34 @@ class ThreadExecutor(ExecutorBase):
     Thread-based executor for CPU-bound tasks.
     """
     
-    def __init__(self, config: Optional[ExecutorConfig] = None):
-        super().__init__(config)
+    @classmethod
+    def from_config(cls, config: ExecutorConfig, **kwargs) -> 'ThreadExecutor':
+        """Mandatory from_config implementation for ThreadExecutor"""
+        logger = logging.getLogger(f"{cls.__name__}.from_config")
+        logger.info(f"Creating {cls.__name__} from configuration")
+        
+        # Step 1: Validate configuration schema
+        cls.validate_config_schema(config)
+        
+        # Step 2: Extract component-specific configuration  
+        component_config = cls.extract_component_config(config)
+        
+        # Step 3: Resolve dependencies
+        dependencies = cls.resolve_dependencies(component_config, **kwargs)
+        
+        # Step 4: Create instance
+        instance = cls.create_instance(config, component_config, dependencies)
+        
+        # Step 5: Post-creation initialization
+        instance._post_config_initialization()
+        
+        logger.info(f"Successfully created {cls.__name__}")
+        return instance
+    
+    def _init_from_config(self, config: ExecutorConfig, component_config: Dict[str, Any],
+                         dependencies: Dict[str, Any]) -> None:
+        """Initialize ThreadExecutor with resolved dependencies"""
+        super()._init_from_config(config, component_config, dependencies)
         self._executor: Optional[Any] = None
         
     async def initialize(self) -> None:
@@ -181,8 +264,34 @@ class ProcessExecutor(ExecutorBase):
     Process-based executor for CPU-intensive tasks requiring isolation.
     """
     
-    def __init__(self, config: Optional[ExecutorConfig] = None):
-        super().__init__(config)
+    @classmethod
+    def from_config(cls, config: ExecutorConfig, **kwargs) -> 'ProcessExecutor':
+        """Mandatory from_config implementation for ProcessExecutor"""
+        logger = logging.getLogger(f"{cls.__name__}.from_config")
+        logger.info(f"Creating {cls.__name__} from configuration")
+        
+        # Step 1: Validate configuration schema
+        cls.validate_config_schema(config)
+        
+        # Step 2: Extract component-specific configuration  
+        component_config = cls.extract_component_config(config)
+        
+        # Step 3: Resolve dependencies
+        dependencies = cls.resolve_dependencies(component_config, **kwargs)
+        
+        # Step 4: Create instance
+        instance = cls.create_instance(config, component_config, dependencies)
+        
+        # Step 5: Post-creation initialization
+        instance._post_config_initialization()
+        
+        logger.info(f"Successfully created {cls.__name__}")
+        return instance
+    
+    def _init_from_config(self, config: ExecutorConfig, component_config: Dict[str, Any],
+                         dependencies: Dict[str, Any]) -> None:
+        """Initialize ProcessExecutor with resolved dependencies"""
+        super()._init_from_config(config, component_config, dependencies)
         self._executor: Optional[Any] = None
         
     async def initialize(self) -> None:
@@ -235,8 +344,34 @@ class ParslExecutor(ExecutorBase):
     This executor integrates with Parsl for distributed and HPC execution.
     """
     
-    def __init__(self, config: Optional[ExecutorConfig] = None):
-        super().__init__(config)
+    @classmethod
+    def from_config(cls, config: ExecutorConfig, **kwargs) -> 'ParslExecutor':
+        """Mandatory from_config implementation for ParslExecutor"""
+        logger = logging.getLogger(f"{cls.__name__}.from_config")
+        logger.info(f"Creating {cls.__name__} from configuration")
+        
+        # Step 1: Validate configuration schema
+        cls.validate_config_schema(config)
+        
+        # Step 2: Extract component-specific configuration  
+        component_config = cls.extract_component_config(config)
+        
+        # Step 3: Resolve dependencies
+        dependencies = cls.resolve_dependencies(component_config, **kwargs)
+        
+        # Step 4: Create instance
+        instance = cls.create_instance(config, component_config, dependencies)
+        
+        # Step 5: Post-creation initialization
+        instance._post_config_initialization()
+        
+        logger.info(f"Successfully created {cls.__name__}")
+        return instance
+    
+    def _init_from_config(self, config: ExecutorConfig, component_config: Dict[str, Any],
+                         dependencies: Dict[str, Any]) -> None:
+        """Initialize ParslExecutor with resolved dependencies"""
+        super()._init_from_config(config, component_config, dependencies)
         self._parsl_dfk = None
         self._parsl_config = None
         
@@ -442,29 +577,47 @@ class ParslExecutor(ExecutorBase):
 
 
 def create_executor(executor_type: Union[ExecutorType, str], 
-                   config: Optional[ExecutorConfig] = None) -> ExecutorBase:
+                   config: Optional[ExecutorConfig] = None, **kwargs) -> ExecutorBase:
     """
-    Factory function to create executors.
+    MANDATORY from_config factory for all executor types
     
     Args:
         executor_type: Type of executor to create
-        config: Optional configuration
+        config: Executor configuration
+        **kwargs: Framework-provided dependencies
         
     Returns:
-        Configured executor instance
+        ExecutorBase instance created via from_config
+        
+    Raises:
+        ValueError: If executor type is unknown
+        ComponentConfigurationError: If configuration is invalid
     """
+    logger = logging.getLogger("executor.factory")
+    logger.info(f"Creating executor via mandatory from_config")
+    
     if isinstance(executor_type, str):
         executor_type = ExecutorType(executor_type)
     
     config = config or ExecutorConfig(executor_type=executor_type)
     
-    if executor_type == ExecutorType.LOCAL:
-        return LocalExecutor(config)
-    elif executor_type == ExecutorType.THREAD:
-        return ThreadExecutor(config)
-    elif executor_type == ExecutorType.PROCESS:
-        return ProcessExecutor(config)
-    elif executor_type == ExecutorType.PARSL:
-        return ParslExecutor(config)
-    else:
-        raise ValueError(f"Unknown executor type: {executor_type}") 
+    try:
+        if executor_type == ExecutorType.LOCAL:
+            executor_class = LocalExecutor
+        elif executor_type == ExecutorType.THREAD:
+            executor_class = ThreadExecutor
+        elif executor_type == ExecutorType.PROCESS:
+            executor_class = ProcessExecutor
+        elif executor_type == ExecutorType.PARSL:
+            executor_class = ParslExecutor
+        else:
+            raise ValueError(f"Unknown executor type: {executor_type}")
+        
+        # Create instance via from_config
+        instance = executor_class.from_config(config, **kwargs)
+        
+        logger.info(f"Successfully created {executor_class.__name__} via from_config")
+        return instance
+        
+    except Exception as e:
+        raise ValueError(f"Failed to create executor '{executor_type}' via from_config: {e}") 

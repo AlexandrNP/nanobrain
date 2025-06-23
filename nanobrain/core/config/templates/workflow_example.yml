@@ -1,170 +1,163 @@
-name: "CodeGenerationWorkflow"
-description: "Complete workflow for code generation and file writing"
-version: "1.0.0"
-
-# Define executors
+name: CodeGenerationWorkflow
+description: Complete workflow for code generation and file writing
+version: 1.0.0
 executors:
   local_executor:
-    executor_type: "local"
-    name: "local_executor"
-    description: "Local executor for running tasks"
+    executor_type: local
+    name: local_executor
+    description: Local executor for running tasks
     max_workers: 4
-
-# Define data units
 data_units:
   code_input:
-    data_type: "memory"
-    name: "code_input"
-    description: "Input for code generation requests"
-  
+    data_type: memory
+    name: code_input
+    description: Input for code generation requests
   generated_code:
-    data_type: "memory"
-    name: "generated_code"
-    description: "Generated code output"
-  
+    data_type: memory
+    name: generated_code
+    description: Generated code output
   file_output:
-    data_type: "file"
-    name: "file_output"
-    description: "File output for saved code"
-    file_path: "output/generated_code.py"
-
-# Define triggers
+    data_type: file
+    name: file_output
+    description: File output for saved code
+    file_path: output/generated_code.py
 triggers:
   input_trigger:
-    trigger_type: "data_updated"
-    name: "input_trigger"
-    description: "Trigger when input data is updated"
-  
+    trigger_type: data_updated
+    name: input_trigger
+    description: Trigger when input data is updated
   code_ready_trigger:
-    trigger_type: "data_updated"
-    name: "code_ready_trigger"
-    description: "Trigger when code is generated"
-
-# Define agents
+    trigger_type: data_updated
+    name: code_ready_trigger
+    description: Trigger when code is generated
 agents:
   code_generator:
-    class: "SimpleAgent"
-    description: "Agent for generating code from natural language"
+    class: Agent
+    description: Agent for generating code from natural language
     defaults:
-      model: "gpt-4-turbo"
+      model: gpt-4-turbo
       temperature: 0.2
       max_tokens: 4000
     config:
-      name: "code_generator"
-      description: "Specialized agent for generating software code"
-      model: "gpt-4-turbo"
+      name: code_generator
+      description: Specialized agent for generating software code
+      model: gpt-4-turbo
       temperature: 0.2
       max_tokens: 4000
-      system_prompt: |
-        You are a specialized code generation agent. Generate clean, well-documented code based on natural language descriptions.
-        
-        Guidelines:
-        - Follow best practices for the target language
-        - Include comprehensive docstrings
-        - Add type hints where appropriate
-        - Handle errors gracefully
-        - Write maintainable code
-  
-  file_writer:
-    class: "agents.FileWriterAgent"
-    description: "Agent for writing files based on natural language descriptions"
-    defaults:
-      model: "gpt-3.5-turbo"
-      temperature: 0.1
-    config:
-      name: "file_writer"
-      description: "Specialized agent for file operations"
-      model: "gpt-3.5-turbo"
-      temperature: 0.1
+      system_prompt: 'You are a specialized code generation agent. Generate clean,
+        well-documented code based on natural language descriptions.
 
-# Define steps
+
+        Guidelines:
+
+        - Follow best practices for the target language
+
+        - Include comprehensive docstrings
+
+        - Add type hints where appropriate
+
+        - Handle errors gracefully
+
+        - Write maintainable code
+
+        '
+  file_writer:
+    class: agents.FileWriterAgent
+    description: Agent for writing files based on natural language descriptions
+    defaults:
+      model: gpt-3.5-turbo
+      temperature: 0.1
+    config:
+      name: file_writer
+      description: Specialized agent for file operations
+      model: gpt-3.5-turbo
+      temperature: 0.1
 steps:
   code_generation_step:
-    class: "SimpleStep"
-    description: "Step that generates code using the code generator agent"
+    class: Step
+    description: Step that generates code using the code generator agent
     config:
-      name: "code_generation_step"
-      description: "Generate code from natural language input"
+      name: code_generation_step
+      description: Generate code from natural language input
       debug_mode: true
       enable_logging: true
     input_configs:
       input:
-        data_type: "memory"
-        name: "input"
-        description: "Code generation request"
+        data_type: memory
+        name: input
+        description: Code generation request
     output_config:
-      data_type: "memory"
-      name: "output"
-      description: "Generated code"
+      data_type: memory
+      name: output
+      description: Generated code
     trigger_config:
-      trigger_type: "data_updated"
-      name: "input_trigger"
-      description: "Trigger on input data update"
-  
+      trigger_type: data_updated
+      name: input_trigger
+      description: Trigger on input data update
   file_writing_step:
-    class: "SimpleStep"
-    description: "Step that writes generated code to files"
+    class: Step
+    description: Step that writes generated code to files
     config:
-      name: "file_writing_step"
-      description: "Write generated code to files"
+      name: file_writing_step
+      description: Write generated code to files
       debug_mode: true
       enable_logging: true
     input_configs:
       code:
-        data_type: "memory"
-        name: "code"
-        description: "Code to write to file"
+        data_type: memory
+        name: code
+        description: Code to write to file
       filename:
-        data_type: "memory"
-        name: "filename"
-        description: "Target filename"
+        data_type: memory
+        name: filename
+        description: Target filename
     output_config:
-      data_type: "file"
-      name: "output"
-      description: "Written file"
+      data_type: file
+      name: output
+      description: Written file
     trigger_config:
-      trigger_type: "data_updated"
-      name: "code_ready_trigger"
-      description: "Trigger when code is ready"
-
-# Define links between components
+      trigger_type: data_updated
+      name: code_ready_trigger
+      description: Trigger when code is ready
 links:
-  - name: "input_to_generator"
-    link_type: "direct"
-    source: "code_input"
-    target: "code_generation_step.input"
-    description: "Link input data to code generation step"
-  
-  - name: "generator_to_writer"
-    link_type: "direct"
-    source: "code_generation_step.output"
-    target: "file_writing_step.code"
-    description: "Link generated code to file writing step"
-  
-  - name: "writer_to_output"
-    link_type: "direct"
-    source: "file_writing_step.output"
-    target: "file_output"
-    description: "Link written file to output"
-
-# Workflow metadata
+- name: input_to_generator
+  link_type: direct
+  source: code_input
+  target: code_generation_step.input
+  description: Link input data to code generation step
+- name: generator_to_writer
+  link_type: direct
+  source: code_generation_step.output
+  target: file_writing_step.code
+  description: Link generated code to file writing step
+- name: writer_to_output
+  link_type: direct
+  source: file_writing_step.output
+  target: file_output
+  description: Link written file to output
 metadata:
-  author: "NanoBrain Framework"
-  created: "2024-01-01"
-  tags: ["code-generation", "file-writing", "workflow"]
-  
-# Example usage scenarios
+  author: NanoBrain Framework
+  created: '2024-01-01'
+  tags:
+  - code-generation
+  - file-writing
+  - workflow
 examples:
   simple_function:
-    description: "Generate a simple Python function"
+    description: Generate a simple Python function
     input:
-      code_input: "Write a Python function that calculates the factorial of a number"
+      code_input: Write a Python function that calculates the factorial of a number
     expected_output:
-      file_output: "output/generated_code.py"
-  
+      file_output: output/generated_code.py
   class_generation:
-    description: "Generate a Python class"
+    description: Generate a Python class
     input:
-      code_input: "Create a User class with methods for authentication and profile management"
+      code_input: Create a User class with methods for authentication and profile
+        management
     expected_output:
-      file_output: "output/generated_code.py" 
+      file_output: output/generated_code.py
+_metadata:
+  last_updated: '2025-06-22T23:41:37.518890'
+  updated_by: modular_config_migration
+  migration_version: 1.0.0
+  uses_modular_config: true

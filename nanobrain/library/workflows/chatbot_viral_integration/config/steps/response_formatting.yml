@@ -1,0 +1,85 @@
+name: Response Formatting
+description: Format responses for optimal user presentation
+estimated_time: 30.0
+debug_mode: false
+enable_logging: true
+response_timeout: 30.0
+classification_config:
+  confidence_threshold: 0.7
+  max_categories: 5
+  use_embeddings: true
+  model_name: sentence-transformers/all-MiniLM-L6-v2
+  fallback_category: general
+annotation_job_config:
+  max_concurrent_jobs: 3
+  job_timeout: 300.0
+  enable_caching: true
+  cache_duration: 1800
+  result_format: json
+conversation_config:
+  max_context_length: 4000
+  context_compression: true
+  maintain_history: true
+  response_streaming: false
+  temperature: 0.7
+  max_tokens: 1000
+formatting_config:
+  output_format: markdown
+  include_metadata: true
+  enable_syntax_highlighting: true
+  wrap_code_blocks: true
+  include_citations: false
+llm_config:
+  provider: openai
+  model: gpt-3.5-turbo
+  temperature: 0.7
+  max_tokens: 1000
+  top_p: 1.0
+  frequency_penalty: 0.0
+  presence_penalty: 0.0
+error_handling:
+  retry_failed_requests: true
+  max_retries: 3
+  backoff_strategy: exponential
+  fallback_response: I apologize, but I'm unable to process your request at the moment.
+performance:
+  enable_caching: true
+  cache_ttl: 3600
+  parallel_processing: false
+  rate_limiting: true
+  max_requests_per_minute: 60
+safety_config:
+  content_filtering: true
+  toxicity_detection: true
+  pii_detection: true
+  response_validation: true
+integration_config:
+  enable_workflow_integration: true
+  viral_analysis_endpoint: null
+  database_connection: null
+  external_apis: []
+_metadata:
+  config_type: chatbot_step
+  framework_version: 1.0.0
+  created_by: nanobrain_framework
+  description: Default configuration for chatbot workflow steps
+  source_workflow: nanobrain/library/workflows/chatbot_viral_integration/ChatbotViralWorkflow.yml
+  step_id: response_formatting
+  created_from_inline: true
+  based_on_default: nanobrain/library/config/defaults/chatbot_workflow_steps.yml
+  created_date: '2025-06-22T23:41:37.495921'
+enable_markdown: true
+enable_progress_bars: true
+progress_bar_length: 20
+max_response_length: 10000
+streaming_chunk_size: 50
+max_streaming_chunks: 100
+include_troubleshooting_tips: true
+include_fallback_suggestions: true
+show_step_details: true
+collapse_completed_steps: true
+highlight_current_step: true
+format_annotation_jobs: true
+format_progress_updates: true
+format_conversational_responses: true
+format_error_messages: true

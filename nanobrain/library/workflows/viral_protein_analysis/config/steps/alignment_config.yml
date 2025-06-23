@@ -1,0 +1,23 @@
+name: Multiple Sequence Alignment
+description: Generate multiple sequence alignments using ClustalW
+estimated_time: 120.0
+class: AlignmentStep
+step_type: simple
+debug_mode: true
+enable_logging: true
+alignment_config:
+  algorithm: clustalw
+  gap_open_penalty: 10.0
+  gap_extend_penalty: 0.2
+  protein_matrix: BLOSUM62
+  max_iterations: 3
+logical_steps_covered:
+- 13
+step_description_detailed: 'This step performs sequence alignment:
+
+  13. Generate multiple sequence alignments using ClustalW '
+_metadata:
+  last_updated: '2025-06-22T23:41:37.626310'
+  updated_by: modular_config_migration
+  migration_version: 1.0.0
+  uses_modular_config: true

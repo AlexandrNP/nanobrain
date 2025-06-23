@@ -1,257 +1,232 @@
-name: "ChatWorkflow"
-description: "Enhanced chat workflow with modular step architecture and proper interconnections"
-class: "ChatWorkflow"
-
+name: ChatWorkflow
+description: Enhanced chat workflow with modular step architecture and proper interconnections
+class: ChatWorkflow
 metadata:
-  biological_analogy: "Distributed neural network processing"
-  justification: >
-    Like how the brain processes information through interconnected neural networks,
-    this workflow processes conversations through interconnected steps with
-    proper data flow and event-driven activation.
-  objectives:
-    - Provide modular and extensible chat workflow architecture
-    - Demonstrate proper step interconnections via data units, links, and triggers
-    - Support conversation history and performance monitoring
-    - Enable hierarchical step composition with substeps
-    - Showcase NanoBrain framework capabilities
+  biological_analogy: Distributed neural network processing
+  justification: 'Like how the brain processes information through interconnected
+    neural networks, this workflow processes conversations through interconnected
+    steps with proper data flow and event-driven activation.
 
-# Workflow configuration
+    '
+  objectives:
+  - Provide modular and extensible chat workflow architecture
+  - Demonstrate proper step interconnections via data units, links, and triggers
+  - Support conversation history and performance monitoring
+  - Enable hierarchical step composition with substeps
+  - Showcase NanoBrain framework capabilities
 config:
-  name: "ChatWorkflow"
-  description: "Enhanced chat workflow with step-based architecture"
-  
-  # Executor configuration
+  name: ChatWorkflow
+  description: Enhanced chat workflow with step-based architecture
   executor:
-    type: "local"
+    type: local
     max_workers: 2
     timeout: 30.0
-    
-  # Agent configuration
   agent:
-    class: "EnhancedCollaborativeAgent"
-    model: "gpt-3.5-turbo"
+    class: EnhancedCollaborativeAgent
+    model: gpt-3.5-turbo
     temperature: 0.7
     max_tokens: 2000
     enable_metrics: true
-    system_prompt: >
-      You are a helpful and friendly AI assistant with enhanced capabilities.
-      You can engage in natural conversation while leveraging specialized tools
-      and collaborating with other agents when needed.
-    
-    # Delegation rules for A2A collaboration
+    system_prompt: 'You are a helpful and friendly AI assistant with enhanced capabilities.
+      You can engage in natural conversation while leveraging specialized tools and
+      collaborating with other agents when needed.
+
+      '
     delegation_rules:
-      - keywords: ["code", "programming", "script", "function"]
-        agent: "code_specialist"
-        description: "Delegate coding tasks to code specialist"
-        
-      - keywords: ["file", "write", "save", "create"]
-        agent: "file_manager"
-        description: "Delegate file operations to file manager"
-        
-      - keywords: ["calculate", "math", "compute"]
-        agent: "calculator"
-        description: "Delegate mathematical calculations"
-  
-  # Data units configuration
+    - keywords:
+      - code
+      - programming
+      - script
+      - function
+      agent: code_specialist
+      description: Delegate coding tasks to code specialist
+    - keywords:
+      - file
+      - write
+      - save
+      - create
+      agent: file_manager
+      description: Delegate file operations to file manager
+    - keywords:
+      - calculate
+      - math
+      - compute
+      agent: calculator
+      description: Delegate mathematical calculations
   data_units:
     user_input:
-      type: "memory"
-      description: "User input messages"
+      type: memory
+      description: User input messages
       cache_size: 100
-      
     agent_input:
-      type: "memory"
-      description: "Processed input for agent"
+      type: memory
+      description: Processed input for agent
       cache_size: 100
-      
     agent_output:
-      type: "memory"
-      description: "Agent response output"
+      type: memory
+      description: Agent response output
       cache_size: 100
-      
     cli_output:
-      type: "memory"
-      description: "Final output for CLI display"
+      type: memory
+      description: Final output for CLI display
       cache_size: 100
-      
     conversation_history:
-      type: "conversation_history"
-      description: "Persistent conversation history"
-      db_path: "chat_workflow_history.db"
+      type: conversation_history
+      description: Persistent conversation history
+      db_path: chat_workflow_history.db
       max_messages_per_conversation: 1000
       auto_cleanup: true
       cleanup_days: 30
-      
     performance_metrics:
-      type: "memory"
-      description: "Performance tracking data"
+      type: memory
+      description: Performance tracking data
       cache_size: 50
-
-# Step definitions with individual directories
 steps:
   cli_interface_step:
-    directory: "steps/cli_interface_step"
-    class: "CLIInterfaceStep"
-    description: "Command-line interface for user interaction"
+    directory: steps/cli_interface_step
+    class: CLIInterfaceStep
+    description: Command-line interface for user interaction
     config:
-      name: "cli_interface_step"
-      prompt_prefix: "Chat> "
+      name: cli_interface_step
+      prompt_prefix: 'Chat> '
       show_timestamps: true
       enable_commands: true
-      
   conversation_manager_step:
-    directory: "steps/conversation_manager_step"
-    class: "ConversationManagerStep"
-    description: "Manages conversation context and history"
+    directory: steps/conversation_manager_step
+    class: ConversationManagerStep
+    description: Manages conversation context and history
     config:
-      name: "conversation_manager_step"
+      name: conversation_manager_step
       context_window: 10
       enable_history_persistence: true
       enable_performance_tracking: true
-      
-    # Substeps for hierarchical composition
     substeps:
       history_persistence_step:
-        directory: "substeps/history_persistence_step"
-        class: "HistoryPersistenceStep"
-        description: "Handles conversation history persistence"
-        
+        directory: substeps/history_persistence_step
+        class: HistoryPersistenceStep
+        description: Handles conversation history persistence
       performance_tracking_step:
-        directory: "substeps/performance_tracking_step"
-        class: "PerformanceTrackingStep"
-        description: "Tracks performance metrics"
-        
+        directory: substeps/performance_tracking_step
+        class: PerformanceTrackingStep
+        description: Tracks performance metrics
   agent_processing_step:
-    directory: "steps/agent_processing_step"
-    class: "AgentProcessingStep"
-    description: "Processes input through the enhanced agent"
+    directory: steps/agent_processing_step
+    class: AgentProcessingStep
+    description: Processes input through the enhanced agent
     config:
-      name: "agent_processing_step"
+      name: agent_processing_step
       timeout: 30.0
       retry_attempts: 3
-
-# Data flow links between components
 links:
   user_to_manager:
-    type: "direct"
-    source: "user_input"
-    target: "agent_input"
-    description: "Link user input to conversation manager"
-    
+    type: direct
+    source: user_input
+    target: agent_input
+    description: Link user input to conversation manager
   manager_to_agent:
-    type: "direct"
-    source: "agent_input"
-    target: "agent_output"
-    description: "Link processed input to agent"
-    
+    type: direct
+    source: agent_input
+    target: agent_output
+    description: Link processed input to agent
   agent_to_cli:
-    type: "direct"
-    source: "agent_output"
-    target: "cli_output"
-    description: "Link agent output to CLI display"
-    
+    type: direct
+    source: agent_output
+    target: cli_output
+    description: Link agent output to CLI display
   history_persistence:
-    type: "direct"
-    source: "agent_output"
-    target: "conversation_history"
-    description: "Persist conversation to history"
-
-# Trigger definitions for event-driven processing
+    type: direct
+    source: agent_output
+    target: conversation_history
+    description: Persist conversation to history
 triggers:
   user_input_trigger:
-    type: "data_updated"
-    data_units: ["user_input"]
-    callback: "conversation_manager_step.execute"
-    description: "Trigger conversation manager on user input"
-    
+    type: data_updated
+    data_units:
+    - user_input
+    callback: conversation_manager_step.execute
+    description: Trigger conversation manager on user input
   agent_input_trigger:
-    type: "data_updated"
-    data_units: ["agent_input"]
-    callback: "agent_processing_step.execute"
-    description: "Trigger agent processing on manager output"
-    
+    type: data_updated
+    data_units:
+    - agent_input
+    callback: agent_processing_step.execute
+    description: Trigger agent processing on manager output
   agent_output_trigger:
-    type: "data_updated"
-    data_units: ["agent_output"]
-    callback: "cli_interface_step.handle_output"
-    description: "Trigger CLI output on agent response"
-    
+    type: data_updated
+    data_units:
+    - agent_output
+    callback: cli_interface_step.handle_output
+    description: Trigger CLI output on agent response
   performance_trigger:
-    type: "timer"
+    type: timer
     interval_seconds: 60
-    callback: "conversation_manager_step.update_performance_metrics"
-    description: "Periodic performance metrics update"
-
-# Workflow execution flow
+    callback: conversation_manager_step.update_performance_metrics
+    description: Periodic performance metrics update
 execution_flow:
-  - stage: "input"
-    description: "User input collection"
-    components: ["cli_interface_step", "user_input"]
-    
-  - stage: "processing"
-    description: "Conversation management and context handling"
-    components: ["conversation_manager_step", "agent_input"]
-    
-  - stage: "agent_execution"
-    description: "Agent processing and response generation"
-    components: ["agent_processing_step", "agent_output"]
-    
-  - stage: "output"
-    description: "Response output and history persistence"
-    components: ["cli_interface_step", "conversation_history"]
-
-# Performance and monitoring settings
+- stage: input
+  description: User input collection
+  components:
+  - cli_interface_step
+  - user_input
+- stage: processing
+  description: Conversation management and context handling
+  components:
+  - conversation_manager_step
+  - agent_input
+- stage: agent_execution
+  description: Agent processing and response generation
+  components:
+  - agent_processing_step
+  - agent_output
+- stage: output
+  description: Response output and history persistence
+  components:
+  - cli_interface_step
+  - conversation_history
 performance:
   enable_metrics: true
   track_response_times: true
   track_conversation_length: true
   track_agent_performance: true
   metrics_retention_days: 7
-  
-# Error handling configuration
 error_handling:
   max_retries: 3
   timeout_seconds: 30
   fallback_responses: true
   log_errors: true
   graceful_degradation: true
-
-# Validation rules
 validation:
   required_components:
-    - "executor"
-    - "agent"
-    - "user_input"
-    - "agent_output"
-    - "conversation_history"
-    
+  - executor
+  - agent
+  - user_input
+  - agent_output
+  - conversation_history
   data_flow_validation:
-    - source: "user_input"
-      target: "agent_input"
-      via: "conversation_manager_step"
-      
-    - source: "agent_input"
-      target: "agent_output"
-      via: "agent_processing_step"
-      
-    - source: "agent_output"
-      target: "cli_output"
-      via: "cli_interface_step"
-
-# Integration settings
+  - source: user_input
+    target: agent_input
+    via: conversation_manager_step
+  - source: agent_input
+    target: agent_output
+    via: agent_processing_step
+  - source: agent_output
+    target: cli_output
+    via: cli_interface_step
 integration:
   compatible_agents:
-    - "EnhancedCollaborativeAgent"
-    - "ConversationalAgent"
-    
+  - EnhancedCollaborativeAgent
+  - ConversationalAgent
   required_protocols:
-    - "A2A"  # Optional for enhanced features
-    - "MCP"  # Optional for tool integration
-    
+  - A2A
+  - MCP
   required_dependencies:
-    - "asyncio"
-    - "sqlite3"
-    
+  - asyncio
+  - sqlite3
   optional_dependencies:
-    - "openai"  # For LLM integration
-    - "parsl"   # For distributed execution 
+  - openai
+  - parsl
+_metadata:
+  last_updated: '2025-06-22T23:41:37.467566'
+  updated_by: modular_config_migration
+  migration_version: 1.0.0
+  uses_modular_config: true

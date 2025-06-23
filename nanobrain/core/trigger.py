@@ -2,6 +2,7 @@
 Trigger System for NanoBrain Framework
 
 Provides event-driven processing capabilities for Steps.
+Enhanced with mandatory from_config pattern implementation.
 """
 
 import asyncio
@@ -12,6 +13,7 @@ from typing import Any, Dict, Optional, List, Callable, Set, Union
 from enum import Enum
 from pydantic import BaseModel, Field, ConfigDict
 
+from .component_base import FromConfigBase, ComponentConfigurationError, ComponentDependencyError
 # Import logging system
 from .logging_system import get_logger, get_system_log_manager
 
@@ -39,18 +41,51 @@ class TriggerConfig(BaseModel):
     name: str = ""
 
 
-class TriggerBase(ABC):
+class TriggerBase(FromConfigBase, ABC):
     """
     Base class for triggers that control when Steps execute.
+    Enhanced with mandatory from_config pattern implementation.
     
     Biological analogy: Action potential threshold mechanisms.
     Justification: Like how neurons fire when threshold conditions are met,
     triggers activate steps when specific conditions are satisfied.
     """
     
-    def __init__(self, config: Optional[TriggerConfig] = None, **kwargs):
-        self.config = config or TriggerConfig()
-        self.name = kwargs.get('name', self.config.name or self.__class__.__name__)
+    COMPONENT_TYPE = "trigger"
+    REQUIRED_CONFIG_FIELDS = ['trigger_type']
+    OPTIONAL_CONFIG_FIELDS = {
+        'debounce_ms': 100,
+        'max_frequency_hz': 10.0,
+        'condition': None,
+        'timer_interval_ms': None,
+        'name': ''
+    }
+    
+    @classmethod
+    def extract_component_config(cls, config: TriggerConfig) -> Dict[str, Any]:
+        """Extract Trigger configuration"""
+        return {
+            'trigger_type': config.trigger_type,
+            'debounce_ms': getattr(config, 'debounce_ms', 100),
+            'max_frequency_hz': getattr(config, 'max_frequency_hz', 10.0),
+            'condition': getattr(config, 'condition', None),
+            'timer_interval_ms': getattr(config, 'timer_interval_ms', None),
+            'name': getattr(config, 'name', '')
+        }
+    
+    @classmethod  
+    def resolve_dependencies(cls, component_config: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        """Resolve Trigger dependencies"""
+        return {
+            'enable_logging': kwargs.get('enable_logging', True),
+            'debug_mode': kwargs.get('debug_mode', False)
+        }
+    
+    def _init_from_config(self, config: TriggerConfig, component_config: Dict[str, Any],
+                         dependencies: Dict[str, Any]) -> None:
+        """Initialize Trigger with resolved dependencies"""
+        self.config = config
+        self.name = component_config.get('name') or self.__class__.__name__
         self._is_active = False
         self._callbacks: List[Callable] = []
         self._last_trigger_time = 0.0
@@ -64,21 +99,23 @@ class TriggerBase(ABC):
         self._total_callback_time = 0.0
         
         # Initialize centralized logging system
-        self.enable_logging = kwargs.get('enable_logging', True)
+        self.enable_logging = dependencies.get('enable_logging', True)
         if self.enable_logging:
             # Use centralized logging system
-            self.nb_logger = get_logger(self.name, category="triggers", debug_mode=kwargs.get('debug_mode', False))
+            self.nb_logger = get_logger(self.name, category="triggers", debug_mode=dependencies.get('debug_mode', False))
             
             # Register with system log manager
             system_manager = get_system_log_manager()
             system_manager.register_component("triggers", self.name, self, {
-                "trigger_type": self.config.trigger_type.value if hasattr(self.config.trigger_type, 'value') else str(self.config.trigger_type),
-                "debounce_ms": self.config.debounce_ms,
-                "max_frequency_hz": self.config.max_frequency_hz,
+                "trigger_type": component_config['trigger_type'].value if hasattr(component_config['trigger_type'], 'value') else str(component_config['trigger_type']),
+                "debounce_ms": component_config['debounce_ms'],
+                "max_frequency_hz": component_config['max_frequency_hz'],
                 "enable_logging": True
             })
         else:
             self.nb_logger = None
+    
+    # TriggerBase inherits FromConfigBase.__init__ which prevents direct instantiation
         
     def _get_internal_state(self) -> Dict[str, Any]:
         """Get comprehensive internal state for logging."""
@@ -258,10 +295,44 @@ class DataUpdatedTrigger(TriggerBase):
     Trigger that fires when data units are updated.
     """
     
-    def __init__(self, data_units: List[Any], config: Optional[TriggerConfig] = None, **kwargs):
-        config = config or TriggerConfig(trigger_type=TriggerType.DATA_UPDATED)
-        super().__init__(config, **kwargs)
-        self.data_units = data_units
+    @classmethod
+    def from_config(cls, config: TriggerConfig, **kwargs) -> 'DataUpdatedTrigger':
+        """Mandatory from_config implementation for DataUpdatedTrigger"""
+        logger = get_logger(f"{cls.__name__}.from_config")
+        logger.info(f"Creating {cls.__name__} from configuration")
+        
+        # Step 1: Validate configuration schema
+        cls.validate_config_schema(config)
+        
+        # Step 2: Extract component-specific configuration  
+        component_config = cls.extract_component_config(config)
+        
+        # Step 3: Resolve dependencies
+        dependencies = cls.resolve_dependencies(component_config, **kwargs)
+        
+        # Step 4: Create instance
+        instance = cls.create_instance(config, component_config, dependencies)
+        
+        # Step 5: Post-creation initialization
+        instance._post_config_initialization()
+        
+        logger.info(f"Successfully created {cls.__name__}")
+        return instance
+        
+    @classmethod
+    def resolve_dependencies(cls, component_config: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        """Resolve DataUpdatedTrigger dependencies"""
+        base_deps = super().resolve_dependencies(component_config, **kwargs)
+        return {
+            **base_deps,
+            'data_units': kwargs.get('data_units', [])
+        }
+    
+    def _init_from_config(self, config: TriggerConfig, component_config: Dict[str, Any],
+                         dependencies: Dict[str, Any]) -> None:
+        """Initialize DataUpdatedTrigger with resolved dependencies"""
+        super()._init_from_config(config, component_config, dependencies)
+        self.data_units = dependencies.get('data_units', [])
         self._monitoring_tasks: List[asyncio.Task] = []
         
     async def start_monitoring(self) -> None:
@@ -378,10 +449,44 @@ class AllDataReceivedTrigger(TriggerBase):
     Trigger that fires when all required data units have data.
     """
     
-    def __init__(self, data_units: List[Any], config: Optional[TriggerConfig] = None, **kwargs):
-        config = config or TriggerConfig(trigger_type=TriggerType.ALL_DATA_RECEIVED)
-        super().__init__(config, **kwargs)
-        self.data_units = data_units
+    @classmethod
+    def from_config(cls, config: TriggerConfig, **kwargs) -> 'AllDataReceivedTrigger':
+        """Mandatory from_config implementation for AllDataReceivedTrigger"""
+        logger = get_logger(f"{cls.__name__}.from_config")
+        logger.info(f"Creating {cls.__name__} from configuration")
+        
+        # Step 1: Validate configuration schema
+        cls.validate_config_schema(config)
+        
+        # Step 2: Extract component-specific configuration  
+        component_config = cls.extract_component_config(config)
+        
+        # Step 3: Resolve dependencies
+        dependencies = cls.resolve_dependencies(component_config, **kwargs)
+        
+        # Step 4: Create instance
+        instance = cls.create_instance(config, component_config, dependencies)
+        
+        # Step 5: Post-creation initialization
+        instance._post_config_initialization()
+        
+        logger.info(f"Successfully created {cls.__name__}")
+        return instance
+        
+    @classmethod
+    def resolve_dependencies(cls, component_config: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        """Resolve AllDataReceivedTrigger dependencies"""
+        base_deps = super().resolve_dependencies(component_config, **kwargs)
+        return {
+            **base_deps,
+            'data_units': kwargs.get('data_units', [])
+        }
+    
+    def _init_from_config(self, config: TriggerConfig, component_config: Dict[str, Any],
+                         dependencies: Dict[str, Any]) -> None:
+        """Initialize AllDataReceivedTrigger with resolved dependencies"""
+        super()._init_from_config(config, component_config, dependencies)
+        self.data_units = dependencies.get('data_units', [])
         self._monitoring_task: Optional[asyncio.Task] = None
         
     async def start_monitoring(self) -> None:
@@ -439,13 +544,45 @@ class TimerTrigger(TriggerBase):
     Trigger that fires at regular intervals.
     """
     
-    def __init__(self, interval_ms: int, config: Optional[TriggerConfig] = None, **kwargs):
-        config = config or TriggerConfig(
-            trigger_type=TriggerType.TIMER,
-            timer_interval_ms=interval_ms
-        )
-        super().__init__(config, **kwargs)
-        self.interval_ms = interval_ms
+    @classmethod
+    def from_config(cls, config: TriggerConfig, **kwargs) -> 'TimerTrigger':
+        """Mandatory from_config implementation for TimerTrigger"""
+        logger = get_logger(f"{cls.__name__}.from_config")
+        logger.info(f"Creating {cls.__name__} from configuration")
+        
+        # Step 1: Validate configuration schema
+        cls.validate_config_schema(config)
+        
+        # Step 2: Extract component-specific configuration  
+        component_config = cls.extract_component_config(config)
+        
+        # Step 3: Resolve dependencies
+        dependencies = cls.resolve_dependencies(component_config, **kwargs)
+        
+        # Step 4: Create instance
+        instance = cls.create_instance(config, component_config, dependencies)
+        
+        # Step 5: Post-creation initialization
+        instance._post_config_initialization()
+        
+        logger.info(f"Successfully created {cls.__name__}")
+        return instance
+        
+    @classmethod
+    def resolve_dependencies(cls, component_config: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        """Resolve TimerTrigger dependencies"""
+        base_deps = super().resolve_dependencies(component_config, **kwargs)
+        interval_ms = kwargs.get('interval_ms') or component_config.get('timer_interval_ms', 1000)
+        return {
+            **base_deps,
+            'interval_ms': interval_ms
+        }
+    
+    def _init_from_config(self, config: TriggerConfig, component_config: Dict[str, Any],
+                         dependencies: Dict[str, Any]) -> None:
+        """Initialize TimerTrigger with resolved dependencies"""
+        super()._init_from_config(config, component_config, dependencies)
+        self.interval_ms = dependencies.get('interval_ms', 1000)
         self._timer_task: Optional[asyncio.Task] = None
         
     async def start_monitoring(self) -> None:
@@ -488,9 +625,34 @@ class ManualTrigger(TriggerBase):
     Trigger that fires only when manually activated.
     """
     
-    def __init__(self, config: Optional[TriggerConfig] = None, **kwargs):
-        config = config or TriggerConfig(trigger_type=TriggerType.MANUAL)
-        super().__init__(config, **kwargs)
+    @classmethod
+    def from_config(cls, config: TriggerConfig, **kwargs) -> 'ManualTrigger':
+        """Mandatory from_config implementation for ManualTrigger"""
+        logger = get_logger(f"{cls.__name__}.from_config")
+        logger.info(f"Creating {cls.__name__} from configuration")
+        
+        # Step 1: Validate configuration schema
+        cls.validate_config_schema(config)
+        
+        # Step 2: Extract component-specific configuration  
+        component_config = cls.extract_component_config(config)
+        
+        # Step 3: Resolve dependencies
+        dependencies = cls.resolve_dependencies(component_config, **kwargs)
+        
+        # Step 4: Create instance
+        instance = cls.create_instance(config, component_config, dependencies)
+        
+        # Step 5: Post-creation initialization
+        instance._post_config_initialization()
+        
+        logger.info(f"Successfully created {cls.__name__}")
+        return instance
+    
+    def _init_from_config(self, config: TriggerConfig, component_config: Dict[str, Any],
+                         dependencies: Dict[str, Any]) -> None:
+        """Initialize ManualTrigger with resolved dependencies"""
+        super()._init_from_config(config, component_config, dependencies)
         
     async def start_monitoring(self) -> None:
         """Start monitoring (no-op for manual trigger)."""
@@ -510,16 +672,24 @@ class ManualTrigger(TriggerBase):
             logger.warning(f"ManualTrigger {self.name} not active")
 
 
-def create_trigger(config: Union[Dict[str, Any], TriggerConfig]) -> TriggerBase:
+def create_trigger(config: Union[Dict[str, Any], TriggerConfig], **kwargs) -> TriggerBase:
     """
-    Factory function to create triggers.
+    MANDATORY from_config factory for all trigger types
     
     Args:
         config: Trigger configuration (dict or TriggerConfig)
+        **kwargs: Framework-provided dependencies
         
     Returns:
-        Configured trigger instance
+        TriggerBase instance created via from_config
+        
+    Raises:
+        ValueError: If trigger type is unknown
+        ComponentConfigurationError: If configuration is invalid
     """
+    logger = get_logger("trigger.factory")
+    logger.info(f"Creating trigger via mandatory from_config")
+    
     if isinstance(config, dict):
         config = TriggerConfig(**config)
     
@@ -528,14 +698,23 @@ def create_trigger(config: Union[Dict[str, Any], TriggerConfig]) -> TriggerBase:
     if isinstance(trigger_type, str):
         trigger_type = TriggerType(trigger_type)
     
-    if trigger_type == TriggerType.DATA_UPDATED:
-        return DataUpdatedTrigger([], config)
-    elif trigger_type == TriggerType.ALL_DATA_RECEIVED:
-        return AllDataReceivedTrigger([], config)
-    elif trigger_type == TriggerType.TIMER:
-        interval_ms = config.timer_interval_ms or 1000
-        return TimerTrigger(interval_ms, config)
-    elif trigger_type == TriggerType.MANUAL:
-        return ManualTrigger(config)
-    else:
-        raise ValueError(f"Unknown trigger type: {trigger_type}") 
+    try:
+        if trigger_type == TriggerType.DATA_UPDATED:
+            trigger_class = DataUpdatedTrigger
+        elif trigger_type == TriggerType.ALL_DATA_RECEIVED:
+            trigger_class = AllDataReceivedTrigger
+        elif trigger_type == TriggerType.TIMER:
+            trigger_class = TimerTrigger
+        elif trigger_type == TriggerType.MANUAL:
+            trigger_class = ManualTrigger
+        else:
+            raise ValueError(f"Unknown trigger type: {trigger_type}")
+        
+        # Create instance via from_config
+        instance = trigger_class.from_config(config, **kwargs)
+        
+        logger.info(f"Successfully created {trigger_class.__name__} via from_config")
+        return instance
+        
+    except Exception as e:
+        raise ValueError(f"Failed to create trigger '{trigger_type}' via from_config: {e}") 

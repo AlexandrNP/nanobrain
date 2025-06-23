@@ -1,0 +1,61 @@
+# Default Configuration for DataUnits
+# Classes:
+# - nanobrain.core.data_unit.DataUnitMemory
+# - nanobrain.core.data_unit.DataUnitFile
+# - nanobrain.core.data_unit.DataUnitString
+# - nanobrain.core.data_unit.DataUnitStream
+
+# Basic data unit settings
+name: "DefaultDataUnit"
+description: "Default data unit configuration"
+data_type: "any"
+
+# Data storage settings
+storage_type: "memory"  # memory, file, string, stream
+persistent: false
+cache_enabled: true
+
+# File-specific settings (for DataUnitFile)
+file_path: null
+file_format: "auto"  # auto-detect format
+encoding: "utf-8"
+compression: null    # none, gzip, bzip2, xz
+
+# Memory-specific settings (for DataUnitMemory)
+max_memory_size: null  # No limit by default
+memory_tracking: true
+
+# String-specific settings (for DataUnitString)
+max_string_length: null
+string_encoding: "utf-8"
+
+# Stream-specific settings (for DataUnitStream)
+buffer_size: 8192
+stream_timeout: 30.0
+auto_close: true
+
+# Validation settings
+validate_on_load: true
+validate_on_save: true
+schema_validation: false
+
+# Performance settings
+lazy_loading: false
+chunk_size: 1024
+parallel_processing: false
+
+# Metadata and tracking
+track_access: false
+track_modifications: false
+version_control: false
+
+# Security settings
+encrypt_at_rest: false
+access_control: false
+
+# Framework metadata
+_metadata:
+  config_type: "data_unit"
+  framework_version: "1.0.0"
+  created_by: "nanobrain_framework"
+  description: "Default configuration for all data unit types" 

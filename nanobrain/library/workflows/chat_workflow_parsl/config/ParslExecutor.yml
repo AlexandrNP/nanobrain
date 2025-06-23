@@ -1,50 +1,35 @@
-# Parsl Executor Configuration for Chat Workflow
-# Optimized for fast local processing without distributed worker overhead
-
-name: "parsl_chat_executor"
-type: "executor"
-executor_type: "parsl"
-max_workers: 2  # Reduced to minimize overhead
-timeout: 10     # Much shorter timeout
-
-# Parsl-specific configuration optimized for local processing
+name: parsl_chat_executor
+type: executor
+executor_type: parsl
+max_workers: 2
+timeout: 10
 parsl_config:
-  # Execution strategy - use simple local strategy
   strategy: null
-  
-  # Application caching enabled for performance
   app_cache: true
-  
-  # Checkpoint settings (disabled for speed)
   checkpoint_mode: null
-  
-  # Minimal retry to fail fast
   retries: 0
-  
-  # Optimized executor configuration for local processing
   executors:
-    - label: "htex_local_fast"
-      class: "parsl.executors.HighThroughputExecutor"
-      max_workers_per_node: 2  # Minimal workers
-      worker_debug: false
-      heartbeat_period: 5      # Very frequent heartbeat for fast failure detection
-      heartbeat_threshold: 10  # Fast timeout for worker failures
-      # Aggressive local provider settings
-      provider_config:
-        class: "parsl.providers.LocalProvider"
-        min_blocks: 1
-        init_blocks: 1
-        max_blocks: 1          # Single block only
-        worker_init: ""
-        # Additional settings for local optimization
-        parallelism: 0.5       # Conservative parallelism
-
-# Fallback configuration when Parsl fails
+  - label: htex_local_fast
+    class: parsl.executors.HighThroughputExecutor
+    max_workers_per_node: 2
+    worker_debug: false
+    heartbeat_period: 5
+    heartbeat_threshold: 10
+    provider_config:
+      class: parsl.providers.LocalProvider
+      min_blocks: 1
+      init_blocks: 1
+      max_blocks: 1
+      worker_init: ''
+      parallelism: 0.5
 fallback:
-  executor_type: "local"
+  executor_type: local
   max_workers: 4
-  
-# Alternative: Thread-based executor for pure local processing
 thread_fallback:
-  executor_type: "thread"
-  max_workers: 4 
+  executor_type: thread
+  max_workers: 4
+_metadata:
+  last_updated: '2025-06-22T23:41:37.537480'
+  updated_by: modular_config_migration
+  migration_version: 1.0.0
+  uses_modular_config: true

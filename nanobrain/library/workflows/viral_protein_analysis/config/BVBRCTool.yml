@@ -1,18 +1,9 @@
-# BV-BRC Tool Configuration for NanoBrain Framework
-# 
-# This configuration defines settings for the BV-BRC (Bacterial and Viral 
-# Bioinformatics Resource Center) tool integration with real API calls.
-
-tool_name: "bv_brc"
-
-# Local Installation Configuration (macOS specific)
+tool_name: bv_brc
 installation:
-  type: "local"
-  installation_path: "/Applications/BV-BRC.app"
-  executable_path: "/Applications/BV-BRC.app/deployment/bin"
+  type: local
+  installation_path: /Applications/BV-BRC.app
+  executable_path: /Applications/BV-BRC.app/deployment/bin
   verify_on_init: true
-  
-# Data Processing Configuration
 data_processing:
   genome_batch_size: 50
   md5_batch_size: 25
@@ -20,27 +11,23 @@ data_processing:
   max_genome_length: 15000
   timeout_seconds: 300
   use_cache: true
-
-# Progressive Scaling Configuration
 progressive_scaling:
   level_1:
     limit: 5
     batch_size: 5
-    description: "Small test - 5 genomes"
+    description: Small test - 5 genomes
   level_2:
     limit: 10
     batch_size: 10
-    description: "Basic validation - 10 genomes"
+    description: Basic validation - 10 genomes
   level_3:
     limit: 20
     batch_size: 15
-    description: "Medium test - 20 genomes"
+    description: Medium test - 20 genomes
   level_4:
     limit: 50
     batch_size: 25
-    description: "Full scale - 50 genomes"
-
-# Error Handling Configuration
+    description: Full scale - 50 genomes
 error_handling:
   detailed_diagnostics: true
   suggest_fixes: true
@@ -48,21 +35,19 @@ error_handling:
   max_retries: 3
   use_real_data: true
   mock_fallback: false
-
-# Alphavirus Specific Configuration
 alphavirus:
-  target_lineage: "Alphavirus"
+  target_lineage: Alphavirus
   expected_genome_count_min: 5
   quality_check_enabled: true
-  
-# CLI Tools Configuration
 cli_tools:
-  p3_all_genomes: "p3-all-genomes"
-
-  p3_get_genome_features: "p3-get-genome-features"
-
-# Output Configuration
+  p3_all_genomes: p3-all-genomes
+  p3_get_genome_features: p3-get-genome-features
 output:
-  format: "fasta"
+  format: fasta
   include_annotations: true
-  validate_sequences: true 
+  validate_sequences: true
+_metadata:
+  last_updated: '2025-06-22T23:41:37.563179'
+  updated_by: modular_config_migration
+  migration_version: 1.0.0
+  uses_modular_config: true

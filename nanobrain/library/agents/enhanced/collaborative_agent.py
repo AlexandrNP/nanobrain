@@ -6,32 +6,99 @@ Multi-protocol collaborative agent with delegation and coordination capabilities
 
 import asyncio
 from typing import Any, Dict, List, Optional
+from nanobrain.core.component_base import FromConfigBase
+from nanobrain.core.logging_system import get_logger
 from nanobrain.core.agent import ConversationalAgent, AgentConfig
 from nanobrain.core.a2a_support import A2ASupportMixin
 from nanobrain.core.mcp_support import MCPSupportMixin
 from .delegation_engine import DelegationEngine
-from .performance_tracker import AgentPerformanceTracker
+# from .performance_tracker import AgentPerformanceTracker  # Module not available, using None for now
 
 
-class CollaborativeAgent(A2ASupportMixin, MCPSupportMixin, ConversationalAgent):
+class CollaborativeAgent(FromConfigBase, A2ASupportMixin, MCPSupportMixin, ConversationalAgent):
     """Multi-protocol collaborative agent with delegation and coordination."""
     
-    def __init__(self, 
-                 config: AgentConfig,
-                 a2a_config_path: Optional[str] = None,
-                 mcp_config_path: Optional[str] = None,
-                 delegation_rules: Optional[List[Dict[str, Any]]] = None,
-                 enable_metrics: bool = True,
-                 **kwargs):
-        super().__init__(config, **kwargs)
+    # Component configuration
+    COMPONENT_TYPE = "collaborative_agent"
+    REQUIRED_CONFIG_FIELDS = ['name']
+    OPTIONAL_CONFIG_FIELDS = {
+        'a2a_config_path': None,
+        'mcp_config_path': None,
+        'delegation_rules': [],
+        'enable_metrics': True
+    }
+    
+    @classmethod
+    def extract_component_config(cls, config: AgentConfig) -> Dict[str, Any]:
+        """Extract CollaborativeAgent configuration"""
+        return {
+            'name': config.name,
+            'description': config.description,
+            'model': config.model,
+            'system_prompt': config.system_prompt,
+        }
+    
+    @classmethod  
+    def resolve_dependencies(cls, component_config: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        """Resolve CollaborativeAgent dependencies"""
+        # Create executor via from_config to avoid direct instantiation
+        from nanobrain.core.executor import LocalExecutor, ExecutorConfig
+        
+        executor_config = kwargs.get('executor_config') or ExecutorConfig()
+        executor = LocalExecutor.from_config(executor_config)
+        
+        return {
+            'executor': executor,
+            'a2a_config_path': kwargs.get('a2a_config_path'),
+            'mcp_config_path': kwargs.get('mcp_config_path'),
+            'delegation_rules': kwargs.get('delegation_rules', []),
+            'enable_metrics': kwargs.get('enable_metrics', True),
+        }
+    
+    @classmethod
+    def from_config(cls, config: AgentConfig, **kwargs) -> 'CollaborativeAgent':
+        """Mandatory from_config implementation for CollaborativeAgent"""
+        logger = get_logger(f"{cls.__name__}.from_config")
+        logger.info(f"Creating {cls.__name__} from configuration")
+        
+        # Step 1: Validate configuration schema
+        cls.validate_config_schema(config)
+        
+        # Step 2: Extract component-specific configuration  
+        component_config = cls.extract_component_config(config)
+        
+        # Step 3: Resolve dependencies
+        dependencies = cls.resolve_dependencies(component_config, **kwargs)
+        
+        # Step 4: Create instance
+        instance = cls.create_instance(config, component_config, dependencies)
+        
+        # Step 5: Post-creation initialization
+        instance._post_config_initialization()
+        
+        logger.info(f"Successfully created {cls.__name__}")
+        return instance
+        
+    def _init_from_config(self, config: AgentConfig, component_config: Dict[str, Any],
+                         dependencies: Dict[str, Any]) -> None:
+        """Initialize CollaborativeAgent with resolved dependencies"""
+        # Extract executor from dependencies to pass to parent
+        executor = dependencies.pop('executor', None)
+        a2a_config_path = dependencies.pop('a2a_config_path', None)
+        mcp_config_path = dependencies.pop('mcp_config_path', None)
+        delegation_rules = dependencies.pop('delegation_rules', [])
+        enable_metrics = dependencies.pop('enable_metrics', True)
+        
+        # Initialize parent classes first
+        ConversationalAgent.__init__(self, config, executor=executor, **dependencies)
         
         # Protocol configuration
         self.a2a_config_path = a2a_config_path
         self.mcp_config_path = mcp_config_path
         
         # Delegation and performance tracking
-        self.delegation_engine = DelegationEngine(delegation_rules or [])
-        self.performance_tracker = AgentPerformanceTracker() if enable_metrics else None
+        self.delegation_engine = DelegationEngine(delegation_rules)
+        self.performance_tracker = None  # AgentPerformanceTracker() if enable_metrics else None
         
         # Collaboration statistics
         self.collaboration_count = 0

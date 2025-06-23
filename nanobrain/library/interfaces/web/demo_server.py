@@ -48,16 +48,24 @@ async def run_demo_server(
     print("=" * 50)
     
     try:
-        # Create web interface
+        # Create web interface using mandatory from_config pattern
         if config_file:
             print(f"📁 Loading configuration from: {config_file}")
+            # Note: from_config_file method may need to be updated to use from_config internally
             interface = WebInterface.from_config_file(config_file)
         else:
             print("⚙️  Using default configuration")
             config = WebInterfaceConfig()
-            config.server.host = host
-            config.server.port = port
-            interface = WebInterface(config)
+            if hasattr(config, 'server'):
+                config.server.host = host
+                config.server.port = port
+            else:
+                # Set attributes directly if server sub-config doesn't exist
+                config.host = host
+                config.port = port
+            
+            # Use mandatory from_config pattern
+            interface = WebInterface.from_config(config)
         
         print(f"🚀 Starting server on {host}:{port}")
         print(f"📖 API documentation will be available at: http://{host}:{port}/docs")

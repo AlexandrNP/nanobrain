@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 from nanobrain.core.external_tool import ExternalTool, ExternalToolConfig, ToolResult
+from nanobrain.core.component_base import FromConfigBase, ComponentConfigurationError, ComponentDependencyError
 from nanobrain.core.logging_system import get_logger
 
 
@@ -91,9 +92,10 @@ class ToolExecutionError(BioinformaticsToolError):
     pass
 
 
-class BioinformaticsExternalTool(ExternalTool):
+class BioinformaticsExternalTool(FromConfigBase, ExternalTool):
     """
     Enhanced base class for bioinformatics external tools.
+    Enhanced with mandatory from_config pattern implementation.
     
     Provides comprehensive tool management including:
     - Auto-detection of existing installations
@@ -104,18 +106,68 @@ class BioinformaticsExternalTool(ExternalTool):
     - Retry logic with exponential backoff
     """
     
-    def __init__(self, config: BioinformaticsToolConfig):
-        super().__init__(config)
+    COMPONENT_TYPE = "bioinformatics_tool"
+    REQUIRED_CONFIG_FIELDS = ['tool_name']
+    OPTIONAL_CONFIG_FIELDS = {
+        'conda_package': None,
+        'conda_channel': 'bioconda',
+        'git_repository': None,
+        'environment_name': None,
+        'local_installation_paths': [],
+        'progressive_scaling': {},
+        'initial_scale_level': 1,
+        'detailed_diagnostics': True,
+        'suggest_fixes': True,
+        'auto_retry': True,
+        'max_retries': 2,
+        'use_real_data': True,
+        'mock_fallback': False
+    }
+    
+    @classmethod
+    def extract_component_config(cls, config: BioinformaticsToolConfig) -> Dict[str, Any]:
+        """Extract BioinformaticsExternalTool configuration"""
+        return {
+            'tool_name': getattr(config, 'tool_name', 'unknown'),
+            'conda_package': getattr(config, 'conda_package', None),
+            'conda_channel': getattr(config, 'conda_channel', 'bioconda'),
+            'git_repository': getattr(config, 'git_repository', None),
+            'environment_name': getattr(config, 'environment_name', None),
+            'local_installation_paths': getattr(config, 'local_installation_paths', []),
+            'progressive_scaling': getattr(config, 'progressive_scaling', {}),
+            'initial_scale_level': getattr(config, 'initial_scale_level', 1),
+            'detailed_diagnostics': getattr(config, 'detailed_diagnostics', True),
+            'suggest_fixes': getattr(config, 'suggest_fixes', True),
+            'auto_retry': getattr(config, 'auto_retry', True),
+            'max_retries': getattr(config, 'max_retries', 2),
+            'use_real_data': getattr(config, 'use_real_data', True),
+            'mock_fallback': getattr(config, 'mock_fallback', False)
+        }
+    
+    @classmethod  
+    def resolve_dependencies(cls, component_config: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        """Resolve BioinformaticsExternalTool dependencies"""
+        return {}
+    
+    def _init_from_config(self, config: BioinformaticsToolConfig, component_config: Dict[str, Any],
+                         dependencies: Dict[str, Any]) -> None:
+        """Initialize BioinformaticsExternalTool with resolved dependencies"""
+        # Initialize ExternalTool first
+        ExternalTool.__init__(self, config)
+        
         self.bio_config = config
+        self.tool_name = component_config.get('tool_name', 'unknown')
         self.logger = get_logger(f"bio_tool_{self.tool_name}")
         
         # Installation state
         self.installation_status = None
-        self.environment_name = config.environment_name
+        self.environment_name = component_config.get('environment_name')
         
         # Progressive scaling state
-        self.current_scale_level = config.initial_scale_level
-        self.scale_config = config.progressive_scaling
+        self.current_scale_level = component_config.get('initial_scale_level', 1)
+        self.scale_config = component_config.get('progressive_scaling', {})
+    
+    # BioinformaticsExternalTool inherits FromConfigBase.__init__ which prevents direct instantiation
         
     async def initialize_tool(self) -> InstallationStatus:
         """

@@ -1,0 +1,81 @@
+name: DefaultChatWorkflow
+description: Default chat workflow configuration
+version: 1.0.0
+execution_strategy: sequential
+error_handling: continue
+debug_mode: false
+enable_monitoring: true
+chat_config:
+  max_turns: 50
+  context_window: 4000
+  enable_memory: true
+  memory_type: conversation
+  response_streaming: false
+  typing_simulation: false
+agent_config:
+  agent_type: conversational
+  model: gpt-3.5-turbo
+  temperature: 0.7
+  max_tokens: 1000
+  system_prompt: You are a helpful AI assistant.
+tools_config:
+  enabled: true
+  available_tools: []
+  tool_calling: auto
+  tool_timeout: 60.0
+session_config:
+  enable_sessions: true
+  session_timeout: 1800
+  persist_sessions: false
+  max_sessions: 100
+io_config:
+  input_validation: true
+  output_formatting: true
+  markdown_support: true
+  code_highlighting: true
+performance_config:
+  response_caching: false
+  parallel_processing: false
+  batch_size: 1
+  rate_limiting: false
+safety_config:
+  content_filtering: true
+  toxicity_detection: true
+  privacy_protection: true
+  data_retention_days: 30
+steps_config:
+  input_processing:
+    enabled: true
+    validation: true
+    preprocessing: true
+  conversation_processing:
+    enabled: true
+    context_management: true
+    memory_integration: true
+  response_generation:
+    enabled: true
+    post_processing: true
+    formatting: true
+  output_delivery:
+    enabled: true
+    validation: true
+    logging: true
+monitoring_config:
+  track_metrics: true
+  log_conversations: false
+  performance_analytics: true
+  user_feedback: false
+integration_config:
+  external_apis: []
+  webhooks: []
+  databases: []
+  message_queues: []
+_metadata:
+  config_type: chat_workflow
+  framework_version: 1.0.0
+  created_by: nanobrain_framework
+  description: Default configuration for chat workflow
+  last_updated: '2025-06-22T23:41:37.529258'
+  updated_by: modular_config_migration
+  migration_version: 1.0.0
+  uses_modular_config: true

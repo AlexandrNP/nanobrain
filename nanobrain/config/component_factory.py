@@ -13,7 +13,7 @@ import asyncio
 
 try:
     from ..core import (
-        Step, SimpleStep, Agent, SimpleAgent,
+        BaseStep, Step, Agent, SimpleAgent,
         DataUnitMemory, DataUnitFile, DataUnitString, DataUnitStream,
         ManualTrigger, TimerTrigger, AllDataReceivedTrigger, DataUpdatedTrigger,
         DirectLink, LangChainTool,
@@ -22,7 +22,7 @@ try:
 except ImportError:
     # Fallback for when running from project root with src in path
     from core import (
-        Step, SimpleStep, Agent, SimpleAgent,
+        BaseStep, Step, Agent, SimpleAgent,
         DataUnitMemory, DataUnitFile, DataUnitString, DataUnitStream,
         ManualTrigger, TimerTrigger, AllDataReceivedTrigger, DataUpdatedTrigger,
         DirectLink, LangChainTool,
@@ -140,6 +140,7 @@ class ComponentFactory:
         
         # Other classes
         self.custom_classes.update({
+            "BaseStep": BaseStep,
             "Step": Step,
             "Link": DirectLink,
             "LangChainTool": LangChainTool,
@@ -304,9 +305,9 @@ class ComponentFactory:
         logger.debug(f"Created agent: {agent_class_name}")
         return agent
     
-    def _create_step(self, config: Dict[str, Any], name: Optional[str] = None) -> Step:
+    def _create_step(self, config: Dict[str, Any], name: Optional[str] = None) -> BaseStep:
         """Create a step from configuration."""
-        step_type = config.get('type', 'SimpleStep')
+        step_type = config.get('type', 'Step')
         step_config_dict = config.get('config', {})
         
         if name and 'name' not in step_config_dict:
@@ -323,9 +324,9 @@ class ComponentFactory:
         step_config = StepConfig(**step_config_dict)
 
         # Create step instance based on type
-        if step_type == 'SimpleStep':
-            from nanobrain.core.step import SimpleStep
-            step = SimpleStep(config=step_config, agent=agent)
+        if step_type == 'Step':
+            from nanobrain.core.step import Step
+            step = Step.from_config(config=step_config, agent=agent)
         else:
             raise ValueError(f"Unknown step type: {step_type}")
 
@@ -528,7 +529,7 @@ class ComponentFactory:
             # Handle class names that should map to component types
             if type_value in ['SimpleAgent', 'CodeWriterAgent', 'FileWriterAgent', 'Agent']:
                 return ComponentType.AGENT
-            elif type_value in ['SimpleStep', 'Step', 'TransformStep']:
+            elif type_value in ['Step', 'BaseStep', 'TransformStep']:
                 return ComponentType.STEP
             else:
                 try:
@@ -541,7 +542,7 @@ class ComponentFactory:
         class_name = config.get('class', '')
         if class_name in ['SimpleAgent', 'CodeWriterAgent', 'FileWriterAgent', 'Agent']:
             return ComponentType.AGENT
-        elif class_name in ['SimpleStep', 'Step', 'TransformStep']:
+        elif class_name in ['Step', 'BaseStep', 'TransformStep']:
             return ComponentType.STEP
         elif 'data_type' in config:
             return ComponentType.DATA_UNIT

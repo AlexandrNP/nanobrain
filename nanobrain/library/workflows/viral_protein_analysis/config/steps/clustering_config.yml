@@ -1,0 +1,23 @@
+name: Protein Clustering
+description: Cluster proteins by sequence similarity using CD-HIT
+estimated_time: 90.0
+class: ClusteringStep
+step_type: simple
+debug_mode: true
+enable_logging: true
+clustering_config:
+  algorithm: cd-hit
+  similarity_threshold: 0.9
+  word_length: 5
+  memory_limit: 2000
+  threads: 4
+logical_steps_covered:
+- 12
+step_description_detailed: 'This step performs protein clustering:
+
+  12. Cluster proteins by sequence similarity using CD-HIT '
+_metadata:
+  last_updated: '2025-06-22T23:41:37.617334'
+  updated_by: modular_config_migration
+  migration_version: 1.0.0
+  uses_modular_config: true

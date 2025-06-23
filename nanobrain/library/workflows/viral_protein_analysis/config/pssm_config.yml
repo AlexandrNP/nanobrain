@@ -1,96 +1,74 @@
-# PSSM Generator Configuration
-# Configuration for Position-Specific Scoring Matrix generation
-
 tool:
-  name: "pssm_generator"
-  
-# PSSM generation parameters
+  name: pssm_generator
 pssm_parameters:
   pseudocount: 0.01
-  amino_acid_alphabet: "ACDEFGHIKLMNPQRSTVWY"
+  amino_acid_alphabet: ACDEFGHIKLMNPQRSTVWY
   log_odds: true
   normalize: true
-  
-# Background frequencies (from Swiss-Prot database)
 background_frequencies:
-  A: 0.0825  # Alanine
-  C: 0.0137  # Cysteine
-  D: 0.0546  # Aspartic acid
-  E: 0.0675  # Glutamic acid
-  F: 0.0386  # Phenylalanine
-  G: 0.0708  # Glycine
-  H: 0.0227  # Histidine
-  I: 0.0596  # Isoleucine
-  K: 0.0584  # Lysine
-  L: 0.0966  # Leucine
-  M: 0.0242  # Methionine
-  N: 0.0406  # Asparagine
-  P: 0.0470  # Proline
-  Q: 0.0393  # Glutamine
-  R: 0.0553  # Arginine
-  S: 0.0656  # Serine
-  T: 0.0534  # Threonine
-  V: 0.0687  # Valine
-  W: 0.0108  # Tryptophan
-  Y: 0.0292  # Tyrosine
-
-# Quality thresholds
+  A: 0.0825
+  C: 0.0137
+  D: 0.0546
+  E: 0.0675
+  F: 0.0386
+  G: 0.0708
+  H: 0.0227
+  I: 0.0596
+  K: 0.0584
+  L: 0.0966
+  M: 0.0242
+  N: 0.0406
+  P: 0.047
+  Q: 0.0393
+  R: 0.0553
+  S: 0.0656
+  T: 0.0534
+  V: 0.0687
+  W: 0.0108
+  Y: 0.0292
 quality_thresholds:
-  min_sequences: 3              # Minimum sequences required for PSSM
-  min_conservation: 0.5         # Minimum mean conservation score
-  gap_threshold: 0.5            # Maximum fraction of gaps per position
-  
-# Matrix validation
+  min_sequences: 3
+  min_conservation: 0.5
+  gap_threshold: 0.5
 validation:
   check_matrix_completeness: true
   validate_score_ranges: true
-  min_valid_positions: 5        # Minimum positions with valid data
-  
-# Scoring parameters
+  min_valid_positions: 5
 scoring:
-  default_low_score: -10.0      # Score for zero frequencies (log-odds)
-  normalization_method: "z_score"  # Options: z_score, min_max, none
-  
-# Export settings
+  default_low_score: -10.0
+  normalization_method: z_score
 export:
-  default_format: "json"        # Options: json, csv, binary
+  default_format: json
   include_metadata: true
   include_conservation_profiles: true
   include_background_frequencies: true
-  
-  # Export file naming
   file_naming:
     include_cluster_id: true
     include_timestamp: false
-    prefix: "pssm_matrix"
-    
-# Analysis settings
+    prefix: pssm_matrix
 analysis:
   calculate_statistics: true
   identify_conserved_positions: true
   conserved_position_threshold: 0.8
-  
-  # Quality metrics
   quality_metrics:
     score_distribution: true
     position_entropy: true
     matrix_completeness: true
-    
-# Performance settings
 performance:
-  parallel_matrix_generation: false  # Process matrices sequentially
+  parallel_matrix_generation: false
   memory_efficient_mode: true
-  
-# Error handling
 error_handling:
   skip_low_quality_alignments: true
   continue_on_matrix_failure: true
   log_failed_matrices: true
-  
-# Logging
 logging:
-  log_level: "INFO"
+  log_level: INFO
   log_generation_progress: true
   log_quality_assessment: true
   log_matrix_statistics: true
-  detailed_error_logging: true 
+  detailed_error_logging: true
+_metadata:
+  last_updated: '2025-06-22T23:41:37.559179'
+  updated_by: modular_config_migration
+  migration_version: 1.0.0
+  uses_modular_config: true

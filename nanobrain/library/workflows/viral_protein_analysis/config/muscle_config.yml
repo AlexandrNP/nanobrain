@@ -1,71 +1,54 @@
-# MUSCLE Multiple Sequence Alignment Configuration
-# Configuration for MUSCLE alignment in the viral protein workflow
-
 tool:
-  name: "muscle"
-  installation_path: null  # Use system PATH
-  executable_path: null    # Use system PATH
-
-# Alignment parameters
+  name: muscle
+  installation_path: null
+  executable_path: null
 alignment:
   max_iterations: 16
   diagonal_optimization: true
   gap_open_penalty: -12.0
   gap_extend_penalty: -1.0
-  output_format: "fasta"  # Options: fasta, clustal, msf, phylip
-
-# Quality parameters
+  output_format: fasta
 quality:
-  min_sequences: 3         # Minimum sequences required for alignment
-  max_sequences: 1000      # Maximum sequences per alignment
+  min_sequences: 3
+  max_sequences: 1000
   min_conservation_threshold: 0.5
-  max_gap_percentage: 50   # Maximum percentage of gaps allowed
-
-# Conservation analysis
+  max_gap_percentage: 50
 conservation:
   calculate_profile: true
-  highly_conserved_threshold: 0.8  # Threshold for highly conserved positions
+  highly_conserved_threshold: 0.8
   position_scoring: true
-  
-# Quality scoring
 quality_scoring:
   enabled: true
   weights:
     conservation_score: 0.5
     gap_penalty: 0.3
     size_bonus: 0.2
-  
   thresholds:
     high_quality_threshold: 0.7
     acceptable_quality_threshold: 0.5
-
-# Performance settings
 performance:
-  parallel_processing: false  # MUSCLE doesn't support parallel processing natively
+  parallel_processing: false
   memory_optimization: true
-  
-# Output settings
 output:
   export_conservation_profile: true
   export_quality_metrics: true
   keep_intermediate_files: false
-  
-  # Export formats available
   available_formats:
-    - "fasta"
-    - "clustal" 
-    - "phylip"
-    
-# Error handling
+  - fasta
+  - clustal
+  - phylip
 error_handling:
   retry_failed_alignments: true
   max_retry_attempts: 2
   skip_problematic_clusters: true
-  
-# Logging
 logging:
-  log_level: "INFO"
+  log_level: INFO
   log_alignment_progress: true
   log_quality_metrics: true
   log_conservation_analysis: true
-  detailed_statistics: true 
+  detailed_statistics: true
+_metadata:
+  last_updated: '2025-06-22T23:41:37.608564'
+  updated_by: modular_config_migration
+  migration_version: 1.0.0
+  uses_modular_config: true

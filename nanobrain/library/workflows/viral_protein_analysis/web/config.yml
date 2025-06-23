@@ -1,92 +1,73 @@
 standalone_interface:
-  server_host: "0.0.0.0"
+  server_host: 0.0.0.0
   server_port: 8001
-  title: "EEEV Protein Boundary Analysis - Phase 3"
-  description: "Enhanced standalone interface for viral protein boundary identification with literature support"
-  environment: "production"  # Can be "production", "testing", "development"
-  
-  # NanoBrain component settings
+  title: EEEV Protein Boundary Analysis - Phase 3
+  description: Enhanced standalone interface for viral protein boundary identification
+    with literature support
+  environment: production
   enable_logging: true
   enable_resource_monitoring: true
   enable_caching: true
-  
-  # EEEV-specific settings
-  default_organism: "Eastern equine encephalitis virus"
+  default_organism: Eastern equine encephalitis virus
   expected_proteins:
-    - "capsid protein"
-    - "envelope protein E1"
-    - "envelope protein E2"
-    - "6K protein"
-    - "nsP1"
-    - "nsP2"
-    - "nsP3"
-    - "nsP4"
-    - "E3"
+  - capsid protein
+  - envelope protein E1
+  - envelope protein E2
+  - 6K protein
+  - nsP1
+  - nsP2
+  - nsP3
+  - nsP4
+  - E3
   genome_size_kb: 11.7
-  
-  # Environment-specific timeout and behavior settings
   timeout_config:
     production:
       timeout_hours: 48
       mock_api_calls: false
-      cache_ttl_hours: 168  # 1 week
-      literature_search_depth: "comprehensive"
-      
+      cache_ttl_hours: 168
+      literature_search_depth: comprehensive
     testing:
       timeout_seconds: 10
       mock_api_calls: true
       cache_ttl_minutes: 5
-      literature_search_depth: "minimal"
-      
+      literature_search_depth: minimal
     development:
       timeout_seconds: 30
       mock_api_calls: false
       cache_ttl_hours: 24
-      literature_search_depth: "moderate"
-
-# Email configuration for the standalone interface
+      literature_search_depth: moderate
 email_config:
-  default_email: "onarykov@anl.gov"
-  
+  default_email: onarykov@anl.gov
   service_usage:
     pubmed_api:
       required: true
       use_email: true
       respect_rate_limits: true
-      
     ncbi_entrez:
       required: true
       use_email: true
       respect_rate_limits: true
-
-# Cache configuration for standalone interface
 cache_config:
   storage:
     memory_cache:
       max_size_mb: 256
       ttl_hours: 24
       compression: true
-      
     disk_cache:
-      directory: "data/cache/standalone"
+      directory: data/cache/standalone
       max_size_gb: 2
       ttl_days: 7
       compression: true
-      
   strategies:
     pubmed_references:
       aggressive_caching: true
-      ttl_hours: 168  # 1 week for literature
-      
+      ttl_hours: 168
     bvbrc_data:
       aggressive_caching: true
-      ttl_hours: 72   # 3 days for sequence data
-      
+      ttl_hours: 72
     analysis_results:
       aggressive_caching: false
-      ttl_hours: 24   # 1 day for results
-
-# Resource monitoring configuration
+      ttl_hours: 24
 resource_monitor_config:
   disk_warning_gb: 1.0
   disk_critical_gb: 0.5
@@ -95,39 +76,54 @@ resource_monitor_config:
   monitoring_interval_seconds: 30
   cleanup_enabled: true
   user_notification_enabled: true
-
-# EEEV-specific configuration
 eeev_config:
   genome_validation:
     min_size_kb: 10.5
     max_size_kb: 12.5
     expected_proteins: 9
-    
   protein_types:
-    - name: "capsid"
-      expected_length_range: [200, 400]
-      boundary_patterns: ["capsid", "structural"]
-      
-    - name: "envelope"
-      expected_length_range: [400, 600]
-      boundary_patterns: ["envelope", "E1", "E2", "glycoprotein"]
-      
-    - name: "structural"
-      expected_length_range: [1000, 1500]
-      boundary_patterns: ["structural", "polyprotein"]
-      
-    - name: "6K"
-      expected_length_range: [50, 100]
-      boundary_patterns: ["6K", "small"]
-      
+  - name: capsid
+    expected_length_range:
+    - 200
+    - 400
+    boundary_patterns:
+    - capsid
+    - structural
+  - name: envelope
+    expected_length_range:
+    - 400
+    - 600
+    boundary_patterns:
+    - envelope
+    - E1
+    - E2
+    - glycoprotein
+  - name: structural
+    expected_length_range:
+    - 1000
+    - 1500
+    boundary_patterns:
+    - structural
+    - polyprotein
+  - name: 6K
+    expected_length_range:
+    - 50
+    - 100
+    boundary_patterns:
+    - 6K
+    - small
   literature_search_terms:
-    - "Eastern equine encephalitis virus"
-    - "EEEV"
-    - "alphavirus"
-    - "Togaviridae"
-    
+  - Eastern equine encephalitis virus
+  - EEEV
+  - alphavirus
+  - Togaviridae
   output_customization:
-    file_prefix: "eeev_"
+    file_prefix: eeev_
     include_metadata: true
     include_literature_references: true
-    include_boundary_confidence: true 
+    include_boundary_confidence: true
+_metadata:
+  last_updated: '2025-06-22T23:41:37.614106'
+  updated_by: modular_config_migration
+  migration_version: 1.0.0
+  uses_modular_config: true

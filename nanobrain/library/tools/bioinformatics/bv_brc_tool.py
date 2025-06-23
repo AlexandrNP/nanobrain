@@ -126,6 +126,7 @@ class BVBRCInstallationError(ToolInstallationError):
 class BVBRCTool(BioinformaticsExternalTool):
     """
     Enhanced BV-BRC tool with exact command sequence implementation.
+    Enhanced with mandatory from_config pattern implementation.
     
     Features:
     - Virus name resolution with fuzzy matching (~1000 taxa)
@@ -136,19 +137,44 @@ class BVBRCTool(BioinformaticsExternalTool):
     - Preserved intermediate files for debugging
     """
     
-    def __init__(self, config: Optional[BVBRCConfig] = None):
+    @classmethod
+    def from_config(cls, config: BVBRCConfig, **kwargs) -> 'BVBRCTool':
+        """Mandatory from_config implementation for BVBRCTool"""
+        logger = get_logger(f"{cls.__name__}.from_config")
+        logger.info(f"Creating {cls.__name__} from configuration")
+        
+        # Step 1: Validate configuration schema
+        cls.validate_config_schema(config)
+        
+        # Step 2: Extract component-specific configuration  
+        component_config = cls.extract_component_config(config)
+        
+        # Step 3: Resolve dependencies
+        dependencies = cls.resolve_dependencies(component_config, **kwargs)
+        
+        # Step 4: Create instance
+        instance = cls.create_instance(config, component_config, dependencies)
+        
+        # Step 5: Post-creation initialization
+        instance._post_config_initialization()
+        
+        logger.info(f"Successfully created {cls.__name__}")
+        return instance
+    
+    def _init_from_config(self, config: BVBRCConfig, component_config: Dict[str, Any],
+                         dependencies: Dict[str, Any]) -> None:
+        """Initialize BVBRCTool with resolved dependencies"""
         if config is None:
             config = BVBRCConfig()
             
         config.tool_name = "bv_brc"
-        super().__init__(config)
+        super()._init_from_config(config, component_config, dependencies)
         
         self.bv_brc_config = config
         self.logger = get_logger("bv_brc_tool")
         
         # CLI tool paths (legacy)
         self.p3_all_genomes = None
-
         self.p3_get_genome_features = None
         
         # Legacy data caches
@@ -163,6 +189,8 @@ class BVBRCTool(BioinformaticsExternalTool):
         # Statistics
         self.requests_processed = 0
         self.cache_hit_count = 0
+    
+    # BVBRCTool inherits FromConfigBase.__init__ which prevents direct instantiation
         
     async def initialize_tool(self) -> InstallationStatus:
         """Initialize BV-BRC tool with enhanced command pipeline"""

@@ -1,0 +1,128 @@
+name: MinimalAlphavirusWorkflow
+description: Minimal working Alphavirus protein analysis workflow using available
+  steps
+version: 1.0.0
+execution_strategy: sequential
+error_handling: stop
+enable_monitoring: true
+workflow_directory: nanobrain/library/workflows/viral_protein_analysis
+enable_progress_reporting: true
+progress_batch_interval: 5.0
+progress_collapsed_by_default: false
+progress_show_technical_errors: true
+progress_preserve_session_history: true
+max_parallel_steps: 1
+step_timeout: 1800.0
+retry_attempts: 1
+retry_delay: 5.0
+validate_graph: true
+allow_cycles: false
+require_connected_graph: true
+steps:
+- step_id: data_acquisition
+  name: BV-BRC Data Acquisition
+  description: Acquire alphavirus genome data from BV-BRC database
+  class: BVBRCDataAcquisitionStep
+  estimated_time: 120.0
+  config:
+    bvbrc_config:
+      installation_path: /Applications/BV-BRC.app/deployment
+      executable_path: /Applications/BV-BRC.app/deployment/bin
+      genome_batch: 100
+      md5_batch: 50
+      min_length: 8000
+      max_length: 15000
+      timeout_seconds: 300
+      retry_attempts: 3
+      verify_on_init: false
+    target_genus: Alphavirus
+    min_genome_length: 10000
+    max_genome_length: 15000
+    genome_batch_size: 100
+    md5_batch_size: 50
+- step_id: annotation_mapping
+  name: Annotation Mapping
+  description: Map and standardize protein annotations
+  class: AnnotationMappingStep
+  estimated_time: 60.0
+  config:
+    standardize_names: true
+    validate_annotations: true
+- step_id: sequence_curation
+  name: Sequence Curation
+  description: Curate sequences based on quality metrics
+  class: SequenceCurationStep
+  estimated_time: 60.0
+  config:
+    min_length: 50
+    max_length: 3000
+    max_ambiguous_percent: 5.0
+    remove_duplicates: true
+- step_id: clustering
+  name: Protein Clustering
+  description: Cluster proteins by sequence similarity
+  class: ClusteringStep
+  estimated_time: 180.0
+  config:
+    clustering_method: simple
+    similarity_threshold: 0.7
+    min_cluster_size: 3
+- step_id: alignment
+  name: Multiple Sequence Alignment
+  description: Create multiple sequence alignments for each cluster
+  class: AlignmentStep
+  estimated_time: 240.0
+  config_file: config/steps/alignment.yml
+- step_id: pssm_analysis
+  name: PSSM Analysis
+  description: Generate Position-Specific Scoring Matrices
+  class: PSSMAnalysisStep
+  estimated_time: 120.0
+  config:
+    pssm_config:
+      pseudocount: 0.1
+      method: frequency_based
+      alphabet: protein
+    min_sequences_for_pssm: 3
+    normalize_scores: true
+links:
+- link_id: acquisition_to_mapping
+  source: data_acquisition
+  target: annotation_mapping
+  link_type: direct
+  data_mapping:
+    protein_annotations: protein_annotations
+    unique_proteins: unique_proteins
+- link_id: mapping_to_curation
+  source: annotation_mapping
+  target: sequence_curation
+  link_type: direct
+  data_mapping:
+    standardized_annotations: annotations
+- link_id: curation_to_clustering
+  source: sequence_curation
+  target: clustering
+  link_type: direct
+  data_mapping:
+    curated_sequences: sequences
+- link_id: clustering_to_alignment
+  source: clustering
+  target: alignment
+  link_type: direct
+  data_mapping:
+    clusters: clusters
+- link_id: alignment_to_pssm
+  source: alignment
+  target: pssm_analysis
+  link_type: direct
+  data_mapping:
+    aligned_clusters: aligned_clusters
+resources:
+  temporary_directory: data/minimal_alphavirus_analysis
+  enable_cleanup: false
+  log_level: INFO
+_metadata:
+  last_updated: '2025-06-22T23:41:37.586694'
+  updated_by: modular_config_migration
+  migration_version: 1.0.0
+  uses_modular_config: true

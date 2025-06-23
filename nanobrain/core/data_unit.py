@@ -2,6 +2,7 @@
 Data Unit System for NanoBrain Framework
 
 Provides data interfaces and ingestion capabilities for Steps.
+Enhanced with mandatory from_config pattern implementation.
 """
 
 import asyncio
@@ -14,6 +15,7 @@ from pathlib import Path
 import json
 import time
 
+from .component_base import FromConfigBase, ComponentConfigurationError, ComponentDependencyError
 # Import logging system
 from .logging_system import get_logger, get_system_log_manager
 
@@ -42,34 +44,69 @@ class DataUnitConfig(BaseModel):
     name: str = ""
 
 
-class DataUnitBase(ABC):
+class DataUnitBase(FromConfigBase, ABC):
     """
     Base class for data units that handle data storage and retrieval.
+    Enhanced with mandatory from_config pattern implementation.
     
     Biological analogy: Synaptic vesicles storing neurotransmitters.
     Justification: Like how synaptic vesicles store and release neurotransmitters
     for neural communication, data units store and provide data for step communication.
     """
     
-    def __init__(self, config: Optional[DataUnitConfig] = None, **kwargs):
-        self.config = config or DataUnitConfig()
-        self.name = kwargs.get('name', self.config.name or self.__class__.__name__)
+    COMPONENT_TYPE = "data_unit"
+    REQUIRED_CONFIG_FIELDS = ['data_type']
+    OPTIONAL_CONFIG_FIELDS = {
+        'persistent': False,
+        'cache_size': 1000,
+        'file_path': None,
+        'encoding': 'utf-8',
+        'initial_value': None,
+        'name': ''
+    }
+    
+    @classmethod
+    def extract_component_config(cls, config: DataUnitConfig) -> Dict[str, Any]:
+        """Extract DataUnit configuration"""
+        return {
+            'data_type': config.data_type,
+            'persistent': getattr(config, 'persistent', False),
+            'cache_size': getattr(config, 'cache_size', 1000),
+            'file_path': getattr(config, 'file_path', None),
+            'encoding': getattr(config, 'encoding', 'utf-8'),
+            'initial_value': getattr(config, 'initial_value', None),
+            'name': getattr(config, 'name', '')
+        }
+    
+    @classmethod  
+    def resolve_dependencies(cls, component_config: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        """Resolve DataUnit dependencies"""
+        return {
+            'enable_logging': kwargs.get('enable_logging', True),
+            'debug_mode': kwargs.get('debug_mode', False)
+        }
+    
+    def _init_from_config(self, config: DataUnitConfig, component_config: Dict[str, Any],
+                         dependencies: Dict[str, Any]) -> None:
+        """Initialize DataUnit with resolved dependencies"""
+        self.config = config
+        self.name = component_config.get('name') or self.__class__.__name__
         self._data: Any = None
         self._metadata: Dict[str, Any] = {}
         self._is_initialized = False
         self._lock = asyncio.Lock()
         
         # Initialize centralized logging system
-        self.enable_logging = kwargs.get('enable_logging', True)
+        self.enable_logging = dependencies.get('enable_logging', True)
         if self.enable_logging:
             # Use centralized logging system
-            self.nb_logger = get_logger(self.name, category="data_units", debug_mode=kwargs.get('debug_mode', False))
+            self.nb_logger = get_logger(self.name, category="data_units", debug_mode=dependencies.get('debug_mode', False))
             
             # Register with system log manager
             system_manager = get_system_log_manager()
             system_manager.register_component("data_units", self.name, self, {
-                "data_type": self.config.data_type.value if hasattr(self.config.data_type, 'value') else str(self.config.data_type),
-                "persistent": self.config.persistent,
+                "data_type": component_config['data_type'].value if hasattr(component_config['data_type'], 'value') else str(component_config['data_type']),
+                "persistent": component_config['persistent'],
                 "enable_logging": True
             })
         else:
@@ -80,6 +117,8 @@ class DataUnitBase(ABC):
         self._last_operation = None
         self._creation_time = time.time()
         self._access_count = {"get": 0, "set": 0, "clear": 0}
+    
+    # DataUnitBase inherits FromConfigBase.__init__ which prevents direct instantiation
         
     @abstractmethod
     async def get(self) -> Any:
@@ -259,8 +298,34 @@ class DataUnitMemory(DataUnitBase):
     In-memory data unit for fast access.
     """
     
-    def __init__(self, config: Optional[DataUnitConfig] = None, **kwargs):
-        super().__init__(config, **kwargs)
+    @classmethod
+    def from_config(cls, config: DataUnitConfig, **kwargs) -> 'DataUnitMemory':
+        """Mandatory from_config implementation for DataUnitMemory"""
+        logger = get_logger(f"{cls.__name__}.from_config")
+        logger.info(f"Creating {cls.__name__} from configuration")
+        
+        # Step 1: Validate configuration schema
+        cls.validate_config_schema(config)
+        
+        # Step 2: Extract component-specific configuration  
+        component_config = cls.extract_component_config(config)
+        
+        # Step 3: Resolve dependencies
+        dependencies = cls.resolve_dependencies(component_config, **kwargs)
+        
+        # Step 4: Create instance
+        instance = cls.create_instance(config, component_config, dependencies)
+        
+        # Step 5: Post-creation initialization
+        instance._post_config_initialization()
+        
+        logger.info(f"Successfully created {cls.__name__}")
+        return instance
+    
+    def _init_from_config(self, config: DataUnitConfig, component_config: Dict[str, Any],
+                         dependencies: Dict[str, Any]) -> None:
+        """Initialize DataUnitMemory with resolved dependencies"""
+        super()._init_from_config(config, component_config, dependencies)
         self._data = None
         
     async def get(self) -> Any:
@@ -313,10 +378,46 @@ class DataUnitFile(DataUnitBase):
     File-based data unit for persistent storage.
     """
     
-    def __init__(self, file_path: str, config: Optional[DataUnitConfig] = None, **kwargs):
-        config = config or DataUnitConfig(data_type=DataUnitType.FILE, persistent=True)
-        config.file_path = file_path
-        super().__init__(config, **kwargs)
+    @classmethod
+    def from_config(cls, config: DataUnitConfig, **kwargs) -> 'DataUnitFile':
+        """Mandatory from_config implementation for DataUnitFile"""
+        logger = get_logger(f"{cls.__name__}.from_config")
+        logger.info(f"Creating {cls.__name__} from configuration")
+        
+        # Step 1: Validate configuration schema
+        cls.validate_config_schema(config)
+        
+        # Step 2: Extract component-specific configuration  
+        component_config = cls.extract_component_config(config)
+        
+        # Step 3: Resolve dependencies
+        dependencies = cls.resolve_dependencies(component_config, **kwargs)
+        
+        # Step 4: Create instance
+        instance = cls.create_instance(config, component_config, dependencies)
+        
+        # Step 5: Post-creation initialization
+        instance._post_config_initialization()
+        
+        logger.info(f"Successfully created {cls.__name__}")
+        return instance
+    
+    @classmethod
+    def resolve_dependencies(cls, component_config: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        """Resolve DataUnitFile dependencies"""
+        base_deps = super().resolve_dependencies(component_config, **kwargs)
+        return {
+            **base_deps,
+            'file_path': kwargs.get('file_path') or component_config.get('file_path')
+        }
+    
+    def _init_from_config(self, config: DataUnitConfig, component_config: Dict[str, Any],
+                         dependencies: Dict[str, Any]) -> None:
+        """Initialize DataUnitFile with resolved dependencies"""
+        super()._init_from_config(config, component_config, dependencies)
+        file_path = dependencies.get('file_path') or component_config.get('file_path')
+        if not file_path:
+            raise ComponentConfigurationError("DataUnitFile requires file_path")
         self.file_path = Path(file_path)
         
     async def get(self) -> Any:
@@ -379,10 +480,44 @@ class DataUnitString(DataUnitBase):
     String-based data unit for text data.
     """
     
-    def __init__(self, initial_value: str = "", config: Optional[DataUnitConfig] = None, **kwargs):
-        config = config or DataUnitConfig(data_type=DataUnitType.STRING)
-        super().__init__(config, **kwargs)
-        self._data = initial_value
+    @classmethod
+    def from_config(cls, config: DataUnitConfig, **kwargs) -> 'DataUnitString':
+        """Mandatory from_config implementation for DataUnitString"""
+        logger = get_logger(f"{cls.__name__}.from_config")
+        logger.info(f"Creating {cls.__name__} from configuration")
+        
+        # Step 1: Validate configuration schema
+        cls.validate_config_schema(config)
+        
+        # Step 2: Extract component-specific configuration  
+        component_config = cls.extract_component_config(config)
+        
+        # Step 3: Resolve dependencies
+        dependencies = cls.resolve_dependencies(component_config, **kwargs)
+        
+        # Step 4: Create instance
+        instance = cls.create_instance(config, component_config, dependencies)
+        
+        # Step 5: Post-creation initialization
+        instance._post_config_initialization()
+        
+        logger.info(f"Successfully created {cls.__name__}")
+        return instance
+    
+    @classmethod
+    def resolve_dependencies(cls, component_config: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        """Resolve DataUnitString dependencies"""
+        base_deps = super().resolve_dependencies(component_config, **kwargs)
+        return {
+            **base_deps,
+            'initial_value': kwargs.get('initial_value', component_config.get('initial_value', ''))
+        }
+    
+    def _init_from_config(self, config: DataUnitConfig, component_config: Dict[str, Any],
+                         dependencies: Dict[str, Any]) -> None:
+        """Initialize DataUnitString with resolved dependencies"""
+        super()._init_from_config(config, component_config, dependencies)
+        self._data = dependencies.get('initial_value', '')
         
     async def get(self) -> str:
         """Get string data."""
@@ -416,9 +551,34 @@ class DataUnitStream(DataUnitBase):
     Stream-based data unit for continuous data flow.
     """
     
-    def __init__(self, config: Optional[DataUnitConfig] = None, **kwargs):
-        config = config or DataUnitConfig(data_type=DataUnitType.STREAM)
-        super().__init__(config, **kwargs)
+    @classmethod
+    def from_config(cls, config: DataUnitConfig, **kwargs) -> 'DataUnitStream':
+        """Mandatory from_config implementation for DataUnitStream"""
+        logger = get_logger(f"{cls.__name__}.from_config")
+        logger.info(f"Creating {cls.__name__} from configuration")
+        
+        # Step 1: Validate configuration schema
+        cls.validate_config_schema(config)
+        
+        # Step 2: Extract component-specific configuration  
+        component_config = cls.extract_component_config(config)
+        
+        # Step 3: Resolve dependencies
+        dependencies = cls.resolve_dependencies(component_config, **kwargs)
+        
+        # Step 4: Create instance
+        instance = cls.create_instance(config, component_config, dependencies)
+        
+        # Step 5: Post-creation initialization
+        instance._post_config_initialization()
+        
+        logger.info(f"Successfully created {cls.__name__}")
+        return instance
+    
+    def _init_from_config(self, config: DataUnitConfig, component_config: Dict[str, Any],
+                         dependencies: Dict[str, Any]) -> None:
+        """Initialize DataUnitStream with resolved dependencies"""
+        super()._init_from_config(config, component_config, dependencies)
         self._queue: Optional[asyncio.Queue] = None
         self._subscribers: List[asyncio.Queue] = []
         
@@ -491,16 +651,24 @@ class DataUnitStream(DataUnitBase):
         self._metadata.clear()
 
 
-def create_data_unit(config: Union[Dict[str, Any], DataUnitConfig]) -> DataUnitBase:
+def create_data_unit(config: Union[Dict[str, Any], DataUnitConfig], **kwargs) -> DataUnitBase:
     """
-    Factory function to create data units.
+    MANDATORY from_config factory for all data unit types
     
     Args:
         config: Data unit configuration (dict or DataUnitConfig)
+        **kwargs: Framework-provided dependencies
         
     Returns:
-        Configured data unit instance
+        DataUnitBase instance created via from_config
+        
+    Raises:
+        ValueError: If data unit type is unknown
+        ComponentConfigurationError: If configuration is invalid
     """
+    logger = get_logger("data_unit.factory")
+    logger.info(f"Creating data unit via mandatory from_config")
+    
     if isinstance(config, dict):
         config = DataUnitConfig(**config)
     
@@ -509,17 +677,23 @@ def create_data_unit(config: Union[Dict[str, Any], DataUnitConfig]) -> DataUnitB
     if isinstance(data_type, str):
         data_type = DataUnitType(data_type)
     
-    if data_type == DataUnitType.MEMORY:
-        return DataUnitMemory(config)
-    elif data_type == DataUnitType.FILE:
-        # DataUnitFile requires file_path parameter
-        file_path = config.file_path or "/tmp/default_file.txt"
-        return DataUnitFile(file_path, config)
-    elif data_type == DataUnitType.STRING:
-        # DataUnitString can take initial_value parameter
-        initial_value = getattr(config, 'initial_value', "")
-        return DataUnitString(initial_value, config)
-    elif data_type == DataUnitType.STREAM:
-        return DataUnitStream(config)
-    else:
-        raise ValueError(f"Unknown data unit type: {data_type}") 
+    try:
+        if data_type == DataUnitType.MEMORY:
+            data_unit_class = DataUnitMemory
+        elif data_type == DataUnitType.FILE:
+            data_unit_class = DataUnitFile
+        elif data_type == DataUnitType.STRING:
+            data_unit_class = DataUnitString
+        elif data_type == DataUnitType.STREAM:
+            data_unit_class = DataUnitStream
+        else:
+            raise ValueError(f"Unknown data unit type: {data_type}")
+        
+        # Create instance via from_config
+        instance = data_unit_class.from_config(config, **kwargs)
+        
+        logger.info(f"Successfully created {data_unit_class.__name__} via from_config")
+        return instance
+        
+    except Exception as e:
+        raise ValueError(f"Failed to create data unit '{data_type}' via from_config: {e}") 

@@ -1,0 +1,38 @@
+# Default Configuration for Step and TransformStep
+# Class: nanobrain.core.step.Step, nanobrain.core.step.TransformStep
+
+name: "DefaultStep"
+description: "Default step configuration"
+
+# Executor configuration (optional - will use framework defaults if not specified)
+executor_config: null
+
+# Input/Output configuration
+input_configs: {}
+output_config: null
+
+# Trigger configuration
+trigger_config: null
+
+# Step behavior settings
+auto_initialize: true
+debug_mode: false
+enable_logging: true
+log_data_transfers: true
+
+# Execution settings
+timeout: null
+max_retries: 0
+retry_delay: 1.0
+
+# Metadata
+estimated_time: 60.0
+tags: []
+custom_parameters: {}
+
+# Framework metadata
+_metadata:
+  config_type: "step"
+  framework_version: "1.0.0"
+  created_by: "nanobrain_framework"
+  description: "Default configuration for Step and TransformStep components" 

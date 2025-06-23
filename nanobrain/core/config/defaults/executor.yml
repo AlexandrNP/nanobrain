@@ -1,0 +1,55 @@
+# Default Configuration for Executors
+# Classes: 
+# - nanobrain.core.executor.LocalExecutor
+# - nanobrain.core.executor.ThreadExecutor  
+# - nanobrain.core.executor.ProcessExecutor
+# - nanobrain.core.executor.ParslExecutor
+
+# Basic executor settings
+name: "DefaultExecutor"
+description: "Default executor configuration"
+debug_mode: false
+
+# Execution limits
+max_concurrent: 1
+timeout: 300.0  # 5 minutes default
+
+# Error handling
+retry_on_failure: false
+max_retries: 3
+retry_delay: 1.0
+
+# Resource management
+memory_limit: null  # No limit by default
+cpu_limit: null     # No limit by default
+
+# Monitoring and logging
+enable_monitoring: true
+log_execution: true
+performance_tracking: true
+
+# Thread-specific settings (for ThreadExecutor)
+thread_pool_size: 4
+max_workers: null
+
+# Process-specific settings (for ProcessExecutor)
+process_pool_size: 2
+max_processes: null
+use_multiprocessing: true
+
+# Parsl-specific settings (for ParslExecutor)
+parsl_config: null
+provider_config: null
+executor_label: "default"
+
+# Advanced settings
+cleanup_on_exit: true
+resource_monitoring_interval: 5.0
+heartbeat_interval: 30.0
+
+# Framework metadata
+_metadata:
+  config_type: "executor"
+  framework_version: "1.0.0"
+  created_by: "nanobrain_framework"
+  description: "Default configuration for all executor types" 

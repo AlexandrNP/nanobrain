@@ -1,0 +1,69 @@
+name: DefaultChatbotStep
+description: Default configuration for chatbot workflow steps
+estimated_time: 30.0
+debug_mode: false
+enable_logging: true
+response_timeout: 30.0
+classification_config:
+  confidence_threshold: 0.7
+  max_categories: 5
+  use_embeddings: true
+  model_name: sentence-transformers/all-MiniLM-L6-v2
+  fallback_category: general
+annotation_job_config:
+  max_concurrent_jobs: 3
+  job_timeout: 300.0
+  enable_caching: true
+  cache_duration: 1800
+  result_format: json
+conversation_config:
+  max_context_length: 4000
+  context_compression: true
+  maintain_history: true
+  response_streaming: false
+  temperature: 0.7
+  max_tokens: 1000
+formatting_config:
+  output_format: markdown
+  include_metadata: true
+  enable_syntax_highlighting: true
+  wrap_code_blocks: true
+  include_citations: false
+llm_config:
+  provider: openai
+  model: gpt-3.5-turbo
+  temperature: 0.7
+  max_tokens: 1000
+  top_p: 1.0
+  frequency_penalty: 0.0
+  presence_penalty: 0.0
+error_handling:
+  retry_failed_requests: true
+  max_retries: 3
+  backoff_strategy: exponential
+  fallback_response: I apologize, but I'm unable to process your request at the moment.
+performance:
+  enable_caching: true
+  cache_ttl: 3600
+  parallel_processing: false
+  rate_limiting: true
+  max_requests_per_minute: 60
+safety_config:
+  content_filtering: true
+  toxicity_detection: true
+  pii_detection: true
+  response_validation: true
+integration_config:
+  enable_workflow_integration: true
+  viral_analysis_endpoint: null
+  database_connection: null
+  external_apis: []
+_metadata:
+  config_type: chatbot_step
+  framework_version: 1.0.0
+  created_by: nanobrain_framework
+  description: Default configuration for chatbot workflow steps
+  last_updated: '2025-06-22T23:41:37.524752'
+  updated_by: modular_config_migration
+  migration_version: 1.0.0
+  uses_modular_config: true

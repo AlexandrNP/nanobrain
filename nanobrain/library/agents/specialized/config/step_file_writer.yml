@@ -1,6 +1,6 @@
 name: "StepFileWriter"
 description: "Step for performing file operations based on natural language descriptions"
-class: "SimpleStep"  # This should be a step, not an agent
+class: "Step"  # Uses Step class after mandatory from_config migration
 
 defaults:
   backup_enabled: true

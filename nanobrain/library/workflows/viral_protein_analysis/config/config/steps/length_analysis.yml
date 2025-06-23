@@ -1,0 +1,100 @@
+name: Sequence Length Analysis
+description: Analyze protein sequence length distributions
+estimated_time: 300.0
+debug_mode: false
+enable_logging: true
+enable_progress_reporting: true
+bvbrc_config:
+  installation_path: /Applications/BV-BRC.app/deployment
+  executable_path: /Applications/BV-BRC.app/deployment/bin
+  api_base_url: https://www.bv-brc.org/api
+  timeout_seconds: 300
+  retry_attempts: 3
+  genome_batch: 100
+  md5_batch: 50
+  min_length: 8000
+  max_length: 15000
+  verify_on_init: false
+target_genus: Alphavirus
+min_genome_length: 8000
+max_genome_length: 15000
+genome_batch_size: 100
+md5_batch_size: 50
+curation_config:
+  min_length: 50
+  max_length: 5000
+  remove_duplicates: true
+  quality_threshold: 0.8
+  max_ambiguous_percent: 5.0
+  min_annotation_confidence: 0.6
+clustering_config:
+  clustering_method: mmseqs2
+  similarity_threshold: 0.7
+  coverage_threshold: 0.8
+  min_cluster_size: 3
+  max_cluster_size: 1000
+  mmseqs_config:
+    sensitivity: 7.5
+    cluster_mode: 0
+    coverage: 0.8
+    min_seq_id: 0.7
+alignment_config:
+  alignment_method: muscle
+  min_alignment_length: 100
+  max_gap_percentage: 50.0
+  validate_alignment_quality: true
+  muscle_config:
+    max_iterations: 16
+    diagonal_optimization: true
+pssm_config:
+  create_pssm_matrices: true
+  conservation_threshold: 0.8
+  position_specific_scoring: true
+  output_format: json
+annotation_config:
+  standardize_names: true
+  use_ictv_mapping: true
+  validate_annotations: true
+  consensus_threshold: 0.6
+report_config:
+  generate_summary: true
+  include_statistics: true
+  output_formats:
+  - html
+  - json
+  - csv
+  include_visualizations: true
+quality_control:
+  validate_input_data: true
+  check_sequence_integrity: true
+  verify_annotations: true
+  report_anomalies: true
+performance:
+  enable_parallel_processing: false
+  max_workers: 4
+  memory_limit: 4GB
+  enable_caching: true
+  cache_duration: 3600
+output:
+  save_intermediate_results: true
+  compress_outputs: false
+  include_metadata: true
+  preserve_provenance: true
+_metadata:
+  config_type: viral_analysis_step
+  framework_version: 1.0.0
+  created_by: nanobrain_framework
+  description: Default configuration for viral protein analysis workflow steps
+  source_workflow: nanobrain/library/workflows/viral_protein_analysis/config/AlphavirusWorkflow.yml
+  step_id: length_analysis
+  created_from_inline: true
+  based_on_default: nanobrain/library/config/defaults/viral_analysis_steps.yml
+  created_date: '2025-06-22T23:41:37.413659'
+calculate_length_stats: true
+identify_outliers: true
+outlier_threshold: 2.5
+create_length_histograms: true
+create_boxplots: true
+flag_unusual_lengths: true
+min_expected_length: 100
+max_expected_length: 2500

@@ -22,12 +22,14 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', 'sr
 from nanobrain.core.agent import ConversationalAgent, AgentConfig
 from nanobrain.core.a2a_support import A2ASupportMixin
 from nanobrain.core.mcp_support import MCPSupportMixin
+from nanobrain.core.component_base import FromConfigBase, ComponentConfigurationError, ComponentDependencyError
 from nanobrain.core.logging_system import get_logger
 
 
-class EnhancedCollaborativeAgent(A2ASupportMixin, MCPSupportMixin, ConversationalAgent):
+class EnhancedCollaborativeAgent(FromConfigBase, A2ASupportMixin, MCPSupportMixin, ConversationalAgent):
     """
     Enhanced conversational agent with A2A and MCP protocol support.
+    Enhanced with mandatory from_config pattern implementation.
     
     This agent can:
     - Use MCP tools for structured operations
@@ -44,20 +46,82 @@ class EnhancedCollaborativeAgent(A2ASupportMixin, MCPSupportMixin, Conversationa
     - Extensible tool detection and usage patterns
     """
     
-    def __init__(self, config: AgentConfig, **kwargs):
-        """
-        Initialize the Enhanced Collaborative Agent.
+    COMPONENT_TYPE = "enhanced_collaborative_agent"
+    REQUIRED_CONFIG_FIELDS = ['name', 'description']
+    OPTIONAL_CONFIG_FIELDS = {
+        'model': 'gpt-3.5-turbo',
+        'temperature': 0.7,
+        'max_tokens': None,
+        'system_prompt': '',
+        'delegation_rules': [],
+        'tool_keywords': {},
+        'enable_metrics': True,
+        'a2a_config_path': None,
+        'mcp_config_path': None
+    }
+    
+    @classmethod
+    def extract_component_config(cls, config: AgentConfig) -> Dict[str, Any]:
+        """Extract EnhancedCollaborativeAgent configuration"""
+        return {
+            'name': getattr(config, 'name', 'enhanced_agent'),
+            'description': getattr(config, 'description', ''),
+            'model': getattr(config, 'model', 'gpt-3.5-turbo'),
+            'temperature': getattr(config, 'temperature', 0.7),
+            'max_tokens': getattr(config, 'max_tokens', None),
+            'system_prompt': getattr(config, 'system_prompt', ''),
+        }
+    
+    @classmethod  
+    def resolve_dependencies(cls, component_config: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        """Resolve EnhancedCollaborativeAgent dependencies"""
+        # Create executor via from_config to avoid direct instantiation
+        from nanobrain.core.executor import LocalExecutor, ExecutorConfig
         
-        Args:
-            config: Agent configuration
-            **kwargs: Additional configuration including:
-                - delegation_rules: List of rules for A2A delegation
-                - tool_keywords: Custom tool detection keywords
-                - enable_metrics: Whether to track performance metrics
-                - a2a_config_path: Path to A2A configuration
-                - mcp_config_path: Path to MCP configuration
-        """
-        super().__init__(config, **kwargs)
+        executor_config = kwargs.get('executor_config') or ExecutorConfig()
+        executor = LocalExecutor.from_config(executor_config)
+        
+        return {
+            'executor': executor,
+            'delegation_rules': kwargs.get('delegation_rules', []),
+            'tool_keywords': kwargs.get('tool_keywords', {}),
+            'enable_metrics': kwargs.get('enable_metrics', True),
+            'a2a_config_path': kwargs.get('a2a_config_path'),
+            'mcp_config_path': kwargs.get('mcp_config_path'),
+        }
+    
+    @classmethod
+    def from_config(cls, config: AgentConfig, **kwargs) -> 'EnhancedCollaborativeAgent':
+        """Mandatory from_config implementation for EnhancedCollaborativeAgent"""
+        logger = get_logger(f"{cls.__name__}.from_config")
+        logger.info(f"Creating {cls.__name__} from configuration")
+        
+        # Step 1: Validate configuration schema
+        cls.validate_config_schema(config)
+        
+        # Step 2: Extract component-specific configuration  
+        component_config = cls.extract_component_config(config)
+        
+        # Step 3: Resolve dependencies
+        dependencies = cls.resolve_dependencies(component_config, **kwargs)
+        
+        # Step 4: Create instance
+        instance = cls.create_instance(config, component_config, dependencies)
+        
+        # Step 5: Post-creation initialization
+        instance._post_config_initialization()
+        
+        logger.info(f"Successfully created {cls.__name__}")
+        return instance
+    
+    def _init_from_config(self, config: AgentConfig, component_config: Dict[str, Any],
+                         dependencies: Dict[str, Any]) -> None:
+        """Initialize EnhancedCollaborativeAgent with resolved dependencies"""
+        # Extract executor from dependencies to pass to parent
+        executor = dependencies.pop('executor', None)
+        
+        # Initialize parent classes first
+        ConversationalAgent.__init__(self, config, executor=executor, **dependencies)
         
         # Enhanced logger
         self.enhanced_logger = get_logger(f"enhanced.{self.name}")
@@ -66,14 +130,14 @@ class EnhancedCollaborativeAgent(A2ASupportMixin, MCPSupportMixin, Conversationa
         self.collaboration_count = 0
         self.tool_usage_count = 0
         
-        # Configuration
-        self.delegation_rules = kwargs.get('delegation_rules', [])
-        self.tool_keywords = kwargs.get('tool_keywords', self._get_default_tool_keywords())
-        self.enable_metrics = kwargs.get('enable_metrics', True)
+        # Configuration from dependencies
+        self.delegation_rules = dependencies.get('delegation_rules', [])
+        self.tool_keywords = dependencies.get('tool_keywords') or self._get_default_tool_keywords()
+        self.enable_metrics = dependencies.get('enable_metrics', True)
         
         # Protocol configuration paths
-        self.a2a_config_path = kwargs.get('a2a_config_path')
-        self.mcp_config_path = kwargs.get('mcp_config_path')
+        self.a2a_config_path = dependencies.get('a2a_config_path')
+        self.mcp_config_path = dependencies.get('mcp_config_path')
         
         # Performance tracking
         self.start_time = datetime.now()
@@ -82,6 +146,8 @@ class EnhancedCollaborativeAgent(A2ASupportMixin, MCPSupportMixin, Conversationa
         self.successful_tool_uses = 0
         self.delegation_errors = 0
         self.tool_errors = 0
+    
+    # EnhancedCollaborativeAgent inherits FromConfigBase.__init__ which prevents direct instantiation
     
     async def initialize(self) -> None:
         """Initialize the enhanced collaborative agent."""

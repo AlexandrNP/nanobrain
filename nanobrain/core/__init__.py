@@ -28,8 +28,13 @@ from .tool import (
     ToolRegistry, ToolConfig, ToolType, create_tool
 )
 
+from .component_base import (
+    FromConfigBase, ComponentConfigurationError, ComponentDependencyError,
+    import_class_from_path
+)
+
 from .step import (
-    Step, SimpleStep, TransformStep, StepConfig, create_step
+    BaseStep, Step, TransformStep, StepConfig, create_step
 )
 
 from .workflow import (
@@ -82,8 +87,12 @@ __all__ = [
     'ToolBase', 'FunctionTool', 'AgentTool', 'StepTool', 'LangChainTool', 
     'ToolRegistry', 'ToolConfig', 'ToolType', 'create_tool',
     
+    # Component Base
+    'FromConfigBase', 'ComponentConfigurationError', 'ComponentDependencyError',
+    'import_class_from_path',
+    
     # Steps
-    'Step', 'SimpleStep', 'TransformStep', 'StepConfig', 'create_step',
+    'BaseStep', 'Step', 'TransformStep', 'StepConfig', 'create_step',
     
     # Workflows
     'Workflow', 'WorkflowConfig', 'WorkflowGraph', 'ConfigLoader', 

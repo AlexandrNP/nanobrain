@@ -21,7 +21,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'library'))
 from nanobrain.config.component_factory import ComponentFactory, ComponentType, get_factory
 from nanobrain.core.agent import Agent, SimpleAgent
 from agents.specialized import CodeWriterAgent
-from nanobrain.core.step import Step, SimpleStep
+from nanobrain.core.step import BaseStep, Step
 from nanobrain.core.data_unit import DataUnitMemory
 from nanobrain.core.trigger import DataUpdatedTrigger
 from nanobrain.core.link import DirectLink

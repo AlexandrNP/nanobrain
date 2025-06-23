@@ -1,0 +1,64 @@
+# Default Configuration for Triggers
+# Classes:
+# - nanobrain.core.trigger.DataUpdatedTrigger
+# - nanobrain.core.trigger.AllDataReceivedTrigger
+# - nanobrain.core.trigger.TimerTrigger
+# - nanobrain.core.trigger.ManualTrigger
+
+# Basic trigger settings
+name: "DefaultTrigger"
+description: "Default trigger configuration"
+trigger_type: "manual"  # manual, data_updated, all_data_received, timer
+
+# Common trigger settings
+enabled: true
+auto_reset: true
+max_triggers: null  # No limit by default
+
+# DataUpdatedTrigger settings
+data_source: null
+watch_fields: []
+ignore_fields: []
+debounce_time: 0.0  # No debouncing by default
+
+# AllDataReceivedTrigger settings
+required_data_sources: []
+timeout: null  # No timeout by default
+partial_trigger: false
+
+# TimerTrigger settings
+interval: 60.0  # 1 minute default
+initial_delay: 0.0
+repeat_count: null  # Infinite by default
+use_cron: false
+cron_expression: null
+
+# ManualTrigger settings
+require_confirmation: false
+confirmation_message: "Trigger execution?"
+
+# Advanced settings
+priority: 0
+condition_expression: null
+custom_validators: []
+
+# Monitoring and logging
+log_triggers: true
+performance_tracking: true
+trigger_history: false
+
+# Error handling
+on_error: "log"  # log, retry, ignore, abort
+max_error_retries: 3
+error_backoff: 1.0
+
+# Concurrency settings
+allow_concurrent: false
+max_concurrent_triggers: 1
+
+# Framework metadata
+_metadata:
+  config_type: "trigger"
+  framework_version: "1.0.0"
+  created_by: "nanobrain_framework"
+  description: "Default configuration for all trigger types" 

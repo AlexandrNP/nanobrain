@@ -1,201 +1,172 @@
-name: "ParslChatWorkflow"
-description: "Chat workflow with Parsl distributed execution using existing NanoBrain infrastructure"
-class: "ParslChatWorkflow"
-
+name: ParslChatWorkflow
+description: Chat workflow with Parsl distributed execution using existing NanoBrain
+  infrastructure
+class: ParslChatWorkflow
 metadata:
-  biological_analogy: "Distributed neural processing with parallel execution nodes"
-  justification: >
-    Like how the brain distributes complex processing across multiple neural regions
-    working in parallel, this workflow distributes chat processing across multiple
-    compute resources using Parsl for high-performance parallel execution.
-  objectives:
-    - Demonstrate Parsl integration using existing NanoBrain ParslExecutor
-    - Showcase parallel conversational agent processing
-    - Provide scalable distributed chat workflow
-    - Enable high-throughput conversational AI with load balancing
+  biological_analogy: Distributed neural processing with parallel execution nodes
+  justification: 'Like how the brain distributes complex processing across multiple
+    neural regions working in parallel, this workflow distributes chat processing
+    across multiple compute resources using Parsl for high-performance parallel execution.
 
-# Workflow configuration following existing pattern
+    '
+  objectives:
+  - Demonstrate Parsl integration using existing NanoBrain ParslExecutor
+  - Showcase parallel conversational agent processing
+  - Provide scalable distributed chat workflow
+  - Enable high-throughput conversational AI with load balancing
 config:
-  name: "ParslChatWorkflow"
-  description: "Distributed chat workflow using ParslExecutor"
-  
-  # Optimized executor configuration - Enable Parsl for distributed processing
+  name: ParslChatWorkflow
+  description: Distributed chat workflow using ParslExecutor
   executor:
-    type: "parsl"
-    prefer_thread: false  # Use Parsl for distributed processing demonstration
-    max_workers: 4       # Reduced for efficiency
-    timeout: 15.0        # Shorter timeout for responsiveness
+    type: parsl
+    prefer_thread: false
+    max_workers: 4
+    timeout: 15.0
     parsl_config:
       executors:
-        - class: "parsl.executors.HighThroughputExecutor"
-          label: "htex_local_fast"
-          max_workers_per_node: 2
-          cores_per_worker: 1
-          heartbeat_period: 5
-          heartbeat_threshold: 10
-  
-  # Multiple agents for parallel processing
+      - class: parsl.executors.HighThroughputExecutor
+        label: htex_local_fast
+        max_workers_per_node: 2
+        cores_per_worker: 1
+        heartbeat_period: 5
+        heartbeat_threshold: 10
   agents:
-    - name: "parsl_agent_1"
-      config_file: "config/EnhancedCollaborativeAgent_1.yml"
-    - name: "parsl_agent_2"
-      config_file: "config/EnhancedCollaborativeAgent_2.yml"
-    - name: "parsl_agent_3"
-      config_file: "config/EnhancedCollaborativeAgent_3.yml"
-  
-  # Data units configuration
+  - name: parsl_agent_1
+    config_file: config/EnhancedCollaborativeAgent_1.yml
+  - name: parsl_agent_2
+    config_file: config/EnhancedCollaborativeAgent_2.yml
+  - name: parsl_agent_3
+    config_file: config/EnhancedCollaborativeAgent_3.yml
   data_units:
     user_input:
-      type: "memory"
-      description: "User input for Parsl distributed processing"
+      type: memory
+      description: User input for Parsl distributed processing
       cache_size: 100
-      
     parsl_agent_input:
-      type: "memory"
-      description: "Processed input for Parsl agent distribution"
+      type: memory
+      description: Processed input for Parsl agent distribution
       cache_size: 100
-      
     parsl_agent_output:
-      type: "memory"
-      description: "Aggregated output from Parsl distributed agents"
+      type: memory
+      description: Aggregated output from Parsl distributed agents
       cache_size: 100
-      
     cli_output:
-      type: "memory"
-      description: "Final formatted output for CLI display"
+      type: memory
+      description: Final formatted output for CLI display
       cache_size: 100
-      
     conversation_history:
-      type: "conversation_history"
-      config_file: "config/ConversationHistoryUnit.yml"
-      
+      type: conversation_history
+      config_file: config/ConversationHistoryUnit.yml
     parsl_performance_metrics:
-      type: "memory"
-      description: "Parsl execution performance and monitoring data"
+      type: memory
+      description: Parsl execution performance and monitoring data
       cache_size: 200
-
-# Step definitions using enhanced library components
 steps:
   parsl_cli_interface_step:
-    directory: "library/infrastructure/interfaces/cli"
-    class: "ParslAwareInteractiveCLI"
-    config_file: "config/ParslAwareInteractiveCLI.yml"
-    description: "CLI interface with Parsl execution monitoring"
-    
+    directory: library/infrastructure/interfaces/cli
+    class: ParslAwareInteractiveCLI
+    config_file: config/ParslAwareInteractiveCLI.yml
+    description: CLI interface with Parsl execution monitoring
   parsl_load_balancer_step:
-    directory: "library/infrastructure/load_balancing"
-    class: "ParslAwareLoadBalancer"
-    config_file: "config/ParslAwareLoadBalancer.yml"
-    description: "Load balancer optimized for Parsl execution"
-    
+    directory: library/infrastructure/load_balancing
+    class: ParslAwareLoadBalancer
+    config_file: config/ParslAwareLoadBalancer.yml
+    description: Load balancer optimized for Parsl execution
   parsl_agent_processing_step:
-    directory: "library/infrastructure/steps"
-    class: "ParslOptimizedConversationalAgentStep"
-    config_file: "config/ParslOptimizedConversationalAgentStep.yml"
-    description: "Conversational agent processing optimized for Parsl"
-    
+    directory: library/infrastructure/steps
+    class: ParslOptimizedConversationalAgentStep
+    config_file: config/ParslOptimizedConversationalAgentStep.yml
+    description: Conversational agent processing optimized for Parsl
   parsl_monitoring_step:
-    directory: "library/infrastructure/monitoring"
-    class: "ParslAwarePerformanceMonitor"
-    config_file: "config/ParslAwarePerformanceMonitor.yml"
-    description: "Performance monitoring with Parsl metrics"
-
-# Data flow links
+    directory: library/infrastructure/monitoring
+    class: ParslAwarePerformanceMonitor
+    config_file: config/ParslAwarePerformanceMonitor.yml
+    description: Performance monitoring with Parsl metrics
 links:
   user_to_load_balancer:
-    type: "direct"
-    source: "user_input"
-    target: "parsl_agent_input"
-    description: "Route user input through Parsl-aware load balancer"
-    
+    type: direct
+    source: user_input
+    target: parsl_agent_input
+    description: Route user input through Parsl-aware load balancer
   load_balancer_to_agents:
-    type: "direct"
-    source: "parsl_agent_input"
-    target: "parsl_agent_output"
-    description: "Distribute requests to Parsl-optimized agents"
-    
+    type: direct
+    source: parsl_agent_input
+    target: parsl_agent_output
+    description: Distribute requests to Parsl-optimized agents
   agents_to_cli:
-    type: "direct"
-    source: "parsl_agent_output"
-    target: "cli_output"
-    description: "Display aggregated Parsl agent responses"
-    
+    type: direct
+    source: parsl_agent_output
+    target: cli_output
+    description: Display aggregated Parsl agent responses
   history_persistence:
-    type: "direct"
-    source: "parsl_agent_output"
-    target: "conversation_history"
-    description: "Persist conversation with Parsl execution metadata"
-
-# Trigger definitions
+    type: direct
+    source: parsl_agent_output
+    target: conversation_history
+    description: Persist conversation with Parsl execution metadata
 triggers:
   user_input_trigger:
-    type: "data_updated"
-    data_units: ["user_input"]
-    callback: "parsl_load_balancer_step.execute"
-    description: "Trigger Parsl load balancing on user input"
-    
+    type: data_updated
+    data_units:
+    - user_input
+    callback: parsl_load_balancer_step.execute
+    description: Trigger Parsl load balancing on user input
   load_balancer_trigger:
-    type: "data_updated"
-    data_units: ["parsl_agent_input"]
-    callback: "parsl_agent_processing_step.execute"
-    description: "Trigger Parsl agent processing"
-    
+    type: data_updated
+    data_units:
+    - parsl_agent_input
+    callback: parsl_agent_processing_step.execute
+    description: Trigger Parsl agent processing
   output_trigger:
-    type: "data_updated"
-    data_units: ["parsl_agent_output"]
-    callback: "parsl_cli_interface_step.handle_output"
-    description: "Display Parsl execution results"
-    
+    type: data_updated
+    data_units:
+    - parsl_agent_output
+    callback: parsl_cli_interface_step.handle_output
+    description: Display Parsl execution results
   monitoring_trigger:
-    type: "timer"
+    type: timer
     interval_seconds: 30
-    callback: "parsl_monitoring_step.collect_metrics"
-    description: "Collect Parsl performance metrics"
-
-# Workflow execution flow
+    callback: parsl_monitoring_step.collect_metrics
+    description: Collect Parsl performance metrics
 execution_flow:
-  - stage: "input"
-    description: "User input collection with Parsl-aware CLI"
-    components: ["parsl_cli_interface_step", "user_input"]
-    
-  - stage: "load_balancing"
-    description: "Parsl-aware request distribution and load balancing"
-    components: ["parsl_load_balancer_step", "parsl_agent_input"]
-    
-  - stage: "distributed_processing"
-    description: "Parallel agent execution using ParslExecutor"
-    components: ["parsl_agent_processing_step", "parsl_agent_output"]
-    
-  - stage: "output"
-    description: "Response aggregation and CLI display"
-    components: ["parsl_cli_interface_step", "cli_output"]
-    
-  - stage: "monitoring"
-    description: "Parsl execution monitoring and performance tracking"
-    components: ["parsl_monitoring_step", "parsl_performance_metrics"]
-
-# Parsl-specific workflow settings
+- stage: input
+  description: User input collection with Parsl-aware CLI
+  components:
+  - parsl_cli_interface_step
+  - user_input
+- stage: load_balancing
+  description: Parsl-aware request distribution and load balancing
+  components:
+  - parsl_load_balancer_step
+  - parsl_agent_input
+- stage: distributed_processing
+  description: Parallel agent execution using ParslExecutor
+  components:
+  - parsl_agent_processing_step
+  - parsl_agent_output
+- stage: output
+  description: Response aggregation and CLI display
+  components:
+  - parsl_cli_interface_step
+  - cli_output
+- stage: monitoring
+  description: Parsl execution monitoring and performance tracking
+  components:
+  - parsl_monitoring_step
+  - parsl_performance_metrics
 parsl_workflow:
-  # Execution optimization
   optimization:
     enable_batching: true
     batch_size: 5
     enable_caching: true
-    cache_strategy: "aggressive"
-    
-  # Resource management
+    cache_strategy: aggressive
   resource_management:
     auto_scaling: false
     resource_monitoring: true
     failure_recovery: true
-    
-  # Performance tuning
   performance:
     checkpoint_frequency: 100
     garbage_collection: true
     lazy_errors: true
-
-# Standard workflow settings
 performance:
   enable_metrics: true
   track_response_times: true
@@ -203,7 +174,6 @@ performance:
   track_agent_performance: true
   track_parsl_execution: true
   metrics_retention_days: 7
-
 error_handling:
   max_retries: 3
   timeout_seconds: 60
@@ -211,35 +181,34 @@ error_handling:
   log_errors: true
   graceful_degradation: true
   parsl_fault_tolerance: true
-
 validation:
   required_components:
-    - "executor"
-    - "agents"
-    - "user_input"
-    - "parsl_agent_output"
-    - "conversation_history"
-  
+  - executor
+  - agents
+  - user_input
+  - parsl_agent_output
+  - conversation_history
   parsl_validation:
-    - parsl_available: true
-    - executor_initialized: true
-    - monitoring_enabled: true
-
+  - parsl_available: true
+  - executor_initialized: true
+  - monitoring_enabled: true
 integration:
   compatible_agents:
-    - "EnhancedCollaborativeAgent"
-    - "ConversationalAgent"
-  
+  - EnhancedCollaborativeAgent
+  - ConversationalAgent
   required_protocols:
-    - "A2A"
-    - "MCP"
-  
+  - A2A
+  - MCP
   required_dependencies:
-    - "asyncio"
-    - "sqlite3"
-    - "parsl"
-  
+  - asyncio
+  - sqlite3
+  - parsl
   optional_dependencies:
-    - "openai"
-    - "psutil"
-    - "cloudpickle" 
+  - openai
+  - psutil
+  - cloudpickle
+_metadata:
+  last_updated: '2025-06-22T23:41:37.358666'
+  updated_by: modular_config_migration
+  migration_version: 1.0.0
+  uses_modular_config: true

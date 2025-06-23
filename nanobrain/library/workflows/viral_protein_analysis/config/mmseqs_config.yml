@@ -1,64 +1,48 @@
-# MMseqs2 Clustering Configuration
-# Configuration for MMseqs2 clustering optimized for viral proteins
-
 tool:
-  name: "mmseqs"
-  installation_path: null  # Use system PATH
-  executable_path: null    # Use system PATH
-
-# Clustering parameters
+  name: mmseqs
+  installation_path: null
+  executable_path: null
 clustering:
-  min_seq_id: 0.7          # Minimum sequence identity (70%)
-  coverage: 0.8            # Coverage fraction (80%)
-  sensitivity: 7.5         # Sensitivity parameter
-  coverage_mode: 1         # Bidirectional coverage
-  cluster_mode: 0          # Greedy clustering
+  min_seq_id: 0.7
+  coverage: 0.8
+  sensitivity: 7.5
+  coverage_mode: 1
+  cluster_mode: 0
   prefer_short_conserved: true
-
-# Short well-conserved region optimization
 short_conserved_optimization:
   enabled: true
-  max_length_threshold: 300    # Maximum length for "short" sequences
-  min_conservation_score: 0.8  # Minimum conservation score
-  min_cluster_size: 3          # Minimum members for valid cluster
-  
-  # MMseqs2 parameters for short regions
-  mask_low_complexity: false   # No masking to preserve short regions
+  max_length_threshold: 300
+  min_conservation_score: 0.8
+  min_cluster_size: 3
+  mask_low_complexity: false
   composition_bias_correction: false
-  gap_open_penalty: 11         # Higher gap open penalty
-  gap_extend_penalty: 1        # Lower gap extend penalty
-
-# Performance parameters
+  gap_open_penalty: 11
+  gap_extend_penalty: 1
 performance:
   threads: 4
-  memory_limit: "8G"
-  tmp_dir: null  # Use system temp directory
-  
-# Quality thresholds
+  memory_limit: 8G
+  tmp_dir: null
 quality:
   min_sequences_per_cluster: 2
   max_sequences_per_cluster: 1000
-  
-# Output settings
 output:
   keep_intermediate_files: false
-  output_format: "tsv"
-  
-# Analysis settings
+  output_format: tsv
 analysis:
   calculate_conservation_scores: true
   identify_short_well_conserved: true
   quality_scoring_enabled: true
-  
-  # Quality scoring weights
   quality_weights:
     conservation_score: 0.6
     size_bonus: 0.2
-    length_bonus: 0.2  # For short sequences when preferred
-    
-# Logging
+    length_bonus: 0.2
 logging:
-  log_level: "INFO"
+  log_level: INFO
   log_clustering_progress: true
   log_cluster_statistics: true
-  log_quality_metrics: true 
+  log_quality_metrics: true
+_metadata:
+  last_updated: '2025-06-22T23:41:37.572579'
+  updated_by: modular_config_migration
+  migration_version: 1.0.0
+  uses_modular_config: true

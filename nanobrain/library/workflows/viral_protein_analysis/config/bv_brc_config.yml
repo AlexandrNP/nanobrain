@@ -1,61 +1,49 @@
-# BV-BRC CLI Tool Configuration
-# Configuration for BV-BRC CLI tools in the Alphavirus workflow
-
 tool:
-  name: "bv_brc"
-  installation_path: "/Applications/BV-BRC.app/"
-  executable_path: "/Applications/BV-BRC.app/deployment/bin/"
+  name: bv_brc
+  installation_path: /Applications/BV-BRC.app/
+  executable_path: /Applications/BV-BRC.app/deployment/bin/
   anonymous_access: true
   data_verification_enabled: true
-
-# Data filtering parameters
 filtering:
   min_genome_length: 8000
   max_genome_length: 15000
-  
-# Batch processing settings
 batch_processing:
   genome_batch_size: 100
   md5_batch_size: 50
-  
-# Alphavirus-specific query parameters
 alphavirus_query:
-  taxon_filter: "taxon_lineage_names,Alphavirus"
+  taxon_filter: taxon_lineage_names,Alphavirus
   genome_attributes:
-    - "genome_id"
-    - "genome_length" 
-    - "genome_name"
-    - "taxon_lineage_names"
-    
+  - genome_id
+  - genome_length
+  - genome_name
+  - taxon_lineage_names
   protein_attributes:
-    - "patric_id"
-    - "aa_sequence_md5"
-    - "product"
-    - "gene"
-    - "refseq_locus_tag"
-    - "start"
-    - "end"
-    - "strand"
-    - "feature_type"
-    
+  - patric_id
+  - aa_sequence_md5
+  - product
+  - gene
+  - refseq_locus_tag
+  - start
+  - end
+  - strand
+  - feature_type
   sequence_attributes:
-    - "aa_sequence_md5"
-    - "aa_sequence"
-
-# Quality control
+  - aa_sequence_md5
+  - aa_sequence
 quality_control:
   verify_data_completeness: true
   minimum_data_lines: 1
   expected_fields_validation: true
-  
-# Error handling
 error_handling:
   retry_attempts: 3
   retry_delay_seconds: 5
   timeout_seconds: 300
-  
-# Logging
 logging:
-  log_level: "INFO"
+  log_level: INFO
   log_batch_progress: true
-  log_data_statistics: true 
+  log_data_statistics: true
+_metadata:
+  last_updated: '2025-06-22T23:41:37.575335'
+  updated_by: modular_config_migration
+  migration_version: 1.0.0
+  uses_modular_config: true

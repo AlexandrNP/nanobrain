@@ -3,6 +3,7 @@ Link System for NanoBrain Framework
 
 Provides dataflow abstractions for connecting Steps together.
 Links define how information flows between system components.
+Enhanced with mandatory from_config pattern implementation.
 """
 
 import asyncio
@@ -13,6 +14,7 @@ from typing import Any, Dict, Optional, List, Callable, Union
 from enum import Enum
 from pydantic import BaseModel, Field, ConfigDict
 
+from .component_base import FromConfigBase, ComponentConfigurationError, ComponentDependencyError
 # Import logging system
 from .logging_system import get_logger, get_system_log_manager
 
@@ -115,20 +117,55 @@ class LinkConfig(BaseModel):
     model_config = ConfigDict(use_enum_values=True)
 
 
-class LinkBase(ABC):
+class LinkBase(FromConfigBase, ABC):
     """
     Base class for links that connect data flow between Steps.
+    Enhanced with mandatory from_config pattern implementation.
     
     Biological analogy: Neural pathways connecting brain regions.
     Justification: Like how neural pathways carry information between
     different brain regions, links carry data between different steps.
     """
     
-    def __init__(self, source: Any, target: Any, config: Optional[LinkConfig] = None, **kwargs):
-        self.config = config or LinkConfig()
-        self.source = source
-        self.target = target
-        self.name = kwargs.get('name', f"{getattr(source, 'name', 'unknown')}->{getattr(target, 'name', 'unknown')}")
+    COMPONENT_TYPE = "link"
+    REQUIRED_CONFIG_FIELDS = ['link_type']
+    OPTIONAL_CONFIG_FIELDS = {
+        'buffer_size': 100,
+        'transform_function': None,
+        'condition': None,
+        'file_path': None,
+        'data_mapping': None
+    }
+    
+    @classmethod
+    def extract_component_config(cls, config: LinkConfig) -> Dict[str, Any]:
+        """Extract Link configuration"""
+        return {
+            'link_type': config.link_type,
+            'buffer_size': getattr(config, 'buffer_size', 100),
+            'transform_function': getattr(config, 'transform_function', None),
+            'condition': getattr(config, 'condition', None),
+            'file_path': getattr(config, 'file_path', None),
+            'data_mapping': getattr(config, 'data_mapping', None)
+        }
+    
+    @classmethod  
+    def resolve_dependencies(cls, component_config: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        """Resolve Link dependencies"""
+        return {
+            'source': kwargs.get('source'),
+            'target': kwargs.get('target'),
+            'enable_logging': kwargs.get('enable_logging', True),
+            'debug_mode': kwargs.get('debug_mode', False)
+        }
+    
+    def _init_from_config(self, config: LinkConfig, component_config: Dict[str, Any],
+                         dependencies: Dict[str, Any]) -> None:
+        """Initialize Link with resolved dependencies"""
+        self.config = config
+        self.source = dependencies.get('source')
+        self.target = dependencies.get('target')
+        self.name = f"{getattr(self.source, 'name', 'unknown')}->{getattr(self.target, 'name', 'unknown')}"
         self._is_active = False
         self._transfer_count = 0
         self._error_count = 0
@@ -137,22 +174,24 @@ class LinkBase(ABC):
         self._total_transfer_time = 0.0
         
         # Initialize centralized logging system
-        self.enable_logging = kwargs.get('enable_logging', True)
+        self.enable_logging = dependencies.get('enable_logging', True)
         if self.enable_logging:
             # Use centralized logging system
-            self.nb_logger = get_logger(self.name, category="links", debug_mode=kwargs.get('debug_mode', False))
+            self.nb_logger = get_logger(self.name, category="links", debug_mode=dependencies.get('debug_mode', False))
             
             # Register with system log manager
             system_manager = get_system_log_manager()
             system_manager.register_component("links", self.name, self, {
-                "link_type": self.config.link_type.value if hasattr(self.config.link_type, 'value') else str(self.config.link_type),
-                "source": getattr(source, 'name', str(source)),
-                "target": getattr(target, 'name', str(target)),
-                "buffer_size": self.config.buffer_size,
+                "link_type": component_config['link_type'].value if hasattr(component_config['link_type'], 'value') else str(component_config['link_type']),
+                "source": getattr(self.source, 'name', str(self.source)),
+                "target": getattr(self.target, 'name', str(self.target)),
+                "buffer_size": component_config['buffer_size'],
                 "enable_logging": True
             })
         else:
             self.nb_logger = None
+    
+    # LinkBase inherits FromConfigBase.__init__ which prevents direct instantiation
         
     @abstractmethod
     async def transfer(self, data: Any) -> None:

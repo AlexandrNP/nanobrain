@@ -1,0 +1,109 @@
+# Default Configuration for Web Interface
+# Class: nanobrain.library.interfaces.web.web_interface.WebInterface
+
+name: "DefaultWebInterface"
+description: "Default web interface configuration"
+version: "1.0.0"
+
+# Server configuration
+server:
+  host: "127.0.0.1"
+  port: 8000
+  workers: 1
+  timeout: 30
+  keepalive: 2
+  max_requests: 1000
+  max_requests_jitter: 50
+  preload_app: false
+  daemon: false
+  debug: false
+
+# API configuration
+api:
+  prefix: "/api/v1"
+  title: "NanoBrain API"
+  description: "NanoBrain Framework REST API"
+  version: "1.0.0"
+  docs_url: "/docs"
+  redoc_url: "/redoc"
+  openapi_url: "/openapi.json"
+  include_in_schema: true
+
+# CORS configuration
+cors:
+  enabled: true
+  allow_origins: ["*"]
+  allow_methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+  allow_headers: ["*"]
+  allow_credentials: false
+  expose_headers: []
+  max_age: 600
+
+# Chat configuration
+chat:
+  enabled: true
+  max_message_length: 4000
+  max_conversation_length: 100
+  enable_streaming: false
+  typing_indicators: true
+  message_history: true
+  auto_save_conversations: false
+
+# Logging configuration
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file_enabled: false
+  file_path: "logs/web_interface.log"
+  console_enabled: true
+  request_logging: true
+  error_logging: true
+
+# Security configuration
+security:
+  enable_auth: false
+  auth_provider: "local"
+  session_secret: null
+  session_timeout: 3600
+  rate_limiting: true
+  max_requests_per_minute: 60
+  enable_https: false
+  ssl_cert_path: null
+  ssl_key_path: null
+
+# Static files configuration
+static_files:
+  enabled: true
+  directory: "static"
+  mount_path: "/static"
+  cache_max_age: 3600
+
+# Template configuration
+templates:
+  directory: "templates"
+  auto_reload: false
+  cache_size: 400
+
+# Database configuration (if needed)
+database:
+  enabled: false
+  type: "sqlite"
+  url: "sqlite:///./web_interface.db"
+  echo: false
+  pool_size: 5
+  max_overflow: 10
+
+# Workflow integration
+workflow_config_path: null
+enable_workflow_metrics: true
+workflow_timeout: 300.0
+
+# Custom settings
+custom_settings: {}
+
+# Framework metadata
+_metadata:
+  config_type: "web_interface"
+  framework_version: "1.0.0"
+  created_by: "nanobrain_framework"
+  description: "Default configuration for web interface" 

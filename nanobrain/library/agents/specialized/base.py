@@ -11,6 +11,7 @@ from datetime import datetime
 from abc import ABC, abstractmethod
 
 # Updated imports for nanobrain package structure
+from nanobrain.core.component_base import FromConfigBase
 from nanobrain.core.agent import Agent, SimpleAgent, ConversationalAgent, AgentConfig
 from nanobrain.core.executor import LocalExecutor, ExecutorConfig
 from nanobrain.core.logging_system import NanoBrainLogger, get_logger
@@ -128,15 +129,80 @@ class SpecializedAgentBase(ABC):
         return False
 
 
-class SimpleSpecializedAgent(SpecializedAgentBase, SimpleAgent):
+class SimpleSpecializedAgent(FromConfigBase, SpecializedAgentBase, SimpleAgent):
     """
     Simple specialized agent that processes input without conversation history.
     
     Combines SimpleAgent capabilities with specialized functionality.
     """
     
-    def __init__(self, config: AgentConfig, **kwargs):
-        super().__init__(config=config, **kwargs)
+    # Component configuration
+    COMPONENT_TYPE = "simple_specialized_agent"
+    REQUIRED_CONFIG_FIELDS = ['name']
+    OPTIONAL_CONFIG_FIELDS = {}
+    
+    @classmethod
+    def extract_component_config(cls, config: AgentConfig) -> Dict[str, Any]:
+        """Extract SimpleSpecializedAgent configuration"""
+        return {
+            'name': config.name,
+            'description': config.description,
+            'model': config.model,
+            'system_prompt': config.system_prompt,
+        }
+    
+    @classmethod  
+    def resolve_dependencies(cls, component_config: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        """Resolve SimpleSpecializedAgent dependencies"""
+        # Create executor via from_config to avoid direct instantiation
+        from nanobrain.core.executor import LocalExecutor, ExecutorConfig
+        
+        executor_config = kwargs.get('executor_config') or ExecutorConfig()
+        executor = LocalExecutor.from_config(executor_config)
+        
+        return {
+            'executor': executor,
+        }
+    
+    @classmethod
+    def from_config(cls, config: AgentConfig, **kwargs) -> 'SimpleSpecializedAgent':
+        """Mandatory from_config implementation for SimpleSpecializedAgent"""
+        logger = get_logger(f"{cls.__name__}.from_config")
+        logger.info(f"Creating {cls.__name__} from configuration")
+        
+        # Step 1: Validate configuration schema
+        cls.validate_config_schema(config)
+        
+        # Step 2: Extract component-specific configuration  
+        component_config = cls.extract_component_config(config)
+        
+        # Step 3: Resolve dependencies
+        dependencies = cls.resolve_dependencies(component_config, **kwargs)
+        
+        # Step 4: Create instance
+        instance = cls.create_instance(config, component_config, dependencies)
+        
+        # Step 5: Post-creation initialization
+        instance._post_config_initialization()
+        
+        logger.info(f"Successfully created {cls.__name__}")
+        return instance
+        
+    def _init_from_config(self, config: AgentConfig, component_config: Dict[str, Any],
+                         dependencies: Dict[str, Any]) -> None:
+        """Initialize SimpleSpecializedAgent with resolved dependencies"""
+        # Extract executor from dependencies to pass to parent
+        executor = dependencies.pop('executor', None)
+        
+        # Initialize parent classes first
+        SimpleAgent.__init__(self, config, executor=executor, **dependencies)
+        # SpecializedAgentBase doesn't need config, just call super() directly
+        self._specialized_operations_count = 0
+        self._specialized_errors_count = 0
+        self._domain_specific_metrics = {}
+        
+        # Get specialized logger
+        self.specialized_logger = get_logger(f"specialized.{self.name}")
     
     async def process(self, input_text: str, **kwargs) -> str:
         """
@@ -164,15 +230,80 @@ class SimpleSpecializedAgent(SpecializedAgentBase, SimpleAgent):
         return await super().process(input_text, **kwargs)
 
 
-class ConversationalSpecializedAgent(SpecializedAgentBase, ConversationalAgent):
+class ConversationalSpecializedAgent(FromConfigBase, SpecializedAgentBase, ConversationalAgent):
     """
     Conversational specialized agent that maintains conversation history.
     
     Combines ConversationalAgent capabilities with specialized functionality.
     """
     
-    def __init__(self, config: AgentConfig, **kwargs):
-        super().__init__(config=config, **kwargs)
+    # Component configuration
+    COMPONENT_TYPE = "conversational_specialized_agent"
+    REQUIRED_CONFIG_FIELDS = ['name']
+    OPTIONAL_CONFIG_FIELDS = {}
+    
+    @classmethod
+    def extract_component_config(cls, config: AgentConfig) -> Dict[str, Any]:
+        """Extract ConversationalSpecializedAgent configuration"""
+        return {
+            'name': config.name,
+            'description': config.description,
+            'model': config.model,
+            'system_prompt': config.system_prompt,
+        }
+    
+    @classmethod  
+    def resolve_dependencies(cls, component_config: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        """Resolve ConversationalSpecializedAgent dependencies"""
+        # Create executor via from_config to avoid direct instantiation
+        from nanobrain.core.executor import LocalExecutor, ExecutorConfig
+        
+        executor_config = kwargs.get('executor_config') or ExecutorConfig()
+        executor = LocalExecutor.from_config(executor_config)
+        
+        return {
+            'executor': executor,
+        }
+    
+    @classmethod
+    def from_config(cls, config: AgentConfig, **kwargs) -> 'ConversationalSpecializedAgent':
+        """Mandatory from_config implementation for ConversationalSpecializedAgent"""
+        logger = get_logger(f"{cls.__name__}.from_config")
+        logger.info(f"Creating {cls.__name__} from configuration")
+        
+        # Step 1: Validate configuration schema
+        cls.validate_config_schema(config)
+        
+        # Step 2: Extract component-specific configuration  
+        component_config = cls.extract_component_config(config)
+        
+        # Step 3: Resolve dependencies
+        dependencies = cls.resolve_dependencies(component_config, **kwargs)
+        
+        # Step 4: Create instance
+        instance = cls.create_instance(config, component_config, dependencies)
+        
+        # Step 5: Post-creation initialization
+        instance._post_config_initialization()
+        
+        logger.info(f"Successfully created {cls.__name__}")
+        return instance
+        
+    def _init_from_config(self, config: AgentConfig, component_config: Dict[str, Any],
+                         dependencies: Dict[str, Any]) -> None:
+        """Initialize ConversationalSpecializedAgent with resolved dependencies"""
+        # Extract executor from dependencies to pass to parent
+        executor = dependencies.pop('executor', None)
+        
+        # Initialize parent classes first
+        ConversationalAgent.__init__(self, config, executor=executor, **dependencies)
+        # SpecializedAgentBase doesn't need config, just initialize directly
+        self._specialized_operations_count = 0
+        self._specialized_errors_count = 0
+        self._domain_specific_metrics = {}
+        
+        # Get specialized logger
+        self.specialized_logger = get_logger(f"specialized.{self.name}")
     
     async def process(self, input_text: str, **kwargs) -> str:
         """

@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 from dataclasses import dataclass, asdict, field
 from collections import defaultdict
 
-from .step import Step, StepConfig
+from .step import BaseStep, Step, StepConfig
 from .data_unit import DataUnitBase, DataUnitConfig
 from .trigger import TriggerBase, TriggerConfig
 from .link import LinkBase, DirectLink, ConditionalLink, TransformLink, LinkConfig, LinkType
@@ -334,7 +334,7 @@ class WorkflowGraph:
         
         self.logger = get_logger("workflow.graph")
     
-    def add_step(self, step_id: str, step: Step) -> None:
+    def add_step(self, step_id: str, step: BaseStep) -> None:
         """Add a step node to the graph."""
         if step_id in self.nodes:
             raise ValueError(f"Step {step_id} already exists in workflow graph")
@@ -417,7 +417,7 @@ class WorkflowGraph:
         self._invalidate_cache()
         self.logger.debug(f"Removed link from workflow graph: {link_id}")
     
-    def get_step(self, step_id: str) -> Optional[Step]:
+    def get_step(self, step_id: str) -> Optional[BaseStep]:
         """Get a step by ID."""
         return self.nodes.get(step_id)
     
@@ -723,7 +723,7 @@ class ConfigLoader:
         self.logger.debug("Configuration cache cleared")
 
 
-class Workflow(Step):
+class Workflow(BaseStep):
     """
     Base workflow class extending Step.
     
@@ -740,9 +740,97 @@ class Workflow(Step):
     - Performance monitoring and metrics collection
     """
     
-    def __init__(self, config: WorkflowConfig, executor: Optional[ExecutorBase] = None, **kwargs):
-        """Initialize workflow with configuration."""
-        super().__init__(config, executor, **kwargs)
+    COMPONENT_TYPE = "workflow"
+    REQUIRED_CONFIG_FIELDS = ['name']
+    OPTIONAL_CONFIG_FIELDS = {
+        'description': '',
+        'steps': [],
+        'links': [],
+        'execution_strategy': 'sequential',
+        'error_handling': 'continue',
+        'enable_monitoring': True,
+        'auto_initialize': True,
+        'debug_mode': False
+    }
+    
+    @classmethod
+    def extract_component_config(cls, config: WorkflowConfig) -> Dict[str, Any]:
+        """Extract Workflow configuration"""
+        base_config = super().extract_component_config(config)
+        return {
+            **base_config,
+            'steps': getattr(config, 'steps', []),
+            'links': getattr(config, 'links', []),
+            'execution_strategy': getattr(config, 'execution_strategy', ExecutionStrategy.SEQUENTIAL),
+            'error_handling': getattr(config, 'error_handling', ErrorHandlingStrategy.CONTINUE),
+            'enable_monitoring': getattr(config, 'enable_monitoring', True),
+            'workflow_directory': getattr(config, 'workflow_directory', None),
+            'max_parallel_steps': getattr(config, 'max_parallel_steps', 10),
+            'step_timeout': getattr(config, 'step_timeout', 300.0),
+            'retry_attempts': getattr(config, 'retry_attempts', 3),
+            'retry_delay': getattr(config, 'retry_delay', 1.0),
+            'validate_graph': getattr(config, 'validate_graph', True),
+            'allow_cycles': getattr(config, 'allow_cycles', False),
+            'require_connected_graph': getattr(config, 'require_connected_graph', True),
+            'enable_progress_reporting': getattr(config, 'enable_progress_reporting', True),
+            'progress_batch_interval': getattr(config, 'progress_batch_interval', 3.0),
+            'progress_collapsed_by_default': getattr(config, 'progress_collapsed_by_default', True),
+            'progress_show_technical_errors': getattr(config, 'progress_show_technical_errors', True),
+            'progress_preserve_session_history': getattr(config, 'progress_preserve_session_history', True)
+        }
+    
+    def _init_from_config(self, config: WorkflowConfig, component_config: Dict[str, Any],
+                         dependencies: Dict[str, Any]) -> None:
+        """Initialize Workflow with resolved dependencies"""
+        super()._init_from_config(config, component_config, dependencies)
+        
+        # Workflow-specific configuration
+        self.workflow_config = config
+        
+        # Core workflow components
+        self.workflow_graph = WorkflowGraph()
+        self.config_loader = ConfigLoader(component_config.get('workflow_directory') or ".")
+        
+        # Step and link management
+        self.child_steps: Dict[str, BaseStep] = {}
+        self.step_links: Dict[str, LinkBase] = {}
+        
+        # Execution state
+        self.execution_order: List[str] = []
+        self.current_step_index: int = 0
+        self.is_workflow_complete: bool = False
+        self.failed_steps: Set[str] = set()
+        self.completed_steps: Set[str] = set()
+        
+        # Performance tracking
+        self.step_execution_times: Dict[str, float] = {}
+        self.workflow_start_time: Optional[float] = None
+        self.workflow_end_time: Optional[float] = None
+        
+        # Progress reporting
+        self.progress_reporter: Optional[ProgressReporter] = None
+        if component_config.get('enable_progress_reporting', True):
+            session_id = dependencies.get('session_id')
+            self.progress_reporter = ProgressReporter(
+                workflow_id=f"{self.name}_{int(time.time())}",
+                workflow_name=self.name,
+                session_id=session_id
+            )
+            self.progress_reporter.workflow_progress.batch_interval = component_config.get('progress_batch_interval', 3.0)
+            self.progress_reporter.workflow_progress.collapsed_by_default = component_config.get('progress_collapsed_by_default', True)
+            self.progress_reporter.workflow_progress.show_technical_errors = component_config.get('progress_show_technical_errors', True)
+            self.progress_reporter.workflow_progress.preserve_session_history = component_config.get('progress_preserve_session_history', True)
+        
+        # Workflow-specific logger
+        self.workflow_logger = get_logger(f"workflow.{self.name}", debug_mode=component_config.get('debug_mode', False))
+        
+        self.workflow_logger.info(f"Initialized workflow: {self.name}")
+    
+    # Workflow inherits FromConfigBase.__init__ which prevents direct instantiation
+    # Use Workflow.from_config() to create instances
+    
+    def _legacy_init_workflow_components(self, config: WorkflowConfig, **kwargs):
+        """Legacy initialization method - kept for reference but should use _init_from_config"""
         
         # Workflow-specific configuration
         self.workflow_config = config
@@ -944,7 +1032,7 @@ class Workflow(Step):
         from .step import create_step
         
         # Determine step type/class
-        step_class = config_dict.get('class', config_dict.get('step_type', 'SimpleStep'))
+        step_class = config_dict.get('class', config_dict.get('step_type', 'Step'))
         
         # Update step config with ID and name
         step_config.name = step_id

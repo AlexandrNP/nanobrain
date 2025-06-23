@@ -1,49 +1,50 @@
-name: "EnhancedCollaborativeAgent_3"
-description: "Third agent in Parsl distributed chat workflow"
-class: "EnhancedCollaborativeAgent"
-
-# Agent configuration
+name: EnhancedCollaborativeAgent_3
+description: Third agent in Parsl distributed chat workflow
+class: EnhancedCollaborativeAgent
 config:
-  name: "parsl_agent_3"
-  description: "Balanced and versatile agent optimized for Parsl execution"
-  model: "gpt-3.5-turbo"
+  name: parsl_agent_3
+  description: Balanced and versatile agent optimized for Parsl execution
+  model: gpt-3.5-turbo
   temperature: 0.7
   max_tokens: 1000
   enable_metrics: true
-  
-  # System prompt for this specific agent
-  system_prompt: >
-    You are Agent 3 in a distributed Parsl-based conversational AI system.
-    You provide balanced, helpful, and comprehensive responses.
-    You work alongside other agents in parallel to provide well-rounded answers.
-    Focus on being practical, helpful, and maintaining good conversational flow.
-    
-  # Parsl-specific configuration
+  system_prompt: 'You are Agent 3 in a distributed Parsl-based conversational AI system.
+    You provide balanced, helpful, and comprehensive responses. You work alongside
+    other agents in parallel to provide well-rounded answers. Focus on being practical,
+    helpful, and maintaining good conversational flow.
+
+    '
   parsl_config:
-    executor_label: "htex_local"
-    priority: "normal"
+    executor_label: htex_local
+    priority: normal
     resource_requirements:
       cores: 1
-      memory: "1GB"
-    
-  # A2A collaboration settings
+      memory: 1GB
   delegation_rules:
-    - keywords: ["help", "explain", "general", "question"]
-      priority: 1.0
-      description: "Handle general help and explanation requests"
-      
-    - keywords: ["conversation", "chat", "discuss"]
-      priority: 0.8
-      description: "Handle conversational requests"
-      
-  # Performance optimization
+  - keywords:
+    - help
+    - explain
+    - general
+    - question
+    priority: 1.0
+    description: Handle general help and explanation requests
+  - keywords:
+    - conversation
+    - chat
+    - discuss
+    priority: 0.8
+    description: Handle conversational requests
   optimization:
     enable_caching: true
     cache_ttl: 450
     batch_processing: false
-    
-  # Error handling
   error_handling:
     max_retries: 2
     timeout: 35.0
-    fallback_response: "I'm Agent 3, and I'm here to help. Let me try to assist you in a different way." 
+    fallback_response: I'm Agent 3, and I'm here to help. Let me try to assist you
+      in a different way.
+_metadata:
+  last_updated: '2025-06-22T23:41:37.543025'
+  updated_by: modular_config_migration
+  migration_version: 1.0.0
+  uses_modular_config: true

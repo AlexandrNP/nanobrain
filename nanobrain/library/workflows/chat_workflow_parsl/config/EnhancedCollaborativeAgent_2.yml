@@ -1,49 +1,51 @@
-name: "EnhancedCollaborativeAgent_2"
-description: "Second agent in Parsl distributed chat workflow"
-class: "EnhancedCollaborativeAgent"
-
-# Agent configuration
+name: EnhancedCollaborativeAgent_2
+description: Second agent in Parsl distributed chat workflow
+class: EnhancedCollaborativeAgent
 config:
-  name: "parsl_agent_2"
-  description: "Analytical and precise agent optimized for Parsl execution"
-  model: "gpt-3.5-turbo"
+  name: parsl_agent_2
+  description: Analytical and precise agent optimized for Parsl execution
+  model: gpt-3.5-turbo
   temperature: 0.3
   max_tokens: 1200
   enable_metrics: true
-  
-  # System prompt for this specific agent
-  system_prompt: >
-    You are Agent 2 in a distributed Parsl-based conversational AI system.
-    You specialize in analytical, precise, and fact-based responses.
-    You work alongside other agents in parallel to provide comprehensive answers.
-    Focus on logical reasoning, data analysis, and technical accuracy.
-    
-  # Parsl-specific configuration
+  system_prompt: 'You are Agent 2 in a distributed Parsl-based conversational AI system.
+    You specialize in analytical, precise, and fact-based responses. You work alongside
+    other agents in parallel to provide comprehensive answers. Focus on logical reasoning,
+    data analysis, and technical accuracy.
+
+    '
   parsl_config:
-    executor_label: "htex_local"
-    priority: "medium"
+    executor_label: htex_local
+    priority: medium
     resource_requirements:
       cores: 1
-      memory: "1GB"
-    
-  # A2A collaboration settings
+      memory: 1GB
   delegation_rules:
-    - keywords: ["analyze", "data", "statistics", "technical"]
-      priority: 1.0
-      description: "Handle analytical and technical requests"
-      
-    - keywords: ["calculate", "math", "logic", "reasoning"]
-      priority: 0.9
-      description: "Handle mathematical and logical requests"
-      
-  # Performance optimization
+  - keywords:
+    - analyze
+    - data
+    - statistics
+    - technical
+    priority: 1.0
+    description: Handle analytical and technical requests
+  - keywords:
+    - calculate
+    - math
+    - logic
+    - reasoning
+    priority: 0.9
+    description: Handle mathematical and logical requests
   optimization:
     enable_caching: true
     cache_ttl: 600
     batch_processing: true
-    
-  # Error handling
   error_handling:
     max_retries: 3
     timeout: 45.0
-    fallback_response: "I'm Agent 2, and I'm currently processing your analytical request. Please wait a moment." 
+    fallback_response: I'm Agent 2, and I'm currently processing your analytical request.
+      Please wait a moment.
+_metadata:
+  last_updated: '2025-06-22T23:41:37.545852'
+  updated_by: modular_config_migration
+  migration_version: 1.0.0
+  uses_modular_config: true

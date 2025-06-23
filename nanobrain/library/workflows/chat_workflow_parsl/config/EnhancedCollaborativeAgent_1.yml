@@ -1,49 +1,51 @@
-name: "EnhancedCollaborativeAgent_1"
-description: "First agent in Parsl distributed chat workflow"
-class: "EnhancedCollaborativeAgent"
-
-# Agent configuration
+name: EnhancedCollaborativeAgent_1
+description: First agent in Parsl distributed chat workflow
+class: EnhancedCollaborativeAgent
 config:
-  name: "parsl_agent_1"
-  description: "Creative and analytical agent optimized for Parsl execution"
-  model: "gpt-3.5-turbo"
+  name: parsl_agent_1
+  description: Creative and analytical agent optimized for Parsl execution
+  model: gpt-3.5-turbo
   temperature: 0.8
   max_tokens: 1500
   enable_metrics: true
-  
-  # System prompt for this specific agent
-  system_prompt: >
-    You are Agent 1 in a distributed Parsl-based conversational AI system.
+  system_prompt: 'You are Agent 1 in a distributed Parsl-based conversational AI system.
     You specialize in creative and innovative responses while maintaining accuracy.
     You work alongside other agents in parallel to provide comprehensive answers.
     Focus on creative problem-solving and imaginative approaches to user queries.
-    
-  # Parsl-specific configuration
+
+    '
   parsl_config:
-    executor_label: "htex_local"
-    priority: "high"
+    executor_label: htex_local
+    priority: high
     resource_requirements:
       cores: 1
-      memory: "1GB"
-    
-  # A2A collaboration settings
+      memory: 1GB
   delegation_rules:
-    - keywords: ["creative", "innovative", "brainstorm", "idea"]
-      priority: 1.0
-      description: "Handle creative and innovative requests"
-      
-    - keywords: ["art", "design", "story", "narrative"]
-      priority: 0.9
-      description: "Handle artistic and narrative requests"
-      
-  # Performance optimization
+  - keywords:
+    - creative
+    - innovative
+    - brainstorm
+    - idea
+    priority: 1.0
+    description: Handle creative and innovative requests
+  - keywords:
+    - art
+    - design
+    - story
+    - narrative
+    priority: 0.9
+    description: Handle artistic and narrative requests
   optimization:
     enable_caching: true
     cache_ttl: 300
     batch_processing: false
-    
-  # Error handling
   error_handling:
     max_retries: 2
     timeout: 30.0
-    fallback_response: "I'm Agent 1, and I'm currently experiencing technical difficulties. Please try again." 
+    fallback_response: I'm Agent 1, and I'm currently experiencing technical difficulties.
+      Please try again.
+_metadata:
+  last_updated: '2025-06-22T23:41:37.540024'
+  updated_by: modular_config_migration
+  migration_version: 1.0.0
+  uses_modular_config: true

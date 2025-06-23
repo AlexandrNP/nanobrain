@@ -2,15 +2,21 @@
 Step System for NanoBrain Framework
 
 Provides event-driven data processing with DataUnit integration.
+Enhanced with mandatory from_config pattern implementation.
 """
 
 import asyncio
+import importlib
 import logging
 import time
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional, List, Union
 from pydantic import BaseModel, Field, ConfigDict
 
+from .component_base import (
+    FromConfigBase, ComponentConfigurationError, ComponentDependencyError,
+    import_class_from_path
+)
 from .executor import ExecutorBase, LocalExecutor, ExecutorConfig
 from .data_unit import DataUnitBase, DataUnitMemory, DataUnitConfig
 from .trigger import TriggerBase, DataUpdatedTrigger, TriggerConfig
@@ -39,9 +45,9 @@ class StepConfig(BaseModel):
     log_executions: bool = True
 
 
-class Step(ABC):
+class BaseStep(FromConfigBase, ABC):
     """
-    Base class for Steps that process data using DataUnits and triggers.
+    Enhanced base class for Steps with mandatory from_config implementation.
     
     Biological analogy: Functional neural circuit.
     Justification: Like how functional neural circuits process specific
@@ -49,17 +55,75 @@ class Step(ABC):
     specific operations and pass results to other steps.
     """
     
-    def __init__(self, config: StepConfig, executor: Optional[ExecutorBase] = None, **kwargs):
+    COMPONENT_TYPE = "base_step"
+    REQUIRED_CONFIG_FIELDS = ['name']
+    OPTIONAL_CONFIG_FIELDS = {
+        'description': '',
+        'auto_initialize': True,
+        'debug_mode': False,
+        'enable_logging': True,
+        'log_data_transfers': True,
+        'log_executions': True
+    }
+    
+    @classmethod
+    def from_config(cls, config: StepConfig, **kwargs) -> 'BaseStep':
+        """Mandatory from_config implementation for BaseStep components"""
+        logger = get_logger(f"{cls.__name__}.from_config")
+        logger.info(f"Creating {cls.__name__} from configuration")
+        
+        # Step 1: Validate configuration schema
+        cls.validate_config_schema(config)
+        
+        # Step 2: Extract component-specific configuration  
+        component_config = cls.extract_component_config(config)
+        
+        # Step 3: Resolve dependencies
+        dependencies = cls.resolve_dependencies(component_config, **kwargs)
+        
+        # Step 4: Create instance
+        instance = cls.create_instance(config, component_config, dependencies)
+        
+        # Step 5: Post-creation initialization
+        instance._post_config_initialization()
+        
+        logger.info(f"Successfully created {cls.__name__}")
+        return instance
+    
+    @classmethod
+    def extract_component_config(cls, config: StepConfig) -> Dict[str, Any]:
+        """Extract BaseStep-specific configuration"""
+        return {
+            'name': config.name,
+            'description': getattr(config, 'description', ''),
+            'auto_initialize': getattr(config, 'auto_initialize', True),
+            'debug_mode': getattr(config, 'debug_mode', False),
+            'enable_logging': getattr(config, 'enable_logging', True),
+            'log_data_transfers': getattr(config, 'log_data_transfers', True),
+            'log_executions': getattr(config, 'log_executions', True),
+        }
+    
+    @classmethod  
+    def resolve_dependencies(cls, component_config: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        """Resolve BaseStep dependencies"""
+        executor = kwargs.get('executor') or LocalExecutor()
+        return {
+            'executor': executor
+        }
+    
+    def _init_from_config(self, config: StepConfig, component_config: Dict[str, Any],
+                         dependencies: Dict[str, Any]) -> None:
+        """Initialize BaseStep with resolved dependencies"""
         self.config = config
-        self.name = config.name
-        self.description = config.description
+        self.name = component_config['name']
+        self.description = component_config['description']
         
         # Initialize logging system
-        self.nb_logger = get_logger(f"step.{self.name}", debug_mode=config.debug_mode)
+        self.nb_logger = get_logger(f"step.{self.name}", debug_mode=component_config['debug_mode'])
         self.nb_logger.info(f"Initializing step: {self.name}", step_name=self.name, config=config.model_dump())
         
         # Executor for running the step
-        self.executor = executor or LocalExecutor(config.executor_config)
+        self.executor = dependencies['executor']
         
         # Data management
         self.input_data_units: Dict[str, DataUnitBase] = {}
@@ -79,6 +143,8 @@ class Step(ABC):
         self._start_time = time.time()
         self._last_activity_time = time.time()
         self._total_processing_time = 0.0
+    
+    # BaseStep inherits FromConfigBase.__init__ which prevents direct instantiation
         
     async def initialize(self) -> None:
         """Initialize the step and its components."""
@@ -430,8 +496,35 @@ class Step(ABC):
         return False
 
 
-class SimpleStep(Step):
-    """Simple step that processes data without complex logic."""
+class Step(BaseStep):
+    """Step (formerly SimpleStep) with mandatory from_config implementation."""
+    
+    REQUIRED_CONFIG_FIELDS = ['name']
+    OPTIONAL_CONFIG_FIELDS = {
+        'description': '',
+        'processing_mode': 'combine',
+        'add_metadata': True,
+        'auto_initialize': True,
+        'debug_mode': False,
+        'enable_logging': True
+    }
+    
+    @classmethod
+    def extract_component_config(cls, config: StepConfig) -> Dict[str, Any]:
+        """Extract Step configuration"""
+        base_config = super().extract_component_config(config)
+        return {
+            **base_config,
+            'processing_mode': getattr(config, 'processing_mode', 'combine'),
+            'add_metadata': getattr(config, 'add_metadata', True),
+        }
+    
+    def _init_from_config(self, config: StepConfig, component_config: Dict[str, Any],
+                         dependencies: Dict[str, Any]) -> None:
+        """Initialize Step with resolved dependencies"""
+        super()._init_from_config(config, component_config, dependencies)
+        self.processing_mode = component_config['processing_mode']
+        self.add_metadata = component_config['add_metadata']
     
     async def process(self, input_data: Dict[str, Any], **kwargs) -> Any:
         """Process input data with simple transformation."""
@@ -463,15 +556,44 @@ class SimpleStep(Step):
             return result
 
 
-class TransformStep(Step):
+class TransformStep(BaseStep):
     """Step that applies a transformation function to input data."""
     
-    def __init__(self, config: StepConfig, transform_func: callable = None, **kwargs):
-        super().__init__(config, **kwargs)
-        self.transform_func = transform_func or self._default_transform
+    REQUIRED_CONFIG_FIELDS = ['name']
+    OPTIONAL_CONFIG_FIELDS = {
+        'description': '',
+        'auto_initialize': True,
+        'debug_mode': False,
+        'enable_logging': True
+    }
+    
+    @classmethod
+    def extract_component_config(cls, config: StepConfig) -> Dict[str, Any]:
+        """Extract TransformStep configuration"""
+        base_config = super().extract_component_config(config)
+        return base_config
+    
+    @classmethod  
+    def resolve_dependencies(cls, component_config: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        """Resolve TransformStep dependencies"""
+        base_deps = super().resolve_dependencies(component_config, **kwargs)
+        
+        # Get transform function from kwargs
+        transform_func = kwargs.get('transform_func')
+        
+        return {
+            **base_deps,
+            'transform_func': transform_func
+        }
+    
+    def _init_from_config(self, config: StepConfig, component_config: Dict[str, Any],
+                         dependencies: Dict[str, Any]) -> None:
+        """Initialize TransformStep with resolved dependencies"""
+        super()._init_from_config(config, component_config, dependencies)
+        self.transform_func = dependencies.get('transform_func') or self._default_transform
         
         self.nb_logger.debug(f"Transform step {self.name} initialized", 
-                           has_custom_transform=transform_func is not None)
+                           has_custom_transform=dependencies.get('transform_func') is not None)
     
     def _default_transform(self, data: Any) -> Any:
         """Default transformation: convert to string and add metadata."""
@@ -513,35 +635,59 @@ class TransformStep(Step):
             return result
 
 
-def create_step(step_type: str, config: StepConfig, **kwargs) -> Step:
+def create_step(step_type: str, config: StepConfig, **kwargs) -> BaseStep:
     """
-    Factory function to create steps of different types.
+    Direct import path factory - NO BACKWARD COMPATIBILITY
     
     Args:
-        step_type: Type of step ('simple', 'transform', or 'workflow')
-        config: Step configuration
-        **kwargs: Additional arguments
+        step_type: MUST be full class import path (e.g., 'module.submodule.ClassName')
+        config: Step configuration object
+        **kwargs: Framework-provided dependencies
         
     Returns:
-        Step instance
+        BaseStep instance created via from_config
+        
+    Raises:
+        ValueError: If step_type is not a full import path or class doesn't implement from_config
+        ImportError: If class cannot be imported
     """
     logger = get_logger("step.factory")
-    logger.info(f"Creating step: {config.name}", 
-               step_type=step_type, 
-               step_name=config.name)
+    logger.info(f"Creating step via mandatory from_config: {step_type}")
     
-    if step_type.lower() == "simple":
-        return SimpleStep(config, **kwargs)
-    elif step_type.lower() == "transform":
-        return TransformStep(config, **kwargs)
-    elif step_type.lower() == "workflow":
-        # Import here to avoid circular imports
-        from .workflow import Workflow, WorkflowConfig
-        if isinstance(config, WorkflowConfig):
-            return Workflow(config, **kwargs)
-        else:
-            # Convert StepConfig to WorkflowConfig
-            workflow_config = WorkflowConfig(**config.model_dump())
-            return Workflow(workflow_config, **kwargs)
-    else:
-        raise ValueError(f"Unknown step type: {step_type}") 
+    # ENFORCE full import path requirement
+    if '.' not in step_type:
+        raise ValueError(
+            f"Step type '{step_type}' must be a full import path. "
+            f"Short class names and built-in types are no longer supported. "
+            f"Use format: 'module.submodule.ClassName'"
+        )
+    
+    try:
+        # Direct import - only supported method
+        module_path, class_name = step_type.rsplit('.', 1)
+        module = importlib.import_module(module_path)
+        step_class = getattr(module, class_name)
+        
+        # MANDATORY: Validate from_config implementation
+        if not hasattr(step_class, 'from_config'):
+            raise ValueError(f"Step class '{step_type}' must implement from_config method")
+        
+        # Create instance via from_config
+        instance = step_class.from_config(config, **kwargs)
+        
+        # Validate returned instance
+        if not isinstance(instance, BaseStep):
+            raise ValueError(
+                f"from_config for '{step_type}' must return BaseStep instance, "
+                f"got {type(instance)}"
+            )
+        
+        logger.info(f"Successfully created {step_type} via from_config")
+        return instance
+        
+    except ImportError as e:
+        raise ImportError(f"Cannot import module '{module_path}': {e}")
+    except AttributeError as e:
+        raise ImportError(f"Class '{class_name}' not found in module '{module_path}': {e}")
+    except Exception as e:
+        raise ValueError(f"Failed to create step '{step_type}': {e}") 

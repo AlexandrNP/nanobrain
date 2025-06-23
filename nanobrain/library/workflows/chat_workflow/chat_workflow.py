@@ -25,6 +25,7 @@ from typing import Dict, Any, Optional, List
 from datetime import datetime
 
 # Core framework imports with proper nanobrain package structure
+from nanobrain.core.component_base import FromConfigBase
 from nanobrain.core.data_unit import DataUnitMemory, DataUnitConfig, DataUnitType
 from nanobrain.core.trigger import DataUpdatedTrigger, TriggerConfig, TriggerType
 from nanobrain.core.link import DirectLink, LinkConfig, LinkType
@@ -37,7 +38,7 @@ from nanobrain.library.agents.conversational import EnhancedCollaborativeAgent
 from nanobrain.library.infrastructure.data import ConversationHistoryUnit
 
 
-class ChatWorkflow:
+class ChatWorkflow(FromConfigBase):
     """
     Enhanced chat workflow with modular step architecture.
     
@@ -49,17 +50,75 @@ class ChatWorkflow:
     - Performance monitoring and metrics
     """
     
-    def __init__(self):
-        """Initialize the chat workflow."""
+    # Component configuration
+    COMPONENT_TYPE = "chat_workflow"
+    REQUIRED_CONFIG_FIELDS = ['name']
+    OPTIONAL_CONFIG_FIELDS = {
+        'model': 'gpt-3.5-turbo',
+        'temperature': 0.7,
+        'max_tokens': 2000,
+        'system_prompt': 'You are a helpful and friendly AI assistant.',
+        'enable_metrics': True
+    }
+    
+    @classmethod
+    def extract_component_config(cls, config: Dict[str, Any]) -> Dict[str, Any]:
+        """Extract ChatWorkflow configuration"""
+        return {
+            'name': config.get('name', 'chat_workflow'),
+            'model': config.get('model', 'gpt-3.5-turbo'),
+            'temperature': config.get('temperature', 0.7),
+            'max_tokens': config.get('max_tokens', 2000),
+            'system_prompt': config.get('system_prompt', 'You are a helpful and friendly AI assistant.'),
+            'enable_metrics': config.get('enable_metrics', True),
+        }
+    
+    @classmethod  
+    def resolve_dependencies(cls, component_config: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        """Resolve ChatWorkflow dependencies"""
+        # Create executor via from_config to avoid direct instantiation
+        executor_config = ExecutorConfig(executor_type="local", max_workers=2)
+        executor = LocalExecutor.from_config(executor_config)
+        
+        return {
+            'executor': executor,
+            'agent_config': component_config,
+        }
+    
+    @classmethod
+    def from_config(cls, config: Dict[str, Any], **kwargs) -> 'ChatWorkflow':
+        """Mandatory from_config implementation for ChatWorkflow"""
+        logger = get_logger(f"{cls.__name__}.from_config")
+        logger.info(f"Creating {cls.__name__} from configuration")
+        
+        # Step 1: Extract component-specific configuration  
+        component_config = cls.extract_component_config(config)
+        
+        # Step 2: Resolve dependencies
+        dependencies = cls.resolve_dependencies(component_config, **kwargs)
+        
+        # Step 3: Create instance
+        instance = cls.create_instance(config, component_config, dependencies)
+        
+        # Step 4: Post-creation initialization
+        instance._post_config_initialization()
+        
+        logger.info(f"Successfully created {cls.__name__}")
+        return instance
+        
+    def _init_from_config(self, config: Dict[str, Any], component_config: Dict[str, Any],
+                         dependencies: Dict[str, Any]) -> None:
+        """Initialize ChatWorkflow with resolved dependencies"""
         self.logger = get_logger("chat_workflow", "workflows")
         
         # Workflow state
         self.is_initialized = False
         self.is_running = False
         
-        # Core components
-        self.executor = None
+        # Core components from dependencies
+        self.executor = dependencies.get('executor')
         self.agent = None
+        self.agent_config = dependencies.get('agent_config')
         
         # Data units
         self.data_units = {}
@@ -76,8 +135,9 @@ class ChatWorkflow:
         self.logger.info("Initializing chat workflow")
         
         try:
-            # Initialize executor
-            await self._setup_executor()
+            # Initialize executor (already created via from_config)
+            if self.executor:
+                await self.executor.initialize()
             
             # Initialize data units
             await self._setup_data_units()
@@ -93,16 +153,8 @@ class ChatWorkflow:
             raise
     
     async def _setup_executor(self) -> None:
-        """Setup the workflow executor."""
-        self.logger.info("Setting up executor")
-        
-        executor_config = ExecutorConfig(
-            executor_type="local",
-            max_workers=2
-        )
-        
-        self.executor = LocalExecutor(executor_config)
-        await self.executor.initialize()
+        """Setup the workflow executor (deprecated - now handled via from_config)."""
+        self.logger.info("Executor setup handled via from_config dependencies")
         
     async def _setup_data_units(self) -> None:
         """Setup data units for the workflow."""
@@ -142,20 +194,21 @@ class ChatWorkflow:
         self.logger.info("Setting up enhanced collaborative agent")
         
         agent_config = AgentConfig(
-            name="chat_assistant",
-            model="gpt-3.5-turbo",
-            temperature=0.7,
-            max_tokens=2000,
-            system_prompt="You are a helpful and friendly AI assistant.",
+            name=self.agent_config.get('name', 'chat_assistant'),
+            model=self.agent_config.get('model', 'gpt-3.5-turbo'),
+            temperature=self.agent_config.get('temperature', 0.7),
+            max_tokens=self.agent_config.get('max_tokens', 2000),
+            system_prompt=self.agent_config.get('system_prompt', 'You are a helpful and friendly AI assistant.'),
             auto_initialize=False,
             debug_mode=True,
             enable_logging=True,
             log_conversations=True
         )
         
-        self.agent = EnhancedCollaborativeAgent(
+        # Use mandatory from_config pattern for agent creation
+        self.agent = EnhancedCollaborativeAgent.from_config(
             agent_config,
-            enable_metrics=True
+            enable_metrics=self.agent_config.get('enable_metrics', True)
         )
         
         await self.agent.initialize()
@@ -247,9 +300,23 @@ class ChatWorkflow:
 
 
 # Factory function for easy workflow creation
-async def create_chat_workflow() -> ChatWorkflow:
-    """Create and initialize a chat workflow."""
-    workflow = ChatWorkflow()
+async def create_chat_workflow(config: Optional[Dict[str, Any]] = None) -> ChatWorkflow:
+    """Create and initialize a chat workflow using mandatory from_config pattern."""
+    default_config = {
+        'name': 'chat_workflow',
+        'model': 'gpt-3.5-turbo',
+        'temperature': 0.7,
+        'max_tokens': 2000,
+        'system_prompt': 'You are a helpful and friendly AI assistant.',
+        'enable_metrics': True
+    }
+    
+    # Merge with provided config
+    if config:
+        default_config.update(config)
+    
+    # Use mandatory from_config pattern
+    workflow = ChatWorkflow.from_config(default_config)
     await workflow.initialize()
     return workflow
 

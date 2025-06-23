@@ -1,0 +1,51 @@
+name: BV-BRC Data Acquisition
+description: Download genomes, filter by size, extract proteins, get sequences and
+  annotations
+estimated_time: 120.0
+class: BVBRCDataAcquisitionStep
+step_type: simple
+debug_mode: true
+enable_logging: true
+bvbrc_config:
+  installation_path: /Applications/BV-BRC.app
+  executable_path: /Applications/BV-BRC.app/deployment/bin
+  timeout_seconds: 400
+  retry_attempts: 2
+  genome_batch: 10
+  md5_batch: 5
+  min_length: 8000
+  max_length: 15000
+  verify_on_init: false
+target_genus: Alphavirus
+min_genome_length: 8000
+max_genome_length: 15000
+genome_batch_size: 100
+md5_batch_size: 50
+logical_steps_covered:
+- 1
+- 2
+- 3
+- 4
+- 5
+- 6
+- 7
+step_description_detailed: 'This step combines 7 logical workflow steps:
+
+  1. Download Alphavirus genomes from BV-BRC
+
+  2. Filter genomes by size constraints
+
+  3. Extract protein sequences from genomes
+
+  4. Validate sequence integrity
+
+  5. Get protein annotations from BV-BRC
+
+  6. Organize genome metadata
+
+  7. Prepare data for annotation mapping '
+_metadata:
+  last_updated: '2025-06-22T23:41:37.620989'
+  updated_by: modular_config_migration
+  migration_version: 1.0.0
+  uses_modular_config: true
