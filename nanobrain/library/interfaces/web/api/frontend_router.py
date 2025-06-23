@@ -10,7 +10,7 @@ import uuid
 from typing import Dict, Any, List, Optional
 from fastapi import APIRouter, HTTPException, Depends, Query, Path
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 from ..models.request_models import ChatRequest, ChatOptions
 from ..models.response_models import (
@@ -22,6 +22,16 @@ from ..models.response_models import (
 
 class FrontendChatRequest(BaseModel):
     """Simplified chat request model optimized for frontend."""
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "message": "Tell me about alphaviruses",
+                "conversation_id": "conv_123",
+                "options": {"temperature": 0.7, "max_tokens": 2000}
+            }
+        }
+    )
+    
     message: str = Field(..., min_length=1, max_length=10000, description="User message")
     conversation_id: Optional[str] = Field(default=None, description="Conversation ID")
     options: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Chat options")
@@ -29,6 +39,19 @@ class FrontendChatRequest(BaseModel):
 
 class FrontendChatResponse(BaseModel):
     """Simplified chat response model optimized for frontend."""
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "message": "Alphaviruses are RNA viruses...",
+                "conversation_id": "conv_123",
+                "timestamp": 1640995200.123,
+                "processing_time_ms": 1250.0,
+                "status": "success",
+                "metadata": {"model_used": "gpt-3.5-turbo", "tokens_used": 150}
+            }
+        }
+    )
+    
     message: str = Field(..., description="Agent response")
     conversation_id: str = Field(..., description="Conversation ID")
     timestamp: float = Field(..., description="Response timestamp")
@@ -39,6 +62,18 @@ class FrontendChatResponse(BaseModel):
 
 class ConversationSummary(BaseModel):
     """Conversation summary for frontend display."""
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "conversation_id": "conv_123",
+                "message_count": 15,
+                "last_message_time": 1640995200.123,
+                "title": "Alphavirus Research Discussion",
+                "preview": "Tell me about alphaviruses..."
+            }
+        }
+    )
+    
     conversation_id: str
     message_count: int
     last_message_time: float
@@ -48,6 +83,17 @@ class ConversationSummary(BaseModel):
 
 class SystemInfo(BaseModel):
     """System information for frontend."""
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "api_version": "1.0.0",
+                "websocket_url": "ws://localhost:8000/ws",
+                "supported_features": ["chat", "viral_analysis", "real_time_updates"],
+                "configuration": {"max_message_length": 10000, "rate_limit_per_minute": 60}
+            }
+        }
+    )
+    
     api_version: str
     websocket_url: str
     supported_features: List[str]

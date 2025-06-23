@@ -65,20 +65,20 @@ class DistributedProcessingStep:
     async def _setup_data_units(self) -> None:
         """Setup input and output data units."""
         # Input data unit for messages
-        self.input_data_unit = DataUnitMemory(
+        self.input_data_unit = DataUnitMemory.from_config(
             DataUnitConfig(
                 name=f"{self.name}_input",
-                type=DataUnitType.MEMORY,
+                data_type=DataUnitType.MEMORY,
                 description="Input messages for distributed processing"
             )
         )
         await self.input_data_unit.initialize()
         
         # Output data unit for results
-        self.output_data_unit = DataUnitMemory(
+        self.output_data_unit = DataUnitMemory.from_config(
             DataUnitConfig(
                 name=f"{self.name}_output",
-                type=DataUnitType.MEMORY,
+                data_type=DataUnitType.MEMORY,
                 description="Results from distributed processing"
             )
         )

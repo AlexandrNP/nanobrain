@@ -742,32 +742,65 @@ except Exception as e:
 
 ### 3. Configuration Management
 
-Use configuration files and environment variables:
+Use modern configuration patterns with Pydantic models and environment variables:
 
 ```python
 import os
 from pathlib import Path
+from pydantic import BaseModel, Field, ConfigDict
+from typing import Optional
+import yaml
 
-class Config:
-    def __init__(self):
-        self.api_key = os.getenv("OPENAI_API_KEY")
-        self.database_url = os.getenv("DATABASE_URL", "sqlite:///app.db")
-        self.debug = os.getenv("DEBUG", "false").lower() == "true"
-        
-        # Load from config file if exists
-        config_file = Path("config/app.yaml")
-        if config_file.exists():
-            self.load_from_file(config_file)
+class AppConfig(BaseModel):
+    """Modern application configuration using Pydantic V2."""
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "api_key": "sk-your-openai-key",
+                "database_url": "sqlite:///app.db",
+                "debug": False,
+                "max_workers": 4,
+                "timeout_seconds": 30.0
+            }
+        }
+    )
     
-    def load_from_file(self, config_file: Path):
-        import yaml
-        with open(config_file) as f:
-            config_data = yaml.safe_load(f)
+    api_key: str = Field(..., description="OpenAI API key")
+    database_url: str = Field(default="sqlite:///app.db", description="Database connection URL")
+    debug: bool = Field(default=False, description="Enable debug mode")
+    max_workers: int = Field(default=4, ge=1, description="Maximum worker threads")
+    timeout_seconds: float = Field(default=30.0, gt=0, description="Request timeout")
+    
+    @classmethod
+    def from_env_and_file(cls, config_file: Optional[Path] = None) -> 'AppConfig':
+        """Load configuration from environment and optional YAML file."""
+        # Start with environment variables
+        config_data = {
+            'api_key': os.getenv("OPENAI_API_KEY"),
+            'database_url': os.getenv("DATABASE_URL", "sqlite:///app.db"),
+            'debug': os.getenv("DEBUG", "false").lower() == "true",
+            'max_workers': int(os.getenv("MAX_WORKERS", "4")),
+            'timeout_seconds': float(os.getenv("TIMEOUT_SECONDS", "30.0"))
+        }
         
-        # Override with file values
-        for key, value in config_data.items():
-            setattr(self, key, value)
+        # Override with file values if exists
+        if config_file and config_file.exists():
+            with open(config_file) as f:
+                file_data = yaml.safe_load(f)
+                config_data.update(file_data)
+        
+        return cls(**config_data)
+
+# Usage
+config = AppConfig.from_env_and_file(Path("config/app.yaml"))
 ```
+
+**Benefits of the modern approach:**
+- ✅ **Type Safety** - Pydantic validates all configuration values
+- ✅ **Environment Integration** - Seamless environment variable support  
+- ✅ **Schema Generation** - Auto-generates JSON schema for documentation
+- ✅ **Validation** - Built-in field validation (min/max values, etc.)
+- ✅ **IDE Support** - Full autocomplete and type checking
 
 ### 4. Logging
 

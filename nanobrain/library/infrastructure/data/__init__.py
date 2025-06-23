@@ -1,36 +1,38 @@
 """
-Data Infrastructure Components
+NanoBrain Library - Specialized Data Infrastructure
 
-This module provides core data abstractions and implementations for the NanoBrain framework.
-It separates data management concerns from database-specific implementations.
+This module provides specialized data components that extend core functionality:
+- ConversationHistoryUnit: Persistent conversation storage and search
+- SessionManager: Session lifecycle management  
+- ExportManager: Data import/export utilities
+- Chat data structures: Domain-specific data models
+
+IMPORTANT: Core data units (DataUnitMemory, DataUnitFile, etc.) have been 
+moved to nanobrain.core.data_unit to eliminate duplication.
 """
 
-from .data_unit_base import DataUnitBase
-from .memory_data_unit import DataUnitMemory
-from .stream_data_unit import DataUnitStream
-from .string_data_unit import DataUnitString
-from .conversation_history import ConversationHistoryUnit
-from .session_manager import SessionManager
+# Specialized extensions only (NOT duplicates)
+from .conversation_history import ConversationHistoryUnit, ConversationMessage
+from .session_manager import SessionManager  
 from .export_manager import ExportManager
-
-# Optional file-based storage (requires aiofiles)
-try:
-    from .file_data_unit import DataUnitFile
-    _file_data_available = True
-except ImportError:
-    DataUnitFile = None
-    _file_data_available = False
+from .chat_session_data import (
+    ChatMessage, ChatSessionData, QueryClassificationData, 
+    ConversationalResponseData, AnnotationJobData, MessageType, MessageRole
+)
 
 __all__ = [
-    'DataUnitBase',
-    'DataUnitMemory', 
-    'DataUnitStream',
-    'DataUnitString',
+    # Specialized data components (legitimate extensions)
     'ConversationHistoryUnit',
-    'SessionManager',
-    'ExportManager'
-]
-
-# Add DataUnitFile to exports only if available
-if _file_data_available:
-    __all__.append('DataUnitFile') 
+    'SessionManager', 
+    'ExportManager',
+    
+    # Chat data structures
+    'ConversationMessage',
+    'ChatMessage',
+    'ChatSessionData',
+    'QueryClassificationData',
+    'ConversationalResponseData', 
+    'AnnotationJobData',
+    'MessageType',
+    'MessageRole'
+] 

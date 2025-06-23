@@ -18,7 +18,7 @@ from pathlib import Path
 from collections import OrderedDict
 import yaml
 from cachetools import TTLCache
-from nanobrain.core.logger import get_logger
+from nanobrain.core.logging_system import get_logger
 
 class CacheManager:
     """

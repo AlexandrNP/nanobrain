@@ -273,11 +273,73 @@ class LinkBase(FromConfigBase, ABC):
 class DirectLink(LinkBase):
     """
     Direct link that immediately transfers data from source to target.
+    Enhanced with mandatory from_config pattern implementation.
     """
     
-    def __init__(self, source: Any, target: Any, config: Optional[LinkConfig] = None, **kwargs):
-        config = config or LinkConfig(link_type=LinkType.DIRECT)
-        super().__init__(source, target, config, **kwargs)
+    COMPONENT_TYPE = "direct_link"
+    REQUIRED_CONFIG_FIELDS = ['link_type']
+    OPTIONAL_CONFIG_FIELDS = {
+        'buffer_size': 100,
+        'data_mapping': None
+    }
+    
+    def __init__(self, *args, **kwargs):
+        """Prevent direct instantiation - use from_config instead"""
+        raise RuntimeError(
+            "Direct instantiation of DirectLink is prohibited. "
+            "ALL framework components must use DirectLink.from_config() "
+            "as per mandatory framework requirements."
+        )
+    
+    @classmethod
+    def from_config(cls, config: LinkConfig, **kwargs) -> 'DirectLink':
+        """Mandatory from_config implementation for DirectLink"""
+        # Get logger
+        nb_logger = get_logger(f"{cls.__name__}.from_config")
+        nb_logger.info(f"Creating {cls.__name__} from configuration")
+        
+        # Step 1: Validate configuration schema
+        cls.validate_config_schema(config)
+        
+        # Step 2: Extract component-specific configuration  
+        component_config = cls.extract_component_config(config)
+        
+        # Step 3: Resolve dependencies
+        dependencies = cls.resolve_dependencies(component_config, **kwargs)
+        
+        # Step 4: Create instance
+        instance = cls.create_instance(config, component_config, dependencies)
+        
+        # Step 5: Post-creation initialization
+        instance._post_config_initialization()
+        
+        nb_logger.info(f"Successfully created {cls.__name__}")
+        return instance
+    
+    @classmethod
+    def extract_component_config(cls, config: LinkConfig) -> Dict[str, Any]:
+        """Extract DirectLink configuration"""
+        return {
+            'link_type': config.link_type,
+            'buffer_size': getattr(config, 'buffer_size', 100),
+            'data_mapping': getattr(config, 'data_mapping', None)
+        }
+    
+    @classmethod  
+    def resolve_dependencies(cls, component_config: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        """Resolve DirectLink dependencies"""
+        return {
+            'source': kwargs.get('source'),
+            'target': kwargs.get('target'),
+            'enable_logging': kwargs.get('enable_logging', True),
+            'debug_mode': kwargs.get('debug_mode', False)
+        }
+    
+    def _init_from_config(self, config: LinkConfig, component_config: Dict[str, Any],
+                         dependencies: Dict[str, Any]) -> None:
+        """Initialize DirectLink with resolved dependencies"""
+        # Call parent _init_from_config
+        super()._init_from_config(config, component_config, dependencies)
         
     async def start(self) -> None:
         """Start the direct link."""
@@ -521,13 +583,85 @@ class TransformLink(LinkBase):
 class ConditionalLink(LinkBase):
     """
     Link that transfers data only when condition is met.
+    Enhanced with mandatory from_config pattern implementation.
     """
     
-    def __init__(self, source: Any, target: Any, condition_func: Callable, 
-                 config: Optional[LinkConfig] = None, **kwargs):
-        config = config or LinkConfig(link_type=LinkType.CONDITIONAL)
-        super().__init__(source, target, config, **kwargs)
-        self.condition_func = condition_func
+    COMPONENT_TYPE = "conditional_link"
+    REQUIRED_CONFIG_FIELDS = ['link_type', 'condition']
+    OPTIONAL_CONFIG_FIELDS = {
+        'buffer_size': 100,
+        'data_mapping': None
+    }
+    
+    def __init__(self, *args, **kwargs):
+        """Prevent direct instantiation - use from_config instead"""
+        raise RuntimeError(
+            "Direct instantiation of ConditionalLink is prohibited. "
+            "ALL framework components must use ConditionalLink.from_config() "
+            "as per mandatory framework requirements."
+        )
+    
+    @classmethod
+    def from_config(cls, config: LinkConfig, **kwargs) -> 'ConditionalLink':
+        """Mandatory from_config implementation for ConditionalLink"""
+        # Get logger
+        nb_logger = get_logger(f"{cls.__name__}.from_config")
+        nb_logger.info(f"Creating {cls.__name__} from configuration")
+        
+        # Step 1: Validate configuration schema
+        cls.validate_config_schema(config)
+        
+        # Step 2: Extract component-specific configuration  
+        component_config = cls.extract_component_config(config)
+        
+        # Step 3: Resolve dependencies
+        dependencies = cls.resolve_dependencies(component_config, **kwargs)
+        
+        # Step 4: Create instance
+        instance = cls.create_instance(config, component_config, dependencies)
+        
+        # Step 5: Post-creation initialization
+        instance._post_config_initialization()
+        
+        nb_logger.info(f"Successfully created {cls.__name__}")
+        return instance
+    
+    @classmethod
+    def extract_component_config(cls, config: LinkConfig) -> Dict[str, Any]:
+        """Extract ConditionalLink configuration"""
+        return {
+            'link_type': config.link_type,
+            'condition': getattr(config, 'condition', None),
+            'buffer_size': getattr(config, 'buffer_size', 100),
+            'data_mapping': getattr(config, 'data_mapping', None)
+        }
+    
+    @classmethod  
+    def resolve_dependencies(cls, component_config: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        """Resolve ConditionalLink dependencies"""
+        condition_config = component_config.get('condition')
+        if not condition_config:
+            raise ValueError("ConditionalLink requires condition configuration")
+        
+        # Parse condition function from config
+        condition_func = parse_condition_from_config(condition_config)
+        
+        return {
+            'source': kwargs.get('source'),
+            'target': kwargs.get('target'), 
+            'condition_func': condition_func,
+            'enable_logging': kwargs.get('enable_logging', True),
+            'debug_mode': kwargs.get('debug_mode', False)
+        }
+    
+    def _init_from_config(self, config: LinkConfig, component_config: Dict[str, Any],
+                         dependencies: Dict[str, Any]) -> None:
+        """Initialize ConditionalLink with resolved dependencies"""
+        # Call parent _init_from_config
+        super()._init_from_config(config, component_config, dependencies)
+        
+        # Set ConditionalLink-specific attributes
+        self.condition_func = dependencies['condition_func']
         
     async def start(self) -> None:
         """Start the conditional link."""
@@ -677,28 +811,34 @@ class FileLink(LinkBase):
             logger.debug(f"FileLink {self.name} monitor cancelled")
 
 
-def create_link(config: Union[Dict[str, Any], LinkConfig]) -> LinkBase:
+def create_link(config: Union[Dict[str, Any], LinkConfig], **kwargs) -> LinkBase:
     """
-    Factory function to create links.
+    Factory function to create links with framework compliance.
     
     Args:
         config: Link configuration (dict or LinkConfig)
+        **kwargs: Additional dependencies like source, target, etc.
         
     Returns:
-        Configured link instance
+        Configured link instance using from_config pattern
     """
     if isinstance(config, dict):
         config = LinkConfig(**config)
     
-    if config.link_type == LinkType.DIRECT:
-        return DirectLink(config)
-    elif config.link_type == LinkType.FILE:
+    # Handle both enum values and string values for link_type
+    link_type_value = config.link_type
+    if hasattr(link_type_value, 'value'):
+        link_type_value = link_type_value.value
+    
+    if link_type_value == "conditional":
+        return ConditionalLink.from_config(config, **kwargs)
+    elif link_type_value == "direct":
+        return DirectLink.from_config(config, **kwargs)
+    elif link_type_value == "file":
         return FileLink(config)
-    elif config.link_type == LinkType.QUEUE:
+    elif link_type_value == "queue":
         return QueueLink(config)
-    elif config.link_type == LinkType.TRANSFORM:
+    elif link_type_value == "transform":
         return TransformLink(config)
-    elif config.link_type == LinkType.CONDITIONAL:
-        return ConditionalLink(config)
     else:
         raise ValueError(f"Unknown link type: {config.link_type}") 

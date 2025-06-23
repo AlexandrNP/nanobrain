@@ -10,13 +10,43 @@ Version: 4.1.0
 """
 
 from nanobrain.core.step import Step, StepConfig
-from nanobrain.core.agent import ConversationalAgent, AgentConfig
+from nanobrain.core.agent import AgentConfig
+from nanobrain.library.agents.specialized.base import ConversationalSpecializedAgent
 from nanobrain.library.infrastructure.data.chat_session_data import (
     ConversationalResponseData, MessageType
 )
 from typing import Dict, Any, List, Optional
 import time
 from datetime import datetime
+
+
+class AlphavirusConversationalAgent(ConversationalSpecializedAgent):
+    """
+    Concrete implementation of ConversationalSpecializedAgent for alphavirus education.
+    
+    This agent provides educational responses about alphaviruses and implements
+    the required abstract methods from the specialized agent base.
+    """
+    
+    async def _process_specialized_request(self, input_text: str, **kwargs) -> Optional[str]:
+        """
+        Process specialized alphavirus requests that don't require LLM.
+        
+        For now, this falls back to LLM processing for all requests.
+        Future enhancements could include direct lookups for simple facts.
+        """
+        # For alphavirus education, we primarily rely on LLM responses
+        # This method could be enhanced to handle simple factual queries directly
+        return None
+    
+    def _should_handle_specialized(self, input_text: str, **kwargs) -> bool:
+        """
+        Determine if this request should be handled by specialized logic.
+        
+        For now, we let all requests go to the LLM for comprehensive responses.
+        """
+        # Could implement keyword-based routing for simple queries in the future
+        return False
 
 
 class ConversationalResponseStep(Step):
@@ -27,8 +57,34 @@ class ConversationalResponseStep(Step):
     and handles various biology topics related to alphaviruses.
     """
     
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
-        super().__init__(config or {})
+    REQUIRED_CONFIG_FIELDS = ['name']
+    OPTIONAL_CONFIG_FIELDS = {
+        'description': 'Conversational response step for alphavirus education',
+        'temperature': 0.7,
+        'max_tokens': 2000,
+        'system_prompt_type': 'alphavirus_expert'
+    }
+    
+    @classmethod
+    def extract_component_config(cls, config: StepConfig) -> Dict[str, Any]:
+        """Extract ConversationalResponseStep configuration"""
+        base_config = super().extract_component_config(config)
+        return {
+            **base_config,
+            'temperature': getattr(config, 'temperature', 0.7),
+            'max_tokens': getattr(config, 'max_tokens', 2000),
+            'system_prompt_type': getattr(config, 'system_prompt_type', 'alphavirus_expert'),
+        }
+    
+    def _init_from_config(self, config: StepConfig, component_config: Dict[str, Any],
+                         dependencies: Dict[str, Any]) -> None:
+        """Initialize ConversationalResponseStep with resolved dependencies"""
+        super()._init_from_config(config, component_config, dependencies)
+        
+        # Store configuration
+        self.temperature = component_config['temperature']
+        self.max_tokens = component_config['max_tokens']
+        self.system_prompt_type = component_config['system_prompt_type']
         
         # Initialize conversational agent for LLM responses
         self.agent = None
@@ -48,7 +104,7 @@ class ConversationalResponseStep(Step):
             self._agent_initialized = True
             self.nb_logger.info("✅ Conversational agent initialized with LLM client")
     
-    def _initialize_conversational_agent(self) -> ConversationalAgent:
+    def _initialize_conversational_agent(self) -> AlphavirusConversationalAgent:
         """Initialize conversational agent with alphavirus expertise"""
         
         system_prompt = """You are an expert virologist specializing in alphaviruses. You provide accurate, scientific information about alphavirus biology, structure, replication, pathogenesis, and related topics.
@@ -83,11 +139,12 @@ Always provide helpful, educational responses that advance understanding of alph
             name="alphavirus_expert",
             description="Expert conversational agent for alphavirus information",
             system_prompt=system_prompt,
-            temperature=0.7,
-            max_tokens=2000
+            temperature=self.temperature,
+            max_tokens=self.max_tokens
         )
         
-        agent = ConversationalAgent(agent_config)
+        # Use the framework-compliant from_config method with our concrete implementation
+        agent = AlphavirusConversationalAgent.from_config(agent_config)
         return agent
     
     async def process(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -156,8 +213,11 @@ Always provide helpful, educational responses that advance understanding of alph
             self.nb_logger.error(f"❌ Conversational response generation failed: {e}")
             
             # Generate fallback response
+            classification_data = input_data.get('classification_data')
+            query = classification_data.original_query if classification_data else ''
+            
             fallback_response = ConversationalResponseData(
-                query=input_data.get('classification_data', {}).get('original_query', ''),
+                query=query,
                 response="I apologize, but I encountered an error generating a response. Please try rephrasing your question or ask about alphavirus structure, replication, or diseases.",
                 response_type='error',
                 confidence=0.0,

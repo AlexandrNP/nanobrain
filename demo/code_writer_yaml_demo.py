@@ -19,7 +19,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Import NanoBrain components
-from nanobrain.config.component_factory import get_factory
+from nanobrain.core.config.component_factory import get_factory
 import sys
 from pathlib import Path
 current_file = Path(__file__) if '__file__' in globals() else Path.cwd() / 'demo' / 'code_writer_yaml_demo.py'

@@ -14,7 +14,7 @@ from pathlib import Path
 from fastapi import FastAPI, WebSocket, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, ConfigDict
 import yaml
 from dataclasses import dataclass
 
@@ -22,9 +22,9 @@ from dataclasses import dataclass
 try:
     from nanobrain.core.logger import get_logger
     from nanobrain.core.data_unit import DataUnitManager
-    from nanobrain.core.resource_monitor import ResourceMonitor, ResourceMonitorConfig
-    from nanobrain.core.bioinformatics.email_manager import EmailManager
-    from nanobrain.core.bioinformatics.cache_manager import CacheManager
+    from nanobrain.library.bioinformatics.resource_monitor import ResourceMonitor, ResourceMonitorConfig
+    from nanobrain.library.bioinformatics.email_manager import EmailManager
+    from nanobrain.library.bioinformatics.cache_manager import CacheManager
     from nanobrain.library.workflows.viral_protein_analysis.eeev_workflow import EEEVWorkflow
     from nanobrain.library.tools.bioinformatics.pubmed_api_client import EnhancedPubMedAPIClient
 except ImportError:
@@ -45,6 +45,20 @@ class AnalysisProgress:
 
 class EEEVAnalysisRequest(BaseModel):
     """Request model for EEEV analysis."""
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "organism": "Eastern equine encephalitis virus",
+                "analysis_type": "boundary_detection",
+                "enable_literature_search": True,
+                "enable_caching": True,
+                "timeout_hours": 2.0,
+                "include_protein_types": ["capsid", "envelope", "structural", "6K"],
+                "output_format": "viral_pssm_json"
+            }
+        }
+    )
+    
     organism: Optional[str] = "Eastern equine encephalitis virus"
     analysis_type: str = "boundary_detection"
     enable_literature_search: bool = True
@@ -55,6 +69,24 @@ class EEEVAnalysisRequest(BaseModel):
 
 class StandaloneConfig(BaseModel):
     """Configuration for standalone interface."""
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "server_host": "0.0.0.0",
+                "server_port": 8001,
+                "title": "EEEV Protein Boundary Analysis",
+                "description": "Standalone interface for viral protein boundary identification",
+                "environment": "production",
+                "enable_logging": True,
+                "enable_resource_monitoring": True,
+                "enable_caching": True,
+                "default_organism": "Eastern equine encephalitis virus",
+                "expected_proteins": ["capsid protein", "envelope protein E1", "envelope protein E2", "6K protein"],
+                "genome_size_kb": 11.7
+            }
+        }
+    )
+    
     server_host: str = "0.0.0.0"
     server_port: int = 8001
     title: str = "EEEV Protein Boundary Analysis"

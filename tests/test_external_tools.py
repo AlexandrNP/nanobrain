@@ -26,8 +26,8 @@ from nanobrain.library.tools.bioinformatics.muscle_tool import MUSCLETool, MUSCL
 from nanobrain.library.tools.bioinformatics.pssm_generator_tool import (
     PSSMGeneratorTool, PSSMConfig
 )
-from nanobrain.core.email_manager import EmailManager
-from nanobrain.core.cache_manager import CacheManager
+from nanobrain.library.bioinformatics.email_manager import EmailManager
+from nanobrain.library.bioinformatics.cache_manager import CacheManager
 
 
 class TestExternalToolBase:

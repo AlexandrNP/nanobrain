@@ -14,7 +14,7 @@ import shutil
 from typing import Dict, Any, Optional, List, Callable
 from pathlib import Path
 from dataclasses import dataclass
-from nanobrain.core.logger import get_logger
+from nanobrain.core.logging_system import get_logger
 
 @dataclass
 class DiskSpaceInfo:

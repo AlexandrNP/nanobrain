@@ -9,7 +9,7 @@ import sqlite3
 from datetime import datetime
 from typing import Any, Dict, Optional, List
 from dataclasses import dataclass, asdict
-from .data_unit_base import DataUnitBase
+from nanobrain.core.data_unit import DataUnitBase
 
 
 @dataclass

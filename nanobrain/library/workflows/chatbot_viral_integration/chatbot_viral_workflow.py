@@ -42,22 +42,43 @@ class ChatbotViralWorkflow(Workflow):
     progress reporting and YAML-configurable steps.
     """
     
-    def __init__(self, config_path: Optional[str] = None, session_id: Optional[str] = None, **kwargs):
-        # Load YAML configuration
-        if config_path is None:
-            config_path = Path(__file__).parent / "ChatbotViralWorkflow.yml"
+    REQUIRED_CONFIG_FIELDS = ['name']
+    OPTIONAL_CONFIG_FIELDS = {
+        'description': 'Chatbot viral integration workflow',
+        'config_path': None,
+        'session_id': None
+    }
+    
+    @classmethod
+    def extract_component_config(cls, config: WorkflowConfig) -> Dict[str, Any]:
+        """Extract ChatbotViralWorkflow configuration"""
+        base_config = super().extract_component_config(config)
+        return {
+            **base_config,
+            'config_path': getattr(config, 'config_path', None),
+            'session_id': getattr(config, 'session_id', None),
+        }
+    
+    @classmethod  
+    def resolve_dependencies(cls, component_config: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        """Resolve ChatbotViralWorkflow dependencies"""
+        from nanobrain.core.executor import LocalExecutor, ExecutorConfig
         
-        with open(config_path, 'r') as f:
-            yaml_config = yaml.safe_load(f)
+        # Create executor using from_config pattern
+        executor = kwargs.get('executor')
+        if not executor:
+            executor_config = ExecutorConfig(executor_type="local", max_workers=3)
+            executor = LocalExecutor.from_config(executor_config)
         
-        # Create WorkflowConfig from YAML
-        workflow_config = WorkflowConfig(**yaml_config)
+        return {'executor': executor}
+    
+    def _init_from_config(self, config: WorkflowConfig, component_config: Dict[str, Any],
+                         dependencies: Dict[str, Any]) -> None:
+        """Initialize ChatbotViralWorkflow with resolved dependencies"""
+        super()._init_from_config(config, component_config, dependencies)
         
-        # Initialize with session ID for progress tracking
-        super().__init__(workflow_config, session_id=session_id, **kwargs)
-        
-        # Store YAML config for step initialization
-        self.yaml_config = yaml_config
+        # Store config for step initialization
+        self.yaml_config = config.__dict__ if hasattr(config, '__dict__') else {}
         
         # Initialize session manager
         self.session_manager = InMemorySessionManager()
@@ -190,6 +211,13 @@ class ChatbotViralWorkflow(Workflow):
             if result and 'formatted_response' in result:
                 assistant_msg.content = result['formatted_response'].get('content', '')
                 assistant_msg.is_streaming = False
+                
+                # Ensure session data is synchronized immediately
+                await self.session_manager.update_session_progress(session_id, {
+                    'message_updated': True,
+                    'message_count': len(session_data.messages),
+                    'timestamp': time.time()
+                })
             
             # Yield completion
             yield {
@@ -423,39 +451,20 @@ class ChatbotViralWorkflow(Workflow):
         self.streaming_callbacks.pop(session_id, None)
 
     async def _create_step_instance(self, step_id: str, step_config: StepConfig, config_dict: Dict[str, Any]) -> Step:
-        """Create a step instance from configuration with support for custom step classes."""
+        """Create a step instance from configuration using framework's create_step function."""
+        # Import here to avoid circular imports
+        from nanobrain.core.step import create_step
         
         # Determine step type/class
-        step_class = config_dict.get('class', config_dict.get('step_type', 'SimpleStep'))
+        step_class = config_dict.get('class', config_dict.get('step_type', 'nanobrain.core.step.Step'))
         
         # Update step config with ID and name
         step_config.name = step_id
         
-        # Create step instance - handle custom step classes
+        # Create step instance using framework's create_step function
         try:
-            # Check if it's one of our custom step classes
-            if step_class == 'QueryClassificationStep':
-                step = QueryClassificationStep(step_config)
-            elif step_class == 'AnnotationJobStep':
-                step = AnnotationJobStep(step_config)
-            elif step_class == 'ConversationalResponseStep':
-                step = ConversationalResponseStep(step_config)
-            elif step_class == 'ResponseFormattingStep':
-                step = ResponseFormattingStep(step_config)
-            else:
-                # Fall back to base create_step function for built-in types
-                from nanobrain.core.step import create_step
-                step = create_step(step_class, step_config)
-            
-            self.nb_logger.info(f"✅ Created step instance: {step_id} ({step_class})")
-            return step
-            
-        except ImportError as e:
-            self.workflow_logger.error(f"❌ Step class not found for {step_id} ({step_class}): {e}")
-            # Create a fallback simple step
-            from nanobrain.core.step import SimpleStep
-            step = SimpleStep(step_config)
-            self.workflow_logger.warning(f"⚠️ Using SimpleStep fallback for {step_id}")
+            step = create_step(step_class, step_config, executor=self.executor)
+            self.workflow_logger.info(f"✅ Created step instance: {step_id} ({step_class})")
             return step
         except Exception as e:
             self.workflow_logger.error(f"❌ Failed to create step {step_id}: {e}")
@@ -496,8 +505,12 @@ class InMemorySessionManager:
         return self.sessions[session_id]
     
     async def get_session(self, session_id: str) -> Optional[ChatSessionData]:
-        """Get session by ID."""
-        return self.sessions.get(session_id)
+        """Get session by ID - returns the same object reference as get_or_create_session."""
+        session = self.sessions.get(session_id)
+        if session:
+            # Update last activity timestamp when accessing session
+            session.last_activity = datetime.now()
+        return session
     
     async def update_session_progress(self, session_id: str, progress_data: Dict[str, Any]) -> None:
         """Update progress data for a session."""
@@ -543,6 +556,21 @@ async def create_chatbot_viral_workflow(config_path: Optional[str] = None,
     Returns:
         Initialized ChatbotViralWorkflow instance
     """
-    workflow = ChatbotViralWorkflow(config_path=config_path, session_id=session_id, **kwargs)
+    # Load YAML configuration
+    if config_path is None:
+        config_path = Path(__file__).parent / "ChatbotViralWorkflow.yml"
+    
+    with open(config_path, 'r') as f:
+        yaml_config = yaml.safe_load(f)
+    
+    # Create WorkflowConfig from YAML
+    workflow_config = WorkflowConfig(**yaml_config)
+    
+    # Add session_id to config for access during initialization
+    if session_id:
+        workflow_config.session_id = session_id
+    
+    # Create workflow using from_config pattern
+    workflow = ChatbotViralWorkflow.from_config(workflow_config, **kwargs)
     await workflow.initialize()
     return workflow 

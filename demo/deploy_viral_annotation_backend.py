@@ -32,7 +32,7 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -58,6 +58,18 @@ except ImportError:
 # API Models
 class ViralAnnotationRequest(BaseModel):
     """Request model for viral annotation pipeline"""
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "target_virus": "Alphavirus",
+                "input_genomes": ["ATCGATCGATCG..."],
+                "limit": 10,
+                "output_format": "json",
+                "include_literature": True
+            }
+        }
+    )
+    
     target_virus: str = Field(default="Alphavirus", description="Target virus family")
     input_genomes: Optional[List[str]] = Field(default=None, description="Input genome sequences")
     limit: int = Field(default=10, description="Maximum genomes to process")
@@ -67,6 +79,26 @@ class ViralAnnotationRequest(BaseModel):
 
 class ViralAnnotationResponse(BaseModel):
     """Response model for viral annotation pipeline"""
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "job_id": "job_123e4567-e89b-12d3-a456-426614174000",
+                "success": True,
+                "execution_time": 125.3,
+                "total_genomes": 5,
+                "total_proteins": 23,
+                "total_clusters": 8,
+                "output_files": {
+                    "annotations": "annotations.csv",
+                    "clusters": "clusters.json",
+                    "summary": "summary.md"
+                },
+                "viral_pssm_url": "http://example.com/pssm/job_123.json",
+                "error_message": None
+            }
+        }
+    )
+    
     job_id: str
     success: bool
     execution_time: Optional[float] = None
@@ -80,6 +112,20 @@ class ViralAnnotationResponse(BaseModel):
 
 class JobStatus(BaseModel):
     """Job status model"""
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "job_id": "job_123e4567-e89b-12d3-a456-426614174000",
+                "status": "running",
+                "progress": 65,
+                "message": "Processing protein clustering...",
+                "started_at": "2023-01-01T12:00:00",
+                "completed_at": None,
+                "result": None
+            }
+        }
+    )
+    
     job_id: str
     status: str  # pending, running, completed, failed
     progress: int  # 0-100

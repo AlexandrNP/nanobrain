@@ -32,3 +32,5 @@ logs
 runinfo
 output
 .db
+*.backup_*
+config_backup_2*

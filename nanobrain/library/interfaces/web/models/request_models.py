@@ -5,7 +5,7 @@ Pydantic models for validating incoming API requests.
 """
 
 from typing import Optional, Dict, Any
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 import uuid
 
 
@@ -16,6 +16,21 @@ class ChatOptions(BaseModel):
     This model defines the optional parameters that can be passed
     with a chat request to customize the agent's behavior.
     """
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "temperature": 0.7,
+                "max_tokens": 2000,
+                "use_rag": False,
+                "conversation_id": None,
+                "enable_streaming": False,
+                "model": None,
+                "system_prompt": None,
+                "metadata": {}
+            }
+        }
+    )
     
     # Model parameters
     temperature: Optional[float] = Field(
@@ -76,7 +91,8 @@ class ChatOptions(BaseModel):
         description="Additional metadata for the request"
     )
     
-    @validator('conversation_id')
+    @field_validator('conversation_id')
+    @classmethod
     def validate_conversation_id(cls, v):
         """Validate conversation ID format."""
         if v is not None:
@@ -89,7 +105,8 @@ class ChatOptions(BaseModel):
                     raise ValueError("Conversation ID must be between 1 and 100 characters")
         return v
     
-    @validator('system_prompt')
+    @field_validator('system_prompt')
+    @classmethod
     def validate_system_prompt(cls, v):
         """Validate system prompt content."""
         if v is not None and len(v.strip()) == 0:
@@ -104,6 +121,21 @@ class ChatRequest(BaseModel):
     This model represents a complete chat request with the user's query
     and optional configuration parameters.
     """
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "query": "Hello, how can you help me today?",
+                "options": {
+                    "temperature": 0.7,
+                    "max_tokens": 2000,
+                    "use_rag": False,
+                    "conversation_id": None
+                },
+                "user_id": "user_123"
+            }
+        }
+    )
     
     query: str = Field(
         ...,
@@ -128,7 +160,8 @@ class ChatRequest(BaseModel):
         description="Optional user ID for session management"
     )
     
-    @validator('query')
+    @field_validator('query')
+    @classmethod
     def validate_query(cls, v):
         """Validate and clean the query."""
         # Remove excessive whitespace
@@ -137,22 +170,8 @@ class ChatRequest(BaseModel):
             raise ValueError("Query cannot be empty")
         return cleaned
     
-    @validator('request_id', pre=True, always=True)
+    @field_validator('request_id', mode='before')
+    @classmethod
     def set_request_id(cls, v):
         """Set request ID if not provided."""
-        return v or str(uuid.uuid4())
-    
-    class Config:
-        """Pydantic configuration."""
-        schema_extra = {
-            "example": {
-                "query": "Hello, how can you help me today?",
-                "options": {
-                    "temperature": 0.7,
-                    "max_tokens": 2000,
-                    "use_rag": False,
-                    "conversation_id": None
-                },
-                "user_id": "user_123"
-            }
-        } 
+        return v or str(uuid.uuid4()) 

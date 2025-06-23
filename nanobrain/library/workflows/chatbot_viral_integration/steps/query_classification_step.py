@@ -28,21 +28,42 @@ class QueryClassificationStep(Step):
     parameter extraction.
     """
     
-    def __init__(self, config: StepConfig):
-        super().__init__(config)
-        
-        # Get nested config dict
-        step_config = getattr(config, 'config', {})
+    REQUIRED_CONFIG_FIELDS = ['name']
+    OPTIONAL_CONFIG_FIELDS = {
+        'description': 'Query classification step',
+        'confidence_thresholds': {
+            'annotation': 0.45,
+            'conversational': 0.35, 
+            'unknown': 0.25
+        },
+        'enable_parameter_extraction': True,
+        'enable_reasoning': True
+    }
+    
+    @classmethod
+    def extract_component_config(cls, config: StepConfig) -> Dict[str, Any]:
+        """Extract QueryClassificationStep configuration"""
+        base_config = super().extract_component_config(config)
+        return {
+            **base_config,
+            'confidence_thresholds': getattr(config, 'confidence_thresholds', {
+                'annotation': 0.45,
+                'conversational': 0.35,
+                'unknown': 0.25
+            }),
+            'enable_parameter_extraction': getattr(config, 'enable_parameter_extraction', True),
+            'enable_reasoning': getattr(config, 'enable_reasoning', True),
+        }
+    
+    def _init_from_config(self, config: StepConfig, component_config: Dict[str, Any],
+                         dependencies: Dict[str, Any]) -> None:
+        """Initialize QueryClassificationStep with resolved dependencies"""
+        super()._init_from_config(config, component_config, dependencies)
         
         # Classification configuration with improved thresholds
-        self.confidence_thresholds = step_config.get('confidence_thresholds', {
-            'annotation': 0.45,  # Lowered from 0.6 for better detection
-            'conversational': 0.35,  # Lowered from 0.5 for better detection
-            'unknown': 0.25  # Lowered from 0.4 for better fallback
-        })
-        
-        self.enable_parameter_extraction = step_config.get('enable_parameter_extraction', True)
-        self.enable_reasoning = step_config.get('enable_reasoning', True)
+        self.confidence_thresholds = component_config['confidence_thresholds']
+        self.enable_parameter_extraction = component_config['enable_parameter_extraction']
+        self.enable_reasoning = component_config['enable_reasoning']
         
         # Initialize keyword mappings
         self.annotation_keywords = self._initialize_annotation_keywords()

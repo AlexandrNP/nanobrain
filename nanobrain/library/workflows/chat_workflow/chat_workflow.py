@@ -161,7 +161,7 @@ class ChatWorkflow(FromConfigBase):
         self.logger.info("Setting up data units")
         
         # User input data unit
-        self.data_units['user_input'] = DataUnitMemory(
+        self.data_units['user_input'] = DataUnitMemory.from_config(
             DataUnitConfig(
                 name="user_input",
                 data_type="memory",
@@ -170,7 +170,7 @@ class ChatWorkflow(FromConfigBase):
         )
         
         # Agent output data unit
-        self.data_units['agent_output'] = DataUnitMemory(
+        self.data_units['agent_output'] = DataUnitMemory.from_config(
             DataUnitConfig(
                 name="agent_output",
                 data_type="memory",

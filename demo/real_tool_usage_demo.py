@@ -17,9 +17,19 @@ sys.path.insert(0, os.path.join(current_dir, '..', 'src'))
 
 # Import with try/catch for component factory
 try:
-    from nanobrain.config.component_factory import create_component_from_yaml
+    from nanobrain.core.config.component_factory import ComponentFactory
+    factory = ComponentFactory()
+    
+    def create_component_from_yaml(path, class_path="nanobrain.library.agents.specialized.CodeWriterAgent"):
+        """Wrapper function using modern factory API"""
+        try:
+            return factory.create_from_yaml_file(path, class_path)
+        except Exception as e:
+            print(f"⚠️  Failed to load component from {path}: {e}")
+            return None
+            
 except ImportError:
-    def create_component_from_yaml(path):
+    def create_component_from_yaml(path, class_path=None):
         print(f"⚠️  Component factory not available, skipping YAML loading for {path}")
         return None
 
@@ -259,8 +269,11 @@ async def demo_yaml_loaded_agent_with_tools():
     print("="*60)
     
     try:
-        # Load agent from YAML configuration
-        agent = create_component_from_yaml("src/agents/config/step_coder.yml")
+        # Load agent from YAML configuration using modern API
+        agent = create_component_from_yaml(
+            "src/agents/config/step_coder.yml",
+            "nanobrain.library.agents.specialized.CodeWriterAgent"
+        )
         
         if not agent:
             print("❌ Failed to load agent from YAML")

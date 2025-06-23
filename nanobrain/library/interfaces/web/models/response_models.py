@@ -5,7 +5,7 @@ Pydantic models for API response serialization and validation.
 """
 
 from typing import Optional, Dict, Any, List
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime
 from enum import Enum
 
@@ -109,6 +109,29 @@ class ChatResponse(BaseModel):
     metadata about the processing and conversation.
     """
     
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "response": "Hello! I'm here to help you with any questions you might have. How can I assist you today?",
+                "status": "success",
+                "conversation_id": "conv_123e4567-e89b-12d3-a456-426614174000",
+                "request_id": "req_123e4567-e89b-12d3-a456-426614174000",
+                "metadata": {
+                    "processing_time_ms": 1250.5,
+                    "token_count": 25,
+                    "prompt_tokens": 12,
+                    "total_tokens": 37,
+                    "model_used": "gpt-3.5-turbo",
+                    "rag_enabled": False,
+                    "conversation_id": "conv_123e4567-e89b-12d3-a456-426614174000",
+                    "message_count": 1,
+                    "timestamp": "2024-01-15T10:30:00Z"
+                },
+                "warnings": []
+            }
+        }
+    )
+    
     # Main response content
     response: str = Field(
         ...,
@@ -150,29 +173,6 @@ class ChatResponse(BaseModel):
         default_factory=list,
         description="Any warnings generated during processing"
     )
-    
-    class Config:
-        """Pydantic configuration."""
-        schema_extra = {
-            "example": {
-                "response": "Hello! I'm here to help you with any questions you might have. How can I assist you today?",
-                "status": "success",
-                "conversation_id": "conv_123e4567-e89b-12d3-a456-426614174000",
-                "request_id": "req_123e4567-e89b-12d3-a456-426614174000",
-                "metadata": {
-                    "processing_time_ms": 1250.5,
-                    "token_count": 25,
-                    "prompt_tokens": 12,
-                    "total_tokens": 37,
-                    "model_used": "gpt-3.5-turbo",
-                    "rag_enabled": False,
-                    "conversation_id": "conv_123e4567-e89b-12d3-a456-426614174000",
-                    "message_count": 1,
-                    "timestamp": "2024-01-15T10:30:00Z"
-                },
-                "warnings": []
-            }
-        }
 
 
 class ErrorResponse(BaseModel):
@@ -181,6 +181,21 @@ class ErrorResponse(BaseModel):
     
     Provides structured error information for client handling.
     """
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "error": "ValidationError",
+                "message": "The provided input failed validation",
+                "details": {
+                    "field": "query",
+                    "issue": "Query cannot be empty"
+                },
+                "request_id": "req_123e4567-e89b-12d3-a456-426614174000",
+                "timestamp": "2024-01-15T10:30:00Z"
+            }
+        }
+    )
     
     error: str = Field(
         ...,
@@ -206,21 +221,6 @@ class ErrorResponse(BaseModel):
         default_factory=datetime.utcnow,
         description="Timestamp when the error occurred"
     )
-    
-    class Config:
-        """Pydantic configuration."""
-        schema_extra = {
-            "example": {
-                "error": "validation_error",
-                "message": "The query field is required and cannot be empty",
-                "details": {
-                    "field": "query",
-                    "rejected_value": ""
-                },
-                "request_id": "req_123e4567-e89b-12d3-a456-426614174000",
-                "timestamp": "2024-01-15T10:30:00Z"
-            }
-        }
 
 
 class HealthResponse(BaseModel):
@@ -229,6 +229,21 @@ class HealthResponse(BaseModel):
     
     Provides information about the API health status.
     """
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "status": "healthy",
+                "version": "1.0.0",
+                "timestamp": "2024-01-15T10:30:00Z",
+                "components": {
+                    "database": "healthy",
+                    "external_api": "healthy",
+                    "workflow": "healthy"
+                }
+            }
+        }
+    )
     
     status: str = Field(
         ...,
@@ -247,23 +262,8 @@ class HealthResponse(BaseModel):
     
     components: Dict[str, str] = Field(
         default_factory=dict,
-        description="Status of individual components"
+        description="Health status of individual components"
     )
-    
-    class Config:
-        """Pydantic configuration."""
-        schema_extra = {
-            "example": {
-                "status": "healthy",
-                "version": "1.0.0",
-                "timestamp": "2024-01-15T10:30:00Z",
-                "components": {
-                    "chat_workflow": "healthy",
-                    "database": "healthy",
-                    "logging": "healthy"
-                }
-            }
-        }
 
 
 class StatusResponse(BaseModel):
@@ -272,6 +272,26 @@ class StatusResponse(BaseModel):
     
     Provides detailed information about the API and workflow status.
     """
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "api_status": "operational",
+                "workflow_status": {
+                    "chatbot_viral": "active",
+                    "annotation_jobs": 5,
+                    "queue_length": 2
+                },
+                "metrics": {
+                    "requests_per_minute": 120,
+                    "average_response_time": 1250.5,
+                    "success_rate": 0.98
+                },
+                "uptime_seconds": 86400,
+                "timestamp": "2024-01-15T10:30:00Z"
+            }
+        }
+    )
     
     api_status: str = Field(
         ...,

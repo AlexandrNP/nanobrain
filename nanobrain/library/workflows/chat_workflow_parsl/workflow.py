@@ -23,7 +23,7 @@ from nanobrain.library.agents.specialized.parsl_agent import ParslAgent
 
 # Step imports
 from .steps.distributed_processing_step.distributed_processing_step import DistributedProcessingStep
-from nanobrain.config import get_config_manager
+from nanobrain.core.config import get_config_manager
 
 # Parsl imports with fallback
 try:
@@ -134,7 +134,7 @@ class ParslChatWorkflow:
                     description=config.get('description', ''),
                     cache_size=config.get('cache_size', 100)
                 )
-                self.data_units[name] = DataUnitMemory(data_unit_config)
+                self.data_units[name] = DataUnitMemory.from_config(data_unit_config)
                 await self.data_units[name].initialize()
         
         self.logger.info(f"Initialized {len(self.data_units)} data units")

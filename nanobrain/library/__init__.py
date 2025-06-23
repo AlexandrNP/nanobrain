@@ -34,6 +34,9 @@ from .infrastructure import (
     ParallelAgentStep,
 )
 
+# Bioinformatics components
+from . import bioinformatics
+
 # Try to import web interface components
 try:
     from .interfaces.web import (
@@ -69,6 +72,9 @@ __all__ = [
     # Infrastructure - Steps
     'ParallelConversationalAgentStep',
     'ParallelAgentStep',
+    
+    # Bioinformatics
+    'bioinformatics',
     
     # Web Interface (if available)
     'WebInterface',

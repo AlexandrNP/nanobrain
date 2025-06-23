@@ -17,10 +17,10 @@ from pathlib import Path
 current_file = Path(__file__) if '__file__' in globals() else Path.cwd() / 'demo' / 'enhanced_validation_demo.py'
 sys.path.insert(0, str(current_file.parent.parent / "src"))
 
-from nanobrain.config import (
-    ComponentFactory, SchemaValidator, ConfigSchema,
-    FieldSchema, ParameterSchema, FieldType, ConstraintType, FieldConstraint,
-    ValidatorFunction, create_component_from_yaml
+from nanobrain.core.config.component_factory import ComponentFactory
+from nanobrain.core.config.schema_validator import (
+    SchemaValidator, ConfigSchema, FieldSchema, ParameterSchema, 
+    FieldType, ConstraintType, FieldConstraint, ValidatorFunction
 )
 
 # Configure logging
@@ -450,7 +450,11 @@ def demo_enhanced_templates():
     # Test enhanced coder template
     print("\n1. Testing enhanced coder template:")
     try:
-        coder_agent = create_component_from_yaml("step_coder_enhanced.yml", "enhanced_coder")
+        # Modern approach: Use factory with explicit class path
+        coder_agent = factory.create_from_yaml_file(
+            "step_coder_enhanced.yml", 
+            "nanobrain.library.agents.specialized.CodeWriterAgent"
+        )
         print(f"✓ Created enhanced coder agent: {coder_agent}")
         print(f"  Agent type: {type(coder_agent).__name__}")
         if hasattr(coder_agent, 'name'):
@@ -461,7 +465,11 @@ def demo_enhanced_templates():
     # Test enhanced file writer template
     print("\n2. Testing enhanced file writer template:")
     try:
-        file_writer_agent = create_component_from_yaml("step_file_writer_enhanced.yml", "enhanced_file_writer")
+        # Modern approach: Use factory with explicit class path
+        file_writer_agent = factory.create_from_yaml_file(
+            "step_file_writer_enhanced.yml", 
+            "nanobrain.library.agents.specialized.FileWriterAgent"
+        )
         print(f"✓ Created enhanced file writer agent: {file_writer_agent}")
         print(f"  Agent type: {type(file_writer_agent).__name__}")
         if hasattr(file_writer_agent, 'name'):
@@ -472,30 +480,19 @@ def demo_enhanced_templates():
     # Test custom configuration with validation
     print("\n3. Testing custom configuration with validation:")
     custom_config = {
-        "name": "CustomAgent",
-        "class": "CodeWriterAgent",
-        "config": {
-            "name": "CustomCodeAgent",
-            "model": "gpt-4",
-            "temperature": 0.2,
-            "max_tokens": 3000,
-            "system_prompt": "You are a helpful coding assistant."
-        },
-        "validation": {
-            "required": ["model", "name"],
-            "optional": ["temperature", "max_tokens"],
-            "constraints": {
-                "temperature": {
-                    "type": "float",
-                    "min": 0.0,
-                    "max": 1.0
-                }
-            }
-        }
+        "name": "CustomCodeAgent",
+        "model": "gpt-4",
+        "temperature": 0.2,
+        "max_tokens": 3000,
+        "system_prompt": "You are a helpful coding assistant."
     }
     
     try:
-        custom_agent = factory.create_component("agent", custom_config, "custom_agent")
+        # Modern approach: Use direct class path with config dict
+        custom_agent = factory.create_component_from_config(
+            "nanobrain.library.agents.specialized.CodeWriterAgent",
+            custom_config
+        )
         print(f"✓ Created custom agent: {custom_agent}")
         print(f"  Agent type: {type(custom_agent).__name__}")
         if hasattr(custom_agent, 'name'):

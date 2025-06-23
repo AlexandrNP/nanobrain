@@ -1077,15 +1077,19 @@ class Workflow(BaseStep):
             
             # Create appropriate link instance based on type
             if link_type == 'conditional':
-                # Handle conditional links with proper condition parsing
-                from .link import ConditionalLink, parse_condition_from_config
+                # Handle conditional links with framework-compliant from_config pattern
+                from .link import ConditionalLink
                 
                 condition_config = link_config_dict.get('condition')
                 if not condition_config:
                     raise ValueError(f"Conditional link {link_id} missing condition configuration")
                 
-                condition_func = parse_condition_from_config(condition_config)
-                link = ConditionalLink(source_step, target_step, condition_func, link_config, name=link_id)
+                link = ConditionalLink.from_config(
+                    link_config, 
+                    source=source_step, 
+                    target=target_step,
+                    name=link_id
+                )
                 
                 self.workflow_logger.info(f"Created conditional link: {link_id} with condition: {condition_config}")
                 
@@ -1113,7 +1117,12 @@ class Workflow(BaseStep):
             else:
                 # Default to DirectLink for 'direct' and any other types
                 from .link import DirectLink
-                link = DirectLink(source_step, target_step, link_config, name=link_id)
+                link = DirectLink.from_config(
+                    link_config,
+                    source=source_step,
+                    target=target_step,
+                    name=link_id
+                )
             
             # Add to workflow
             self.step_links[link_id] = link

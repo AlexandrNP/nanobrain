@@ -38,7 +38,7 @@ class DataUnitLogger:
         
         # Configure value tracking
         try:
-            from nanobrain.config import get_config_manager
+            from nanobrain.core.config import get_config_manager
             config_manager = get_config_manager()
             logging_config = config_manager.get_config_dict().get('logging', {})
             file_config = logging_config.get('file', {})
@@ -68,7 +68,7 @@ class DataUnitLogger:
         """Find the log directory based on the logger's configuration."""
         try:
             # Get main log directory from configuration
-            from nanobrain.config import get_config_manager
+            from nanobrain.core.config import get_config_manager
             config_manager = get_config_manager()
             logging_config = config_manager.get_config_dict().get('logging', {})
             file_config = logging_config.get('file', {})

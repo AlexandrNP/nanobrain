@@ -15,7 +15,7 @@ import os
 import time
 from typing import Any, Dict, Optional, Callable, List
 from dataclasses import dataclass
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 from .logging_system import get_logger
 
@@ -37,6 +37,21 @@ class DiskSpaceInfo:
 
 class ResourceMonitorConfig(BaseModel):
     """Configuration for resource monitoring."""
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "disk_warning_gb": 1.0,
+                "disk_critical_gb": 0.5,
+                "monitoring_interval_seconds": 30.0,
+                "enable_notifications": True,
+                "notification_cooldown_seconds": 300.0,
+                "monitoring_paths": ["."],
+                "enable_auto_pause": True,
+                "pause_on_critical_disk": True
+            }
+        }
+    )
+    
     # Disk space thresholds
     disk_warning_gb: float = 1.0  # Warning at 1GB remaining
     disk_critical_gb: float = 0.5  # Critical at 500MB remaining

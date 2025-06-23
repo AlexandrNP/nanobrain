@@ -12,7 +12,7 @@ import yaml
 import hashlib
 from typing import Dict, Any, Optional, List
 from pathlib import Path
-from nanobrain.core.logger import get_logger
+from nanobrain.core.logging_system import get_logger
 
 class EmailManager:
     """

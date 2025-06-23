@@ -232,10 +232,28 @@ class BaseStep(FromConfigBase, ABC):
             }
     
     def _create_data_unit(self, config: DataUnitConfig) -> DataUnitBase:
-        """Create a data unit from configuration."""
+        """Create a data unit from configuration using ComponentFactory."""
         # Import here to avoid circular imports
-        from .data_unit import create_data_unit
-        return create_data_unit(config)
+        from .config.component_factory import import_and_create_from_config
+        from .data_unit import DataUnitType
+        
+        # Map data unit type to full class path
+        data_type = config.data_type
+        if isinstance(data_type, str):
+            data_type = DataUnitType(data_type)
+        
+        class_path_map = {
+            DataUnitType.MEMORY: "nanobrain.core.data_unit.DataUnitMemory",
+            DataUnitType.FILE: "nanobrain.core.data_unit.DataUnitFile", 
+            DataUnitType.STRING: "nanobrain.core.data_unit.DataUnitString",
+            DataUnitType.STREAM: "nanobrain.core.data_unit.DataUnitStream"
+        }
+        
+        class_path = class_path_map.get(data_type)
+        if not class_path:
+            raise ValueError(f"Unknown data unit type: {data_type}")
+        
+        return import_and_create_from_config(class_path, config)
     
     def _create_trigger(self, config: TriggerConfig) -> TriggerBase:
         """Create a trigger from configuration."""
@@ -474,9 +492,14 @@ class BaseStep(FromConfigBase, ABC):
         """Convenience method to set input data."""
         if input_id not in self.input_data_units:
             # Create a default input data unit if it doesn't exist
-            from .data_unit import DataUnitConfig, DataUnitType, DataUnitMemory
-            config = DataUnitConfig(data_type=DataUnitType.MEMORY)
-            data_unit = DataUnitMemory(config=config, name=input_id)
+            from .data_unit import DataUnitConfig, DataUnitType
+            from .config.component_factory import import_and_create_from_config
+            config = DataUnitConfig(data_type=DataUnitType.MEMORY, name=input_id)
+            data_unit = import_and_create_from_config(
+                "nanobrain.core.data_unit.DataUnitMemory", 
+                config, 
+                name=input_id
+            )
             await data_unit.initialize()
             self.input_data_units[input_id] = data_unit
         

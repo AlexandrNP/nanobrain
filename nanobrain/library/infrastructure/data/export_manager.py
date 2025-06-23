@@ -10,7 +10,7 @@ import asyncio
 from datetime import datetime
 from typing import Any, Dict, Optional, List, Union
 from pathlib import Path
-from .data_unit_base import DataUnitBase
+from nanobrain.core.data_unit import DataUnitBase
 
 
 class ExportManager(DataUnitBase):

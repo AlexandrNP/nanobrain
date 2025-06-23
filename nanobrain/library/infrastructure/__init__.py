@@ -11,13 +11,17 @@ This module provides:
 - Specialized step implementations
 """
 
-# Data management
-from .data import (
+# Core data units (from core module)
+from nanobrain.core.data_unit import (
     DataUnitBase,
     DataUnitMemory,
     DataUnitFile,
     DataUnitStream,
-    DataUnitString,
+    DataUnitString
+)
+
+# Specialized data components (library extensions)
+from .data import (
     ConversationHistoryUnit,
     SessionManager,
     ExportManager
@@ -63,12 +67,14 @@ from .monitoring import (
 )
 
 __all__ = [
-    # Data management
+    # Core data units (from nanobrain.core)
     'DataUnitBase',
     'DataUnitMemory',
     'DataUnitFile', 
     'DataUnitStream',
     'DataUnitString',
+    
+    # Specialized data components (library extensions)
     'ConversationHistoryUnit',
     'SessionManager',
     'ExportManager',

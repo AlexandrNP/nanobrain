@@ -47,7 +47,7 @@ from nanobrain.core.agent import ConversationalAgent, AgentConfig
 from nanobrain.core.executor import LocalExecutor, ExecutorConfig
 from nanobrain.core.a2a_support import A2ASupportMixin, with_a2a_support
 from nanobrain.core.mcp_support import MCPSupportMixin
-# from nanobrain.config.component_factory import ComponentFactory, get_factory
+# from nanobrain.core.config.component_factory import ComponentFactory, get_factory
 
 
 class EnhancedCollaborativeAgent(A2ASupportMixin, MCPSupportMixin, ConversationalAgent):

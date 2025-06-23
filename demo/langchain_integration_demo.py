@@ -19,7 +19,7 @@ from nanobrain.core.agent import (
     create_langchain_agent_executor, initialize_agents_for_langchain,
     LANGCHAIN_AVAILABLE
 )
-from nanobrain.config.component_factory import create_component_from_yaml
+from nanobrain.core.config.component_factory import create_component_from_yaml
 
 async def demo_langchain_integration():
     """Demonstrate NanoBrain agents as LangChain tools."""

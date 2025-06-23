@@ -9,7 +9,7 @@ import json
 from datetime import datetime, timedelta
 from typing import Any, Dict, Optional, List
 from dataclasses import dataclass, asdict
-from .data_unit_base import DataUnitBase
+from nanobrain.core.data_unit import DataUnitBase
 
 
 @dataclass

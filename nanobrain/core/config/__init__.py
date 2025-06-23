@@ -1,15 +1,14 @@
 """
 Configuration system for NanoBrain Framework.
 
-Provides YAML-based configuration management, component factory,
-advanced schema validation capabilities, and global configuration management.
+Provides YAML-based configuration management, simplified component factory,
+and schema validation capabilities with focus on from_config pattern.
 """
 
 from .yaml_config import YAMLConfig, WorkflowConfig
 from .component_factory import (
-    ComponentFactory, ComponentType,
-    get_factory, set_factory,
-    create_component_from_yaml, create_workflow_from_yaml
+    ComponentFactory,
+    import_and_create_from_config
 )
 from .schema_validator import (
     SchemaValidator, ConfigSchema, FieldSchema, ParameterSchema,
@@ -63,13 +62,9 @@ __all__ = [
     'YAMLConfig',
     'WorkflowConfig',
     
-    # Component Factory
+    # Simplified Component Factory
     'ComponentFactory',
-    'ComponentType',
-    'get_factory',
-    'set_factory',
-    'create_component_from_yaml',
-    'create_workflow_from_yaml',
+    'import_and_create_from_config',
     
     # Schema Validation
     'SchemaValidator',
@@ -95,4 +90,9 @@ __all__ = [
     'should_log_to_console',
     'should_log_to_file',
     'get_logging_config',
-] 
+]
+
+# Migration note: Legacy functions removed
+# OLD: get_factory(), create_component_from_yaml(), create_workflow_from_yaml()
+# NEW: Use ComponentFactory().create_component_from_config() or import_and_create_from_config()
+# BEST: Use direct Class.from_config() pattern whenever possible 

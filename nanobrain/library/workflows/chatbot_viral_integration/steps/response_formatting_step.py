@@ -30,10 +30,10 @@ class ResponseFormattingStep(Step):
     def __init__(self, config: StepConfig):
         super().__init__(config)
         
-        # Get nested config dict
-        step_config = getattr(config, 'config', {})
+        # Get nested config dict safely
+        step_config = getattr(config, 'config', {}) if hasattr(config, 'config') else {}
         
-        # Formatting configuration
+        # Formatting configuration with robust defaults
         self.enable_markdown = step_config.get('enable_markdown', True)
         self.enable_progress_bars = step_config.get('enable_progress_bars', True)
         self.progress_bar_length = step_config.get('progress_bar_length', 20)
@@ -45,7 +45,11 @@ class ResponseFormattingStep(Step):
         self.include_troubleshooting = step_config.get('include_troubleshooting_tips', True)
         self.include_fallback_suggestions = step_config.get('include_fallback_suggestions', True)
         
-        self.nb_logger.info("🎨 Response Formatting Step initialized")
+        # Ensure critical attributes are always set
+        if not hasattr(self, 'max_response_length'):
+            self.max_response_length = 10000
+        
+        self.nb_logger.info(f"🎨 Response Formatting Step initialized (max_response_length: {self.max_response_length})")
     
     async def process(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -487,8 +491,9 @@ Your viral protein annotation results are ready! The analysis has identified fun
         content = response_data.format_with_references()
         
         # Truncate if too long
-        if len(content) > self.max_response_length:
-            content = content[:self.max_response_length] + "\n\n*[Response truncated for length]*"
+        max_len = getattr(self, 'max_response_length', 10000)
+        if len(content) > max_len:
+            content = content[:max_len] + "\n\n*[Response truncated for length]*"
         
         formatted_response = {
             'content': content,

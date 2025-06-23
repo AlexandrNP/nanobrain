@@ -44,7 +44,7 @@ from nanobrain.core.link import DirectLink, LinkConfig
 from nanobrain.core.step import Step, StepConfig
 from nanobrain.core.agent import ConversationalAgent, AgentConfig
 from nanobrain.core.executor import ParslExecutor, ExecutorConfig, ExecutorType
-from nanobrain.config.component_factory import ComponentFactory, get_factory
+from nanobrain.core.config.component_factory import ComponentFactory, get_factory
 
 # Import logging system
 from nanobrain.core.logging_system import (
@@ -55,7 +55,7 @@ from nanobrain.core.logging_system import (
 
 # Import global configuration
 try:
-    from nanobrain.config import get_config_manager, get_api_key, get_provider_config, get_logging_config, should_log_to_file, should_log_to_console
+    from nanobrain.core.config import get_config_manager, get_api_key, get_provider_config, get_logging_config, should_log_to_file, should_log_to_console
     CONFIG_AVAILABLE = True
 except ImportError as e:
     print(f"⚠️  Warning: Could not import configuration manager: {e}")

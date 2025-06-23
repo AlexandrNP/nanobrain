@@ -22,7 +22,7 @@ from .core.trigger import DataUpdatedTrigger, TriggerConfig
 from .core.link import DirectLink, LinkConfig
 
 # Configuration imports
-from .config.config_manager import get_config_manager
+from .core.config.config_manager import get_config_manager
 
 __all__ = [
     # Version info

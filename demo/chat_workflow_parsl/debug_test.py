@@ -17,7 +17,7 @@ try:
     print(f"✅ Path setup complete: {project_root}")
     
     # Test config import
-    from nanobrain.config import get_config_manager
+    from nanobrain.core.config import get_config_manager
     print("✅ Config import successful")
     
     config_manager = get_config_manager()

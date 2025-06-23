@@ -21,25 +21,25 @@ steps:
 - step_id: query_classification
   name: Query Classification
   description: Classify user queries as annotation requests or conversational queries
-  class: QueryClassificationStep
+  class: nanobrain.library.workflows.chatbot_viral_integration.steps.query_classification_step.QueryClassificationStep
   estimated_time: 2.0
   config_file: config/steps/query_classification.yml
 - step_id: annotation_job_processing
   name: Annotation Job Processing
   description: Handle viral protein annotation job requests
-  class: AnnotationJobStep
+  class: nanobrain.library.workflows.chatbot_viral_integration.steps.annotation_job_step.AnnotationJobStep
   estimated_time: 300.0
   config_file: config/steps/annotation_job_processing.yml
 - step_id: conversational_response
   name: Conversational Response
   description: Generate intelligent conversational responses about alphaviruses
-  class: ConversationalResponseStep
+  class: nanobrain.library.workflows.chatbot_viral_integration.steps.conversational_response_step.ConversationalResponseStep
   estimated_time: 5.0
   config_file: config/steps/conversational_response.yml
 - step_id: response_formatting
   name: Response Formatting
   description: Format responses for optimal user presentation
-  class: ResponseFormattingStep
+  class: nanobrain.library.workflows.chatbot_viral_integration.steps.response_formatting_step.ResponseFormattingStep
   estimated_time: 1.0
   config_file: config/steps/response_formatting.yml
 links:

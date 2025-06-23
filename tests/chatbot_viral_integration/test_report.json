@@ -1,0 +1,162 @@
+{
+  "timestamp": "2025-06-23 04:49:08",
+  "total_tests": 19,
+  "passed": 19,
+  "failed": 0,
+  "skipped": 0,
+  "total_duration": 7.555632591247559,
+  "results": [
+    {
+      "test_name": "QC-001: Conversational EEEV Query",
+      "test_category": "Query Classification",
+      "status": "PASSED",
+      "duration": 0.10112571716308594,
+      "error_message": null,
+      "details": null
+    },
+    {
+      "test_name": "QC-002: Annotation PSSM Query",
+      "test_category": "Query Classification",
+      "status": "PASSED",
+      "duration": 0.10111021995544434,
+      "error_message": null,
+      "details": null
+    },
+    {
+      "test_name": "QC-003: Conversational proteins",
+      "test_category": "Query Classification",
+      "status": "PASSED",
+      "duration": 0.10048890113830566,
+      "error_message": null,
+      "details": null
+    },
+    {
+      "test_name": "QC-004: Annotation analyze",
+      "test_category": "Query Classification",
+      "status": "PASSED",
+      "duration": 0.10119891166687012,
+      "error_message": null,
+      "details": null
+    },
+    {
+      "test_name": "QC-005: Mixed intent",
+      "test_category": "Query Classification",
+      "status": "PASSED",
+      "duration": 0.10120487213134766,
+      "error_message": null,
+      "details": null
+    },
+    {
+      "test_name": "Classification Accuracy Metrics",
+      "test_category": "Query Classification",
+      "status": "PASSED",
+      "duration": 0.5058040618896484,
+      "error_message": null,
+      "details": null
+    },
+    {
+      "test_name": "CR-001: EEEV Information",
+      "test_category": "Conversational Response",
+      "status": "PASSED",
+      "duration": 0.20112013816833496,
+      "error_message": null,
+      "details": null
+    },
+    {
+      "test_name": "CR-002: Virus transmission",
+      "test_category": "Conversational Response",
+      "status": "PASSED",
+      "duration": 0.20036983489990234,
+      "error_message": null,
+      "details": null
+    },
+    {
+      "test_name": "CR-003: PSSM explanation",
+      "test_category": "Conversational Response",
+      "status": "PASSED",
+      "duration": 0.201218843460083,
+      "error_message": null,
+      "details": null
+    },
+    {
+      "test_name": "Content Quality Validation",
+      "test_category": "Conversational Response",
+      "status": "PASSED",
+      "duration": 0.20121121406555176,
+      "error_message": null,
+      "details": null
+    },
+    {
+      "test_name": "AW-001: EEEV PSSM Workflow",
+      "test_category": "Workflow Integration",
+      "status": "PASSED",
+      "duration": 1.207824945449829,
+      "error_message": null,
+      "details": null
+    },
+    {
+      "test_name": "AW-002: Chikungunya Analysis",
+      "test_category": "Workflow Integration",
+      "status": "PASSED",
+      "duration": 1.207625150680542,
+      "error_message": null,
+      "details": null
+    },
+    {
+      "test_name": "AW-003: Alphavirus Clustering",
+      "test_category": "Workflow Integration",
+      "status": "PASSED",
+      "duration": 0.5035252571105957,
+      "error_message": null,
+      "details": null
+    },
+    {
+      "test_name": "Progress Tracking",
+      "test_category": "Workflow Integration",
+      "status": "PASSED",
+      "duration": 0.7045681476593018,
+      "error_message": null,
+      "details": null
+    },
+    {
+      "test_name": "Error Recovery",
+      "test_category": "Workflow Integration",
+      "status": "PASSED",
+      "duration": 0.6067469120025635,
+      "error_message": null,
+      "details": null
+    },
+    {
+      "test_name": "Concurrent Execution",
+      "test_category": "Workflow Integration",
+      "status": "PASSED",
+      "duration": 0.10135793685913086,
+      "error_message": null,
+      "details": null
+    },
+    {
+      "test_name": "Classification Performance",
+      "test_category": "Performance",
+      "status": "PASSED",
+      "duration": 0.10144615173339844,
+      "error_message": null,
+      "details": null
+    },
+    {
+      "test_name": "Conversational Response Performance",
+      "test_category": "Performance",
+      "status": "PASSED",
+      "duration": 0.20143938064575195,
+      "error_message": null,
+      "details": null
+    },
+    {
+      "test_name": "Workflow Performance",
+      "test_category": "Performance",
+      "status": "PASSED",
+      "duration": 1.106245994567871,
+      "error_message": null,
+      "details": null
+    }
+  ]
+}

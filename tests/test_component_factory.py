@@ -1,35 +1,22 @@
 """
-Tests for Component Factory System
+Tests for Simplified Component Factory System
 
-Tests the YAML-based component creation system.
+Tests the modern from_config pattern and simplified component creation.
 """
 
 import pytest
-import asyncio
 import tempfile
 import yaml
 from pathlib import Path
-from typing import Dict, Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 # Import the components we need to test
-import sys
-import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'library'))
-
-from nanobrain.config.component_factory import ComponentFactory, ComponentType, get_factory
-from nanobrain.core.agent import Agent, SimpleAgent
-from agents.specialized import CodeWriterAgent
-from nanobrain.core.step import BaseStep, Step
-from nanobrain.core.data_unit import DataUnitMemory
-from nanobrain.core.trigger import DataUpdatedTrigger
-from nanobrain.core.link import DirectLink
-from nanobrain.core.executor import LocalExecutor
+from nanobrain.core.config.component_factory import ComponentFactory, import_and_create_from_config
+from nanobrain.core.executor import LocalExecutor, ExecutorConfig, ExecutorType
 
 
-class TestComponentFactory:
-    """Test the ComponentFactory class."""
+class TestSimplifiedComponentFactory:
+    """Test the simplified ComponentFactory class."""
     
     @pytest.fixture
     def factory(self):
@@ -42,763 +29,298 @@ class TestComponentFactory:
         with tempfile.TemporaryDirectory() as temp_dir:
             yield Path(temp_dir)
     
-    @pytest.fixture
-    def sample_agent_config(self):
-        """Sample agent configuration."""
-        return {
-            "name": "TestAgent",
-            "description": "Test agent for unit tests",
-            "class": "SimpleAgent",
-            "config": {
-                "name": "TestAgent",
-                "description": "Test agent",
-                "model": "gpt-3.5-turbo",
-                "temperature": 0.5,
-                "system_prompt": "You are a test agent.",
-                "auto_initialize": False  # Don't auto-initialize to avoid OpenAI calls
-            }
-        }
-    
-    @pytest.fixture
-    def sample_step_config(self):
-        """Sample step configuration."""
-        return {
-            "name": "TestStep",
-            "description": "Test step for unit tests",
-            "class": "SimpleStep",
-            "config": {
-                "name": "TestStep",
-                "description": "Test step",
-                "debug_mode": True
-            },
-            "input_configs": {
-                "input": {
-                    "data_type": "memory",  # Fixed: lowercase
-                    "name": "input",
-                    "description": "Test input"
-                }
-            },
-            "output_config": {
-                "data_type": "memory",  # Fixed: lowercase
-                "name": "output",
-                "description": "Test output"
-            }
-        }
-    
-    @pytest.fixture
-    def sample_workflow_config(self):
-        """Sample workflow configuration."""
-        return {
-            "name": "TestWorkflow",
-            "description": "Test workflow",
-            "version": "1.0.0",
-            "executors": {
-                "local": {
-                    "executor_type": "local",  # Fixed: lowercase
-                    "name": "local",
-                    "description": "Local executor",
-                    "max_workers": 2
-                }
-            },
-            "data_units": {
-                "test_data": {
-                    "data_type": "memory",  # Fixed: lowercase
-                    "name": "test_data",
-                    "description": "Test data unit"
-                }
-            },
-            "triggers": {
-                "test_trigger": {
-                    "trigger_type": "data_updated",  # Fixed: lowercase
-                    "name": "test_trigger",
-                    "description": "Test trigger"
-                }
-            },
-            "agents": {
-                "test_agent": {
-                    "class": "SimpleAgent",
-                    "config": {
-                        "name": "test_agent",
-                        "description": "Test agent",
-                        "model": "gpt-3.5-turbo",
-                        "auto_initialize": False  # Don't auto-initialize
-                    }
-                }
-            },
-            "steps": {
-                "test_step": {
-                    "class": "SimpleStep",
-                    "config": {
-                        "name": "test_step",
-                        "description": "Test step"
-                    }
-                }
-            },
-            "links": [
-                {
-                    "name": "test_link",
-                    "link_type": "direct",  # Fixed: lowercase
-                    "source": "test_data",
-                    "target": "test_step"
-                }
-            ]
-        }
-    
-    @pytest.mark.asyncio
-    async def test_create_agent_from_config(self, factory):
-        """Test creating an agent from configuration."""
-        with patch('openai.AsyncOpenAI') as mock_openai:
-            mock_client = AsyncMock()
-            mock_openai.return_value = mock_client
-            
-            config = {
-                "type": "SimpleAgent",
-                "config": {
-                    "name": "TestAgent",
-                    "description": "Test agent for unit tests",
-                    "model": "gpt-3.5-turbo",
-                    "temperature": 0.5,
-                    "debug_mode": True
-                }
-            }
-            
-            agent = factory.create_component(
-                ComponentType.AGENT, 
-                config, 
-                "test_agent"
-            )
-            
-            assert isinstance(agent, SimpleAgent)
-            assert agent.name == "TestAgent"
-            assert agent.description == "Test agent for unit tests"
-            assert agent.config.model == "gpt-3.5-turbo"
-            assert agent.config.temperature == 0.5
-            
-            await agent.shutdown()
-    
-    @pytest.mark.asyncio
-    async def test_create_step_from_config(self, factory):
-        """Test creating a step from configuration."""
-        config = {
-            "type": "SimpleStep",
-            "config": {
-                "name": "TestStep",
-                "description": "Test step for unit tests",
-                "debug_mode": True
-            },
-            "input_configs": {
-                "input": {
-                    "data_type": "memory",
-                    "persistent": False,
-                    "cache_size": 1000
-                }
-            },
-            "output_config": {
-                "data_type": "memory",
-                "persistent": False,
-                "cache_size": 1000
-            }
-        }
-        
-        step = factory.create_component(
-            ComponentType.STEP, 
-            config, 
-            "test_step"
+    def test_import_and_create_from_config_success(self):
+        """Test successful component creation using import_and_create_from_config."""
+        # Test with LocalExecutor - use proper ExecutorConfig
+        executor_config = ExecutorConfig(
+            executor_type=ExecutorType.LOCAL,
+            max_workers=2
         )
         
-        assert isinstance(step, SimpleStep)
-        assert step.name == "TestStep"
-        assert step.description == "Test step for unit tests"
-        assert len(step.input_data_units) == 1
-        assert step.output_data_unit is not None
-        
-        await step.shutdown()
-    
-    @pytest.mark.asyncio
-    async def test_create_data_unit_from_config(self, factory):
-        """Test creating a data unit from configuration."""
-        config = {
-            "data_type": "memory",
-            "persistent": False,
-            "cache_size": 1000
-        }
-        
-        data_unit = factory.create_component(
-            ComponentType.DATA_UNIT, 
-            config, 
-            "test_data_unit"
+        executor = import_and_create_from_config(
+            "nanobrain.core.executor.LocalExecutor",
+            executor_config
         )
         
-        assert isinstance(data_unit, DataUnitMemory)
-        assert data_unit.name == "test_data_unit"
+        assert executor is not None
+        assert hasattr(executor, 'name')
+        # LocalExecutor name comes from class name, not config
+        assert executor.name == "LocalExecutor"
+        assert executor.config.max_workers == 2
+    
+    def test_import_and_create_from_config_invalid_path(self):
+        """Test error handling for invalid import paths."""
+        executor_config = ExecutorConfig(executor_type=ExecutorType.LOCAL)
         
-    @pytest.mark.asyncio
-    async def test_create_trigger_from_config(self, factory):
-        """Test creating a trigger from configuration."""
-        config = {
-            "trigger_type": "data_updated",
-            "conditions": {
-                "data_units": ["input1", "input2"],
-                "require_all": True
-            }
-        }
+        # Test short name (not allowed)
+        with pytest.raises(ValueError, match="must be a full import path"):
+            import_and_create_from_config("LocalExecutor", executor_config)
         
-        trigger = factory.create_component(
-            ComponentType.TRIGGER, 
-            config, 
-            "test_trigger"
+        # Test invalid module
+        with pytest.raises(ImportError, match="Cannot import module"):
+            import_and_create_from_config("nonexistent.module.Class", executor_config)
+        
+        # Test invalid class
+        with pytest.raises(ImportError, match="Class .* not found"):
+            import_and_create_from_config("nanobrain.core.executor.NonexistentClass", executor_config)
+    
+    def test_import_and_create_from_config_no_from_config_method(self):
+        """Test error handling when class doesn't implement from_config."""
+        # Test with a class that doesn't have from_config
+        with pytest.raises(ValueError, match="must implement from_config method"):
+            import_and_create_from_config("builtins.dict", {})
+    
+    def test_factory_create_component_from_config(self, factory):
+        """Test ComponentFactory.create_component_from_config method."""
+        executor_config = ExecutorConfig(
+            executor_type=ExecutorType.LOCAL,
+            max_workers=3
         )
         
-        assert isinstance(trigger, DataUpdatedTrigger)
-        assert trigger.config.trigger_type == "data_updated"
+        executor = factory.create_component_from_config(
+            "nanobrain.core.executor.LocalExecutor",
+            executor_config
+        )
+        
+        assert executor is not None
+        assert executor.name == "LocalExecutor"
+        assert executor.config.max_workers == 3
     
-    @pytest.mark.asyncio
-    async def test_create_executor_from_config(self, factory):
-        """Test creating an executor from configuration."""
-        config = {
+    def test_factory_create_from_yaml_file(self, factory, temp_config_dir):
+        """Test creating component from YAML file."""
+        # Create a test YAML config file with proper structure
+        config_data = {
             "executor_type": "local",
-            "max_workers": 2,
+            "max_workers": 4,
             "timeout": 30.0
         }
         
-        executor = factory.create_component(
-            ComponentType.EXECUTOR, 
-            config, 
-            "test_executor"
+        yaml_file = temp_config_dir / "test_executor.yml"
+        with open(yaml_file, 'w') as f:
+            yaml.dump(config_data, f)
+        
+        # Create component from YAML
+        executor = factory.create_from_yaml_file(
+            yaml_file,
+            "nanobrain.core.executor.LocalExecutor"
         )
         
-        assert isinstance(executor, LocalExecutor)
-        assert executor.config.executor_type == "local"
-        assert executor.config.max_workers == 2
+        assert executor is not None
+        assert executor.name == "LocalExecutor"
+        assert executor.config.max_workers == 4
         assert executor.config.timeout == 30.0
-        
-        await executor.shutdown()
     
-    @pytest.mark.asyncio
-    async def test_create_from_yaml_file(self, factory, temp_config_dir):
-        """Test creating components from YAML files."""
-        with patch('openai.AsyncOpenAI') as mock_openai:
-            mock_client = AsyncMock()
-            mock_openai.return_value = mock_client
-            
-            # Create a test YAML file
-            config_data = {
-                "type": "SimpleAgent",
-                "description": "Test agent from YAML",
-                "config": {
-                    "name": "YAMLAgent",
-                    "model": "gpt-3.5-turbo",
-                    "temperature": 0.3,
-                    "debug_mode": True
-                }
-            }
-            
-            config_file = temp_config_dir / "test_agent.yml"
-            with open(config_file, 'w') as f:
-                yaml.dump(config_data, f)
-            
-            agent = factory.create_from_yaml_file(config_file)
-            
-            assert isinstance(agent, SimpleAgent)
-            assert agent.name == "YAMLAgent"
-            assert agent.config.temperature == 0.3
-            
-            await agent.shutdown()
-    
-    @pytest.mark.asyncio
-    async def test_create_workflow_from_config(self, factory, temp_config_dir):
-        """Test creating a complete workflow from configuration."""
-        with patch('openai.AsyncOpenAI') as mock_openai:
-            mock_client = AsyncMock()
-            mock_openai.return_value = mock_client
-            
-            workflow_config = {
-                "name": "TestWorkflow",
-                "description": "Test workflow for unit tests",
-                "executors": {
-                    "local": {
-                        "executor_type": "local",
-                        "name": "local",
-                        "description": "Local executor",
-                        "max_workers": 2
-                    }
-                },
-                "data_units": {
-                    "test_data": {
-                        "data_type": "memory",
-                        "name": "test_data",
-                        "description": "Test data unit"
-                    }
-                },
-                "triggers": {
-                    "test_trigger": {
-                        "trigger_type": "data_updated",
-                        "name": "test_trigger",
-                        "description": "Test trigger"
-                    }
-                },
-                "agents": {
-                    "test_agent": {
-                        "class": "SimpleAgent",
-                        "config": {
-                            "name": "test_agent",
-                            "description": "Test agent",
-                            "model": "gpt-3.5-turbo",
-                            "auto_initialize": False
-                        }
-                    }
-                },
-                "steps": {
-                    "test_step": {
-                        "class": "SimpleStep",
-                        "config": {
-                            "name": "test_step",
-                            "description": "Test step"
-                        }
-                    }
-                },
-                "links": [
-                    {
-                        "name": "test_link",
-                        "link_type": "direct",
-                        "source": "test_data",
-                        "target": "test_step"
-                    }
-                ]
-            }
-            
-            workflow_file = temp_config_dir / "test_workflow.yml"
-            with open(workflow_file, 'w') as f:
-                yaml.dump(workflow_config, f)
-            
-            workflow = factory.create_workflow_from_yaml(workflow_file)
-            
-            assert "local" in workflow
-            assert "test_data" in workflow
-            assert "test_trigger" in workflow
-            assert "test_agent" in workflow
-            assert "test_step" in workflow
-            
-            # Cleanup
-            for component in workflow.values():
-                if hasattr(component, 'shutdown'):
-                    await component.shutdown()
-    
-    @pytest.mark.asyncio
-    async def test_component_registry(self, factory):
-        """Test component registry functionality."""
-        with patch('openai.AsyncOpenAI') as mock_openai:
-            mock_client = AsyncMock()
-            mock_openai.return_value = mock_client
-            
-            config = {
-                "type": "SimpleAgent",
-                "config": {
-                    "name": "RegistryAgent",
-                    "debug_mode": True
-                }
-            }
-            
-            # Create and register component
-            agent = factory.create_component(
-                ComponentType.AGENT, 
-                config, 
-                "registry_agent"
-            )
-            
-            # Check registry
-            assert factory.get_component("registry_agent") is agent
-            
-            # List components
-            components = factory.list_components()
-            assert "registry_agent" in components
-            
-            await agent.shutdown()
-    
-    @pytest.mark.asyncio
-    async def test_component_caching(self, factory, temp_config_dir):
-        """Test configuration caching."""
-        with patch('openai.AsyncOpenAI') as mock_openai:
-            mock_client = AsyncMock()
-            mock_openai.return_value = mock_client
-            
-            # Create a test YAML file
-            config_data = {
-                "type": "SimpleAgent",
-                "config": {
-                    "name": "CachedAgent",
-                    "debug_mode": True
-                }
-            }
-            
-            config_file = temp_config_dir / "cached_agent.yml"
-            with open(config_file, 'w') as f:
-                yaml.dump(config_data, f)
-            
-            # Load twice to test caching
-            agent1 = factory.create_from_yaml_file(config_file)
-            agent2 = factory.create_from_yaml_file(config_file)
-            
-            # Both should be created successfully (caching is for config, not instances)
-            assert isinstance(agent1, SimpleAgent)
-            assert isinstance(agent2, SimpleAgent)
-            assert agent1 is not agent2  # Different instances
-            
-            await agent1.shutdown()
-            await agent2.shutdown()
-    
-    def test_custom_class_registration(self, factory):
-        """Test registering custom classes."""
-        class CustomAgent(SimpleAgent):
-            pass
-        
-        class CustomStep(SimpleStep):
-            pass
-        
-        factory.register_class("CustomAgent", CustomAgent)
-        factory.register_class("CustomStep", CustomStep)
-        
-        # Verify registration
-        assert "CustomAgent" in factory.custom_classes
-        assert "CustomStep" in factory.custom_classes
-    
-    @pytest.mark.asyncio
-    async def test_error_handling_missing_file(self, factory):
-        """Test error handling for missing configuration files."""
+    def test_factory_create_from_yaml_file_not_found(self, factory):
+        """Test error handling for missing YAML file."""
         with pytest.raises(FileNotFoundError):
-            factory.create_from_yaml_file("nonexistent_file.yml")
-    
-    @pytest.mark.asyncio
-    async def test_error_handling_invalid_class(self, factory):
-        """Test error handling for invalid class names."""
-        config = {
-            "type": "NonexistentAgent",
-            "config": {
-                "name": "TestAgent",
-                "debug_mode": True
-            }
-        }
-        
-        with pytest.raises((ValueError, KeyError)):
-            factory.create_component(ComponentType.AGENT, config, "test")
-    
-    @pytest.mark.asyncio
-    async def test_error_handling_invalid_config(self, factory):
-        """Test error handling for invalid configurations."""
-        config = {
-            "type": "SimpleAgent",
-            "config": {
-                # Missing required 'name' field
-                "model": "invalid-model"
-            }
-        }
-        
-        with pytest.raises(Exception):  # Could be ValidationError or other
-            await factory.create_component(ComponentType.AGENT, config, "test")
-    
-    @pytest.mark.asyncio
-    async def test_shutdown_all(self, factory):
-        """Test shutting down all components."""
-        with patch('openai.AsyncOpenAI') as mock_openai:
-            mock_client = AsyncMock()
-            mock_openai.return_value = mock_client
-            
-            # Create multiple components
-            agent_config = {
-                "type": "SimpleAgent",
-                "config": {
-                    "name": "ShutdownAgent",
-                    "debug_mode": True
-                }
-            }
-            
-            executor_config = {
-                "executor_type": "local",
-                "max_workers": 1
-            }
-            
-            factory.create_component(ComponentType.AGENT, agent_config, "shutdown_agent")
-            factory.create_component(ComponentType.EXECUTOR, executor_config, "shutdown_executor")
-            
-            # Shutdown all
-            factory.shutdown_components()
-            
-            # Registry should be empty
-            components = factory.list_components()
-            assert len(components) == 0
+            factory.create_from_yaml_file(
+                "nonexistent.yml",
+                "nanobrain.core.executor.LocalExecutor"
+            )
 
-    def test_code_writer_yaml_config_loading(self, factory):
-        """Test that CodeWriterAgent properly loads configuration from YAML."""
-        # Create a test YAML configuration for CodeWriterAgent
-        test_config = {
-            "class": "CodeWriterAgent",
-            "config": {
-                "name": "TestCodeWriter",
-                "description": "Test code writer agent",
-                "model": "gpt-4-turbo",
-                "temperature": 0.1,
-                "max_tokens": 2000,
-                "system_prompt": "Custom system prompt for testing YAML configuration loading."
-            }
-        }
-        
-        # Create agent from config
-        agent = factory.create_component(ComponentType.AGENT, test_config, "test_code_writer")
-        
-        # Verify it's the correct type
-        assert isinstance(agent, CodeWriterAgent)
-        
-        # Verify configuration was loaded from YAML
-        assert agent.config.name == "TestCodeWriter"
-        assert agent.config.description == "Test code writer agent"
-        assert agent.config.model == "gpt-4-turbo"
-        assert agent.config.temperature == 0.1
-        assert agent.config.max_tokens == 2000
-        assert agent.config.system_prompt == "Custom system prompt for testing YAML configuration loading."
-        
-        # Verify agent is registered
-        assert "test_code_writer" in factory.component_registry
-        assert factory.get_component("test_code_writer") is agent
 
-    def test_code_writer_default_prompt_fallback(self, factory):
-        """Test that CodeWriterAgent requires prompts from YAML configuration."""
-        # Create config without system_prompt or prompt_templates
-        test_config = {
-            "class": "CodeWriterAgent",
-            "config": {
-                "name": "DefaultPromptAgent",
-                "description": "Agent with no prompts - should use empty defaults",
-                "model": "gpt-4"
-            }
-        }
-        
-        # Create agent from config
-        agent = factory.create_component(ComponentType.AGENT, test_config)
-        
-        # Verify it's a CodeWriterAgent but has no hardcoded prompts
-        assert isinstance(agent, CodeWriterAgent)
-        
-        # Verify system prompt is empty (no hardcoded defaults)
-        assert agent.config.system_prompt == ""
-        
-        # Verify the agent has the specialized features
-        assert hasattr(agent, 'code_keywords')
-        assert hasattr(agent, 'language_patterns')
-        
-        # This demonstrates that the agent works with minimal configuration
-        print("✅ CodeWriterAgent correctly works with minimal configuration")
-
-    def test_step_coder_yaml_template(self, factory):
-        """Test that step_coder.yml template properly creates CodeWriterAgent."""
-        # Load the actual step_coder.yml template from library
-        agent = factory.create_from_yaml_file(
-            "../library/agents/specialized/config/step_coder.yml",
-            component_name="step_coder_test"
+class TestModernFromConfigPattern:
+    """Test direct from_config usage pattern (recommended approach)."""
+    
+    def test_direct_from_config_usage(self):
+        """Test the preferred direct from_config pattern."""
+        # This is the modern, recommended approach
+        executor_config = ExecutorConfig(
+            executor_type=ExecutorType.LOCAL,
+            max_workers=8
         )
         
-        # Verify it's a CodeWriterAgent
-        assert isinstance(agent, CodeWriterAgent)
+        # Direct usage - no factory needed
+        executor = LocalExecutor.from_config(executor_config)
         
-        # Verify configuration from YAML
-        assert agent.config.name == "StepCoder"
-        assert agent.config.model == "gpt-4-turbo"
-        assert agent.config.temperature == 0.2
-        assert agent.config.max_tokens == 4000
-        
-        # Verify the system prompt was loaded from YAML
-        assert "specialized code generation agent for the NanoBrain framework" in agent.config.system_prompt
-        assert "file_writer tool" in agent.config.system_prompt
-        assert "Generate simple, clean code" in agent.config.system_prompt
-        
-        # Verify agent is registered
-        assert "step_coder_test" in factory.component_registry
-
-    @pytest.mark.asyncio
-    async def test_code_writer_prompt_templates_from_yaml(self):
-        """Test that CodeWriterAgent loads all prompt templates from YAML configuration."""
-        factory = get_factory()
-        
-        # Load CodeWriterAgent from step_coder.yml
-        agent = factory.create_from_yaml_file(
-            "../library/agents/specialized/config/step_coder.yml",
-            component_name="test_prompt_templates"
+        assert executor is not None
+        assert executor.name == "LocalExecutor"  # Name comes from class
+        assert executor.config.max_workers == 8
+    
+    def test_from_config_with_dependencies(self):
+        """Test from_config pattern with additional dependencies."""
+        executor_config = ExecutorConfig(
+            executor_type=ExecutorType.LOCAL,
+            max_workers=2
         )
         
-        # Verify it's a CodeWriterAgent
-        assert isinstance(agent, CodeWriterAgent)
+        # Example of passing additional dependencies
+        executor = LocalExecutor.from_config(
+            executor_config,
+            custom_dependency="test_value"
+        )
         
-        # Verify prompt templates are loaded in config
-        assert hasattr(agent.config, 'prompt_templates')
-        assert isinstance(agent.config.prompt_templates, dict)
-        
-        # Verify all expected prompt templates are present
-        expected_templates = [
-            'enhanced_input',
-            'python_function', 
-            'python_class',
-            'nanobrain_step',
-            'write_code_to_file'
-        ]
-        
-        for template_name in expected_templates:
-            assert template_name in agent.config.prompt_templates, f"Missing template: {template_name}"
-            assert isinstance(agent.config.prompt_templates[template_name], str)
-            assert len(agent.config.prompt_templates[template_name].strip()) > 0, f"Empty template: {template_name}"
-        
-        # Verify templates contain expected placeholders
-        assert '{input_text}' in agent.config.prompt_templates['enhanced_input']
-        assert '{available_tools}' in agent.config.prompt_templates['enhanced_input']
-        
-        assert '{function_name}' in agent.config.prompt_templates['python_function']
-        assert '{description}' in agent.config.prompt_templates['python_function']
-        assert '{parameters}' in agent.config.prompt_templates['python_function']
-        assert '{return_type}' in agent.config.prompt_templates['python_function']
-        
-        # Verify templates are loaded from YAML config, not hardcoded defaults
-        # The YAML templates should contain specific text that differs from defaults
-        assert 'Code Generation Request:' in agent.config.prompt_templates['enhanced_input']
-        assert 'Generate a Python function with the following specifications:' in agent.config.prompt_templates['python_function']
-        
-        print("✅ All prompt templates loaded correctly from YAML configuration")
+        assert executor is not None
+        assert executor.name == "LocalExecutor"
+        assert executor.config.max_workers == 2
 
-    @pytest.mark.asyncio
-    async def test_code_writer_methods_use_yaml_templates(self):
-        """Test that CodeWriterAgent methods use templates from YAML instead of hardcoded prompts."""
-        factory = get_factory()
+
+class TestMigrationPatterns:
+    """Test migration patterns from old to new API."""
+    
+    def test_migration_from_old_factory_pattern(self):
+        """Demonstrate migration from old factory pattern to new approach."""
         
-        # Create agent with custom prompt templates to verify they're being used
-        custom_config = {
-            "class": "CodeWriterAgent",
-            "config": {
-                "name": "TestCodeWriter",
-                "description": "Test agent for template verification",
-                "model": "gpt-3.5-turbo",
-                "temperature": 0.1,
-                "system_prompt": "Test system prompt",
-                "prompt_templates": {
-                    "enhanced_input": "CUSTOM_ENHANCED: {input_text} | TOOLS: {available_tools}",
-                    "python_function": "CUSTOM_FUNCTION: {function_name} - {description} ({parameters}) -> {return_type}",
-                    "python_class": "CUSTOM_CLASS: {class_name}{base_classes} - {description} | Methods: {methods}",
-                    "nanobrain_step": "CUSTOM_STEP: {step_name} - {description} | IN: {input_types} | OUT: {output_types}",
-                    "write_code_to_file": "CUSTOM_WRITE: {tool_name} -> {file_path} | {description} | CODE: {code}"
-                }
-            }
+        # OLD PATTERN (no longer supported):
+        # factory = get_factory()
+        # component = factory.create_component(ComponentType.EXECUTOR, config, "name")
+        
+        # NEW PATTERN (simplified factory):
+        factory = ComponentFactory()
+        config = ExecutorConfig(
+            executor_type=ExecutorType.LOCAL,
+            max_workers=2
+        )
+        component = factory.create_component_from_config(
+            "nanobrain.core.executor.LocalExecutor",
+            config
+        )
+        
+        # BEST PATTERN (direct from_config):
+        best_component = LocalExecutor.from_config(config)
+        
+        assert component is not None
+        assert best_component is not None
+        assert component.name == best_component.name
+        assert component.config.max_workers == best_component.config.max_workers
+    
+    def test_migration_yaml_loading(self):
+        """Demonstrate YAML loading migration."""
+        
+        # OLD PATTERN (no longer supported):
+        # component = create_component_from_yaml("config.yml", "component_name")
+        
+        # NEW PATTERN (specify class path explicitly):
+        config_dict = {
+            "executor_type": "local",
+            "max_workers": 2,
+            "timeout": 15.0
         }
         
-        agent = factory.create_component("agent", custom_config, "test_custom_templates")
+        # Method 1: Use factory
+        factory = ComponentFactory()
+        component1 = factory.create_component_from_config(
+            "nanobrain.core.executor.LocalExecutor",
+            config_dict
+        )
         
-        # Verify custom templates are loaded in config
-        assert agent.config.prompt_templates["enhanced_input"].startswith("CUSTOM_ENHANCED:")
-        assert agent.config.prompt_templates["python_function"].startswith("CUSTOM_FUNCTION:")
-        assert agent.config.prompt_templates["python_class"].startswith("CUSTOM_CLASS:")
-        assert agent.config.prompt_templates["nanobrain_step"].startswith("CUSTOM_STEP:")
-        assert agent.config.prompt_templates["write_code_to_file"].startswith("CUSTOM_WRITE:")
+        # Method 2: Use direct function
+        component2 = import_and_create_from_config(
+            "nanobrain.core.executor.LocalExecutor",
+            config_dict
+        )
         
-        print("✅ CodeWriterAgent correctly uses custom prompt templates from YAML")
+        # Method 3: Direct from_config (best)
+        from nanobrain.core.executor import ExecutorConfig
+        config_obj = ExecutorConfig(**config_dict)
+        component3 = LocalExecutor.from_config(config_obj)
+        
+        assert all(comp.name == "LocalExecutor" for comp in [component1, component2, component3])
+        assert all(comp.config.max_workers == 2 for comp in [component1, component2, component3])
 
 
-class TestYAMLConfigIntegration:
-    """Test integration with YAML configuration system."""
+class TestRealWorldWorkflowCreation:
+    """Test real-world workflow creation patterns."""
     
-    @pytest.fixture
-    def temp_config_dir(self):
-        """Create a temporary directory for config files."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            yield Path(temp_dir)
+    def test_workflow_component_creation(self):
+        """Test creating workflow components using modern pattern."""
+        # Create executor for workflow steps
+        executor_config = ExecutorConfig(
+            executor_type=ExecutorType.LOCAL,
+            max_workers=4
+        )
+        executor = LocalExecutor.from_config(executor_config)
+        
+        # In a real workflow, you'd create steps like this:
+        # step_config = StepConfig(name="workflow_step")
+        # step = SomeStepClass.from_config(step_config, executor=executor)
+        
+        assert executor is not None
+        assert executor.name == "LocalExecutor"
+        assert executor.config.max_workers == 4
     
-    @pytest.mark.asyncio
-    async def test_workflow_config_integration(self, temp_config_dir):
-        """Test integration with workflow configuration."""
-        with patch('openai.AsyncOpenAI') as mock_openai:
-            mock_client = AsyncMock()
-            mock_openai.return_value = mock_client
-            
-            # Create a comprehensive workflow configuration
-            workflow_config = {
-                "name": "IntegrationWorkflow",
-                "description": "Integration test workflow",
-                "metadata": {
-                    "version": "1.0",
-                    "author": "test"
-                },
-                "executors": [
-                    {
-                        "name": "local_exec",
-                        "executor_type": "local",
-                        "max_workers": 2
-                    }
-                ],
-                "data_units": [
-                    {
-                        "name": "memory_store",
-                        "data_type": "memory",
-                        "cache_size": 500
-                    }
-                ],
-                "triggers": [
-                    {
-                        "name": "data_trigger",
-                        "trigger_type": "data_updated",
-                        "conditions": {
-                            "data_units": ["memory_store"],
-                            "require_all": True
-                        }
-                    }
-                ],
-                "agents": [
-                    {
-                        "name": "main_agent",
-                        "type": "SimpleAgent",
-                        "config": {
-                            "name": "IntegrationAgent",
-                            "model": "gpt-3.5-turbo",
-                            "debug_mode": True
-                        }
-                    }
-                ],
-                "steps": [
-                    {
-                        "name": "main_step",
-                        "type": "SimpleStep",
-                        "config": {
-                            "name": "IntegrationStep",
-                            "debug_mode": True
-                        },
-                        "input_configs": {
-                            "input": {
-                                "data_type": "memory",
-                                "cache_size": 100
-                            }
-                        }
-                    }
-                ]
-            }
-            
-            config_file = temp_config_dir / "integration_workflow.yml"
-            with open(config_file, 'w') as f:
-                yaml.dump(workflow_config, f)
-            
-            factory = ComponentFactory()
-            workflow = factory.create_workflow_from_yaml(config_file)
-            
-            # Verify all components were created
-            assert "local_exec" in workflow
-            assert "memory_store" in workflow
-            assert "data_trigger" in workflow
-            assert "main_agent" in workflow
-            assert "main_step" in workflow
-            
-            # Verify component types
-            assert isinstance(workflow["local_exec"], LocalExecutor)
-            assert isinstance(workflow["memory_store"], DataUnitMemory)
-            assert isinstance(workflow["data_trigger"], DataUpdatedTrigger)
-            assert isinstance(workflow["main_agent"], SimpleAgent)
-            assert isinstance(workflow["main_step"], SimpleStep)
-            
-            # Cleanup
-            factory.shutdown_components()
+    def test_batch_component_creation(self):
+        """Test creating multiple components efficiently."""
+        components = []
+        
+        for i in range(3):
+            config = ExecutorConfig(
+                executor_type=ExecutorType.LOCAL,
+                max_workers=i+1
+            )
+            executor = LocalExecutor.from_config(config)
+            components.append(executor)
+        
+        assert len(components) == 3
+        # All have the same name (LocalExecutor) since that's how the class works
+        assert all("LocalExecutor" == comp.name for comp in components)
+        assert all(comp.config.max_workers == i+1 for i, comp in enumerate(components))
 
 
-if __name__ == "__main__":
-    # Run tests
-    pytest.main([__file__, "-v"]) 
+# Integration test to ensure the simplified system works with existing framework
+class TestFrameworkIntegration:
+    """Test that simplified factory integrates properly with existing framework."""
+    
+    def test_integration_with_existing_from_config(self):
+        """Test that our simplified factory works with existing from_config implementations."""
+        # This tests that our approach is compatible with the framework's from_config pattern
+        executor_config = ExecutorConfig(
+            executor_type=ExecutorType.LOCAL,
+            max_workers=2
+        )
+        
+        # Both approaches should work and produce equivalent results
+        direct_executor = LocalExecutor.from_config(executor_config)
+        factory_executor = import_and_create_from_config(
+            "nanobrain.core.executor.LocalExecutor", 
+            executor_config
+        )
+        
+        assert direct_executor.name == factory_executor.name
+        assert type(direct_executor) == type(factory_executor)
+        assert direct_executor.config.max_workers == factory_executor.config.max_workers
+
+
+class TestConfigurationHandling:
+    """Test various configuration formats and conversions."""
+    
+    def test_dict_to_config_conversion(self):
+        """Test that dict configurations are properly converted to ExecutorConfig."""
+        # This demonstrates how the factory handles dictionary input
+        config_dict = {
+            "executor_type": "local",
+            "max_workers": 6,
+            "timeout": 45.0
+        }
+        
+        executor = import_and_create_from_config(
+            "nanobrain.core.executor.LocalExecutor",
+            config_dict
+        )
+        
+        assert executor.name == "LocalExecutor"
+        assert executor.config.max_workers == 6
+        assert executor.config.timeout == 45.0
+    
+    def test_enum_handling(self):
+        """Test that ExecutorType enums are handled correctly."""
+        # Test with enum value
+        config_enum = ExecutorConfig(
+            executor_type=ExecutorType.LOCAL,
+            max_workers=3
+        )
+        
+        # Test with string value
+        config_string = {
+            "executor_type": "local",
+            "max_workers": 3
+        }
+        
+        executor1 = LocalExecutor.from_config(config_enum)
+        executor2 = import_and_create_from_config(
+            "nanobrain.core.executor.LocalExecutor",
+            config_string
+        )
+        
+        assert executor1.config.executor_type == executor2.config.executor_type
+        assert executor1.config.max_workers == executor2.config.max_workers 

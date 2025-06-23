@@ -17,7 +17,7 @@ async def test_configuration():
     print("🔧 Testing Configuration System...")
     
     try:
-        from nanobrain.config import get_config_manager, get_api_key
+        from nanobrain.core.config import get_config_manager, get_api_key
         
         config_manager = get_config_manager()
         print("   ✅ Configuration manager loaded")

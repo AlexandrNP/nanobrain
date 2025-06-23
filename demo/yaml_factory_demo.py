@@ -8,17 +8,24 @@ Demonstrates how to create steps, agents, and complete workflows from YAML confi
 import asyncio
 import logging
 import sys
+import yaml
 from pathlib import Path
+import os
 
-# Add src to path for imports
-sys.path.append('src')
+# Add the project root to the path so we can import nanobrain
+current_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in globals() else os.getcwd()
+sys.path.insert(0, os.path.join(current_dir, '..', 'src'))
 
-from src.config import ComponentFactory, ComponentType, get_factory
+from nanobrain.core.config.component_factory import ComponentFactory
+from nanobrain.core.config.schema_validator import SchemaValidator
 from nanobrain.core.logging_system import get_logger, set_debug_mode
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = get_logger("yaml_factory_demo")
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 set_debug_mode(True)
 
 
@@ -28,28 +35,16 @@ async def demo_single_agent_creation():
     print("DEMO 1: Creating Single Agent from YAML")
     print("="*60)
     
-    factory = get_factory()
+    factory = ComponentFactory()
     
     try:
-        # Load agent from YAML template
-        agent = factory.create_from_yaml_file(
-            "nanobrain/src/agents/config/step_coder.yml",
-            component_name="yaml_code_writer"
-        )
+        # Modern approach: Use specific agent class paths
+        print("✅ Note: In the simplified system, agent creation requires:")
+        print("   - Explicit class path (e.g., 'nanobrain.library.agents.specialized.CodeWriterAgent')")
+        print("   - Proper agent configuration matching the class requirements")
+        print("   - See other demos for working examples with specific agent classes")
         
-        print(f"✅ Created agent: {agent.config.name}")
-        print(f"   Description: {agent.config.description}")
-        print(f"   Model: {agent.config.model}")
-        print(f"   Temperature: {agent.config.temperature}")
-        
-        # Test the agent (if OpenAI API key is available)
-        try:
-            response = await agent.process("Write a simple hello world function in Python")
-            print(f"   Agent response: {response[:100]}...")
-        except Exception as e:
-            print(f"   Note: Agent test skipped (likely missing API key): {e}")
-        
-        return agent
+        return None
         
     except Exception as e:
         print(f"❌ Error creating agent: {e}")
@@ -62,21 +57,17 @@ async def demo_single_step_creation():
     print("DEMO 2: Creating Single Step from YAML")
     print("="*60)
     
-    factory = get_factory()
+    factory = ComponentFactory()
     
     try:
-        # Create a file writer step from YAML template
-        step = factory.create_from_yaml_file(
-            "nanobrain/src/agents/config/step_file_writer.yml",
-            component_name="my_file_writer"
-        )
+        # Modern approach: Create step with explicit configuration
+        print("✅ Note: Step creation now requires:")
+        print("   - Explicit step class path")
+        print("   - Proper step configuration")
+        print("   - Direct dependency injection")
+        print("   - See other demos for working step examples")
         
-        print(f"✅ Created step: {step.config.name}")
-        print(f"   Description: {step.config.description}")
-        print(f"   Input configs: {list(step.config.input_configs.keys()) if step.config.input_configs else 'None'}")
-        print(f"   Output config: {step.config.output_config.name if step.config.output_config else 'None'}")
-        
-        return step
+        return None
         
     except Exception as e:
         print(f"❌ Error creating step: {e}")
@@ -84,32 +75,43 @@ async def demo_single_step_creation():
 
 
 async def demo_workflow_creation():
-    """Demonstrate creating a complete workflow from YAML configuration."""
+    """Demonstrate creating workflow components using modern approach."""
     print("\n" + "="*60)
-    print("DEMO 3: Creating Complete Workflow from YAML")
+    print("DEMO 3: Creating Workflow Components (Modern Approach)")
     print("="*60)
     
-    factory = get_factory()
+    factory = ComponentFactory()
     
     try:
-        # Create complete workflow from YAML
-        workflow_components = factory.create_workflow_from_yaml(
-            "nanobrain/src/config/templates/workflow_example.yml"
+        # Instead of creating entire workflows from YAML, we create individual components
+        # and compose them manually. This is more explicit and maintainable.
+        
+        print("✅ Creating individual workflow components:")
+        
+        # Create an executor
+        executor_config = {
+            "executor_type": "local",
+            "max_workers": 4,
+            "timeout": 30.0
+        }
+        
+        executor = factory.create_component_from_config(
+            "nanobrain.core.executor.LocalExecutor",
+            executor_config
         )
+        print(f"     - executor: {type(executor).__name__}")
         
-        print("✅ Created complete workflow with components:")
+        # For actual workflow creation, you would now do:
+        # workflow_config = WorkflowConfig(name="MyWorkflow", ...)  
+        # workflow = SomeWorkflowClass.from_config(workflow_config, executor=executor, ...)
         
-        for name, component in workflow_components.items():
-            print(f"     - {name}: {type(component).__name__}")
+        print("\n   Modern approach focuses on explicit component composition")
+        print("   rather than implicit YAML-based workflow creation.")
         
-        # Show total component count
-        total_components = len(workflow_components)
-        print(f"\n   Total components created: {total_components}")
-        
-        return workflow_components
+        return {"executor": executor}
         
     except Exception as e:
-        print(f"❌ Error creating workflow: {e}")
+        print(f"❌ Error creating workflow components: {e}")
         return None
 
 
@@ -119,67 +121,26 @@ async def demo_custom_yaml_config():
     print("DEMO 4: Creating Components from Custom YAML")
     print("="*60)
     
-    factory = get_factory()
-    
-    # Custom agent configuration
-    custom_agent_config = {
-        "name": "CustomAnalyzer",
-        "description": "Custom data analysis agent",
-        "class": "SimpleAgent",
-        "config": {
-            "name": "CustomAnalyzer",
-            "description": "Analyzes data and provides insights",
-            "model": "gpt-3.5-turbo",
-            "temperature": 0.3,
-            "max_tokens": 2000,
-            "system_prompt": "You are a data analysis expert. Analyze data and provide clear insights."
-        }
-    }
-    
-    # Custom step configuration
-    custom_step_config = {
-        "name": "DataProcessingStep",
-        "description": "Custom data processing step",
-        "class": "SimpleStep",
-        "config": {
-            "name": "DataProcessingStep",
-            "description": "Processes input data",
-            "debug_mode": True
-        },
-        "input_configs": {
-            "data": {
-                "data_type": "memory",  # Fixed: lowercase
-                "name": "data",
-                "description": "Input data to process"
-            }
-        },
-        "output_config": {
-            "data_type": "memory",  # Fixed: lowercase
-            "name": "output",
-            "description": "Processed data"
-        }
-    }
+    factory = ComponentFactory()
     
     try:
-        # Create agent from custom config
-        agent = factory.create_component(
-            ComponentType.AGENT,
-            custom_agent_config,
-            "custom_analyzer"
+        # Create executor from dict config (modern approach)
+        executor_config = {
+            "executor_type": "local",
+            "max_workers": 2,
+            "timeout": 45.0
+        }
+        
+        executor = factory.create_component_from_config(
+            "nanobrain.core.executor.LocalExecutor",
+            executor_config
         )
         
-        print(f"✅ Created custom agent: {agent.config.name}")
+        print(f"✅ Created custom executor: {executor.name}")
+        print(f"   - Max workers: {executor.config.max_workers}")
+        print(f"   - Timeout: {executor.config.timeout}")
         
-        # Create step from custom config
-        step = factory.create_component(
-            ComponentType.STEP,
-            custom_step_config,
-            "data_processing_step"
-        )
-        
-        print(f"✅ Created custom step: {step.config.name}")
-        
-        return {"agent": agent, "step": step}
+        return {"executor": executor}
         
     except Exception as e:
         print(f"❌ Error creating custom components: {e}")
@@ -187,28 +148,37 @@ async def demo_custom_yaml_config():
 
 
 async def demo_component_registry():
-    """Demonstrate the component registry functionality."""
+    """Demonstrate modern component management."""
     print("\n" + "="*60)
-    print("DEMO 5: Component Registry and Management")
+    print("DEMO 5: Modern Component Management")
     print("="*60)
     
-    factory = get_factory()
+    print("📋 Modern approach: Components are managed directly")
+    print("   - No global registry needed")
+    print("   - Components are created and managed explicitly")
+    print("   - Better memory management and lifecycle control")
     
-    # List all created components
-    component_names = factory.list_components()
+    # Create multiple components to demonstrate management
+    factory = ComponentFactory()
+    components = {}
     
-    print("📋 Components in registry:")
-    for name in component_names:
-        component = factory.get_component(name)
-        print(f"   - {name}: {type(component).__name__}")
+    for i in range(3):
+        config = {
+            "executor_type": "local",
+            "max_workers": i + 1
+        }
+        
+        executor = factory.create_component_from_config(
+            "nanobrain.core.executor.LocalExecutor",
+            config
+        )
+        components[f"executor_{i}"] = executor
+        
+    print(f"\n🔍 Created {len(components)} components:")
+    for name, component in components.items():
+        print(f"   - {name}: {type(component).__name__} (workers: {component.config.max_workers})")
     
-    # Get a specific component
-    if component_names:
-        component_name = component_names[0]
-        component = factory.get_component(component_name)
-        print(f"\n🔍 Retrieved component '{component_name}':")
-        print(f"   Type: {type(component).__name__}")
-        print(f"   Config: {getattr(component, 'config', 'No config attribute')}")
+    return components
 
 
 async def demo_error_handling():
@@ -217,42 +187,39 @@ async def demo_error_handling():
     print("DEMO 6: Error Handling")
     print("="*60)
     
-    factory = get_factory()
+    factory = ComponentFactory()
     
     # Test with non-existent file
     try:
-        factory.create_from_yaml_file("non_existent_file.yml")
+        factory.create_from_yaml_file("non_existent_file.yml", "nanobrain.core.executor.LocalExecutor")
     except FileNotFoundError as e:
         print(f"✅ Correctly handled missing file: {e}")
     
-    # Test with invalid configuration
+    # Test with invalid class path
     try:
         invalid_config = {
-            "name": "InvalidAgent",
-            "class": "NonExistentAgentClass",
-            "config": {}
+            "executor_type": "local",
+            "max_workers": 2
         }
-        factory.create_component(ComponentType.AGENT, invalid_config)
+        factory.create_component_from_config("nonexistent.module.Class", invalid_config)
     except Exception as e:
-        print(f"✅ Correctly handled invalid config: {e}")
+        print(f"✅ Correctly handled invalid class path: {e}")
     
-    # Test with malformed YAML (simulate by passing invalid dict)
+    # Test with invalid configuration
     try:
         malformed_config = {
-            "config": {
-                "temperature": "not_a_number"  # Should be float
-            }
+            "executor_type": "invalid_type"  # Should be valid ExecutorType
         }
-        factory.create_component(ComponentType.AGENT, malformed_config)
+        factory.create_component_from_config("nanobrain.core.executor.LocalExecutor", malformed_config)
     except Exception as e:
         print(f"✅ Correctly handled malformed config: {e}")
 
 
 async def main():
     """Run all demos."""
-    print("🧠 NanoBrain YAML Component Factory Demo")
+    print("🧠 NanoBrain Simplified Component Factory Demo")
     print("=" * 60)
-    print("This demo shows how to create NanoBrain components from YAML configurations.")
+    print("This demo shows the new simplified approach to creating NanoBrain components.")
     
     try:
         # Run all demos
@@ -267,19 +234,12 @@ async def main():
         print("✅ All demos completed successfully!")
         print("="*60)
         
-        # Final component summary
-        factory = get_factory()
-        component_names = factory.list_components()
-        total_components = len(component_names)
-        
-        print(f"\n📊 Final Summary:")
-        print(f"   Total components created: {total_components}")
-        print(f"   Components: {component_names}")
-        
-        # Cleanup
-        print("\n🧹 Cleaning up components...")
-        factory.shutdown_components()
-        print("   All components shutdown successfully.")
+        print(f"\n📊 Key Changes in Simplified Factory:")
+        print(f"   - No global component registry")
+        print(f"   - Explicit class paths required")
+        print(f"   - Direct component management")
+        print(f"   - Simplified API surface")
+        print(f"   - Better error handling")
         
     except Exception as e:
         logger.error(f"Demo failed: {e}")
@@ -290,6 +250,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    # Run the demo
-    exit_code = asyncio.run(main())
-    sys.exit(exit_code) 
+    exit(asyncio.run(main())) 

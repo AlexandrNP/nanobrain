@@ -2,6 +2,57 @@
 
 This document provides comprehensive API documentation for all core classes in the NanoBrain framework. It is designed to be understandable by both humans and LLMs for automatic code generation.
 
+## ⚡ Pydantic V2 Migration Complete
+
+**Status:** ✅ **FULLY MIGRATED** - NanoBrain is now Pydantic V2 compliant
+
+The NanoBrain framework has been successfully migrated to Pydantic V2 with zero breaking changes. All components now use modern Pydantic patterns:
+
+### New Model Configuration Pattern
+
+All NanoBrain models now use the **ConfigDict** pattern instead of class-based configuration:
+
+```python
+from pydantic import BaseModel, Field, ConfigDict
+
+class MyModel(BaseModel):
+    """Modern Pydantic V2 model example."""
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "name": "example_component",
+                "description": "Example description",
+                "enable_feature": True
+            }
+        }
+    )
+    
+    name: str = Field(..., description="Component name")
+    description: str = Field(default="", description="Component description")
+    enable_feature: bool = Field(default=True, description="Enable feature flag")
+```
+
+### Migration Benefits
+
+- ✅ **Zero Breaking Changes** - Full backward compatibility maintained
+- ✅ **Enhanced API Documentation** - Better OpenAPI schema generation
+- ✅ **Future-Ready** - Prepared for Pydantic V3
+- ✅ **Performance** - Improved validation performance
+- ✅ **Modern Patterns** - Uses latest Pydantic best practices
+
+### For Developers
+
+When creating new components, always use the modern pattern:
+
+```python
+# ✅ Correct - Use ConfigDict
+model_config = ConfigDict(json_schema_extra={"example": {...}})
+
+# ❌ Deprecated - Don't use class Config
+class Config:
+    schema_extra = {"example": {...}}
+```
+
 ## Import Structure
 
 All NanoBrain core components are available through the `nanobrain` package:
