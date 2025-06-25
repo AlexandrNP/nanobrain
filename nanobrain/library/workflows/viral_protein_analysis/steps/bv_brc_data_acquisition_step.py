@@ -24,6 +24,8 @@ import re
 from nanobrain.core.step import Step, StepConfig
 from nanobrain.core.logging_system import get_logger
 from nanobrain.library.tools.bioinformatics.bv_brc_tool import BVBRCTool, BVBRCConfig
+import yaml
+from pathlib import Path
 
 
 class GenomeData:
@@ -117,45 +119,58 @@ class BVBRCDataAcquisitionStep(Step):
     
     def __init__(self, config: StepConfig, bvbrc_config: Optional[Dict[str, Any]] = None, **kwargs):
         super().__init__(config, **kwargs)
+        self._initialize_tools(config, bvbrc_config)
         
-        # Extract configuration from step config attributes
-        # StepConfig allows arbitrary fields when config has arbitrary_types_allowed=True
+    def _init_from_config(self, config: StepConfig, component_config: Dict[str, Any], 
+                         dependencies: Dict[str, Any]) -> None:
+        """Initialize BVBRCDataAcquisitionStep with tool integration via from_config pattern"""
+        super()._init_from_config(config, component_config, dependencies)
+        self._initialize_tools(config, None)
         
-        # Get bvbrc_config from step config (loaded from YAML)
-        bvbrc_config_dict = getattr(config, 'bvbrc_config', {})
-        if bvbrc_config:
-            # Merge with provided override config
-            bvbrc_config_dict = {**bvbrc_config_dict, **bvbrc_config}
+    def _initialize_tools(self, config: StepConfig, bvbrc_config: Optional[Dict[str, Any]] = None):
+        """Initialize BV-BRC tool with workflow-local configuration"""
         
-        # Ensure we have the correct default path
-        if 'executable_path' not in bvbrc_config_dict:
-            bvbrc_config_dict['executable_path'] = '/Applications/BV-BRC.app/deployment/bin'
+        # Get workflow directory path
+        workflow_dir = Path(__file__).parent.parent
+        tool_config_path = workflow_dir / "config" / "tools" / "bv_brc_tool.yml"
         
-        # Create BV-BRC configuration from step config
-        from nanobrain.library.workflows.viral_protein_analysis.config.workflow_config import BVBRCConfig
-        self.bvbrc_config = BVBRCConfig(**bvbrc_config_dict)
+        # Load tool configuration from workflow-local YAML
+        if tool_config_path.exists():
+            with open(tool_config_path, 'r') as f:
+                tool_config_dict = yaml.safe_load(f)
+            
+            # Create BV-BRC tool configuration
+            tool_config = BVBRCConfig(**{
+                k: v for k, v in tool_config_dict.items() 
+                if k in ['tool_name', 'installation_path', 'executable_path', 'genome_batch_size', 
+                        'md5_batch_size', 'min_genome_length', 'max_genome_length', 'timeout_seconds', 
+                        'retry_attempts', 'verify_on_init', 'progressive_scaling', 'use_cache']
+            })
+            
+            # Create BV-BRC tool using from_config pattern
+            self.bv_brc_tool = BVBRCTool.from_config(tool_config)
+            if hasattr(self, 'nb_logger') and self.nb_logger:
+                self.nb_logger.info(f"✅ BV-BRC tool loaded from workflow-local config: {tool_config_path}")
+            
+        else:
+            # Fallback to legacy configuration
+            if hasattr(self, 'nb_logger') and self.nb_logger:
+                self.nb_logger.warning(f"⚠️ Workflow-local tool config not found: {tool_config_path}")
+                self.nb_logger.warning("⚠️ Using legacy configuration approach")
+            
+            # Legacy approach with old configuration structure
+            bvbrc_config_dict = getattr(config, 'bvbrc_config', {})
+            if bvbrc_config:
+                bvbrc_config_dict = {**bvbrc_config_dict, **bvbrc_config}
+            
+            if 'executable_path' not in bvbrc_config_dict:
+                bvbrc_config_dict['executable_path'] = '/Applications/BV-BRC.app/deployment/bin'
+            
+            tool_config = BVBRCConfig(**bvbrc_config_dict)
+            self.bv_brc_tool = BVBRCTool.from_config(tool_config)
         
         # Store all step configuration as dict for backward compatibility
         self.step_config = config.model_dump()
-        
-        # Convert workflow BVBRCConfig to tool BVBRCConfig
-        from nanobrain.library.tools.bioinformatics.bv_brc_tool import BVBRCConfig as ToolBVBRCConfig
-        
-        tool_config = ToolBVBRCConfig(
-            tool_name="bv_brc",
-            installation_path=self.bvbrc_config.installation_path,
-            executable_path=self.bvbrc_config.executable_path,
-            genome_batch_size=self.bvbrc_config.genome_batch,
-            md5_batch_size=self.bvbrc_config.md5_batch,
-            min_genome_length=self.bvbrc_config.min_length,
-            max_genome_length=self.bvbrc_config.max_length,
-            timeout_seconds=self.bvbrc_config.timeout_seconds,
-            retry_attempts=self.bvbrc_config.retry_attempts,
-            verify_on_init=self.bvbrc_config.verify_on_init
-        )
-        
-        # Initialize BV-BRC tool with converted configuration
-        self.bv_brc_tool = BVBRCTool(config=tool_config)
         
         # Configuration parameters from step config attributes
         self.min_genome_length = getattr(config, 'min_genome_length', 8000)
@@ -163,7 +178,8 @@ class BVBRCDataAcquisitionStep(Step):
         self.genome_batch_size = getattr(config, 'genome_batch_size', 100)
         self.md5_batch_size = getattr(config, 'md5_batch_size', 50)
         
-        self.nb_logger.info(f"🧬 BVBRCDataAcquisitionStep initialized with path: {self.bvbrc_config.executable_path}")
+        if hasattr(self, 'nb_logger') and self.nb_logger:
+            self.nb_logger.info(f"🧬 BVBRCDataAcquisitionStep initialized with tool: {type(self.bv_brc_tool).__name__}")
     
     async def process(self, input_data: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """

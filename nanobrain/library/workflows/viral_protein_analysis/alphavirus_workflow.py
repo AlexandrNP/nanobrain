@@ -28,8 +28,9 @@ import yaml
 from nanobrain.core.workflow import Workflow, WorkflowConfig
 from nanobrain.core.logging_system import get_logger
 from nanobrain.core.step import Step, StepConfig
+from nanobrain.core.component_base import ComponentConfigurationError, ComponentDependencyError
 
-from .config.workflow_config import AlphavirusWorkflowConfig
+from nanobrain.core.workflow import WorkflowConfig
 
 
 class WorkflowData:
@@ -129,32 +130,62 @@ class AlphavirusWorkflow(Workflow):
     following NanoBrain framework patterns.
     """
     
-    def __init__(self, config_path: Optional[str] = None, session_id: Optional[str] = None, **kwargs):
-        # Load YAML configuration
-        if config_path is None:
-            config_path = Path(__file__).parent / "config" / "CleanWorkflow.yml"
+    COMPONENT_TYPE = "workflow"
+    REQUIRED_CONFIG_FIELDS = ['name']
+    OPTIONAL_CONFIG_FIELDS = {
+        'description': 'Alphavirus protein analysis workflow',
+        'version': '4.2.0',
+        'execution_strategy': 'sequential',
+        'error_handling': 'stop'
+    }
+    
+    @classmethod
+    def extract_component_config(cls, config: WorkflowConfig) -> Dict[str, Any]:
+        """Extract AlphavirusWorkflow configuration"""
+        return {
+            'name': config.name,
+            'description': getattr(config, 'description', 'Alphavirus protein analysis workflow'),
+            'version': getattr(config, 'version', '4.2.0'),
+            'execution_strategy': getattr(config, 'execution_strategy', 'sequential'),
+            'error_handling': getattr(config, 'error_handling', 'stop'),
+            'steps': getattr(config, 'steps', []),
+            'links': getattr(config, 'links', []),
+            'input_parameters': getattr(config, 'input_parameters', {}),
+            'workflow_config': getattr(config, 'workflow_config', {}),
+            'debug_mode': True,  # Required for component base
+            'enable_logging': True  # Required for component base
+        }
+    
+    @classmethod  
+    def resolve_dependencies(cls, component_config: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        """Resolve AlphavirusWorkflow dependencies"""
+        return {
+            'executor': kwargs.get('executor'),
+            'enable_logging': kwargs.get('enable_logging', True),
+            'debug_mode': kwargs.get('debug_mode', True),
+            'session_id': kwargs.get('session_id'),
+            'progress_reporter': kwargs.get('progress_reporter')
+        }
+    
+    def _init_from_config(self, config: WorkflowConfig, component_config: Dict[str, Any],
+                         dependencies: Dict[str, Any]) -> None:
+        """Initialize AlphavirusWorkflow with resolved dependencies"""
+        # Initialize parent with configuration
+        super()._init_from_config(config, component_config, dependencies)
         
-        try:
-            with open(config_path, 'r') as f:
-                yaml_config = yaml.safe_load(f)
-            self.workflow_logger = get_logger(f"alphavirus_workflow", debug_mode=True)
-            self.workflow_logger.info(f"Successfully loaded config from: {config_path}")
-        except FileNotFoundError:
-            self.workflow_logger = get_logger(f"alphavirus_workflow", debug_mode=True)
-            raise FileNotFoundError(f"CRITICAL: Real workflow config not found at {config_path}. Cannot proceed without proper configuration.")
-        
-        # Initialize with real configuration using NanoBrain WorkflowConfig
-        workflow_config = WorkflowConfig(**yaml_config)
-        super().__init__(config=workflow_config, session_id=session_id, **kwargs)
+        # Initialize workflow logger
+        self.workflow_logger = get_logger("alphavirus_workflow", 
+                                        debug_mode=dependencies.get('debug_mode', True))
         
         self.workflow_logger.info("🧬 AlphavirusWorkflow initialized with REAL step implementations (no fallbacks)")
-        self.workflow_logger.info(f"Workflow will execute {len(yaml_config.get('steps', {}))} step groups mapping to 14 logical steps")
+        self.workflow_logger.info(f"Workflow will execute {len(component_config.get('steps', []))} step groups mapping to 14 logical steps")
         
+        # Initialize workflow-specific attributes
         self.workflow_data = WorkflowData()
         self.execution_start_time = None
         
         # Progress reporting setup
-        self.progress_reporter = kwargs.get('progress_reporter')
+        self.progress_reporter = dependencies.get('progress_reporter')
         self.progress_callbacks = []  # Initialize progress callbacks list
         
 
@@ -270,8 +301,8 @@ class AlphavirusWorkflow(Workflow):
         """
         Execute the alphavirus workflow with progress reporting.
         
-        This method routes through the workflow steps based on YAML configuration
-        and provides comprehensive progress tracking.
+        This method executes the workflow steps in the correct order,
+        properly passing input_params to each step as required.
         """
         # Update progress: workflow processing started
         if self.progress_reporter:
@@ -280,17 +311,77 @@ class AlphavirusWorkflow(Workflow):
                 message="Starting alphavirus protein analysis steps"
             )
         
-        # Execute the workflow using the parent class method
-        result = await super().process(input_data, **kwargs)
+        try:
+            # Execute steps sequentially with proper parameter passing
+            workflow_data = WorkflowData()
+            step_results = {}
+            
+            # Execute each step in order, passing input_data as input_params
+            for step_id in ['data_acquisition', 'annotation_mapping', 'sequence_curation', 'clustering', 'alignment', 'pssm_analysis']:
+                if step_id in self.child_steps:
+                    step = self.child_steps[step_id]
+                    self.workflow_logger.info(f"🔄 Executing step: {step_id}")
+                    
+                    # Call execute method with input_params for viral workflow steps
+                    if hasattr(step, 'execute') and 'execute' in str(type(step.execute)):
+                        step_result = await step.execute(input_data)
+                    else:
+                        # Fallback to process method for other step types
+                        step_result = await step.process(input_data, **kwargs)
+                    
+                    step_results[step_id] = step_result
+                    
+                    # Update workflow data based on step results
+                    self._update_workflow_data(workflow_data, step_id, step_result)
+                    
+                    # Update progress
+                    progress = (len(step_results) * 90) // 6 + 5  # 5% to 95%
+                    if self.progress_reporter:
+                        await self.progress_reporter.update_progress(
+                            step_id, progress, 'completed',
+                            message=f"Completed {step_id} step"
+                        )
+            
+            # Store workflow data for result collection
+            self.workflow_data = workflow_data
+            
+            # Update progress: workflow processing completed
+            if self.progress_reporter:
+                await self.progress_reporter.update_progress(
+                    'workflow_processing', 95, 'completed',
+                    message="Alphavirus protein analysis steps completed"
+                )
+            
+            return step_results
+            
+        except Exception as e:
+            self.workflow_logger.error(f"❌ Workflow processing failed: {e}")
+            if self.progress_reporter:
+                await self.progress_reporter.update_progress(
+                    'workflow_error', 0, 'failed',
+                    error=str(e),
+                    message="Workflow execution failed"
+                )
+                raise
+    
+    def _update_workflow_data(self, workflow_data: WorkflowData, step_id: str, step_result: Dict[str, Any]) -> None:
+        """Update workflow data container with step results"""
         
-        # Update progress: workflow processing completed
-        if self.progress_reporter:
-            await self.progress_reporter.update_progress(
-                'workflow_processing', 95, 'completed',
-                message="Alphavirus protein analysis steps completed"
-            )
-        
-        return result
+        try:
+            if step_id == 'data_acquisition' and step_result.get('success'):
+                workflow_data.update_from_acquisition(step_result)
+            elif step_id == 'annotation_mapping' and step_result.get('success'):
+                workflow_data.update_from_mapping(step_result)
+            elif step_id == 'sequence_curation' and step_result.get('success'):
+                workflow_data.update_from_curation(step_result)
+            elif step_id == 'clustering' and step_result.get('success'):
+                workflow_data.update_from_clustering(step_result)
+            elif step_id == 'alignment' and step_result.get('success'):
+                workflow_data.update_from_alignment(step_result)
+            elif step_id == 'pssm_analysis' and step_result.get('success'):
+                workflow_data.update_from_pssm(step_result)
+        except Exception as e:
+            self.workflow_logger.warning(f"⚠️ Could not update workflow data for {step_id}: {e}")
     
     async def _collect_output_files(self, workflow_data: WorkflowData) -> Dict[str, str]:
         """
@@ -307,7 +398,8 @@ class AlphavirusWorkflow(Workflow):
         
         try:
             # Get output directory from configuration
-            output_dir = self.yaml_config.get('resources', {}).get('temporary_directory', 'data/alphavirus_analysis')
+            workflow_config = getattr(self.config, 'workflow_config', {})
+            output_dir = workflow_config.get('output_directory', 'data/alphavirus_analysis')
             output_path = Path(output_dir)
             output_path.mkdir(parents=True, exist_ok=True)
             
@@ -459,44 +551,55 @@ class AlphavirusWorkflow(Workflow):
         """Create a step instance from configuration using custom step types."""
         
         # Determine step type/class from the loaded config
-        # Check if step_config has the class attribute directly (from external config)
-        if hasattr(step_config, 'class') and getattr(step_config, 'class'):
+        # First try getting the class from step_config.config dict (external config files)
+        step_class = None
+        if hasattr(step_config, 'config') and isinstance(step_config.config, dict):
+            step_class = step_config.config.get('class')
+        
+        # If not found, try direct attribute on step_config
+        if not step_class and hasattr(step_config, 'class'):
             step_class = getattr(step_config, 'class')
-        else:
-            # Fall back to config_dict for inline configurations
-            step_class = config_dict.get('class', 'SimpleStep')
+            
+        # Fall back to config_dict for inline configurations
+        if not step_class:
+            step_class = config_dict.get('class', 'SequenceCurationStep')  # Use SequenceCurationStep as default instead of SimpleStep
         
         self.workflow_logger.info(f"🔧 Creating step instance: {step_id} ({step_class})")
         
-        # Create step instance based on class
+        # Create step instance based on class using from_config pattern
         if step_class == 'BVBRCDataAcquisitionStep':
             from .steps.bv_brc_data_acquisition_step import BVBRCDataAcquisitionStep
-            step = BVBRCDataAcquisitionStep(step_config, executor=self.executor)
+            step = BVBRCDataAcquisitionStep.from_config(step_config, executor=self.executor)
             self.workflow_logger.info(f"✅ Created BVBRCDataAcquisitionStep: {step_id}")
             
         elif step_class == 'AnnotationMappingStep':
             from .steps.annotation_mapping_step import AnnotationMappingStep
-            step = AnnotationMappingStep(step_config, executor=self.executor)
+            step = AnnotationMappingStep.from_config(step_config, executor=self.executor)
             self.workflow_logger.info(f"✅ Created AnnotationMappingStep: {step_id}")
             
         elif step_class == 'SequenceCurationStep':
             from .steps.sequence_curation_step import SequenceCurationStep
-            step = SequenceCurationStep(step_config, executor=self.executor)
+            step = SequenceCurationStep.from_config(step_config, executor=self.executor)
             self.workflow_logger.info(f"✅ Created SequenceCurationStep: {step_id}")
             
         elif step_class == 'ClusteringStep':
             from .steps.clustering_step import ClusteringStep
-            step = ClusteringStep(step_config, executor=self.executor)
+            step = ClusteringStep.from_config(step_config, executor=self.executor)
             self.workflow_logger.info(f"✅ Created ClusteringStep: {step_id}")
             
         elif step_class == 'AlignmentStep':
             from .steps.alignment_step import AlignmentStep
-            step = AlignmentStep(step_config, executor=self.executor)
+            step = AlignmentStep.from_config(step_config, executor=self.executor)
             self.workflow_logger.info(f"✅ Created AlignmentStep: {step_id}")
+            
+        elif step_class == 'SequenceCurationStep':
+            from .steps.sequence_curation_step import SequenceCurationStep
+            step = SequenceCurationStep.from_config(step_config, executor=self.executor)
+            self.workflow_logger.info(f"✅ Created SequenceCurationStep: {step_id}")
             
         elif step_class == 'PSSMAnalysisStep':
             from .steps.pssm_analysis_step import PSSMAnalysisStep
-            step = PSSMAnalysisStep(step_config, executor=self.executor)
+            step = PSSMAnalysisStep.from_config(step_config, executor=self.executor)
             self.workflow_logger.info(f"✅ Created PSSMAnalysisStep: {step_id}")
             
         else:
@@ -512,7 +615,7 @@ async def create_alphavirus_workflow(config_path: Optional[str] = None,
                                    session_id: Optional[str] = None,
                                    **kwargs) -> AlphavirusWorkflow:
     """
-    Factory function to create and initialize AlphavirusWorkflow.
+    Factory function to create and initialize AlphavirusWorkflow using mandatory from_config pattern.
     
     Args:
         config_path: Path to YAML configuration file
@@ -522,29 +625,78 @@ async def create_alphavirus_workflow(config_path: Optional[str] = None,
     Returns:
         Initialized AlphavirusWorkflow instance
     """
-    workflow = AlphavirusWorkflow(config_path=config_path, session_id=session_id, **kwargs)
+    from nanobrain.core.workflow import ConfigLoader
+    from nanobrain.core.executor import LocalExecutor, ExecutorConfig
+    
+    # Use the provided config_path or default
+    if not config_path:
+        config_path = Path(__file__).parent / "config" / "CleanWorkflow.yml"
+    
+    # Create workflow config from the YAML file using ConfigLoader
+    config_loader = ConfigLoader(base_path=str(Path(__file__).parent))
+    workflow_config = config_loader.load_workflow_config(str(config_path))
+    
+    # Fix workflow_directory to use absolute path for proper config resolution
+    if hasattr(workflow_config, 'workflow_directory') and workflow_config.workflow_directory:
+        # Convert relative workflow_directory to absolute path
+        if not Path(workflow_config.workflow_directory).is_absolute():
+            # Make it relative to the workflow config file location
+            config_dir = Path(config_path).parent
+            absolute_workflow_dir = config_dir.resolve()
+            workflow_config.workflow_directory = str(absolute_workflow_dir)
+    
+    # Create executor if not provided
+    executor = kwargs.get('executor')
+    if not executor:
+        executor_config = ExecutorConfig(executor_type='local', max_workers=3)
+        executor = LocalExecutor.from_config(executor_config)
+    
+    # Create workflow using from_config pattern
+    workflow = AlphavirusWorkflow.from_config(
+        workflow_config,
+        session_id=session_id,
+        executor=executor,
+        **kwargs
+    )
     await workflow.initialize()
     return workflow
 
 
-def create_workflow_from_config(config: Optional[AlphavirusWorkflowConfig] = None) -> AlphavirusWorkflow:
+def create_workflow_from_config(config: Optional[WorkflowConfig] = None) -> AlphavirusWorkflow:
     """
     Factory function to create an AlphavirusWorkflow instance from configuration
     
     Args:
-        config: Optional AlphavirusWorkflowConfig object. If None, loads from default path.
+        config: Optional WorkflowConfig object. If None, loads from default path.
         
     Returns:
         AlphavirusWorkflow: Configured workflow instance
     """
     
     if config is None:
-        # Load from default configuration file
+        # Load from default configuration file - use create_alphavirus_workflow instead
         default_config_path = Path(__file__).parent / "config" / "AlphavirusWorkflow.yml"
-        workflow = AlphavirusWorkflow(config_path=default_config_path)
+        import asyncio
+        loop = asyncio.get_event_loop()
+        workflow = loop.run_until_complete(create_alphavirus_workflow(config_path=str(default_config_path)))
     else:
-        # Convert config object to workflow
-        workflow = AlphavirusWorkflow()
-        workflow.config = config
+        # For config object, convert to WorkflowConfig and use from_config
+        from nanobrain.core.executor import LocalExecutor, ExecutorConfig
+        executor_config = ExecutorConfig(executor_type='local', max_workers=3)
+        executor = LocalExecutor.from_config(executor_config)
+        
+        # Create a proper WorkflowConfig from the provided config
+        from nanobrain.core.workflow import WorkflowConfig
+        workflow_config = WorkflowConfig(
+            name=getattr(config, 'name', 'AlphavirusWorkflow'),
+            description=getattr(config, 'description', 'Alphavirus protein analysis workflow'),
+            steps=getattr(config, 'steps', {}),
+            links=getattr(config, 'links', [])
+        )
+        
+        workflow = AlphavirusWorkflow.from_config(
+            workflow_config,
+            executor=executor
+        )
     
     return workflow 

@@ -25,10 +25,7 @@ from nanobrain.library.tools.bioinformatics.bv_brc_tool import (
 from nanobrain.library.tools.bioinformatics.pubmed_client import (
     PubMedClient, PubMedConfig, LiteratureReference, PubMedError
 )
-from nanobrain.library.tools.bioinformatics.base_bioinformatics_tool import (
-    InstallationStatus
-)
-from nanobrain.core.external_tool import ToolResult
+from nanobrain.core.external_tool import ToolResult, InstallationStatus
 
 
 class TestBVBRCToolFunctionality:
@@ -314,7 +311,7 @@ class TestPubMedClientFunctionality:
             api_key=None,
             rate_limit=3,
             verify_on_init=False,
-            cache_enabled=True
+            cache_results=True
         )
         return PubMedClient(config=config)
     
@@ -383,7 +380,7 @@ class TestPubMedClientFunctionality:
         Caching improves performance and reduces API calls.
         """
         # Enable caching
-        assert pubmed_client.pubmed_config.cache_enabled
+        assert pubmed_client.pubmed_config.cache_results
         assert len(pubmed_client.search_cache) == 0
         
         # Perform search (will return empty results in current implementation)

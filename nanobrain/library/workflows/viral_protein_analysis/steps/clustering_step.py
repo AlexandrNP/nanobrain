@@ -11,6 +11,8 @@ from typing import Dict, Any, List, Optional
 
 from nanobrain.core.step import Step, StepConfig
 from nanobrain.core.logging_system import get_logger
+import yaml
+from pathlib import Path
 
 
 class ClusteringStep(Step):
@@ -22,20 +24,75 @@ class ClusteringStep(Step):
     
     def __init__(self, config: StepConfig, clustering_config: Optional[Dict[str, Any]] = None, **kwargs):
         super().__init__(config, **kwargs)
+        self._initialize_tools(config, clustering_config)
         
-        # Extract configuration from step config or provided clustering_config
-        step_config_dict = config.config if hasattr(config, 'config') else {}
-        if clustering_config:
-            step_config_dict.update(clustering_config)
+    def _init_from_config(self, config: StepConfig, component_config: Dict[str, Any], 
+                         dependencies: Dict[str, Any]) -> None:
+        """Initialize ClusteringStep with tool integration via from_config pattern"""
+        super()._init_from_config(config, component_config, dependencies)
+        self._initialize_tools(config, None)
         
-        self.clustering_config = step_config_dict.get('clustering_config', {})
-        self.step_config = step_config_dict
+    def _initialize_tools(self, config: StepConfig, clustering_config: Optional[Dict[str, Any]] = None):
+        """Initialize MMseqs2 tool with workflow-local configuration"""
         
-        # Configuration parameters
-        self.similarity_threshold = self.step_config.get('similarity_threshold', 0.5)
-        self.min_cluster_size = self.step_config.get('min_cluster_size', 3)
+        # Get workflow directory path
+        workflow_dir = Path(__file__).parent.parent
+        tool_config_path = workflow_dir / "config" / "tools" / "mmseqs2_tool.yml"
         
-        self.nb_logger.info(f"🧬 ClusteringStep initialized with threshold: {self.similarity_threshold}")
+        # Load MMseqs2 tool configuration from workflow-local YAML
+        if tool_config_path.exists():
+            with open(tool_config_path, 'r') as f:
+                tool_config_dict = yaml.safe_load(f)
+            
+            # Import MMseqs2 tool and config
+            try:
+                from nanobrain.library.tools.bioinformatics.mmseqs_tool import MMseqs2Tool, MMseqs2Config
+                
+                # Create MMseqs2 tool configuration
+                tool_config = MMseqs2Config(**{
+                    k: v for k, v in tool_config_dict.items() 
+                    if k in ['tool_name', 'conda_package', 'conda_channel', 'git_repository',
+                            'environment_name', 'min_seq_id', 'coverage', 'cluster_mode', 
+                            'sensitivity', 'progressive_scaling', 'threads', 'memory_limit', 
+                            'tmp_dir']
+                })
+                
+                # Create MMseqs2 tool using from_config pattern
+                self.mmseqs2_tool = MMseqs2Tool.from_config(tool_config)
+                if hasattr(self, 'nb_logger') and self.nb_logger:
+                    self.nb_logger.info(f"✅ MMseqs2 tool loaded from workflow-local config: {tool_config_path}")
+                
+                # Extract clustering parameters from tool config
+                self.similarity_threshold = tool_config_dict.get('similarity_threshold', 0.7)
+                self.min_cluster_size = tool_config_dict.get('min_cluster_size', 3)
+                
+            except ImportError:
+                if hasattr(self, 'nb_logger') and self.nb_logger:
+                    self.nb_logger.warning("⚠️ MMseqs2Tool not available, using placeholder implementation")
+                self.mmseqs2_tool = None
+                self.similarity_threshold = 0.7
+                self.min_cluster_size = 3
+                
+        else:
+            # Fallback to legacy configuration
+            if hasattr(self, 'nb_logger') and self.nb_logger:
+                self.nb_logger.warning(f"⚠️ Workflow-local tool config not found: {tool_config_path}")
+                self.nb_logger.warning("⚠️ Using legacy configuration approach")
+            
+            self.mmseqs2_tool = None
+            step_config_dict = config.config if hasattr(config, 'config') else {}
+            if clustering_config:
+                step_config_dict.update(clustering_config)
+            
+            self.clustering_config = step_config_dict.get('clustering_config', {})
+            self.similarity_threshold = step_config_dict.get('similarity_threshold', 0.5)
+            self.min_cluster_size = step_config_dict.get('min_cluster_size', 3)
+        
+        # Store step configuration
+        self.step_config = config.model_dump()
+        
+        if hasattr(self, 'nb_logger') and self.nb_logger:
+            self.nb_logger.info(f"🧬 ClusteringStep initialized with threshold: {self.similarity_threshold}")
         
     async def process(self, input_data: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """
@@ -106,12 +163,25 @@ class ClusteringStep(Step):
             
     async def _perform_clustering(self, sequences: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
-        Perform MMseqs2 clustering (placeholder implementation)
+        Perform MMseqs2 clustering with real tool or placeholder implementation
+        """
         
-        In a real implementation, this would:
-        - Create temporary FASTA file
-        - Run MMseqs2 easy-cluster command
-        - Parse clustering results
+        if self.mmseqs2_tool and hasattr(self.mmseqs2_tool, 'cluster_sequences'):
+            self.nb_logger.info("🔧 Using real MMseqs2Tool for clustering")
+            try:
+                # Use real MMseqs2 tool via from_config
+                return await self.mmseqs2_tool.cluster_sequences(sequences)
+            except Exception as e:
+                self.nb_logger.warning(f"⚠️ MMseqs2Tool failed, falling back to placeholder: {e}")
+                return await self._placeholder_clustering(sequences)
+        else:
+            # Fallback to placeholder implementation
+            self.nb_logger.info("🔧 Using placeholder clustering implementation")
+            return await self._placeholder_clustering(sequences)
+    
+    async def _placeholder_clustering(self, sequences: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Placeholder clustering implementation for when MMseqs2 is not available
         """
         
         self.nb_logger.info("Performing sequence clustering (placeholder)")

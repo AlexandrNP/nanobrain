@@ -468,12 +468,57 @@ class BioinformaticsAgent(Agent):
 
 
 class BioinformaticsTool(ToolBase):
-    """Base class for bioinformatics-specific tools."""
+    """
+    Base class for bioinformatics-specific tools.
+    Enhanced with mandatory from_config pattern implementation.
+    """
     
-    def __init__(self, config: ToolConfig, bio_config: Optional[BioinformaticsConfig] = None, **kwargs):
-        super().__init__(config, **kwargs)
-        self.bio_config = bio_config or BioinformaticsConfig()
+    @classmethod
+    def from_config(cls, config: ToolConfig, **kwargs) -> 'BioinformaticsTool':
+        """Mandatory from_config implementation for BioinformaticsTool"""
+        from .logging_system import get_logger
+        logger = get_logger(f"{cls.__name__}.from_config")
+        logger.info(f"Creating {cls.__name__} from configuration")
+        
+        # Step 1: Validate configuration schema
+        cls.validate_config_schema(config)
+        
+        # Step 2: Extract component-specific configuration  
+        component_config = cls.extract_component_config(config)
+        
+        # Step 3: Resolve dependencies
+        dependencies = cls.resolve_dependencies(component_config, **kwargs)
+        
+        # Step 4: Create instance
+        instance = cls.create_instance(config, component_config, dependencies)
+        
+        # Step 5: Post-creation initialization
+        instance._post_config_initialization()
+        
+        logger.info(f"Successfully created {cls.__name__}")
+        return instance
+    
+    @classmethod
+    def resolve_dependencies(cls, component_config: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        """Resolve BioinformaticsTool dependencies"""
+        bio_config = kwargs.get('bio_config')
+        if bio_config is None:
+            bio_config = BioinformaticsConfig()
+        
+        base_deps = super().resolve_dependencies(component_config, **kwargs)
+        return {
+            **base_deps,
+            'bio_config': bio_config
+        }
+    
+    def _init_from_config(self, config: ToolConfig, component_config: Dict[str, Any],
+                         dependencies: Dict[str, Any]) -> None:
+        """Initialize BioinformaticsTool with resolved dependencies"""
+        super()._init_from_config(config, component_config, dependencies)
+        self.bio_config = dependencies['bio_config']
         self.tool_manager = ExternalToolManager(self.bio_config)
+    
+    # BioinformaticsTool inherits FromConfigBase.__init__ which prevents direct instantiation
         
     async def initialize(self) -> None:
         """Initialize bioinformatics tool."""

@@ -319,17 +319,28 @@ class TestEnhancedConversationalAgentStep:
     
     @pytest.fixture
     def agent_step(self, mock_agent, mock_history_manager, mock_performance_tracker):
-        """Create an EnhancedConversationalAgentStep instance."""
+        """Create a test agent step."""
         config = StepConfig(
-            name="test_step",
+            name="test_agent_step",
             description="Test step",
             debug_mode=True,
             enable_logging=True
         )
         
-        step = EnhancedConversationalAgentStep(
-            config, mock_agent, mock_history_manager, mock_performance_tracker
-        )
+        # Create a mock executor to avoid LocalExecutor direct instantiation
+        mock_executor = MagicMock()
+        
+        step = EnhancedConversationalAgentStep.from_config(config, executor=mock_executor)
+        
+        # Override the mocked components
+        step.agent = mock_agent
+        step.history_manager = mock_history_manager
+        step.performance_tracker = mock_performance_tracker
+        
+        # Initialize required attributes for conversation tracking
+        step.message_id = 0
+        step.conversation_count = 1
+        step.current_conversation_id = "test_conversation_1"
         
         # Mock the logger
         step.nb_logger = MagicMock()
@@ -679,7 +690,7 @@ class TestWorkflowIntegration:
                 persistent=False,
                 cache_size=100
             )
-            user_input_du = DataUnitMemory(user_input_config)
+            user_input_du = DataUnitMemory.from_config(user_input_config)
             await user_input_du.initialize()
             
             agent_output_config = DataUnitConfig(
@@ -689,7 +700,7 @@ class TestWorkflowIntegration:
                 persistent=False,
                 cache_size=100
             )
-            agent_output_du = DataUnitMemory(agent_output_config)
+            agent_output_du = DataUnitMemory.from_config(agent_output_config)
             await agent_output_du.initialize()
             
             # Create enhanced agent step
@@ -700,9 +711,20 @@ class TestWorkflowIntegration:
                 enable_logging=True
             )
             
-            agent_step = EnhancedConversationalAgentStep(
-                step_config, mock_agent, history_manager, performance_tracker
-            )
+            # Create a mock executor to avoid LocalExecutor direct instantiation
+            mock_executor = MagicMock()
+            
+            agent_step = EnhancedConversationalAgentStep.from_config(step_config, executor=mock_executor)
+            # Override the mocked components
+            agent_step.agent = mock_agent
+            agent_step.history_manager = history_manager
+            agent_step.performance_tracker = performance_tracker
+            
+            # Initialize required attributes for conversation tracking
+            agent_step.message_id = 0
+            agent_step.conversation_count = 1
+            agent_step.current_conversation_id = "test_conversation_1"
+            
             agent_step.nb_logger = MagicMock()  # Mock logger
             
             # Test message processing

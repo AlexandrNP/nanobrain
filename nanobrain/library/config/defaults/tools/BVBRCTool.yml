@@ -1,0 +1,154 @@
+# BV-BRC Tool Configuration
+name: "bv_brc"
+description: "BV-BRC bioinformatics database tool"
+
+# MANDATORY: Tool card section
+tool_card:
+  version: "1.0.0"
+  purpose: "BV-BRC bioinformatics database tool for viral and bacterial genomics data access"
+  detailed_description: "Integrated tool for accessing the Bacterial and Viral Bioinformatics Resource Center (BV-BRC) database, providing comprehensive genomics data retrieval, analysis, and annotation capabilities."
+  category: "bioinformatics"
+  subcategory: "genomics_database"
+  tags: ["genomics", "database", "viral", "bacterial", "annotation", "bv-brc"]
+  
+  input_format:
+    primary_mode: "json"
+    supported_modes: ["json", "query"]
+    content_types: ["application/json"]
+    format_schema:
+      type: "object"
+      required_fields:
+        query_type:
+          type: "string"
+          description: "Type of BV-BRC query (genome, protein, metadata)"
+          enum: ["genome_search", "protein_search", "metadata_query", "annotation_request"]
+        search_parameters:
+          type: "object"
+          description: "Search criteria and filters"
+      optional_fields:
+        batch_size:
+          type: "integer"
+          description: "Number of results per batch"
+        output_format:
+          type: "string"
+          description: "Preferred output format"
+  
+  output_format:
+    primary_mode: "json"
+    supported_modes: ["json", "csv", "fasta"]
+    content_types: ["application/json", "text/csv", "text/plain"]
+    format_schema:
+      type: "object"
+      guaranteed_fields:
+        status:
+          type: "string"
+          description: "Query execution status"
+        result_count:
+          type: "integer"
+          description: "Number of results returned"
+        data:
+          type: "array"
+          description: "Query results in requested format"
+        metadata:
+          type: "object"
+          description: "Query execution metadata and statistics"
+  
+  capabilities:
+    batch_processing: true
+    streaming: false
+    caching: true
+    rate_limiting: true
+    authentication_required: false
+    concurrent_requests: 3
+  
+  performance:
+    typical_response_time: "5-30 seconds"
+    max_response_time: "400 seconds"
+    memory_usage: "100-500 MB"
+    cpu_requirements: "Low to Medium"
+    concurrency_support: true
+    concurrent_limit: 3
+    rate_limit: "100 requests/hour"
+  
+  usage_examples:
+    - name: "Alphavirus Genome Search"
+      description: "Search for alphavirus genomes with specific criteria"
+      input_example:
+        query_type: "genome_search"
+        search_parameters:
+          organism: "alphavirus"
+          genome_length_min: 8000
+          genome_length_max: 15000
+        batch_size: 50
+      expected_output:
+        status: "success"
+        result_count: 25
+        data: 
+          - genome_id: "123.45"
+            organism: "Chikungunya virus"
+            length: 11805
+            annotations: 12
+        metadata:
+          query_time: 12.3
+          database_version: "2024.1"
+    
+    - name: "Protein Annotation Retrieval"
+      description: "Retrieve protein annotations for viral genomes"
+      input_example:
+        query_type: "protein_search"
+        search_parameters:
+          genome_ids: ["123.45", "123.46"]
+          annotation_type: "functional"
+      expected_output:
+        status: "success"
+        result_count: 24
+        data:
+          - protein_id: "ABC123"
+            function: "RNA-dependent RNA polymerase"
+            confidence: 0.95
+
+# BV-BRC specific settings
+installation_path: "/Applications/BV-BRC.app"
+executable_path: "/Applications/BV-BRC.app/deployment/bin"
+
+# Data processing configuration
+genome_batch_size: 50
+md5_batch_size: 25
+min_genome_length: 8000
+max_genome_length: 15000
+
+# Progressive scaling
+progressive_scaling:
+  1:
+    limit: 5
+    batch_size: 5
+    description: "Small test"
+  2:
+    limit: 10
+    batch_size: 10
+    description: "Basic validation"
+  3:
+    limit: 20
+    batch_size: 15
+    description: "Medium test"
+  4:
+    limit: 50
+    batch_size: 25
+    description: "Full scale"
+
+# Tool-specific settings
+timeout_seconds: 400
+verify_on_init: false
+use_cache: true
+retry_attempts: 2
+
+# Installation detection paths
+local_installation_paths:
+  - "/Applications/BV-BRC.app/deployment/bin"
+  - "/Applications/BV-BRC.app/Contents/Resources/deployment/bin"
+
+# Framework metadata
+_metadata:
+  config_type: "bvbrc_tool"
+  framework_version: "1.0.0"
+  description: "BV-BRC tool for viral and bacterial genomics data" 

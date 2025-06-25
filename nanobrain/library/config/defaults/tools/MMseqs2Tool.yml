@@ -1,0 +1,158 @@
+# MMseqs2 Tool Configuration
+name: "mmseqs2"
+description: "MMseqs2 protein clustering tool"
+
+# MANDATORY: Tool card section
+tool_card:
+  version: "1.0.0"
+  purpose: "MMseqs2 protein sequence clustering and similarity search tool"
+  detailed_description: "High-performance protein sequence clustering tool using Many-against-Many sequence searching (MMseqs2). Provides ultra-fast clustering for large protein datasets with customizable sensitivity and coverage parameters."
+  category: "bioinformatics"
+  subcategory: "sequence_analysis"
+  tags: ["protein", "clustering", "sequence", "similarity", "mmseqs2", "bioinformatics"]
+  
+  input_format:
+    primary_mode: "fasta"
+    supported_modes: ["fasta", "json"]
+    content_types: ["text/plain", "application/json"]
+    format_schema:
+      type: "object"
+      required_fields:
+        sequences:
+          type: "string"
+          description: "FASTA formatted protein sequences"
+        clustering_parameters:
+          type: "object"
+          description: "Clustering configuration parameters"
+      optional_fields:
+        output_format:
+          type: "string"
+          description: "Desired output format"
+        progressive_level:
+          type: "integer"
+          description: "Progressive scaling level (1-4)"
+  
+  output_format:
+    primary_mode: "json"
+    supported_modes: ["json", "tsv", "cluster"]
+    content_types: ["application/json", "text/tab-separated-values"]
+    format_schema:
+      type: "object"
+      guaranteed_fields:
+        clusters:
+          type: "array"
+          description: "Protein sequence clusters"
+        cluster_count:
+          type: "integer"
+          description: "Total number of clusters identified"
+        processing_stats:
+          type: "object"
+          description: "Clustering statistics and performance metrics"
+        metadata:
+          type: "object"
+          description: "Execution metadata and parameters used"
+  
+  capabilities:
+    batch_processing: true
+    streaming: false
+    caching: true
+    rate_limiting: false
+    authentication_required: false
+    concurrent_requests: 1
+  
+  performance:
+    typical_response_time: "10-120 seconds"
+    max_response_time: "1800 seconds"
+    memory_usage: "1-8 GB"
+    cpu_requirements: "High"
+    concurrency_support: false
+    concurrent_limit: 1
+    scaling_characteristics: "Memory and CPU intensive, limited parallelization"
+  
+  usage_examples:
+    - name: "Viral Protein Clustering"
+      description: "Cluster viral proteins by sequence similarity"
+      input_example:
+        sequences: ">protein1\nMKVLWAAPSF...\n>protein2\nMKVLWAAPTF..."
+        clustering_parameters:
+          min_seq_id: 0.7
+          coverage: 0.8
+          sensitivity: 7.5
+        progressive_level: 3
+      expected_output:
+        clusters:
+          - cluster_id: 1
+            representative: "protein1"
+            members: ["protein1", "protein2"]
+            size: 2
+        cluster_count: 1
+        processing_stats:
+          sequences_processed: 2
+          processing_time: 45.2
+        metadata:
+          sensitivity_used: 7.5
+          coverage_threshold: 0.8
+    
+    - name: "Large Scale Protein Analysis"
+      description: "Process large protein datasets with progressive scaling"
+      input_example:
+        sequences: ">protein1\nMKVL...\n[...1000 more sequences]"
+        clustering_parameters:
+          min_seq_id: 0.3
+          coverage: 0.8
+          cluster_mode: 0
+        progressive_level: 4
+      expected_output:
+        clusters: []  # Array of cluster objects
+        cluster_count: 156
+        processing_stats:
+          sequences_processed: 1000
+          processing_time: 1456.7
+
+# Installation configuration
+conda_package: "mmseqs2"
+conda_channel: "bioconda"
+git_repository: "https://github.com/soedinglab/MMseqs2.git"
+environment_name: "nanobrain-viral_protein-mmseqs2"
+
+# Clustering parameters
+min_seq_id: 0.3
+coverage: 0.8
+cluster_mode: 0
+sensitivity: 7.5
+
+# Progressive scaling
+progressive_scaling:
+  1:
+    max_sequences: 50
+    sensitivity: 4.0
+    description: "Fast test"
+  2:
+    max_sequences: 100
+    sensitivity: 5.5
+    description: "Basic validation"
+  3:
+    max_sequences: 500
+    sensitivity: 7.0
+    description: "Medium scale"
+  4:
+    max_sequences: 2000
+    sensitivity: 7.5
+    description: "Full scale"
+
+# Performance settings
+threads: 4
+memory_limit: "8G"
+tmp_dir: null
+
+# Installation paths
+local_installation_paths:
+  - "/usr/local/bin"
+  - "/opt/homebrew/bin"
+  - "~/bin"
+
+# Framework metadata
+_metadata:
+  config_type: "mmseqs2_tool"
+  framework_version: "1.0.0"
+  description: "MMseqs2 for protein sequence clustering" 

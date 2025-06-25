@@ -2,6 +2,119 @@ name: "StepFileWriter"
 description: "Step for performing file operations based on natural language descriptions"
 class: "Step"  # Uses Step class after mandatory from_config migration
 
+# MANDATORY: Agent card section for A2A protocol compliance
+agent_card:
+  version: "1.0.0"
+  purpose: "Specialized step for file operations based on natural language descriptions"
+  detailed_description: "StepFileWriter is a specialized step that integrates FileWriterAgent capabilities to perform file operations through natural language commands, with intelligent parsing and directory management."
+  domain: "file_management"
+  expertise_level: "intermediate"
+  
+  input_format:
+    primary_mode: "json"
+    supported_modes: ["json", "text"]
+    content_types: ["application/json", "text/plain"]
+    format_schema:
+      type: "object"
+      required_fields:
+        input:
+          type: "string"
+          description: "Natural language description of file operation to perform"
+      optional_fields:
+        operation:
+          type: "string"
+          description: "Specific operation type (write, read, append, modify, delete)"
+        path:
+          type: "string"
+          description: "Target file path"
+        content:
+          type: "string"
+          description: "Content for write operations"
+  
+  output_format:
+    primary_mode: "json"
+    supported_modes: ["json", "text"]
+    content_types: ["application/json", "text/plain"]
+    format_schema:
+      type: "object"
+      guaranteed_fields:
+        result:
+          type: "object"
+          description: "File operation result with status and details"
+        operation_performed:
+          type: "string"
+          description: "Description of the operation that was performed"
+        file_path:
+          type: "string"
+          description: "Path of the file that was operated on"
+  
+  capabilities:
+    streaming: false
+    push_notifications: false
+    state_transition_history: false
+    multi_turn_conversation: false
+    context_retention: false
+    tool_usage: true
+    delegation: false
+    collaboration: false
+  
+  skills:
+    - id: "natural_language_parsing"
+      name: "Natural Language File Operation Parsing"
+      description: "Parse natural language descriptions to extract file operations, paths, and content"
+      complexity: "intermediate"
+      input_modes: ["text", "json"]
+      output_modes: ["json"]
+      examples:
+        - "Parse 'Create a config file with database settings' to extract file operation details"
+        - "Extract file path and content from 'Save this code to utils.py: def hello(): print(\"Hello\")'"
+    
+    - id: "file_operations"
+      name: "Comprehensive File Operations"
+      description: "Perform create, read, write, append, modify, and delete operations on files"
+      complexity: "intermediate"
+      input_modes: ["json"]
+      output_modes: ["json"]
+      examples:
+        - "Create new files with automatic directory creation"
+        - "Read file contents and return formatted results"
+        - "Append content to existing files with backup creation"
+  
+  performance:
+    typical_response_time: "1-5 seconds"
+    max_response_time: "30 seconds"
+    memory_usage: "50-200 MB"
+    cpu_requirements: "Low"
+    concurrency_support: true
+    max_concurrent_sessions: 10
+    rate_limit: "100 operations/minute"
+    scaling_characteristics: "I/O bound, scales well with concurrent operations"
+  
+  usage_examples:
+    - name: "Create Configuration File"
+      description: "Create a configuration file with specific content"
+      input_example:
+        input: "Create a config.yml file with database host: localhost, port: 5432"
+      expected_output:
+        result:
+          status: "success"
+          bytes_written: 45
+          backup_created: false
+        operation_performed: "Created configuration file with database settings"
+        file_path: "config.yml"
+    
+    - name: "Save Code to File"
+      description: "Extract code from description and save to specified file"
+      input_example:
+        input: "Save this Python function to utils/helpers.py: def greet(name): return f'Hello, {name}!'"
+      expected_output:
+        result:
+          status: "success"
+          bytes_written: 62
+          directories_created: ["utils"]
+        operation_performed: "Saved Python function to file with directory creation"
+        file_path: "utils/helpers.py"
+
 defaults:
   backup_enabled: true
   backup_extension: ".bak"

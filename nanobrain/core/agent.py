@@ -60,6 +60,9 @@ class AgentConfig(BaseModel):
     enable_logging: bool = True
     log_conversations: bool = True
     log_tool_calls: bool = True
+    
+    # MANDATORY: Agent card section for A2A protocol compliance
+    agent_card: Optional[Dict[str, Any]] = Field(default=None, description="Agent card metadata for A2A protocol compliance")
 
 
 class Agent(ABC):
@@ -93,7 +96,12 @@ class Agent(ABC):
         })
         
         # Executor for running the agent
-        self.executor = executor or LocalExecutor(config.executor_config)
+        if executor:
+            self.executor = executor
+        else:
+            # Create executor using from_config pattern
+            executor_config = config.executor_config or ExecutorConfig()
+            self.executor = LocalExecutor.from_config(executor_config)
         
         # Tool registry for managing tools
         self.tool_registry = ToolRegistry()
@@ -187,16 +195,30 @@ class Agent(ABC):
         self.agent_logger.shutdown()
     
     async def _initialize_llm_client(self) -> None:
-        """Initialize the LLM client."""
+        """Initialize the LLM client using NanoBrain configuration system."""
         try:
             # Try to import OpenAI client
             from openai import AsyncOpenAI
             import os
             
-            # Check if API key is available
-            api_key = os.getenv('OPENAI_API_KEY')
+            # Get API key from NanoBrain configuration system first
+            api_key = None
+            try:
+                from nanobrain.core.config import get_api_key
+                api_key = get_api_key('openai')
+                if api_key:
+                    self.agent_logger.log_debug(f"Agent {self.name} using OpenAI API key from NanoBrain configuration")
+            except ImportError:
+                self.agent_logger.log_debug("NanoBrain config system not available, falling back to environment variables")
+            
+            # Fallback to environment variable if not found in config
             if not api_key:
-                self.agent_logger.log_error(f"No OpenAI API key found for agent {self.name}. Set OPENAI_API_KEY environment variable.",
+                api_key = os.getenv('OPENAI_API_KEY')
+                if api_key:
+                    self.agent_logger.log_debug(f"Agent {self.name} using OpenAI API key from environment variable")
+            
+            if not api_key:
+                self.agent_logger.log_error(f"No OpenAI API key found for agent {self.name}. Configure in global_config.yml or set OPENAI_API_KEY environment variable.",
                                           error_type="missing_api_key")
                 self.llm_client = None
                 return
@@ -800,6 +822,31 @@ class AgentLangChainTool(BaseTool if LANGCHAIN_AVAILABLE else object):
 class SimpleAgent(Agent):
     """Simple agent implementation without conversation history."""
     
+    @classmethod
+    def from_config(cls, config: AgentConfig, **kwargs) -> 'SimpleAgent':
+        """Create SimpleAgent from configuration with mandatory agent_card section"""
+        logger = get_logger(f"{cls.__name__}.from_config")
+        logger.info(f"Creating {cls.__name__} from configuration")
+        
+        # Create instance using existing pattern
+        instance = cls(config, **kwargs)
+        
+        # Extract and store mandatory agent_card metadata
+        if hasattr(config, 'agent_card') and config.agent_card:
+            instance._a2a_card_data = config.agent_card.model_dump() if hasattr(config.agent_card, 'model_dump') else config.agent_card
+            logger.info(f"Agent {instance.name} loaded with A2A card metadata")
+        elif isinstance(config, dict) and 'agent_card' in config:
+            instance._a2a_card_data = config['agent_card']
+            logger.info(f"Agent {instance.name} loaded with A2A card metadata")
+        else:
+            raise ValueError(
+                f"Missing mandatory 'agent_card' section in configuration for {cls.__name__}. "
+                f"All agents must include A2A protocol compliant agent_card metadata."
+            )
+        
+        logger.info(f"Successfully created {cls.__name__} with A2A compliance")
+        return instance
+    
     async def process(self, input_text: str, **kwargs) -> str:
         """Process input text and return response."""
         # Use the special interaction context to ensure I/O is ALWAYS logged
@@ -858,6 +905,31 @@ class ConversationalAgent(Agent):
     def __init__(self, config: AgentConfig, **kwargs):
         super().__init__(config, **kwargs)
         self.max_history_length = kwargs.get('max_history_length', 10)
+    
+    @classmethod
+    def from_config(cls, config: AgentConfig, **kwargs) -> 'ConversationalAgent':
+        """Create ConversationalAgent from configuration with mandatory agent_card section"""
+        logger = get_logger(f"{cls.__name__}.from_config")
+        logger.info(f"Creating {cls.__name__} from configuration")
+        
+        # Create instance using existing pattern
+        instance = cls(config, **kwargs)
+        
+        # Extract and store mandatory agent_card metadata
+        if hasattr(config, 'agent_card') and config.agent_card:
+            instance._a2a_card_data = config.agent_card.model_dump() if hasattr(config.agent_card, 'model_dump') else config.agent_card
+            logger.info(f"Agent {instance.name} loaded with A2A card metadata")
+        elif isinstance(config, dict) and 'agent_card' in config:
+            instance._a2a_card_data = config['agent_card']
+            logger.info(f"Agent {instance.name} loaded with A2A card metadata")
+        else:
+            raise ValueError(
+                f"Missing mandatory 'agent_card' section in configuration for {cls.__name__}. "
+                f"All agents must include A2A protocol compliant agent_card metadata."
+            )
+        
+        logger.info(f"Successfully created {cls.__name__} with A2A compliance")
+        return instance
     
     async def process(self, input_text: str, **kwargs) -> str:
         """Process input text with conversation history."""

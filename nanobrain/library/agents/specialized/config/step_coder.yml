@@ -2,6 +2,113 @@ name: "StepCoder"
 description: "Tool for generating software code based on natural language instructions"
 class: "CodeWriterAgent"  # Use CodeWriterAgent for specialized code generation
 
+# MANDATORY: Agent card section for A2A protocol compliance
+agent_card:
+  version: "1.0.0"
+  purpose: "Specialized code generation agent for software development tasks"
+  detailed_description: "StepCoder is a specialized agent designed for generating high-quality software code from natural language descriptions. It integrates file writing capabilities to save generated code directly to files."
+  domain: "software_development"
+  expertise_level: "advanced"
+  
+  input_format:
+    primary_mode: "json"
+    supported_modes: ["json", "text"]
+    content_types: ["application/json", "text/plain"]
+    format_schema:
+      type: "object"
+      required_fields:
+        input:
+          type: "string"
+          description: "Natural language description of code to generate"
+      optional_fields:
+        language:
+          type: "string"
+          description: "Programming language (defaults to Python)"
+        context:
+          type: "string"
+          description: "Additional context or existing code snippets"
+  
+  output_format:
+    primary_mode: "json"
+    supported_modes: ["json", "text"]
+    content_types: ["application/json", "text/plain"]
+    format_schema:
+      type: "object"
+      guaranteed_fields:
+        generated_code:
+          type: "string"
+          description: "Generated code content"
+        file_path:
+          type: "string"
+          description: "Path where code was saved"
+        file_confirmation:
+          type: "string"
+          description: "Confirmation of successful file creation"
+  
+  capabilities:
+    streaming: false
+    push_notifications: false
+    state_transition_history: false
+    multi_turn_conversation: true
+    context_retention: true
+    tool_usage: true
+    delegation: false
+    collaboration: false
+  
+  skills:
+    - id: "code_generation"
+      name: "Code Generation from Natural Language"
+      description: "Generate clean, well-documented code from natural language descriptions"
+      complexity: "advanced"
+      input_modes: ["text", "json"]
+      output_modes: ["text", "json"]
+      examples:
+        - "Generate Python functions with type hints and docstrings"
+        - "Create classes with methods and proper inheritance"
+        - "Generate NanoBrain framework components (Steps, Agents, Tools)"
+    
+    - id: "file_operations"
+      name: "Automated File Creation"
+      description: "Save generated code directly to specified file paths using integrated tools"
+      complexity: "intermediate"
+      input_modes: ["json"]
+      output_modes: ["json"]
+      examples:
+        - "Save Python modules to specific directories"
+        - "Create configuration files in YAML/JSON format"
+        - "Generate executable scripts with proper permissions"
+  
+  performance:
+    typical_response_time: "3-15 seconds"
+    max_response_time: "120 seconds"
+    memory_usage: "100-300 MB"
+    cpu_requirements: "Medium"
+    concurrency_support: true
+    max_concurrent_sessions: 5
+    rate_limit: "30 requests/minute"
+    scaling_characteristics: "CPU-bound for complex code generation tasks"
+  
+  usage_examples:
+    - name: "Python Function Generation"
+      description: "Generate a utility function with type hints and documentation"
+      input_example:
+        input: "Create a function that validates email addresses using regex"
+        language: "python"
+      expected_output:
+        generated_code: "def validate_email(email: str) -> bool:\n    \"\"\"Validate email address using regex...\"\"\""
+        file_path: "utils/validators.py"
+        file_confirmation: "Successfully created Python file at utils/validators.py"
+    
+    - name: "NanoBrain Step Component"
+      description: "Generate a custom Step class for the NanoBrain framework"
+      input_example:
+        input: "Create a DataProcessingStep that filters and transforms CSV data"
+        context: "NanoBrain framework component"
+      expected_output:
+        generated_code: "class DataProcessingStep(Step):\n    \"\"\"Step for processing CSV data...\"\"\""
+        file_path: "steps/data_processing_step.py"
+        file_confirmation: "Successfully created NanoBrain Step at steps/data_processing_step.py"
+
 defaults:
   model: "gpt-4-turbo"
   temperature: 0.2

@@ -14,17 +14,68 @@ Based on NCBI Entrez API guidelines from https://www.bv-brc.org/docs/
 import asyncio
 import time
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Union
+from pydantic import Field
 import json
 
-from .base_bioinformatics_tool import (
-    BioinformaticsExternalTool,
-    BioinformaticsToolConfig,
+from nanobrain.core.external_tool import (
+    ExternalTool,
+    ToolResult,
+    ToolExecutionError,
     InstallationStatus,
-    DiagnosticReport
+    DiagnosticReport,
+    ToolInstallationError,
+    ExternalToolConfig
 )
-from nanobrain.core.external_tool import ToolResult, ToolExecutionError
+from nanobrain.core.tool import ToolConfig
 from nanobrain.core.logging_system import get_logger
+
+
+@dataclass
+class PubMedConfig(ExternalToolConfig):
+    """Configuration for PubMed literature search client"""
+    # Tool identification
+    tool_name: str = "pubmed"
+    
+    # Default tool card
+    tool_card: Dict[str, Any] = field(default_factory=lambda: {
+        "name": "pubmed",
+        "description": "PubMed client for literature search and analysis",
+        "version": "1.0.0",
+        "category": "bioinformatics",
+        "capabilities": ["literature_search", "research_analysis", "academic_data"]
+    })
+    
+    # API configuration
+    base_url: str = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
+    api_key: Optional[str] = None  # Optional API key for higher rate limits
+    email: Optional[str] = None    # Required for API usage
+    rate_limit: int = 3  # Requests per second
+    max_retries: int = 5
+    retry_backoff: float = 1.0
+    
+    # Search parameters
+    default_database: str = "pubmed"
+    max_results: int = 1000
+    return_format: str = "json"
+    include_abstracts: bool = True
+    include_full_text: bool = False
+    
+    # Quality filters
+    min_publication_year: int = 2000
+    exclude_review_types: List[str] = field(default_factory=list)
+    include_mesh_terms: bool = True
+    
+    # Caching
+    cache_results: bool = True
+    cache_duration: int = 86400  # 24 hours
+    cache_directory: str = "data/pubmed_cache"
+    
+    # Error handling
+    fail_fast: bool = True
+    
+    # No conda/pip packages since this is an API client
+    # No progressive scaling since it's an API-based tool
 
 
 @dataclass
@@ -49,32 +100,12 @@ class LiteratureReference:
         return f"{author_str}. {self.title}. {self.journal} ({self.year}). PMID: {self.pmid}"
 
 
-@dataclass
-class PubMedConfig(BioinformaticsToolConfig):
-    """Configuration for PubMed client"""
-    tool_name: str = "pubmed"
-    email: str = "research@nanobrain.org"
-    api_key: Optional[str] = None
-    rate_limit: int = 3  # requests per second (3 without API key, 10 with)
-    fail_fast: bool = True
-    cache_enabled: bool = True
-    max_results_per_search: int = 20
-    verify_on_init: bool = False  # Disable by default to avoid event loop issues
-    
-    def __post_init__(self):
-        if self.api_key:
-            self.rate_limit = 10  # Higher rate limit with API key
-        
-        # PubMed doesn't require local installation
-        self.local_installation_paths = []
-
-
 class PubMedError(ToolExecutionError):
     """Raised when PubMed API operations fail"""
     pass
 
 
-class PubMedClient(BioinformaticsExternalTool):
+class PubMedClient(ExternalTool):
     """
     PubMed literature search client.
     Enhanced with mandatory from_config pattern implementation.
@@ -88,49 +119,86 @@ class PubMedClient(BioinformaticsExternalTool):
     """
     
     @classmethod
-    def from_config(cls, config: PubMedConfig, **kwargs) -> 'PubMedClient':
+    def from_config(cls, config: Union[ToolConfig, PubMedConfig, Dict], **kwargs) -> 'PubMedClient':
         """Mandatory from_config implementation for PubMedClient"""
         logger = get_logger(f"{cls.__name__}.from_config")
         logger.info(f"Creating {cls.__name__} from configuration")
         
-        # Step 1: Validate configuration schema
-        cls.validate_config_schema(config)
+        # Convert any input to PubMedConfig
+        if isinstance(config, PubMedConfig):
+            # Already specific config, use as-is
+            pass
+        else:
+            # Convert ToolConfig, dict, or any other input to PubMedConfig
+            if hasattr(config, 'model_dump'):
+                config_dict = config.model_dump()
+            elif isinstance(config, dict):
+                config_dict = config
+            else:
+                # Handle object with attributes
+                config_dict = {}
+                # Extract fields that are common to both ToolConfig and PubMedConfig
+                for attr in ['name', 'description', 'tool_card']:
+                    if hasattr(config, attr):
+                        config_dict[attr] = getattr(config, attr)
+            
+            # Create PubMedConfig from the extracted data
+            config = PubMedConfig(**config_dict)
         
-        # Step 2: Extract component-specific configuration  
-        component_config = cls.extract_component_config(config)
-        
-        # Step 3: Resolve dependencies
-        dependencies = cls.resolve_dependencies(component_config, **kwargs)
-        
-        # Step 4: Create instance
-        instance = cls.create_instance(config, component_config, dependencies)
-        
-        # Step 5: Post-creation initialization
-        instance._post_config_initialization()
-        
-        logger.info(f"Successfully created {cls.__name__}")
-        return instance
-    
-    def _init_from_config(self, config: PubMedConfig, component_config: Dict[str, Any],
-                         dependencies: Dict[str, Any]) -> None:
-        """Initialize PubMedClient with resolved dependencies"""
-        if config is None:
-            config = PubMedConfig(
-                email="research@nanobrain.org",
-                api_key=None,
-                fail_fast=True,
-                verify_on_init=False  # Disable auto-initialization to avoid event loop issues
+        # Mandatory tool_card validation and extraction
+        if hasattr(config, 'tool_card') and config.tool_card:
+            tool_card_data = config.tool_card.model_dump() if hasattr(config.tool_card, 'model_dump') else config.tool_card
+            logger.info(f"Tool {config.tool_name} loaded with tool card metadata")
+        elif isinstance(config, dict) and 'tool_card' in config:
+            tool_card_data = config['tool_card']
+            logger.info(f"Tool {config.tool_name} loaded with tool card metadata")
+        else:
+            raise ValueError(
+                f"Missing mandatory 'tool_card' section in configuration for {cls.__name__}. "
+                f"All tools must include tool card metadata for proper discovery and usage."
             )
         
-        super()._init_from_config(config, component_config, dependencies)
+        # Create instance
+        instance = cls(config, **kwargs)
+        instance._tool_card_data = tool_card_data
         
+        logger.info(f"Successfully created {cls.__name__} with tool card compliance")
+        return instance
+    
+    def __init__(self, config: PubMedConfig, **kwargs):
+        """Initialize PubMedClient with configuration"""
+        if config is None:
+            config = PubMedConfig(
+                tool_name="pubmed",
+                email="research@nanobrain.org",
+                api_key=None,
+                cache_results=True
+            )
+        
+        # Ensure name is set consistently
+        if not hasattr(config, 'tool_name') or not config.tool_name:
+            config.tool_name = "pubmed"
+        
+        # Initialize parent classes
+        super().__init__(config, **kwargs)
+        
+        # PubMed specific initialization
         self.pubmed_config = config
-        self.email = config.email
-        self.api_key = config.api_key
-        self.fail_fast = config.fail_fast
-        self.rate_limit = config.rate_limit
+        self.name = config.tool_name
+        self.logger = get_logger(f"pubmed_client_{self.name}")
         
-        self.logger = get_logger("pubmed_client")
+        # PubMed specific attributes
+        self.email = getattr(config, 'email', "research@nanobrain.org")
+        self.api_key = getattr(config, 'api_key', None)
+        self.rate_limit = getattr(config, 'rate_limit', 3)
+        self.max_retries = getattr(config, 'max_retries', 5)
+        self.retry_backoff = getattr(config, 'retry_backoff', 1.0)
+        self.cache_results = getattr(config, 'cache_results', True)
+        self.cache_duration = getattr(config, 'cache_duration', 86400)
+        self.cache_directory = getattr(config, 'cache_directory', "data/pubmed_cache")
+        
+        # Error handling behavior
+        self.fail_fast = getattr(config, 'fail_fast', True)
         
         # Rate limiting tracking
         self.last_request_time = 0
@@ -138,8 +206,6 @@ class PubMedClient(BioinformaticsExternalTool):
         
         # Search caching
         self.search_cache: Dict[str, List[LiteratureReference]] = {}
-    
-    # PubMedClient inherits FromConfigBase.__init__ which prevents direct instantiation
         
     async def initialize_tool(self) -> InstallationStatus:
         """Initialize PubMed client (no local installation required)"""
@@ -213,7 +279,7 @@ class PubMedClient(BioinformaticsExternalTool):
         cache_key = f"alphavirus_{protein_type.lower().replace(' ', '_')}"
         
         # Check cache first
-        if self.pubmed_config.cache_enabled and cache_key in self.search_cache:
+        if self.pubmed_config.cache_results and cache_key in self.search_cache:
             self.logger.info(f"📚 Using cached literature for {protein_type}")
             return self.search_cache[cache_key]
         
@@ -225,7 +291,7 @@ class PubMedClient(BioinformaticsExternalTool):
             placeholder_references = []
             
             # For infrastructure testing, return empty list
-            if self.pubmed_config.cache_enabled:
+            if self.pubmed_config.cache_results:
                 self.search_cache[cache_key] = placeholder_references
             
             return placeholder_references

@@ -12,7 +12,7 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 # Import data unit classes
-from src.core.data_unit import (
+from nanobrain.core.data_unit import (
     DataUnitMemory, DataUnitFile, DataUnitString, DataUnitConfig, DataUnitType
 )
 
@@ -216,7 +216,7 @@ class TestDataUnitContentLogging:
     
     def test_data_serialization_edge_cases(self):
         """Test edge cases in data serialization for logging."""
-        from src.core.logging_system import NanoBrainLogger
+        from nanobrain.core.logging_system import NanoBrainLogger
         
         logger = NanoBrainLogger("test_logger")
         

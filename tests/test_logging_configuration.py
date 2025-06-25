@@ -15,7 +15,7 @@ from io import StringIO
 import sys
 
 # Import the logging system components
-from src.core.logging_system import (
+from nanobrain.core.logging_system import (
     NanoBrainLogger, 
     _configure_global_logging,
     _suppress_third_party_console_logging,
@@ -49,9 +49,9 @@ class TestLoggingConfiguration:
         root_logger.handlers.clear()
         logging.basicConfig(level=logging.INFO)
     
-    @patch('src.core.logging_system.should_log_to_console')
-    @patch('src.core.logging_system.should_log_to_file')
-    @patch('src.core.logging_system.get_logging_config')
+    @patch('nanobrain.core.logging_system.should_log_to_console')
+    @patch('nanobrain.core.logging_system.should_log_to_file')
+    @patch('nanobrain.core.logging_system.get_logging_config')
     def test_file_mode_suppresses_console_output(self, mock_get_config, mock_should_file, mock_should_console):
         """Test that file mode suppresses console output for third-party libraries."""
         # Configure mocks for file-only mode
@@ -90,9 +90,9 @@ class TestLoggingConfiguration:
         assert not openai_logger.propagate
         assert not parsl_logger.propagate
     
-    @patch('src.core.logging_system.should_log_to_console')
-    @patch('src.core.logging_system.should_log_to_file')
-    @patch('src.core.logging_system.get_logging_config')
+    @patch('nanobrain.core.logging_system.should_log_to_console')
+    @patch('nanobrain.core.logging_system.should_log_to_file')
+    @patch('nanobrain.core.logging_system.get_logging_config')
     def test_console_mode_allows_output(self, mock_get_config, mock_should_file, mock_should_console):
         """Test that console mode allows third-party library output."""
         # Configure mocks for console mode
@@ -116,9 +116,9 @@ class TestLoggingConfiguration:
         assert openai_logger.propagate
         assert parsl_logger.propagate
     
-    @patch('src.core.logging_system.should_log_to_console')
-    @patch('src.core.logging_system.should_log_to_file')
-    @patch('src.core.logging_system.get_logging_config')
+    @patch('nanobrain.core.logging_system.should_log_to_console')
+    @patch('nanobrain.core.logging_system.should_log_to_file')
+    @patch('nanobrain.core.logging_system.get_logging_config')
     def test_both_mode_configuration(self, mock_get_config, mock_should_file, mock_should_console):
         """Test that both mode allows console output but also enables file logging."""
         # Configure mocks for both mode
@@ -187,9 +187,9 @@ class TestLoggingConfiguration:
             log_file = Path(temp_dir) / "test.log"
             
             # Mock file-only mode
-            with patch('src.core.logging_system.should_log_to_console', return_value=False), \
-                 patch('src.core.logging_system.should_log_to_file', return_value=True), \
-                 patch('src.core.logging_system.get_logging_config', return_value={'console': {}}):
+            with patch('nanobrain.core.logging_system.should_log_to_console', return_value=False), \
+                 patch('nanobrain.core.logging_system.should_log_to_file', return_value=True), \
+                 patch('nanobrain.core.logging_system.get_logging_config', return_value={'console': {}}):
                 
                 logger = NanoBrainLogger("test_logger", log_file=log_file)
                 
@@ -207,9 +207,9 @@ class TestLoggingConfiguration:
     
     def test_get_logging_status(self):
         """Test the logging status utility function."""
-        with patch('src.core.logging_system.get_logging_mode', return_value='file'), \
-             patch('src.core.logging_system.should_log_to_console', return_value=False), \
-             patch('src.core.logging_system.should_log_to_file', return_value=True):
+        with patch('nanobrain.core.logging_system.get_logging_mode', return_value='file'), \
+             patch('nanobrain.core.logging_system.should_log_to_console', return_value=False), \
+             patch('nanobrain.core.logging_system.should_log_to_file', return_value=True):
             
             status = get_logging_status()
             
@@ -222,16 +222,16 @@ class TestLoggingConfiguration:
     def test_reconfigure_global_logging(self):
         """Test that global logging can be reconfigured dynamically."""
         # Initial configuration
-        with patch('src.core.logging_system.should_log_to_console', return_value=True):
+        with patch('nanobrain.core.logging_system.should_log_to_console', return_value=True):
             _configure_global_logging()
             
             root_logger = logging.getLogger()
             initial_handler_count = len(root_logger.handlers)
         
         # Reconfigure to file-only mode
-        with patch('src.core.logging_system.should_log_to_console', return_value=False), \
-             patch('src.core.logging_system.should_log_to_file', return_value=True), \
-             patch('src.core.logging_system.get_logging_config', return_value={'console': {}}):
+        with patch('nanobrain.core.logging_system.should_log_to_console', return_value=False), \
+             patch('nanobrain.core.logging_system.should_log_to_file', return_value=True), \
+             patch('nanobrain.core.logging_system.get_logging_config', return_value={'console': {}}):
             
             reconfigure_global_logging()
             
@@ -245,9 +245,9 @@ class TestLoggingConfiguration:
 class TestIntegrationWithDemos:
     """Test integration with demo applications."""
     
-    @patch('src.core.logging_system.should_log_to_console')
-    @patch('src.core.logging_system.should_log_to_file') 
-    @patch('src.core.logging_system.get_logging_config')
+    @patch('nanobrain.core.logging_system.should_log_to_console')
+    @patch('nanobrain.core.logging_system.should_log_to_file') 
+    @patch('nanobrain.core.logging_system.get_logging_config')
     def test_parsl_demo_file_mode(self, mock_get_config, mock_should_file, mock_should_console):
         """Test that Parsl demo respects file-only logging mode."""
         # Configure file-only mode
@@ -284,9 +284,9 @@ class TestIntegrationWithDemos:
             assert f"Test message from {logger_name}" not in output
             assert f"Debug message from {logger_name}" not in output
     
-    @patch('src.core.logging_system.should_log_to_console')
-    @patch('src.core.logging_system.should_log_to_file')
-    @patch('src.core.logging_system.get_logging_config')
+    @patch('nanobrain.core.logging_system.should_log_to_console')
+    @patch('nanobrain.core.logging_system.should_log_to_file')
+    @patch('nanobrain.core.logging_system.get_logging_config')
     def test_openai_logging_suppression(self, mock_get_config, mock_should_file, mock_should_console):
         """Test that OpenAI library logging is suppressed in file mode."""
         # Configure file-only mode

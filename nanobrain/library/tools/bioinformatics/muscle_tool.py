@@ -8,23 +8,45 @@ used to prepare clustered sequences for PSSM generation in the Alphavirus workfl
 import asyncio
 import os
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
+from pydantic import Field
 
-from nanobrain.library.tools.bioinformatics.base_bioinformatics_tool import (
-    BioinformaticsExternalTool, 
-    BioinformaticsToolConfig
+from nanobrain.core.external_tool import (
+    ExternalTool,
+    ToolResult,
+    ToolExecutionError,
+    InstallationStatus,
+    DiagnosticReport,
+    ToolInstallationError,
+    ExternalToolConfig
 )
-from nanobrain.core.external_tool import ToolResult, ToolExecutionError
+from nanobrain.core.progressive_scaling import ProgressiveScalingMixin
+from nanobrain.core.tool import ToolConfig
+from nanobrain.core.logging_system import get_logger
 
 
 @dataclass
-class MUSCLEConfig(BioinformaticsToolConfig):
-    """Configuration for MUSCLE alignment"""
+class MUSCLEConfig(ExternalToolConfig):
+    """Configuration for MUSCLE multiple sequence alignment tool"""
+    # Tool identification
     tool_name: str = "muscle"
-    installation_path: Optional[str] = None
-    executable_path: Optional[str] = None
+    
+    # Default tool card
+    tool_card: Dict[str, Any] = field(default_factory=lambda: {
+        "name": "muscle",
+        "description": "MUSCLE tool for multiple sequence alignment",
+        "version": "1.0.0",
+        "category": "bioinformatics",
+        "capabilities": ["sequence_alignment", "msa_generation", "conservation_analysis"]
+    })
+    
+    # Installation configuration
+    conda_package: str = "muscle"
+    conda_channel: str = "bioconda"
+    environment_name: str = "nanobrain-viral_protein-muscle"
+    create_isolated_environment: bool = True
     
     # Alignment parameters
     max_iterations: int = 16
@@ -35,9 +57,47 @@ class MUSCLEConfig(BioinformaticsToolConfig):
     # Quality parameters
     min_sequences: int = 3
     max_sequences: int = 1000
+    output_format: str = "fasta"  # fasta, clustal, msf, phylip
     
-    # Output format
-    output_format: str = "fasta"  # or "clustal", "msf", "phylip"
+    # Conservation analysis
+    calculate_profile: bool = True
+    highly_conserved_threshold: float = 0.8
+    position_scoring: bool = True
+    
+    # Quality scoring
+    quality_scoring: Dict[str, Any] = field(default_factory=lambda: {
+        "enabled": True,
+        "weights": {
+            "conservation_score": 0.5,
+            "gap_penalty": 0.3,
+            "size_bonus": 0.2
+        },
+        "thresholds": {
+            "high_quality_threshold": 0.7,
+            "acceptable_quality_threshold": 0.5
+        }
+    })
+    
+    # Performance settings
+    parallel_processing: bool = False
+    memory_optimization: bool = True
+    
+    # Output settings
+    export_conservation_profile: bool = True
+    export_quality_metrics: bool = True
+    keep_intermediate_files: bool = False
+    
+    # Error handling
+    retry_failed_alignments: bool = True
+    max_retry_attempts: int = 2
+    skip_problematic_clusters: bool = True
+    
+    # Installation paths
+    local_installation_paths: List[str] = field(default_factory=lambda: [
+        "/usr/local/bin",
+        "/opt/homebrew/bin",
+        "~/bin"
+    ])
 
 
 @dataclass
@@ -101,7 +161,7 @@ class AlignmentResult:
     parameters: MUSCLEConfig
 
 
-class MUSCLETool(BioinformaticsExternalTool):
+class MUSCLETool(ProgressiveScalingMixin, ExternalTool):
     """
     MUSCLE multiple sequence alignment tool wrapper.
     Enhanced with mandatory from_config pattern implementation.
@@ -111,33 +171,78 @@ class MUSCLETool(BioinformaticsExternalTool):
     """
     
     @classmethod
-    def from_config(cls, config: MUSCLEConfig, **kwargs) -> 'MUSCLETool':
+    def from_config(cls, config: Union[ToolConfig, MUSCLEConfig, Dict], **kwargs) -> 'MUSCLETool':
         """Mandatory from_config implementation for MUSCLETool"""
-        from nanobrain.core.logging_system import get_logger
         logger = get_logger(f"{cls.__name__}.from_config")
         logger.info(f"Creating {cls.__name__} from configuration")
         
-        # Step 1: Validate configuration schema
-        cls.validate_config_schema(config)
+        # Convert any input to MUSCLEConfig
+        if isinstance(config, MUSCLEConfig):
+            # Already specific config, use as-is
+            pass
+        else:
+            # Convert ToolConfig, dict, or any other input to MUSCLEConfig
+            if hasattr(config, 'model_dump'):
+                config_dict = config.model_dump()
+            elif isinstance(config, dict):
+                config_dict = config
+            else:
+                # Handle object with attributes
+                config_dict = {}
+                # Extract fields that are common to both ToolConfig and MUSCLEConfig
+                for attr in ['name', 'description', 'tool_card']:
+                    if hasattr(config, attr):
+                        config_dict[attr] = getattr(config, attr)
+            
+            # Filter config_dict to only include fields that MUSCLEConfig accepts
+            # Remove ToolConfig-specific fields that MUSCLEConfig doesn't inherit
+            muscle_compatible_fields = {
+                # Core fields from MUSCLEConfig
+                'tool_name', 'tool_card', 'conda_package', 'conda_channel', 
+                'environment_name', 'create_isolated_environment', 'max_iterations',
+                'diagonal_optimization', 'gap_open_penalty', 'gap_extend_penalty',
+                'min_sequences', 'max_sequences', 'output_format', 'calculate_profile',
+                'highly_conserved_threshold', 'position_scoring', 'quality_scoring',
+                'parallel_processing', 'memory_optimization', 'export_conservation_profile',
+                'export_quality_metrics', 'keep_intermediate_files', 'retry_failed_alignments',
+                'max_retry_attempts', 'skip_problematic_clusters', 'local_installation_paths',
+                # Core fields from ExternalToolConfig
+                'installation_path', 'executable_path', 'environment', 'timeout_seconds',
+                'retry_attempts', 'verify_on_init', 'pip_package', 'git_repository',
+                'initial_scale_level', 'detailed_diagnostics', 'suggest_fixes'
+            }
+            
+            filtered_config_dict = {k: v for k, v in config_dict.items() 
+                                   if k in muscle_compatible_fields}
+            
+            logger.debug(f"Filtered config keys: {list(filtered_config_dict.keys())}")
+            logger.debug(f"Removed incompatible keys: {set(config_dict.keys()) - set(filtered_config_dict.keys())}")
+            
+            # Create MUSCLEConfig from the filtered data
+            config = MUSCLEConfig(**filtered_config_dict)
         
-        # Step 2: Extract component-specific configuration  
-        component_config = cls.extract_component_config(config)
+        # Mandatory tool_card validation and extraction
+        if hasattr(config, 'tool_card') and config.tool_card:
+            tool_card_data = config.tool_card.model_dump() if hasattr(config.tool_card, 'model_dump') else config.tool_card
+            logger.info(f"Tool {config.tool_name} loaded with tool card metadata")
+        elif isinstance(config, dict) and 'tool_card' in config:
+            tool_card_data = config['tool_card']
+            logger.info(f"Tool {config.tool_name} loaded with tool card metadata")
+        else:
+            raise ValueError(
+                f"Missing mandatory 'tool_card' section in configuration for {cls.__name__}. "
+                f"All tools must include tool card metadata for proper discovery and usage."
+            )
         
-        # Step 3: Resolve dependencies
-        dependencies = cls.resolve_dependencies(component_config, **kwargs)
+        # Create instance
+        instance = cls(config, **kwargs)
+        instance._tool_card_data = tool_card_data
         
-        # Step 4: Create instance
-        instance = cls.create_instance(config, component_config, dependencies)
-        
-        # Step 5: Post-creation initialization
-        instance._post_config_initialization()
-        
-        logger.info(f"Successfully created {cls.__name__}")
+        logger.info(f"Successfully created {cls.__name__} with tool card compliance")
         return instance
     
-    def _init_from_config(self, config: MUSCLEConfig, component_config: Dict[str, Any],
-                         dependencies: Dict[str, Any]) -> None:
-        """Initialize MUSCLETool with resolved dependencies"""
+    def __init__(self, config: MUSCLEConfig, **kwargs):
+        """Initialize MUSCLETool with configuration"""
         if config is None:
             config = MUSCLEConfig(
                 tool_name="muscle",
@@ -147,10 +252,26 @@ class MUSCLETool(BioinformaticsExternalTool):
                 gap_extend_penalty=-1.0
             )
         
-        super()._init_from_config(config, component_config, dependencies)
+        # Ensure name is set consistently
+        if not hasattr(config, 'tool_name') or not config.tool_name:
+            config.tool_name = "muscle"
+        
+        # Initialize parent classes
+        super().__init__(config, **kwargs)
+        
+        # MUSCLE specific initialization
         self.muscle_config = config
-    
-    # MUSCLETool inherits FromConfigBase.__init__ which prevents direct instantiation
+        self.name = config.tool_name
+        self.logger = get_logger(f"bio_tool_{self.name}")
+        
+        # MUSCLE specific attributes
+        self.max_iterations = getattr(config, 'max_iterations', 16)
+        self.diagonal_optimization = getattr(config, 'diagonal_optimization', True)
+        self.gap_open_penalty = getattr(config, 'gap_open_penalty', -12.0)
+        self.gap_extend_penalty = getattr(config, 'gap_extend_penalty', -1.0)
+        self.min_sequences = getattr(config, 'min_sequences', 3)
+        self.max_sequences = getattr(config, 'max_sequences', 1000)
+        self.output_format = getattr(config, 'output_format', "fasta")
         
     async def verify_installation(self) -> bool:
         """Verify MUSCLE installation"""
@@ -166,12 +287,44 @@ class MUSCLETool(BioinformaticsExternalTool):
             return False
     
     async def execute_command(self, command: List[str], **kwargs) -> ToolResult:
-        """Execute MUSCLE command with retry logic"""
+        """
+        Execute MUSCLE command with retry logic.
+        
+        BREAKING CHANGE: Now enforces mandatory initialization before execution.
+        """
+        # MANDATORY: Ensure tool is initialized before any execution
+        await self.ensure_initialized()
+        
         return await self._execute_with_retry(command, **kwargs)
     
     async def parse_output(self, raw_output: str) -> Dict[str, Any]:
         """Parse MUSCLE alignment output"""
         return await self._parse_fasta_output(raw_output)
+    
+    async def _parse_fasta_output(self, fasta_content: str) -> Dict[str, Any]:
+        """Parse FASTA format output from MUSCLE"""
+        sequences = {}
+        current_header = None
+        current_sequence = []
+        
+        for line in fasta_content.strip().split('\n'):
+            line = line.strip()
+            if line.startswith('>'):
+                # Save previous sequence if exists
+                if current_header and current_sequence:
+                    sequences[current_header] = ''.join(current_sequence)
+                
+                # Start new sequence
+                current_header = line[1:]  # Remove '>' prefix
+                current_sequence = []
+            elif line and current_header:
+                current_sequence.append(line)
+        
+        # Save last sequence
+        if current_header and current_sequence:
+            sequences[current_header] = ''.join(current_sequence)
+        
+        return {"sequences": sequences, "total_sequences": len(sequences)}
     
     async def align_sequences(self, sequences: Dict[str, str], 
                             custom_params: Optional[Dict[str, Any]] = None) -> AlignmentResult:

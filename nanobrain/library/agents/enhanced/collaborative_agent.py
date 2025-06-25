@@ -73,10 +73,23 @@ class CollaborativeAgent(FromConfigBase, A2ASupportMixin, MCPSupportMixin, Conve
         # Step 4: Create instance
         instance = cls.create_instance(config, component_config, dependencies)
         
-        # Step 5: Post-creation initialization
+        # Step 5: Mandatory agent_card validation and extraction
+        if hasattr(config, 'agent_card') and config.agent_card:
+            instance._a2a_card_data = config.agent_card.model_dump() if hasattr(config.agent_card, 'model_dump') else config.agent_card
+            logger.info(f"Agent {instance.name} loaded with A2A card metadata")
+        elif isinstance(config, dict) and 'agent_card' in config:
+            instance._a2a_card_data = config['agent_card']
+            logger.info(f"Agent {instance.name} loaded with A2A card metadata")
+        else:
+            raise ValueError(
+                f"Missing mandatory 'agent_card' section in configuration for {cls.__name__}. "
+                f"All agents must include A2A protocol compliant agent_card metadata for proper discovery and usage."
+            )
+        
+        # Step 6: Post-creation initialization
         instance._post_config_initialization()
         
-        logger.info(f"Successfully created {cls.__name__}")
+        logger.info(f"Successfully created {cls.__name__} with A2A compliance")
         return instance
         
     def _init_from_config(self, config: AgentConfig, component_config: Dict[str, Any],

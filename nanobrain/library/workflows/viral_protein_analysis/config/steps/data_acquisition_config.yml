@@ -2,25 +2,26 @@ name: BV-BRC Data Acquisition
 description: Download genomes, filter by size, extract proteins, get sequences and
   annotations
 estimated_time: 120.0
-class: BVBRCDataAcquisitionStep
+class: nanobrain.library.workflows.viral_protein_analysis.steps.bv_brc_data_acquisition_step.BVBRCDataAcquisitionStep
 step_type: simple
-debug_mode: true
+debug_mode: false
 enable_logging: true
-bvbrc_config:
-  installation_path: /Applications/BV-BRC.app
-  executable_path: /Applications/BV-BRC.app/deployment/bin
-  timeout_seconds: 400
-  retry_attempts: 2
-  genome_batch: 10
-  md5_batch: 5
-  min_length: 8000
-  max_length: 15000
-  verify_on_init: false
+
+# Framework settings
+debug_mode: false
+enable_logging: true
+
+# Step-specific configuration (no tool config duplication)
 target_genus: Alphavirus
 min_genome_length: 8000
 max_genome_length: 15000
 genome_batch_size: 100
 md5_batch_size: 50
+
+# Tool reference (not embedded config) - Phase 3 enhancement
+tool_dependencies:
+  bv_brc_tool: config/tools/bv_brc_tool.yml
+
 logical_steps_covered:
 - 1
 - 2
@@ -44,8 +45,14 @@ step_description_detailed: 'This step combines 7 logical workflow steps:
   6. Organize genome metadata
 
   7. Prepare data for annotation mapping '
+
+# Framework metadata - Phase 3 updated
 _metadata:
-  last_updated: '2025-06-22T23:41:37.620989'
-  updated_by: modular_config_migration
+  last_updated: '2025-06-23T22:30:00.000000'
+  updated_by: Phase3_tool_integration_enhancement
   migration_version: 1.0.0
   uses_modular_config: true
+  config_type: "step"
+  framework_version: "1.0.0"
+  compliance_level: "full"
+  tool_integration: "from_config"

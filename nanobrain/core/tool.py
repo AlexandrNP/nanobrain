@@ -2,6 +2,7 @@
 Tool System for NanoBrain Framework
 
 Provides tool interface and adapters for different tool frameworks.
+Enhanced with mandatory from_config pattern implementation.
 """
 
 import asyncio
@@ -10,6 +11,9 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional, List, Callable, Union
 from enum import Enum
 from pydantic import BaseModel, Field, ConfigDict
+
+from .component_base import FromConfigBase, ComponentConfigurationError, ComponentDependencyError
+from .logging_system import get_logger
 
 logger = logging.getLogger(__name__)
 
@@ -32,25 +36,102 @@ class ToolConfig(BaseModel):
     async_execution: bool = True
     timeout: Optional[float] = None
     
-    model_config = ConfigDict(use_enum_values=True)
+    # MANDATORY: Tool card section for A2A protocol compliance
+    tool_card: Optional[Dict[str, Any]] = Field(default=None, description="Tool card metadata for A2A protocol compliance")
+    
+    model_config = ConfigDict(use_enum_values=True, extra="allow")
 
 
-class ToolBase(ABC):
+class ToolBase(FromConfigBase, ABC):
     """
     Base class for tools that can be used by Agents.
+    Enhanced with mandatory from_config pattern implementation.
     
     Biological analogy: Specialized neural circuits for specific functions.
     Justification: Like how the brain has specialized circuits for vision, 
     language, etc., tools provide specialized functionality for agents.
     """
     
-    def __init__(self, config: ToolConfig, **kwargs):
+    COMPONENT_TYPE = "tool"
+    REQUIRED_CONFIG_FIELDS = ['name', 'tool_type']
+    OPTIONAL_CONFIG_FIELDS = {
+        'description': '',
+        'parameters': {},
+        'async_execution': True,
+        'timeout': None
+    }
+    
+    @classmethod
+    def extract_component_config(cls, config: ToolConfig) -> Dict[str, Any]:
+        """Extract Tool configuration"""
+        return {
+            'name': config.name,
+            'tool_type': config.tool_type,
+            'description': getattr(config, 'description', ''),
+            'parameters': getattr(config, 'parameters', {}),
+            'async_execution': getattr(config, 'async_execution', True),
+            'timeout': getattr(config, 'timeout', None)
+        }
+    
+    @classmethod  
+    def resolve_dependencies(cls, component_config: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        """Resolve Tool dependencies"""
+        return {
+            'enable_logging': kwargs.get('enable_logging', True),
+            'debug_mode': kwargs.get('debug_mode', False)
+        }
+    
+    @classmethod
+    def validate_and_extract_tool_card(cls, config: Union[ToolConfig, Dict], instance_name: str = None) -> Dict[str, Any]:
+        """
+        Validate and extract mandatory tool_card section from configuration.
+        
+        Args:
+            config: Tool configuration (ToolConfig object or dict)
+            instance_name: Name of the tool instance for error messages
+            
+        Returns:
+            Tool card data dictionary
+            
+        Raises:
+            ValueError: If mandatory tool_card section is missing
+        """
+        logger = get_logger(f"{cls.__name__}.validate_tool_card")
+        
+        # Extract tool card data
+        if hasattr(config, 'tool_card') and config.tool_card:
+            tool_card_data = config.tool_card.model_dump() if hasattr(config.tool_card, 'model_dump') else config.tool_card
+            logger.info(f"Tool {instance_name or 'unknown'} loaded with tool card metadata")
+            return tool_card_data
+        elif isinstance(config, dict) and 'tool_card' in config:
+            tool_card_data = config['tool_card']
+            logger.info(f"Tool {instance_name or 'unknown'} loaded with tool card metadata")
+            return tool_card_data
+        else:
+            raise ValueError(
+                f"Missing mandatory 'tool_card' section in configuration for {cls.__name__}. "
+                f"All tools must include tool card metadata for proper discovery and usage."
+            )
+    
+    def _init_from_config(self, config: ToolConfig, component_config: Dict[str, Any],
+                         dependencies: Dict[str, Any]) -> None:
+        """Initialize Tool with resolved dependencies"""
         self.config = config
-        self.name = config.name
-        self.description = config.description
+        self.name = component_config['name']
+        self.description = component_config['description']
         self._is_initialized = False
         self._call_count = 0
         self._error_count = 0
+        
+        # Initialize logging if enabled
+        self.enable_logging = dependencies.get('enable_logging', True)
+        if self.enable_logging:
+            self.nb_logger = get_logger(self.name, category="tools", 
+                                      debug_mode=dependencies.get('debug_mode', False))
+        else:
+            self.nb_logger = None
+    
+    # ToolBase inherits FromConfigBase.__init__ which prevents direct instantiation
         
     @abstractmethod
     async def execute(self, **kwargs) -> Any:
@@ -170,11 +251,53 @@ class ToolBase(ABC):
 class FunctionTool(ToolBase):
     """
     Tool that wraps a Python function.
+    Enhanced with mandatory from_config pattern implementation.
     """
     
-    def __init__(self, func: Callable, config: ToolConfig, **kwargs):
-        super().__init__(config, **kwargs)
-        self.func = func
+    @classmethod
+    def from_config(cls, config: ToolConfig, **kwargs) -> 'FunctionTool':
+        """Mandatory from_config implementation for FunctionTool"""
+        logger = get_logger(f"{cls.__name__}.from_config")
+        logger.info(f"Creating {cls.__name__} from configuration")
+        
+        # Step 1: Validate configuration schema
+        cls.validate_config_schema(config)
+        
+        # Step 2: Extract component-specific configuration  
+        component_config = cls.extract_component_config(config)
+        
+        # Step 3: Resolve dependencies
+        dependencies = cls.resolve_dependencies(component_config, **kwargs)
+        
+        # Step 4: Create instance
+        instance = cls.create_instance(config, component_config, dependencies)
+        
+        # Step 5: Post-creation initialization
+        instance._post_config_initialization()
+        
+        logger.info(f"Successfully created {cls.__name__}")
+        return instance
+    
+    @classmethod
+    def resolve_dependencies(cls, component_config: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        """Resolve FunctionTool dependencies"""
+        func = kwargs.get('func')
+        if not func:
+            raise ComponentDependencyError("FunctionTool requires 'func' parameter")
+        
+        base_deps = super().resolve_dependencies(component_config, **kwargs)
+        return {
+            **base_deps,
+            'func': func
+        }
+    
+    def _init_from_config(self, config: ToolConfig, component_config: Dict[str, Any],
+                         dependencies: Dict[str, Any]) -> None:
+        """Initialize FunctionTool with resolved dependencies"""
+        super()._init_from_config(config, component_config, dependencies)
+        self.func = dependencies['func']
+    
+    # FunctionTool inherits FromConfigBase.__init__ which prevents direct instantiation
         
     async def execute(self, **kwargs) -> Any:
         """Execute the wrapped function."""
@@ -213,11 +336,53 @@ class FunctionTool(ToolBase):
 class AgentTool(ToolBase):
     """
     Tool that wraps another Agent for agent-to-agent interaction.
+    Enhanced with mandatory from_config pattern implementation.
     """
     
-    def __init__(self, agent: Any, config: ToolConfig, **kwargs):
-        super().__init__(config, **kwargs)
-        self.agent = agent
+    @classmethod
+    def from_config(cls, config: ToolConfig, **kwargs) -> 'AgentTool':
+        """Mandatory from_config implementation for AgentTool"""
+        logger = get_logger(f"{cls.__name__}.from_config")
+        logger.info(f"Creating {cls.__name__} from configuration")
+        
+        # Step 1: Validate configuration schema
+        cls.validate_config_schema(config)
+        
+        # Step 2: Extract component-specific configuration  
+        component_config = cls.extract_component_config(config)
+        
+        # Step 3: Resolve dependencies
+        dependencies = cls.resolve_dependencies(component_config, **kwargs)
+        
+        # Step 4: Create instance
+        instance = cls.create_instance(config, component_config, dependencies)
+        
+        # Step 5: Post-creation initialization
+        instance._post_config_initialization()
+        
+        logger.info(f"Successfully created {cls.__name__}")
+        return instance
+    
+    @classmethod
+    def resolve_dependencies(cls, component_config: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        """Resolve AgentTool dependencies"""
+        agent = kwargs.get('agent')
+        if not agent:
+            raise ComponentDependencyError("AgentTool requires 'agent' parameter")
+        
+        base_deps = super().resolve_dependencies(component_config, **kwargs)
+        return {
+            **base_deps,
+            'agent': agent
+        }
+    
+    def _init_from_config(self, config: ToolConfig, component_config: Dict[str, Any],
+                         dependencies: Dict[str, Any]) -> None:
+        """Initialize AgentTool with resolved dependencies"""
+        super()._init_from_config(config, component_config, dependencies)
+        self.agent = dependencies['agent']
+    
+    # AgentTool inherits FromConfigBase.__init__ which prevents direct instantiation
         
     async def execute(self, **kwargs) -> Any:
         """Execute the wrapped agent."""
@@ -247,11 +412,53 @@ class AgentTool(ToolBase):
 class StepTool(ToolBase):
     """
     Tool that wraps a Step for step-based processing.
+    Enhanced with mandatory from_config pattern implementation.
     """
     
-    def __init__(self, step: Any, config: ToolConfig, **kwargs):
-        super().__init__(config, **kwargs)
-        self.step = step
+    @classmethod
+    def from_config(cls, config: ToolConfig, **kwargs) -> 'StepTool':
+        """Mandatory from_config implementation for StepTool"""
+        logger = get_logger(f"{cls.__name__}.from_config")
+        logger.info(f"Creating {cls.__name__} from configuration")
+        
+        # Step 1: Validate configuration schema
+        cls.validate_config_schema(config)
+        
+        # Step 2: Extract component-specific configuration  
+        component_config = cls.extract_component_config(config)
+        
+        # Step 3: Resolve dependencies
+        dependencies = cls.resolve_dependencies(component_config, **kwargs)
+        
+        # Step 4: Create instance
+        instance = cls.create_instance(config, component_config, dependencies)
+        
+        # Step 5: Post-creation initialization
+        instance._post_config_initialization()
+        
+        logger.info(f"Successfully created {cls.__name__}")
+        return instance
+    
+    @classmethod
+    def resolve_dependencies(cls, component_config: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        """Resolve StepTool dependencies"""
+        step = kwargs.get('step')
+        if not step:
+            raise ComponentDependencyError("StepTool requires 'step' parameter")
+        
+        base_deps = super().resolve_dependencies(component_config, **kwargs)
+        return {
+            **base_deps,
+            'step': step
+        }
+    
+    def _init_from_config(self, config: ToolConfig, component_config: Dict[str, Any],
+                         dependencies: Dict[str, Any]) -> None:
+        """Initialize StepTool with resolved dependencies"""
+        super()._init_from_config(config, component_config, dependencies)
+        self.step = dependencies['step']
+    
+    # StepTool inherits FromConfigBase.__init__ which prevents direct instantiation
         
     async def execute(self, **kwargs) -> Any:
         """Execute the wrapped step."""
@@ -283,11 +490,53 @@ class StepTool(ToolBase):
 class LangChainTool(ToolBase):
     """
     Adapter for LangChain tools.
+    Enhanced with mandatory from_config pattern implementation.
     """
     
-    def __init__(self, langchain_tool: Any, config: ToolConfig, **kwargs):
-        super().__init__(config, **kwargs)
-        self.langchain_tool = langchain_tool
+    @classmethod
+    def from_config(cls, config: ToolConfig, **kwargs) -> 'LangChainTool':
+        """Mandatory from_config implementation for LangChainTool"""
+        logger = get_logger(f"{cls.__name__}.from_config")
+        logger.info(f"Creating {cls.__name__} from configuration")
+        
+        # Step 1: Validate configuration schema
+        cls.validate_config_schema(config)
+        
+        # Step 2: Extract component-specific configuration  
+        component_config = cls.extract_component_config(config)
+        
+        # Step 3: Resolve dependencies
+        dependencies = cls.resolve_dependencies(component_config, **kwargs)
+        
+        # Step 4: Create instance
+        instance = cls.create_instance(config, component_config, dependencies)
+        
+        # Step 5: Post-creation initialization
+        instance._post_config_initialization()
+        
+        logger.info(f"Successfully created {cls.__name__}")
+        return instance
+    
+    @classmethod
+    def resolve_dependencies(cls, component_config: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        """Resolve LangChainTool dependencies"""
+        langchain_tool = kwargs.get('langchain_tool')
+        if not langchain_tool:
+            raise ComponentDependencyError("LangChainTool requires 'langchain_tool' parameter")
+        
+        base_deps = super().resolve_dependencies(component_config, **kwargs)
+        return {
+            **base_deps,
+            'langchain_tool': langchain_tool
+        }
+    
+    def _init_from_config(self, config: ToolConfig, component_config: Dict[str, Any],
+                         dependencies: Dict[str, Any]) -> None:
+        """Initialize LangChainTool with resolved dependencies"""
+        super()._init_from_config(config, component_config, dependencies)
+        self.langchain_tool = dependencies['langchain_tool']
+    
+    # LangChainTool inherits FromConfigBase.__init__ which prevents direct instantiation
         
     async def execute(self, **kwargs) -> Any:
         """Execute the LangChain tool."""
@@ -405,47 +654,58 @@ class ToolRegistry:
                 await tool.shutdown()
 
 
-def create_tool(tool_type: ToolType, config: ToolConfig, **kwargs) -> ToolBase:
+def create_tool(config: Union[Dict[str, Any], ToolConfig], **kwargs) -> ToolBase:
     """
-    Factory function to create tools.
+    MANDATORY from_config factory for all tool types
     
     Args:
-        tool_type: Type of tool to create
-        config: Tool configuration
-        **kwargs: Additional arguments
+        config: Tool configuration (dict or ToolConfig)
+        **kwargs: Framework-provided dependencies
         
     Returns:
-        Configured tool instance
+        ToolBase instance created via from_config
+        
+    Raises:
+        ValueError: If tool type is unknown
+        ComponentConfigurationError: If configuration is invalid
     """
-    if tool_type == ToolType.FUNCTION:
-        func = kwargs.get('func')
-        if not func:
-            raise ValueError("func required for FUNCTION tool")
-        return FunctionTool(func, config, **kwargs)
-    elif tool_type == ToolType.AGENT:
-        agent = kwargs.get('agent')
-        if not agent:
-            raise ValueError("agent required for AGENT tool")
-        # Remove agent from kwargs to avoid duplicate parameter
-        agent_kwargs = {k: v for k, v in kwargs.items() if k != 'agent'}
-        return AgentTool(agent, config, **agent_kwargs)
-    elif tool_type == ToolType.STEP:
-        step = kwargs.get('step')
-        if not step:
-            raise ValueError("step required for STEP tool")
-        return StepTool(step, config, **kwargs)
-    elif tool_type == ToolType.LANGCHAIN:
-        langchain_tool = kwargs.get('langchain_tool')
-        if not langchain_tool:
-            raise ValueError("langchain_tool required for LANGCHAIN tool")
-        return LangChainTool(langchain_tool, config, **kwargs)
-    else:
-        raise ValueError(f"Unknown tool type: {tool_type}")
+    logger = get_logger("tool.factory")
+    logger.info(f"Creating tool via mandatory from_config")
+    
+    if isinstance(config, dict):
+        config = ToolConfig(**config)
+    
+    # Handle both enum and string values (due to use_enum_values=True)
+    tool_type = config.tool_type
+    if isinstance(tool_type, str):
+        tool_type = ToolType(tool_type)
+    
+    try:
+        tool_classes = {
+            ToolType.FUNCTION: FunctionTool,
+            ToolType.AGENT: AgentTool,
+            ToolType.STEP: StepTool,
+            ToolType.LANGCHAIN: LangChainTool,
+            # Note: EXTERNAL tools should use specific external tool classes
+        }
+        
+        tool_class = tool_classes.get(tool_type)
+        if not tool_class:
+            raise ValueError(f"Unknown tool type: {tool_type}. Available types: {list(tool_classes.keys())}")
+        
+        # Create instance via from_config
+        instance = tool_class.from_config(config, **kwargs)
+        
+        logger.info(f"Successfully created {tool_class.__name__} via from_config")
+        return instance
+        
+    except Exception as e:
+        raise ValueError(f"Failed to create tool '{tool_type}' via from_config: {e}")
 
 
 def function_tool(name: str, description: str = "", parameters: Optional[Dict[str, Any]] = None):
     """
-    Decorator to create a function tool.
+    Decorator to create a function tool using from_config pattern.
     
     Args:
         name: Tool name
@@ -462,6 +722,6 @@ def function_tool(name: str, description: str = "", parameters: Optional[Dict[st
             description=description,
             parameters=parameters or {}
         )
-        return FunctionTool(func, config)
+        return FunctionTool.from_config(config, func=func)
     
     return decorator 

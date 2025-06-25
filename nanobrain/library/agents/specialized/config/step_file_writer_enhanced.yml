@@ -2,6 +2,127 @@ name: "StepFileWriterEnhanced"
 description: "Advanced tool for performing file operations based on natural language descriptions"
 class: "FileWriterAgent"  # Use specialized FileWriterAgent
 
+# MANDATORY: Agent card section for A2A protocol compliance
+agent_card:
+  version: "2.0.0"
+  purpose: "Advanced file operations agent with comprehensive natural language processing capabilities"
+  detailed_description: "StepFileWriterEnhanced is an advanced file operations agent that provides comprehensive file management capabilities through natural language processing, including batch operations, templates, and advanced safety features."
+  domain: "file_management"
+  expertise_level: "expert"
+  
+  input_format:
+    primary_mode: "json"
+    supported_modes: ["json", "text"]
+    content_types: ["application/json", "text/plain"]
+    format_schema:
+      type: "object"
+      required_fields:
+        input:
+          type: "string"
+          description: "Natural language description of file operation (supports complex and batch operations)"
+      optional_fields:
+        operation:
+          type: "string"
+          description: "Specific operation type (write, read, append, modify, delete, backup, move, copy, search, replace)"
+        template:
+          type: "string"
+          description: "Template for file generation (python_module, config_file, etc.)"
+        encoding:
+          type: "string"
+          description: "File encoding (utf-8, ascii, latin-1, cp1252)"
+  
+  output_format:
+    primary_mode: "json"
+    supported_modes: ["json", "text"]
+    content_types: ["application/json", "text/plain"]
+    format_schema:
+      type: "object"
+      guaranteed_fields:
+        result:
+          type: "object"
+          description: "Comprehensive operation result with status, files affected, and metadata"
+        operations_performed:
+          type: "array"
+          description: "List of all operations performed for batch processes"
+        backup_info:
+          type: "object"
+          description: "Information about backups created during operations"
+  
+  capabilities:
+    streaming: false
+    push_notifications: false
+    state_transition_history: true
+    multi_turn_conversation: true
+    context_retention: true
+    tool_usage: true
+    delegation: false
+    collaboration: false
+  
+  skills:
+    - id: "advanced_file_operations"
+      name: "Advanced File Operations"
+      description: "Comprehensive file operations including batch processing, templates, and complex manipulations"
+      complexity: "expert"
+      input_modes: ["text", "json"]
+      output_modes: ["json"]
+      examples:
+        - "Batch operations on multiple files with pattern matching"
+        - "Template-based file generation with customizable parameters"
+        - "Search and replace operations across file sets"
+        - "Safe file operations with automatic backup and rollback"
+    
+    - id: "natural_language_understanding"
+      name: "Advanced Natural Language Processing"
+      description: "Parse complex natural language descriptions to extract detailed operation parameters"
+      complexity: "expert"
+      input_modes: ["text"]
+      output_modes: ["json"]
+      examples:
+        - "Extract multiple operations from complex descriptions"
+        - "Understand context and implicit parameters in natural language"
+        - "Handle ambiguous requests with intelligent interpretation"
+  
+  performance:
+    typical_response_time: "2-10 seconds"
+    max_response_time: "120 seconds"
+    memory_usage: "100-500 MB"
+    cpu_requirements: "Medium"
+    concurrency_support: true
+    max_concurrent_sessions: 8
+    rate_limit: "50 operations/minute"
+    scaling_characteristics: "I/O and CPU bound for complex batch operations"
+  
+  usage_examples:
+    - name: "Batch File Processing"
+      description: "Process multiple files with pattern-based operations"
+      input_example:
+        input: "Create backup copies of all Python files in the src directory and move them to backups/"
+        operation: "batch"
+      expected_output:
+        result:
+          status: "success"
+          files_processed: 15
+          operations_count: 30
+        operations_performed:
+          - {operation: "backup", source: "src/module1.py", destination: "src/module1.py.bak"}
+          - {operation: "copy", source: "src/module1.py.bak", destination: "backups/module1.py.bak"}
+        backup_info:
+          backups_created: 15
+          total_size: "245KB"
+    
+    - name: "Template-based File Generation"
+      description: "Generate files from templates with custom parameters"
+      input_example:
+        input: "Create a Python module for data processing with class DataProcessor"
+        template: "python_module"
+      expected_output:
+        result:
+          status: "success"
+          file_created: "data_processing.py"
+          template_used: "python_module"
+        operations_performed:
+          - {operation: "write", file: "data_processing.py", template: "python_module", customizations: ["DataProcessor class"]}
+
 defaults:
   backup_enabled: true
   backup_extension: ".bak"

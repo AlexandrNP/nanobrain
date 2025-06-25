@@ -12,7 +12,7 @@ from nanobrain.core.workflow import (
     Workflow, WorkflowConfig, WorkflowGraph, ConfigLoader,
     ExecutionStrategy, ErrorHandlingStrategy, create_workflow
 )
-from nanobrain.core.step import StepConfig, SimpleStep
+from nanobrain.core.step import StepConfig, Step
 from nanobrain.core.data_unit import DataUnitConfig
 from nanobrain.core.executor import LocalExecutor
 
@@ -35,7 +35,7 @@ class TestWorkflowGraph:
         graph = WorkflowGraph()
         
         step_config = StepConfig(name="test_step")
-        step = SimpleStep(step_config)
+        step = Step(step_config)
         
         graph.add_step("test_step", step)
         assert "test_step" in graph.nodes
@@ -52,7 +52,7 @@ class TestWorkflowGraph:
         # Create three steps
         for i in range(3):
             step_config = StepConfig(name=f"step_{i}")
-            step = SimpleStep(step_config)
+            step = Step(step_config)
             graph.add_step(f"step_{i}", step)
         
         # Initially no cycles
@@ -84,7 +84,7 @@ class TestWorkflowGraph:
         steps = []
         for name in ['A', 'B', 'C']:
             step_config = StepConfig(name=name)
-            step = SimpleStep(step_config)
+            step = Step(step_config)
             graph.add_step(name, step)
             steps.append((name, step))
         
@@ -113,7 +113,7 @@ class TestWorkflowGraph:
         
         # Add single step - should be valid
         step_config = StepConfig(name="single_step")
-        step = SimpleStep(step_config)
+        step = Step(step_config)
         graph.add_step("single_step", step)
         
         is_valid, errors = graph.validate_graph(require_connected=False)
@@ -147,7 +147,7 @@ class TestConfigLoader:
             'steps': [
                 {
                     'step_id': 'test_step',
-                    'class': 'SimpleStep',
+                    'class': 'Step',
                     'config': {'name': 'test_step'}
                 }
             ],
@@ -214,7 +214,7 @@ class TestWorkflow:
             steps=[
                 {
                     'step_id': 'step1',
-                    'class': 'SimpleStep',
+                    'class': 'Step',
                     'config': {
                         'name': 'step1',
                         'description': 'First step'
@@ -322,7 +322,7 @@ class TestWorkflowFactory:
             steps=[
                 {
                     'step_id': 'test_step',
-                    'class': 'SimpleStep',
+                    'class': 'Step',
                     'config': {'name': 'test_step'}
                 }
             ]
@@ -348,7 +348,7 @@ class TestWorkflowFactory:
             'steps': [
                 {
                     'step_id': 'test_step',
-                    'class': 'SimpleStep',
+                    'class': 'Step',
                     'config': {'name': 'test_step'}
                 }
             ],
@@ -375,7 +375,7 @@ class TestWorkflowFactory:
             'steps': [
                 {
                     'step_id': 'yaml_step',
-                    'class': 'SimpleStep',
+                    'class': 'Step',
                     'config': {'name': 'yaml_step'}
                 }
             ],
@@ -414,7 +414,7 @@ class TestWorkflowIntegration:
             steps=[
                 {
                     'step_id': 'exec_step',
-                    'class': 'SimpleStep',
+                    'class': 'Step',
                     'config': {'name': 'exec_step'}
                 }
             ]
@@ -442,7 +442,7 @@ class TestWorkflowIntegration:
             steps=[
                 {
                     'step_id': 'inner_step',
-                    'class': 'SimpleStep',
+                    'class': 'Step',
                     'config': {'name': 'inner_step'}
                 }
             ]
@@ -454,7 +454,7 @@ class TestWorkflowIntegration:
             steps=[
                 {
                     'step_id': 'regular_step',
-                    'class': 'SimpleStep',
+                    'class': 'Step',
                     'config': {'name': 'regular_step'}
                 }
                 # Note: Nested workflows would need additional configuration

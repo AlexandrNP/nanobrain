@@ -1,54 +1,48 @@
 tool_name: mmseqs2
-installation:
-  type: conda
-  conda_package: mmseqs2
-  conda_channel: bioconda
-  git_repository: https://github.com/soedinglab/MMseqs2.git
-  environment_name: nanobrain-viral_protein-mmseqs2
-  verify_on_init: true
-clustering:
-  min_seq_id: 0.3
-  coverage: 0.8
-  cluster_mode: 0
-  sensitivity: 7.5
+tool_card:
+  name: mmseqs2
+  description: MMseqs2 ultra-fast protein sequence clustering and similarity search
+  version: 1.0.0
+  category: bioinformatics
+  capabilities:
+    - protein_clustering
+    - sequence_search
+    - similarity_analysis
+
+# Installation configuration
+conda_package: mmseqs2
+conda_channel: bioconda
+environment_name: nanobrain-viral_protein-mmseqs2
+create_isolated_environment: true
+verify_on_init: false
+
+# MMseqs2 specific settings
+min_seq_id: 0.3
+coverage: 0.8
+cluster_mode: 0
+sensitivity: 7.5
+threads: 4
+memory_limit: 8GB
+tmp_dir: /tmp/mmseqs2
+
+# Progressive scaling configuration
 progressive_scaling:
-  level_1:
+  1:
     max_sequences: 50
-    sensitivity: 4.0
-    description: Fast test - 50 sequences
-  level_2:
-    max_sequences: 100
-    sensitivity: 5.5
-    description: Basic validation - 100 sequences
-  level_3:
-    max_sequences: 500
-    sensitivity: 7.0
-    description: Medium scale - 500 sequences
-  level_4:
-    max_sequences: 2000
+    sensitivity: 5.0
+    threads: 2
+    description: "Fast test"
+  2:
+    max_sequences: 200
+    sensitivity: 6.0
+    threads: 4
+    description: "Medium scale"
+  3:
+    max_sequences: 1000
     sensitivity: 7.5
-    description: Full scale - 2000 sequences
-performance:
-  threads: 4
-  memory_limit: 8G
-  tmp_dir: null
-error_handling:
-  detailed_diagnostics: true
-  suggest_fixes: true
-  auto_retry: true
-  max_retries: 3
-  use_real_data: true
-  mock_fallback: false
-alternatives:
-  docker_image: soedinglab/mmseqs2
-  homebrew_formula: mmseqs2
-  build_from_source: true
-quality_control:
-  min_sequence_length: 10
-  validate_clustering: true
-  report_statistics: true
-_metadata:
-  last_updated: '2025-06-22T23:41:37.591407'
-  updated_by: modular_config_migration
-  migration_version: 1.0.0
-  uses_modular_config: true
+    threads: 8
+    description: "Full scale"
+
+initial_scale_level: 1
+detailed_diagnostics: true
+suggest_fixes: true

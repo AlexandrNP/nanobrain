@@ -156,7 +156,7 @@ class ResponseFormattingStep(Step):
                 else:
                     return {
                         'content': f"❌ **Annotation Job Failed**\n\n{error_msg}",
-                        'message_type': MessageType.ERROR,
+                        'message_type': MessageType.ERROR.value,
                         'requires_markdown': True,
                         'job_id': job_data.job_id,
                         'status': "failed"
@@ -167,7 +167,7 @@ class ResponseFormattingStep(Step):
                 progress = job_data.progress
                 return {
                     'content': f"🔄 **Processing Viral Annotation**\n\nProgress: {progress}%\nJob ID: `{job_data.job_id}`",
-                    'message_type': MessageType.ANNOTATION_PROGRESS,
+                    'message_type': MessageType.ANNOTATION_PROGRESS.value,
                     'requires_markdown': True,
                     'job_id': job_data.job_id,
                     'status': "running",
@@ -233,7 +233,7 @@ class ResponseFormattingStep(Step):
                 
                 return {
                     'content': "\n".join(content_parts),
-                    'message_type': MessageType.ANNOTATION_RESULT,
+                    'message_type': MessageType.ANNOTATION_RESULT.value,
                     'requires_markdown': True,
                     'job_id': job_data.job_id,
                     'status': "completed"
@@ -242,7 +242,7 @@ class ResponseFormattingStep(Step):
             # Fallback for other cases
             return {
                 'content': f"📊 **Annotation Job Status**: {job_data.status}\n\nJob ID: `{job_data.job_id}`",
-                'message_type': MessageType.INFO,
+                'message_type': MessageType.INFO.value,
                 'requires_markdown': True,
                 'job_id': job_data.job_id,
                 'status': job_data.status
@@ -252,7 +252,7 @@ class ResponseFormattingStep(Step):
             self.nb_logger.error(f"Error formatting annotation response: {e}")
             return {
                 'content': f"❌ **Error formatting response**: {str(e)}",
-                'message_type': MessageType.ERROR,
+                'message_type': MessageType.ERROR.value,
                 'requires_markdown': True,
                 'job_id': job_data.job_id if job_data else None,
                 'status': "error"
@@ -384,7 +384,7 @@ class ResponseFormattingStep(Step):
             
             return {
                 'content': "\n".join(content_parts),
-                'message_type': MessageType.ANNOTATION_RESULT,
+                'message_type': MessageType.ANNOTATION_RESULT.value,
                 'requires_markdown': True,
                 'job_id': job_data.job_id,
                 'status': "completed_with_fallback" if is_fallback else "completed",
@@ -400,7 +400,7 @@ class ResponseFormattingStep(Step):
             self.nb_logger.error(f"Error formatting PSSM response: {e}")
             return {
                 'content': f"✅ **PSSM Analysis Completed with Formatting Issues**\n\n**Job ID**: `{job_data.job_id}`\n\nThe analysis completed but there was an issue formatting the results: {str(e)}",
-                'message_type': MessageType.ANNOTATION_RESULT,
+                'message_type': MessageType.ANNOTATION_RESULT.value,
                 'requires_markdown': True,
                 'job_id': job_data.job_id,
                 'status': "completed_with_errors",
@@ -720,7 +720,7 @@ Your viral protein annotation results are ready! The analysis has identified fun
 
         return {
             'content': "\n".join(content_parts),
-            'message_type': MessageType.ANNOTATION_RESULT,
+            'message_type': MessageType.ANNOTATION_RESULT.value,
             'requires_markdown': True,
             'job_id': job_data.job_id,
             'status': "completed_mock",

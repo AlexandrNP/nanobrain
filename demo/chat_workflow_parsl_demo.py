@@ -44,7 +44,7 @@ from nanobrain.core.link import DirectLink, LinkConfig
 from nanobrain.core.step import Step, StepConfig
 from nanobrain.core.agent import ConversationalAgent, AgentConfig
 from nanobrain.core.executor import ParslExecutor, ExecutorConfig, ExecutorType
-from nanobrain.core.config.component_factory import ComponentFactory, get_factory
+from nanobrain.core.config.component_factory import ComponentFactory
 
 # Import logging system
 from nanobrain.core.logging_system import (
@@ -879,7 +879,7 @@ class ParslChatWorkflow:
     """
     
     def __init__(self):
-        self.factory = get_factory()
+        self.factory = ComponentFactory()
         self.components = {}
         self.cli = None
         self.parsl_executor = None

@@ -2,6 +2,126 @@ name: "EnhancedCollaborativeAgent"
 description: "Advanced conversational agent with A2A and MCP protocol support"
 class: "EnhancedCollaborativeAgent"
 
+# MANDATORY: Agent card section for A2A protocol compliance
+agent_card:
+  version: "1.0.0"
+  purpose: "Advanced conversational agent with multi-protocol collaboration support"
+  detailed_description: "This agent provides enhanced conversational AI capabilities with intelligent task delegation, A2A protocol support, and MCP tool integration for complex collaborative workflows."
+  domain: "collaboration"
+  expertise_level: "advanced"
+  
+  input_format:
+    primary_mode: "json"
+    supported_modes: ["json", "text"]
+    content_types: ["application/json", "text/plain"]
+    format_schema:
+      type: "object"
+      required_fields:
+        message:
+          type: "string"
+          description: "Natural language instruction or query"
+      optional_fields:
+        context:
+          type: "object"
+          description: "Conversation context and session information"
+        delegation_preferences:
+          type: "object"
+          description: "Agent delegation and tool selection preferences"
+  
+  output_format:
+    primary_mode: "json"
+    supported_modes: ["json", "text", "structured"]
+    content_types: ["application/json", "text/plain"]
+    format_schema:
+      type: "object"
+      guaranteed_fields:
+        response:
+          type: "string"
+          description: "Natural language response"
+        collaboration_metadata:
+          type: "object"
+          description: "Delegation and collaboration execution details"
+        performance_metrics:
+          type: "object"
+          description: "Performance and timing information"
+  
+  capabilities:
+    streaming: false
+    push_notifications: false
+    state_transition_history: true
+    multi_turn_conversation: true
+    context_retention: true
+    tool_usage: true
+    delegation: true
+    collaboration: true
+  
+  skills:
+    - id: "conversational_ai"
+      name: "Advanced Conversational AI"
+      description: "Natural language understanding and context-aware responses"
+      complexity: "advanced"
+      input_modes: ["text", "json"]
+      output_modes: ["text", "json", "structured"]
+      examples:
+        - "Multi-turn technical discussions"
+        - "Context-aware problem solving"
+        - "Collaborative workflow orchestration"
+    
+    - id: "task_delegation"
+      name: "Intelligent Task Delegation"
+      description: "Automatic delegation to specialized agents based on task analysis"
+      complexity: "expert"
+      input_modes: ["json"]
+      output_modes: ["json", "structured"]
+      examples:
+        - "Code generation delegation to CodeWriter agents"
+        - "File operation delegation to FileWriter agents"
+        - "Research task delegation to specialized tools"
+    
+    - id: "protocol_integration"
+      name: "Multi-Protocol Integration"
+      description: "A2A and MCP protocol support for enhanced collaboration"
+      complexity: "expert"
+      input_modes: ["json", "a2a", "mcp"]
+      output_modes: ["json", "a2a", "mcp"]
+      examples:
+        - "A2A agent-to-agent communication"
+        - "MCP tool integration and execution"
+        - "Cross-protocol workflow coordination"
+  
+  performance:
+    typical_response_time: "2-10 seconds"
+    max_response_time: "300 seconds"
+    memory_usage: "100-500 MB per session"
+    cpu_requirements: "Medium to High"
+    concurrency_support: true
+    max_concurrent_sessions: 10
+    rate_limit: "60 requests/minute"
+    scaling_characteristics: "Horizontal scaling with distributed delegation"
+  
+  usage_examples:
+    - name: "Collaborative Code Development"
+      description: "Multi-agent collaboration for complex coding tasks"
+      context: "Software development workflow"
+      input_example:
+        message: "Create a REST API for user management with authentication"
+        context:
+          project_type: "web_application"
+          programming_language: "python"
+        delegation_preferences:
+          preferred_agents: ["CodeWriterAgent", "FileWriterAgent"]
+          parallel_execution: true
+      expected_output:
+        response: "I'll coordinate with specialized agents to create a complete REST API..."
+        collaboration_metadata:
+          agents_delegated: ["CodeWriterAgent", "FileWriterAgent"]
+          tasks_completed: 3
+          execution_time: 45.2
+        performance_metrics:
+          total_processing_time: 45.2
+          delegation_overhead: 2.1
+          success_rate: 1.0
+
 defaults:
   model: "gpt-4-turbo"
   temperature: 0.7

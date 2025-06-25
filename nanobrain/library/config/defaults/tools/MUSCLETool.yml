@@ -1,0 +1,170 @@
+# MUSCLE Tool Configuration
+name: "muscle"
+description: "MUSCLE multiple sequence alignment tool"
+
+# MANDATORY: Tool card section
+tool_card:
+  version: "1.0.0"
+  purpose: "MUSCLE multiple sequence alignment tool for protein and nucleotide sequences"
+  detailed_description: "Multiple Sequence Comparison by Log-Expectation (MUSCLE) tool providing fast and accurate multiple sequence alignments with quality scoring and conservation analysis capabilities."
+  category: "bioinformatics"
+  subcategory: "sequence_alignment"
+  tags: ["alignment", "muscle", "sequence", "protein", "nucleotide", "conservation", "bioinformatics"]
+  
+  input_format:
+    primary_mode: "fasta"
+    supported_modes: ["fasta", "json"]
+    content_types: ["text/plain", "application/json"]
+    format_schema:
+      type: "object"
+      required_fields:
+        sequences:
+          type: "string"
+          description: "FASTA formatted sequences for alignment"
+        alignment_parameters:
+          type: "object"
+          description: "Alignment configuration parameters"
+      optional_fields:
+        output_format:
+          type: "string"
+          description: "Desired alignment output format"
+          enum: ["fasta", "clustal", "msf", "phylip"]
+        quality_analysis:
+          type: "boolean"
+          description: "Enable quality scoring and conservation analysis"
+  
+  output_format:
+    primary_mode: "fasta"
+    supported_modes: ["fasta", "clustal", "json"]
+    content_types: ["text/plain", "application/json"]
+    format_schema:
+      type: "object"
+      guaranteed_fields:
+        alignment:
+          type: "string"
+          description: "Multiple sequence alignment in requested format"
+        alignment_stats:
+          type: "object"
+          description: "Alignment quality and statistics"
+        conservation_profile:
+          type: "array"
+          description: "Position-wise conservation scores"
+        metadata:
+          type: "object"
+          description: "Alignment parameters and execution details"
+  
+  capabilities:
+    batch_processing: true
+    streaming: false
+    caching: true
+    rate_limiting: false
+    authentication_required: false
+    concurrent_requests: 2
+  
+  performance:
+    typical_response_time: "5-60 seconds"
+    max_response_time: "600 seconds"
+    memory_usage: "100-2000 MB"
+    cpu_requirements: "Medium"
+    concurrency_support: true
+    concurrent_limit: 2
+    scaling_characteristics: "Scales with sequence count and length"
+  
+  usage_examples:
+    - name: "Viral Protein Alignment"
+      description: "Align viral protein sequences with quality analysis"
+      input_example:
+        sequences: ">protein1\nMKVLWAAPSF...\n>protein2\nMKVLWAAPTF...\n>protein3\nMKVLWAAPAF..."
+        alignment_parameters:
+          max_iterations: 16
+          gap_open_penalty: -12.0
+          gap_extend_penalty: -1.0
+        output_format: "fasta"
+        quality_analysis: true
+      expected_output:
+        alignment: ">protein1\nMKVLWAAPSF...\n>protein2\nMKVLWAAPTF...\n>protein3\nMKVLWAAPAF..."
+        alignment_stats:
+          sequences_aligned: 3
+          alignment_length: 156
+          conserved_positions: 142
+          quality_score: 0.87
+        conservation_profile: [0.95, 0.88, 0.92, 0.76]
+        metadata:
+          iterations_used: 16
+          processing_time: 23.4
+    
+    - name: "Large Sequence Set Alignment"
+      description: "Align large sets of homologous sequences"
+      input_example:
+        sequences: ">seq1\nATCG...\n[...100 more sequences]"
+        alignment_parameters:
+          max_iterations: 8
+          diagonal_optimization: true
+        output_format: "clustal"
+        quality_analysis: false
+      expected_output:
+        alignment: "CLUSTAL format alignment..."
+        alignment_stats:
+          sequences_aligned: 100
+          alignment_length: 2456
+          gaps_percent: 15.2
+        metadata:
+          processing_time: 456.7
+
+# Installation configuration
+conda_package: "muscle"
+conda_channel: "bioconda"
+environment_name: "nanobrain-viral_protein-muscle"
+
+# Alignment parameters
+max_iterations: 16
+diagonal_optimization: true
+gap_open_penalty: -12.0
+gap_extend_penalty: -1.0
+
+# Quality parameters
+min_sequences: 3
+max_sequences: 1000
+output_format: "fasta"  # fasta, clustal, msf, phylip
+
+# Conservation analysis
+calculate_profile: true
+highly_conserved_threshold: 0.8
+position_scoring: true
+
+# Quality scoring
+quality_scoring:
+  enabled: true
+  weights:
+    conservation_score: 0.5
+    gap_penalty: 0.3
+    size_bonus: 0.2
+  thresholds:
+    high_quality_threshold: 0.7
+    acceptable_quality_threshold: 0.5
+
+# Performance settings
+parallel_processing: false
+memory_optimization: true
+
+# Output settings
+export_conservation_profile: true
+export_quality_metrics: true
+keep_intermediate_files: false
+
+# Error handling
+retry_failed_alignments: true
+max_retry_attempts: 2
+skip_problematic_clusters: true
+
+# Installation paths
+local_installation_paths:
+  - "/usr/local/bin"
+  - "/opt/homebrew/bin"
+  - "~/bin"
+
+# Framework metadata
+_metadata:
+  config_type: "muscle_tool"
+  framework_version: "1.0.0"
+  description: "MUSCLE for multiple sequence alignment" 

@@ -2,6 +2,137 @@ name: "StepCoderEnhanced"
 description: "Advanced tool for generating software code based on natural language instructions"
 class: "CodeWriterAgent"  # Use specialized CodeWriterAgent
 
+# MANDATORY: Agent card section for A2A protocol compliance
+agent_card:
+  version: "2.0.0"
+  purpose: "Advanced code generation agent with multi-language support and architectural pattern implementation"
+  detailed_description: "StepCoderEnhanced is an expert-level code generation agent capable of creating high-quality software code, implementing design patterns, and building complex architectural components across multiple programming languages."
+  domain: "software_development"
+  expertise_level: "expert"
+  
+  input_format:
+    primary_mode: "json"
+    supported_modes: ["json", "text"]
+    content_types: ["application/json", "text/plain"]
+    format_schema:
+      type: "object"
+      required_fields:
+        input:
+          type: "string"
+          description: "Detailed natural language description of code requirements (supports complex architectural patterns)"
+      optional_fields:
+        language:
+          type: "string"
+          description: "Programming language (Python, JavaScript, TypeScript, Java, Go, Rust, C++, C#)"
+        complexity_level:
+          type: "string"
+          description: "Code complexity level (simple, intermediate, advanced, expert)"
+        architecture_pattern:
+          type: "string"
+          description: "Architecture pattern to implement (MVC, Clean Architecture, Microservices, etc.)"
+  
+  output_format:
+    primary_mode: "json"
+    supported_modes: ["json", "text"]
+    content_types: ["application/json", "text/plain"]
+    format_schema:
+      type: "object"
+      guaranteed_fields:
+        generated_code:
+          type: "string"
+          description: "High-quality generated code with documentation and type hints"
+        explanation:
+          type: "string"
+          description: "Detailed explanation of the code structure and design decisions"
+        usage_examples:
+          type: "array"
+          description: "Code usage examples and integration instructions"
+        test_code:
+          type: "string"
+          description: "Unit tests for the generated code (when requested)"
+  
+  capabilities:
+    streaming: false
+    push_notifications: false
+    state_transition_history: false
+    multi_turn_conversation: true
+    context_retention: true
+    tool_usage: false
+    delegation: false
+    collaboration: false
+  
+  skills:
+    - id: "multi_language_generation"
+      name: "Multi-Language Code Generation"
+      description: "Generate high-quality code in multiple programming languages with language-specific best practices"
+      complexity: "expert"
+      input_modes: ["text", "json"]
+      output_modes: ["text", "json"]
+      examples:
+        - "Python code with type hints, docstrings, and PEP 8 compliance"
+        - "TypeScript with interfaces, generics, and comprehensive typing"
+        - "Java with design patterns, annotations, and enterprise patterns"
+        - "Go with idiomatic patterns, error handling, and performance optimization"
+    
+    - id: "architectural_patterns"
+      name: "Software Architecture Pattern Implementation"
+      description: "Implement complex software architecture patterns and design principles"
+      complexity: "expert"
+      input_modes: ["text", "json"]
+      output_modes: ["text", "json"]
+      examples:
+        - "Clean Architecture implementation with dependency injection"
+        - "Microservice architecture with API gateway and service discovery"
+        - "Event-driven architecture with message queues and event sourcing"
+        - "Plugin system with dynamic loading and dependency management"
+    
+    - id: "advanced_code_features"
+      name: "Advanced Code Features and Optimizations"
+      description: "Generate code with advanced features like error handling, logging, testing, and performance optimization"
+      complexity: "expert"
+      input_modes: ["text", "json"]
+      output_modes: ["text", "json"]
+      examples:
+        - "Comprehensive error handling with custom exceptions and recovery strategies"
+        - "Performance-optimized algorithms with complexity analysis"
+        - "Security-focused implementations with input validation and sanitization"
+        - "Concurrent and asynchronous programming patterns"
+  
+  performance:
+    typical_response_time: "5-20 seconds"
+    max_response_time: "180 seconds"
+    memory_usage: "200-600 MB"
+    cpu_requirements: "High"
+    concurrency_support: true
+    max_concurrent_sessions: 3
+    rate_limit: "20 requests/minute"
+    scaling_characteristics: "CPU-bound for complex code generation and analysis"
+  
+  usage_examples:
+    - name: "Microservice API Development"
+      description: "Generate a complete microservice with REST API, database integration, and monitoring"
+      input_example:
+        input: "Create a user management microservice with FastAPI, PostgreSQL integration, JWT authentication, rate limiting, and health monitoring"
+        language: "Python"
+        complexity_level: "expert"
+        architecture_pattern: "Microservices"
+      expected_output:
+        generated_code: "Complete FastAPI microservice with models, routes, authentication, database integration..."
+        explanation: "Detailed explanation of architecture, design decisions, and implementation patterns"
+        usage_examples: ["How to start the service", "API endpoint examples", "Database setup instructions"]
+        test_code: "Comprehensive unit and integration tests with pytest"
+    
+    - name: "Design Pattern Implementation"
+      description: "Implement a specific design pattern with real-world application"
+      input_example:
+        input: "Implement a plugin system using the Factory pattern with dynamic loading for a data processing application"
+        language: "Python"
+        complexity_level: "advanced"
+      expected_output:
+        generated_code: "Factory pattern implementation with plugin loader, registry, and dynamic instantiation"
+        explanation: "Explanation of Factory pattern benefits and implementation details"
+        usage_examples: ["How to create plugins", "Plugin registration process", "Dynamic loading examples"]
+
 defaults:
   model: "gpt-4-turbo"
   temperature: 0.2

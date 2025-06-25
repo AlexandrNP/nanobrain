@@ -1,6 +1,6 @@
 """
-Resource Monitoring System for Viral Protein Analysis Workflow
-Phase 3 Implementation - Resource Management and Workflow Control
+Resource Monitoring System for NanoBrain Framework
+Enhanced Implementation - Resource Management and Workflow Control
 
 Provides comprehensive resource monitoring with configurable thresholds,
 automatic workflow pausing, and user notification system.

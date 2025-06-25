@@ -37,7 +37,7 @@ from nanobrain.core.link import DirectLink, LinkConfig
 from nanobrain.core.step import Step, StepConfig
 from nanobrain.core.agent import ConversationalAgent, AgentConfig
 from nanobrain.core.executor import LocalExecutor, ExecutorConfig
-from nanobrain.core.config.component_factory import ComponentFactory, get_factory
+from nanobrain.core.config.component_factory import ComponentFactory
 
 # Import logging system
 from nanobrain.core.logging_system import NanoBrainLogger, get_logger, set_debug_mode, OperationType
@@ -563,7 +563,7 @@ class ChatWorkflow:
     """
     
     def __init__(self):
-        self.factory = get_factory()
+        self.factory = ComponentFactory()
         self.components = {}
         self.cli = None
         self.executor = None

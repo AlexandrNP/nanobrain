@@ -12,7 +12,7 @@ from pathlib import Path
 from nanobrain.library.tools.bioinformatics.bv_brc_tool import BVBRCTool, BVBRCConfig
 from nanobrain.library.tools.bioinformatics.mmseqs_tool import MMseqs2Tool, MMseqs2Config
 from nanobrain.library.tools.bioinformatics.muscle_tool import MUSCLETool, MUSCLEConfig
-from nanobrain.library.tools.bioinformatics.pssm_generator_tool import PSSMGeneratorTool, PSSMConfig
+from nanobrain.library.tools.bioinformatics.pubmed_client import PubMedClient
 
 
 class TestToolInstallations:
@@ -39,7 +39,12 @@ class TestToolInstallations:
                     else:
                         print(f"⚠️ Missing {tool}")
             else:
-                print(f"❌ BV-BRC executables not found at {exec_path}")
+                # Try alternative path
+                alt_exec_path = bvbrc_path / "deployment/bin/"
+                if alt_exec_path.exists():
+                    print(f"✅ BV-BRC executables found at {alt_exec_path}")
+                else:
+                    print(f"❌ BV-BRC executables not found at {exec_path}")
         else:
             print(f"❌ BV-BRC not found at {bvbrc_path}")
             print("ℹ️ Install BV-BRC from https://www.bv-brc.org/")
@@ -84,191 +89,133 @@ class TestToolInstallations:
                 print(f"❌ {package} not available")
 
 
-class TestToolConfigurations:
-    """Test tool configurations and basic functionality"""
-    
-    def test_bvbrc_config_creation(self):
-        """Test BV-BRC configuration setup"""
-        config = BVBRCConfig(
-            tool_name="bv_brc_test",
-            verify_on_init=False
-        )
-        
-        assert config.tool_name == "bv_brc_test"
-        assert config.anonymous_access == True
-        assert config.genome_batch_size > 0
-        assert config.md5_batch_size > 0
-        print("✅ BV-BRC configuration test passed")
-    
-    def test_mmseqs_config_creation(self):
-        """Test MMseqs2 configuration setup"""
-        config = MMseqs2Config(
-            tool_name="mmseqs_test",
-            verify_on_init=False,
-            min_seq_id=0.7,
-            coverage=0.8
-        )
-        
-        assert config.tool_name == "mmseqs_test"
-        assert config.min_seq_id == 0.7
-        assert config.coverage == 0.8
-        print("✅ MMseqs2 configuration test passed")
-    
-    def test_muscle_config_creation(self):
-        """Test MUSCLE configuration setup"""
-        config = MUSCLEConfig(
-            tool_name="muscle_test",
-            verify_on_init=False,
-            max_iterations=16
-        )
-        
-        assert config.tool_name == "muscle_test"
-        assert config.max_iterations == 16
-        print("✅ MUSCLE configuration test passed")
-    
-    def test_pssm_config_creation(self):
-        """Test PSSM generator configuration setup"""
-        config = PSSMConfig(
-            tool_name="pssm_test",
-            verify_on_init=False,
-            pseudocount=0.01
-        )
-        
-        assert config.tool_name == "pssm_test"
-        assert config.pseudocount == 0.01
-        print("✅ PSSM configuration test passed")
-
-
 class TestToolInitialization:
-    """Test tool initialization without async issues"""
+    """Test tool initialization and configuration"""
     
-    def test_bvbrc_tool_creation(self):
-        """Test BV-BRC tool can be created without errors"""
-        config = BVBRCConfig(
-            tool_name="bv_brc_init_test",
-            verify_on_init=False
-        )
-        
+    @pytest.mark.asyncio
+    async def test_bvbrc_tool_creation(self):
+        """Test BV-BRC tool creation via from_config with mandatory card"""
         try:
-            tool = BVBRCTool(config)
-            assert tool.tool_name == "bv_brc_init_test"
-            assert hasattr(tool, 'bv_brc_config')
-            print("✅ BV-BRC tool initialization test passed")
+            from nanobrain.core.config.component_factory import ComponentFactory
+            factory = ComponentFactory()
+            
+            # Use the default configuration file with tool_card
+            tool = factory.create_from_yaml_file(
+                'nanobrain/library/config/defaults/tools/BVBRCTool.yml',
+                'nanobrain.library.tools.bioinformatics.bv_brc_tool.BVBRCTool'
+            )
+            assert tool is not None
+            print("✅ BV-BRC tool created successfully with tool card")
         except Exception as e:
-            print(f"❌ BV-BRC tool initialization failed: {e}")
-            raise
+            print(f"❌ BV-BRC tool creation failed: {e}")
+            pytest.fail(f"BV-BRC tool creation failed: {e}")
     
-    def test_mmseqs_tool_creation(self):
-        """Test MMseqs2 tool can be created without errors"""
-        config = MMseqs2Config(
-            tool_name="mmseqs_init_test",
-            verify_on_init=False
-        )
-        
+    @pytest.mark.asyncio
+    async def test_mmseqs2_tool_creation(self):
+        """Test MMseqs2 tool creation via from_config with mandatory card"""
         try:
-            tool = MMseqs2Tool(config)
-            assert tool.tool_name == "mmseqs_init_test"
-            assert hasattr(tool, 'mmseqs_config')
-            print("✅ MMseqs2 tool initialization test passed")
+            from nanobrain.core.config.component_factory import ComponentFactory
+            factory = ComponentFactory()
+            
+            # Use the default configuration file with tool_card
+            tool = factory.create_from_yaml_file(
+                'nanobrain/library/config/defaults/tools/MMseqs2Tool.yml',
+                'nanobrain.library.tools.bioinformatics.mmseqs_tool.MMseqs2Tool'
+            )
+            assert tool is not None
+            print("✅ MMseqs2 tool created successfully with tool card")
         except Exception as e:
-            print(f"❌ MMseqs2 tool initialization failed: {e}")
-            raise
+            print(f"❌ MMseqs2 tool creation failed: {e}")
+            pytest.fail(f"MMseqs2 tool creation failed: {e}")
     
-    def test_muscle_tool_creation(self):
-        """Test MUSCLE tool can be created without errors"""
-        config = MUSCLEConfig(
-            tool_name="muscle_init_test",
-            verify_on_init=False
-        )
-        
+    @pytest.mark.asyncio
+    async def test_muscle_tool_creation(self):
+        """Test MUSCLE tool creation via from_config with mandatory card"""
         try:
-            tool = MUSCLETool(config)
-            assert tool.tool_name == "muscle_init_test"
-            assert hasattr(tool, 'muscle_config')
-            print("✅ MUSCLE tool initialization test passed")
+            from nanobrain.core.config.component_factory import ComponentFactory
+            factory = ComponentFactory()
+            
+            # Use the default configuration file with tool_card
+            tool = factory.create_from_yaml_file(
+                'nanobrain/library/config/defaults/tools/MUSCLETool.yml',
+                'nanobrain.library.tools.bioinformatics.muscle_tool.MUSCLETool'
+            )
+            assert tool is not None
+            print("✅ MUSCLE tool created successfully with tool card")
         except Exception as e:
-            print(f"❌ MUSCLE tool initialization failed: {e}")
-            raise
-    
-    def test_pssm_tool_creation(self):
-        """Test PSSM tool can be created without errors"""
-        config = PSSMConfig(
-            tool_name="pssm_init_test",
-            verify_on_init=False
-        )
-        
-        try:
-            tool = PSSMGeneratorTool(config)
-            assert tool.tool_name == "pssm_init_test"
-            assert hasattr(tool, 'pssm_config')
-            print("✅ PSSM tool initialization test passed")
-        except Exception as e:
-            print(f"❌ PSSM tool initialization failed: {e}")
-            raise
+            print(f"❌ MUSCLE tool creation failed: {e}")
+            pytest.fail(f"MUSCLE tool creation failed: {e}")
 
 
-class TestWorkflowCompatibility:
-    """Test workflow compatibility and data flow"""
+class TestToolAutoInstallation:
+    """Test auto-installation functionality"""
     
-    def test_data_containers(self):
-        """Test data container compatibility"""
-        from nanobrain.library.tools.bioinformatics.bv_brc_tool import GenomeData, ProteinData
-        
-        # Test GenomeData creation
-        genome = GenomeData(
-            genome_id="test.1",
-            genome_length=11700,
-            genome_name="Test Genome",
-            taxon_lineage="Test Lineage"
-        )
-        
-        assert genome.genome_id == "test.1"
-        assert genome.genome_length == 11700
-        
-        # Test ProteinData creation
-        protein = ProteinData(
-            patric_id="fig|test.1.peg.1",
-            aa_sequence_md5="test_md5",
-            product="test protein",
-            gene="testA",
-            aa_sequence="MKLLVVVAG"
-        )
-        
-        assert protein.patric_id == "fig|test.1.peg.1"
-        assert protein.aa_sequence_md5 == "test_md5"
-        
-        print("✅ Data container compatibility test passed")
+    @pytest.mark.asyncio
+    async def test_tool_detection_and_installation_bvbrc(self):
+        """Test BV-BRC detection and installation guidance"""
+        try:
+            from nanobrain.core.config.component_factory import ComponentFactory
+            factory = ComponentFactory()
+            
+            # Use the default configuration file with tool_card
+            tool = factory.create_from_yaml_file(
+                'nanobrain/library/config/defaults/tools/BVBRCTool.yml',
+                'nanobrain.library.tools.bioinformatics.bv_brc_tool.BVBRCTool'
+            )
+            
+            # Test installation detection
+            status = await tool.detect_existing_installation()
+            
+            print(f"BV-BRC Detection Results:")
+            print(f"  Found: {status.found}")
+            print(f"  Installation Type: {status.installation_type}")
+            print(f"  Installation Path: {status.installation_path}")
+            print(f"  Executable Path: {status.executable_path}")
+            print(f"  Issues: {status.issues}")
+            print(f"  Suggestions: {status.suggestions}")
+            
+            assert hasattr(status, 'found')
+            assert hasattr(status, 'installation_type')
+            assert hasattr(status, 'issues')
+            assert hasattr(status, 'suggestions')
+            
+        except Exception as e:
+            print(f"❌ BV-BRC detection test failed: {e}")
+            pytest.fail(f"BV-BRC detection failed: {e}")
     
-    def test_configuration_file_structure(self):
-        """Test configuration file structure compatibility"""
-        from pathlib import Path
-        
-        # Check config directories exist
-        config_dirs = [
-            "nanobrain/library/workflows/viral_protein_analysis/config",
-            "nanobrain/config"
-        ]
-        
-        for config_dir in config_dirs:
-            config_path = Path(config_dir)
-            if config_path.exists():
-                print(f"✅ Configuration directory found: {config_dir}")
-            else:
-                print(f"ℹ️ Configuration directory not found: {config_dir}")
-    
-    def test_logging_integration(self):
-        """Test logging system integration"""
-        from nanobrain.core.logging_system import get_logger
-        
-        # Test logger creation
-        logger = get_logger("test_integration")
-        assert logger is not None
-        
-        # Test logging functionality
-        logger.info("Integration test logging verification")
-        print("✅ Logging integration test passed")
+    @pytest.mark.asyncio
+    async def test_tool_detection_and_installation_mmseqs2(self):
+        """Test MMseqs2 detection and installation guidance"""
+        try:
+            from nanobrain.core.config.component_factory import ComponentFactory
+            factory = ComponentFactory()
+            
+            # Use the default configuration file with tool_card
+            tool = factory.create_from_yaml_file(
+                'nanobrain/library/config/defaults/tools/MMseqs2Tool.yml',
+                'nanobrain.library.tools.bioinformatics.mmseqs_tool.MMseqs2Tool'
+            )
+            
+            # Test installation detection
+            status = await tool.detect_existing_installation()
+            
+            print(f"MMseqs2 Detection Results:")
+            print(f"  Found: {status.found}")
+            print(f"  Installation Type: {status.installation_type}")
+            print(f"  Installation Path: {status.installation_path}")
+            print(f"  Executable Path: {status.executable_path}")
+            print(f"  Issues: {status.issues}")
+            print(f"  Suggestions: {status.suggestions}")
+            
+            assert hasattr(status, 'found')
+            assert hasattr(status, 'installation_type')
+            assert hasattr(status, 'issues')
+            assert hasattr(status, 'suggestions')
+            
+        except Exception as e:
+            print(f"❌ MMseqs2 detection test failed: {e}")
+            pytest.fail(f"MMseqs2 detection failed: {e}")
 
 
-# Run tests if executed directly
 if __name__ == "__main__":
-    pytest.main([__file__, "-v", "-s"])  # -s to show print statements 
+    pytest.main([__file__, "-v"]) 

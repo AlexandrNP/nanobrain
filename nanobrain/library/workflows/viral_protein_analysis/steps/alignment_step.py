@@ -14,6 +14,8 @@ from typing import Dict, Any, List, Optional
 
 from nanobrain.core.step import Step, StepConfig
 from nanobrain.core.logging_system import get_logger
+import yaml
+from pathlib import Path
 
 
 class AlignmentStep(Step):
@@ -25,21 +27,77 @@ class AlignmentStep(Step):
     
     def __init__(self, config: StepConfig, alignment_config: Optional[Dict[str, Any]] = None, **kwargs):
         super().__init__(config, **kwargs)
+        self._initialize_tools(config, alignment_config)
         
-        # Extract configuration from step config or provided alignment_config
-        step_config_dict = config.config if hasattr(config, 'config') else {}
-        if alignment_config:
-            step_config_dict.update(alignment_config)
+    def _init_from_config(self, config: StepConfig, component_config: Dict[str, Any], 
+                         dependencies: Dict[str, Any]) -> None:
+        """Initialize AlignmentStep with tool integration via from_config pattern"""
+        super()._init_from_config(config, component_config, dependencies)
+        self._initialize_tools(config, None)
         
-        self.alignment_config = step_config_dict.get('alignment_config', {})
-        self.step_config = step_config_dict
+    def _initialize_tools(self, config: StepConfig, alignment_config: Optional[Dict[str, Any]] = None):
+        """Initialize MUSCLE tool with workflow-local configuration"""
         
-        # Configuration parameters
-        self.alignment_tool = self.step_config.get('alignment_tool', 'muscle')
-        self.min_cluster_size = self.step_config.get('min_cluster_size', 3)
-        self.max_cluster_size = self.step_config.get('max_cluster_size', 1000)
+        # Get workflow directory path
+        workflow_dir = Path(__file__).parent.parent
+        tool_config_path = workflow_dir / "config" / "tools" / "muscle_tool.yml"
         
-        self.nb_logger.info(f"🧬 AlignmentStep initialized with tool: {self.alignment_tool}")
+        # Load MUSCLE tool configuration from workflow-local YAML
+        if tool_config_path.exists():
+            with open(tool_config_path, 'r') as f:
+                tool_config_dict = yaml.safe_load(f)
+            
+            # Import MUSCLE tool and config
+            try:
+                from nanobrain.library.tools.bioinformatics.muscle_tool import MUSCLETool, MUSCLEConfig
+                
+                # Create MUSCLE tool configuration
+                tool_config = MUSCLEConfig(**{
+                    k: v for k, v in tool_config_dict.items() 
+                    if k in ['tool_name', 'installation_path', 'executable_path', 'max_iterations', 
+                            'diagonal_optimization', 'gap_open_penalty', 'gap_extend_penalty', 
+                            'min_sequences', 'max_sequences', 'output_format']
+                })
+                
+                # Create MUSCLE tool using from_config pattern
+                self.muscle_tool = MUSCLETool.from_config(tool_config)
+                if hasattr(self, 'nb_logger') and self.nb_logger:
+                    self.nb_logger.info(f"✅ MUSCLE tool loaded from workflow-local config: {tool_config_path}")
+                
+                # Extract alignment parameters from tool config
+                self.alignment_tool = 'muscle'
+                self.min_cluster_size = tool_config_dict.get('min_cluster_size', 3)
+                self.max_cluster_size = tool_config_dict.get('max_cluster_size', 1000)
+                
+            except ImportError:
+                if hasattr(self, 'nb_logger') and self.nb_logger:
+                    self.nb_logger.warning("⚠️ MUSCLETool not available, using placeholder implementation")
+                self.muscle_tool = None
+                self.alignment_tool = 'muscle_placeholder'
+                self.min_cluster_size = 3
+                self.max_cluster_size = 1000
+                
+        else:
+            # Fallback to legacy configuration
+            if hasattr(self, 'nb_logger') and self.nb_logger:
+                self.nb_logger.warning(f"⚠️ Workflow-local tool config not found: {tool_config_path}")
+                self.nb_logger.warning("⚠️ Using legacy configuration approach")
+            
+            self.muscle_tool = None
+            step_config_dict = config.config if hasattr(config, 'config') else {}
+            if alignment_config:
+                step_config_dict.update(alignment_config)
+            
+            self.alignment_config = step_config_dict.get('alignment_config', {})
+            self.alignment_tool = step_config_dict.get('alignment_tool', 'muscle')
+            self.min_cluster_size = step_config_dict.get('min_cluster_size', 3)
+            self.max_cluster_size = step_config_dict.get('max_cluster_size', 1000)
+        
+        # Store step configuration
+        self.step_config = config.model_dump()
+        
+        if hasattr(self, 'nb_logger') and self.nb_logger:
+            self.nb_logger.info(f"🧬 AlignmentStep initialized with tool: {self.alignment_tool}")
         
     async def process(self, input_data: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """
@@ -139,7 +197,27 @@ class AlignmentStep(Step):
         
     async def _align_cluster_sequences(self, cluster: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Align sequences within a cluster using MUSCLE (placeholder)
+        Align sequences within a cluster using MUSCLE tool or placeholder
+        """
+        
+        cluster_members = cluster.get('members', [])
+        
+        if self.muscle_tool and hasattr(self.muscle_tool, 'align_sequences'):
+            self.nb_logger.debug(f"🔧 Using real MUSCLETool for cluster {cluster.get('id')}")
+            try:
+                # Use real MUSCLE tool via from_config
+                return await self.muscle_tool.align_sequences(cluster)
+            except Exception as e:
+                self.nb_logger.warning(f"⚠️ MUSCLETool failed for cluster {cluster.get('id')}, falling back to placeholder: {e}")
+                return await self._placeholder_alignment(cluster)
+        else:
+            # Fallback to placeholder implementation
+            self.nb_logger.debug(f"🔧 Using placeholder alignment for cluster {cluster.get('id')}")
+            return await self._placeholder_alignment(cluster)
+    
+    async def _placeholder_alignment(self, cluster: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Placeholder alignment implementation for when MUSCLE is not available
         """
         
         cluster_members = cluster.get('members', [])

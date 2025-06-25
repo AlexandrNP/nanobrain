@@ -3,39 +3,31 @@ NanoBrain Bioinformatics Tools Package
 
 This package contains specialized bioinformatics tools for the NanoBrain framework,
 including wrappers for external tools like BV-BRC, MMseqs2, MUSCLE, PubMed, and others.
+
+Note: Common classes like InstallationStatus, DiagnosticReport, ToolInstallationError,
+and ToolExecutionError are available from nanobrain.core.external_tool.
 """
 
-from .base_bioinformatics_tool import (
-    BioinformaticsExternalTool,
-    BioinformaticsToolConfig,
-    InstallationStatus,
-    DiagnosticReport,
-    BioinformaticsToolError,
-    ToolInstallationError,
-    ToolExecutionError
-)
-from .bv_brc_tool import BVBRCTool, BVBRCConfig, GenomeData, ProteinData, BVBRCDataError, BVBRCInstallationError
+from .bv_brc_tool import BVBRCTool, GenomeData, ProteinData, BVBRCDataError, BVBRCInstallationError, BVBRCConfig
 from .mmseqs_tool import MMseqs2Tool, MMseqs2Config
-from .pubmed_client import PubMedClient, PubMedConfig, LiteratureReference, PubMedError
+from .muscle_tool import MUSCLETool, MUSCLEConfig
+from .pubmed_client import PubMedClient, PubMedConfig
 
 __all__ = [
-    "BioinformaticsExternalTool",
-    "BioinformaticsToolConfig", 
-    "InstallationStatus",
-    "DiagnosticReport",
-    "BioinformaticsToolError",
-    "ToolInstallationError",
-    "ToolExecutionError",
-    "BVBRCTool",
+    # Configuration classes
     "BVBRCConfig",
-    "GenomeData", 
-    "ProteinData",
-    "BVBRCDataError",
-    "BVBRCInstallationError",
-    "MMseqs2Tool",
-    "MMseqs2Config",
-    "PubMedClient",
+    "MMseqs2Config", 
+    "MUSCLEConfig",
     "PubMedConfig",
-    "LiteratureReference",
-    "PubMedError"
+    # Tool classes
+    "BVBRCTool",
+    "MMseqs2Tool", 
+    "MUSCLETool",
+    "PubMedClient",
+    # Data structures
+    "GenomeData",
+    "ProteinData",
+    # Exceptions
+    "BVBRCDataError",
+    "BVBRCInstallationError"
 ] 

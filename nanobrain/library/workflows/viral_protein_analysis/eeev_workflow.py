@@ -10,7 +10,7 @@ from typing import Dict, Any, Optional
 from pathlib import Path
 
 from .alphavirus_workflow import AlphavirusWorkflow, WorkflowData, WorkflowResult
-from .config.workflow_config import AlphavirusWorkflowConfig
+from nanobrain.core.workflow import WorkflowConfig
 
 
 class EEEVWorkflow(AlphavirusWorkflow):
@@ -24,13 +24,15 @@ class EEEVWorkflow(AlphavirusWorkflow):
     - Metadata generation
     """
     
-    def __init__(self, config: Optional[AlphavirusWorkflowConfig] = None):
+    def __init__(self, config: Optional[WorkflowConfig] = None):
         """Initialize EEEV workflow with customized configuration"""
         
         # Load and customize config for EEEV
         if config is None:
+            from nanobrain.core.workflow import ConfigLoader
             config_path = Path(__file__).parent / "config" / "AlphavirusWorkflow.yml"
-            config = AlphavirusWorkflowConfig.from_file(str(config_path))
+            config_loader = ConfigLoader(base_path=str(Path(__file__).parent))
+            config = config_loader.load_workflow_config(str(config_path))
         
         # Apply EEEV-specific customizations
         self._customize_config_for_eeev(config)
@@ -43,24 +45,28 @@ class EEEVWorkflow(AlphavirusWorkflow):
         self.logger = get_logger("eeev_workflow")
         self.logger.info("Initialized EEEV-specific workflow")
     
-    def _customize_config_for_eeev(self, config: AlphavirusWorkflowConfig) -> None:
+    def _customize_config_for_eeev(self, config: WorkflowConfig) -> None:
         """Customize configuration specifically for EEEV analysis"""
         
         # EEEV-specific naming
         config.name = "eeev_analysis"
         config.description = "Eastern Equine Encephalitis Virus protein analysis using BV-BRC and MMseqs2"
         
+        # Note: Since we're now using WorkflowConfig instead of AlphavirusWorkflowConfig,
+        # we'll set these as attributes that can be used by the workflow steps
+        if not hasattr(config, 'eeev_config'):
+            config.eeev_config = {}
+        
         # EEEV genome size constraints (typical EEEV ~11.7kb)
-        config.bvbrc.min_length = 10500  # Allow some variation
-        config.bvbrc.max_length = 12500
-        config.bvbrc.genus = "Alphavirus"
+        config.eeev_config['min_length'] = 10500  # Allow some variation
+        config.eeev_config['max_length'] = 12500
+        config.eeev_config['genus'] = "Alphavirus"
         
         # EEEV-specific output directory
-        if not config.output.base_directory.endswith("eeev_analysis"):
-            config.output.base_directory = str(Path(config.output.base_directory) / "eeev_analysis")
+        config.eeev_config['base_directory'] = "eeev_analysis"
         
         # EEEV-specific output file naming
-        config.output.output_files = {
+        config.eeev_config['output_files'] = {
             "filtered_genomes": "eeev_filtered_genomes.json",
             "unique_proteins": "eeev_unique_proteins.fasta",
             "clusters": "eeev_clusters.json", 
@@ -71,7 +77,7 @@ class EEEVWorkflow(AlphavirusWorkflow):
         }
         
         # EEEV-specific protein length expectations
-        config.quality_control.expected_lengths = {
+        config.eeev_config['expected_lengths'] = {
             "nsP1": [520, 580],    # EEEV nsP1 ~549 aa
             "nsP2": [770, 820],    # EEEV nsP2 ~798 aa
             "nsP3": [500, 560],    # EEEV nsP3 ~530 aa  
@@ -84,10 +90,12 @@ class EEEVWorkflow(AlphavirusWorkflow):
         }
         
         # EEEV-specific quality thresholds
-        config.quality_control.min_sequence_length = 30  # Minimum protein length
-        config.quality_control.max_sequence_length = 1000  # Maximum expected protein length
-        config.quality_control.remove_duplicates = True
-        config.quality_control.validate_protein_families = True
+        config.eeev_config['quality_control'] = {
+            'min_sequence_length': 30,  # Minimum protein length
+            'max_sequence_length': 1000,  # Maximum expected protein length
+            'remove_duplicates': True,
+            'validate_protein_families': True
+        }
     
     async def execute_full_workflow(self, target_organism: str = "Eastern equine encephalitis virus") -> WorkflowResult:
         """

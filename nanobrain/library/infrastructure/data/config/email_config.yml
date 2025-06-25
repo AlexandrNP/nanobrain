@@ -1,0 +1,67 @@
+email_config:
+  default_email: "user@example.com"
+  
+  service_usage:
+    api_service:
+      required: false
+      use_email: false
+      description: "Internal API services"
+      
+    external_api:
+      required: true
+      use_email: true
+      description: "External API services requiring email identification"
+      
+    data_service:
+      required: true
+      use_email: true
+      description: "Data processing services"
+      fallback_with_auth: true
+      
+    computation_service:
+      required: false
+      use_email: false
+      description: "Computational services"
+      
+  environments:
+    testing:
+      timeout_seconds: 10
+      timeout_hours: 1
+      mock_api_calls: true
+      use_cached_responses: true
+      
+    development:
+      timeout_seconds: 30
+      timeout_hours: 2
+      mock_api_calls: false
+      use_cached_responses: true
+      
+    production:
+      timeout_seconds: 60
+      timeout_hours: 48
+      mock_api_calls: false
+      use_cached_responses: false
+      
+  rate_limiting:
+    external_api:
+      max_requests_per_hour: 100
+      max_requests_per_second: 1
+      
+    data_service:
+      max_requests_per_hour: 50
+      max_requests_per_second: 0.5
+      
+  service_specific:
+    external_api:
+      search_terms: []
+      priority_items: []
+      expected_response_format:
+        type: "json"
+        required_fields: []
+        
+    data_service:
+      search_terms: []
+      priority_items: []
+      expected_response_format:
+        type: "structured"
+        required_fields: [] 

@@ -78,8 +78,21 @@ def _convert_dict_to_config_object(class_path: str, config_dict: Dict[str, Any])
     Returns:
         Appropriate config object
     """
-    # Determine config class based on component class path
-    if 'executor' in class_path.lower():
+    # MANDATORY: Check for agent_card/tool_card sections first
+    # All configurations with card sections must use standard config classes
+    if 'agent_card' in config_dict and 'agent' in class_path.lower():
+        from nanobrain.core.agent import AgentConfig
+        logger.debug(f"Using AgentConfig with agent_card for {class_path}")
+        return AgentConfig(**config_dict)
+    elif 'tool_card' in config_dict and any(term in class_path.lower() for term in ['tool', 'client']):
+        # Always use generic ToolConfig for tools with tool_card
+        # Individual tools will convert to specific configs in their from_config methods
+        from nanobrain.core.tool import ToolConfig
+        logger.debug(f"Using generic ToolConfig with tool_card for {class_path}")
+        return ToolConfig(**config_dict)
+    
+    # Determine config class based on component class path (existing logic)
+    elif 'executor' in class_path.lower():
         from nanobrain.core.executor import ExecutorConfig
         return ExecutorConfig(**config_dict)
     elif 'agent' in class_path.lower():
@@ -166,6 +179,8 @@ class ComponentFactory:
         
         # Convert dict to appropriate config object based on component type
         return self.create_component_from_config(class_path, config_dict, **kwargs)
+    
+
 
 
 # Backwards compatibility note: Legacy global functions removed

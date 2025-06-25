@@ -1,0 +1,44 @@
+cache_config:
+  storage:
+    memory_cache:
+      max_size_mb: 512
+      ttl_hours: 24
+      
+    disk_cache:
+      directory: "data/cache"
+      max_size_gb: 5
+      ttl_days: 7
+      
+  strategies:
+    api_service:
+      aggressive_caching: true
+      cache_duration_days: 30
+      deduplicate_similar: true
+      similarity_threshold: 0.95
+      description: "External API services requiring aggressive caching"
+      
+    data_service:
+      cache_duration_hours: 168  # 7 days
+      compress_large_responses: true
+      description: "Data processing services with large responses"
+      
+    external_service:
+      cache_duration_hours: 24
+      compress_large_responses: false
+      description: "General external services"
+      
+    computation_service:
+      cache_duration_hours: 72  # 3 days
+      compress_large_responses: true
+      description: "Computational services with expensive operations"
+      
+  preload:
+    enabled: true
+    common_queries: []
+    warmup_on_startup: false
+    
+  cleanup:
+    auto_cleanup_enabled: true
+    cleanup_interval_hours: 24
+    max_age_days: 30
+    max_cache_size_gb: 10 

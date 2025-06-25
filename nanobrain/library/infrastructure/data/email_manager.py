@@ -1,6 +1,6 @@
 """
-Enhanced Email Manager for Viral Protein Analysis Workflow
-Phase 3 Implementation - Email Manager with Optional Usage
+Enhanced Email Manager for NanoBrain Framework
+Service Integration Implementation - Email Manager with Configurable Usage
 
 Provides configurable email management with service-specific usage patterns,
 rate limiting, and environment-aware configuration.
@@ -38,10 +38,10 @@ class EmailManager:
         
         # Load configuration
         if config_path is None:
-            config_path = "nanobrain/library/workflows/viral_protein_analysis/config/email_config.yml"
+            config_path = "nanobrain/library/infrastructure/data/config/email_config.yml"
         
         self.config = self._load_config(config_path)
-        self.email = self.config.get("email_config", {}).get("default_email", "onarykov@anl.gov")
+        self.email = self.config.get("email_config", {}).get("default_email", "user@example.com")
         
         # Initialize rate limiting tracking
         self._rate_limit_tracker = {}
@@ -70,11 +70,11 @@ class EmailManager:
         """Get default configuration if file loading fails."""
         return {
             "email_config": {
-                "default_email": "onarykov@anl.gov",
+                "default_email": "user@example.com",
                 "service_usage": {
-                    "bvbrc_api": {"required": False, "use_email": False},
-                    "pubmed_api": {"required": True, "use_email": True},
-                    "ncbi_entrez": {"required": True, "use_email": True}
+                    "api_service": {"required": False, "use_email": False},
+                    "external_api": {"required": True, "use_email": True},
+                    "data_service": {"required": True, "use_email": True}
                 },
                 "environments": {
                     "testing": {"timeout_seconds": 10, "mock_api_calls": True},
@@ -89,7 +89,7 @@ class EmailManager:
         Return email only if required and configured for service.
         
         Args:
-            service: Service name (e.g., 'pubmed_api', 'bvbrc_api')
+            service: Service name (e.g., 'external_api', 'api_service')
             
         Returns:
             Email address if required for service, None otherwise
@@ -218,23 +218,26 @@ class EmailManager:
         service_config = self.config.get("email_config", {}).get("service_usage", {}).get(service, {})
         return service_config.get("description", f"Service: {service}")
     
-    def get_eeev_config(self) -> Dict[str, Any]:
+    def get_service_config(self, service: str) -> Dict[str, Any]:
         """
-        Get EEEV-specific configuration.
+        Get service-specific configuration.
         
+        Args:
+            service: Service name
+            
         Returns:
-            EEEV configuration dictionary
+            Service configuration dictionary
         """
-        eeev_config = self.config.get("email_config", {}).get("eeev_specific", {})
+        service_config = self.config.get("email_config", {}).get("service_specific", {}).get(service, {})
         
-        # Default EEEV configuration
-        default_eeev = {
-            "literature_search_terms": ["Eastern equine encephalitis virus", "EEEV", "alphavirus"],
-            "priority_proteins": ["capsid protein", "envelope protein E1", "envelope protein E2", "6K protein"],
-            "expected_genome_size": {"min_kb": 10.5, "max_kb": 12.5, "typical_kb": 11.7}
+        # Default service configuration
+        default_config = {
+            "search_terms": [],
+            "priority_items": [],
+            "expected_response_format": {}
         }
         
-        return {**default_eeev, **eeev_config}
+        return {**default_config, **service_config}
     
     def validate_configuration(self) -> List[str]:
         """
@@ -252,7 +255,7 @@ class EmailManager:
         
         # Check service configurations
         service_usage = email_config.get("service_usage", {})
-        required_services = ["pubmed_api", "bvbrc_api", "ncbi_entrez"]
+        required_services = ["external_api", "api_service", "data_service"]
         
         for service in required_services:
             if service not in service_usage:

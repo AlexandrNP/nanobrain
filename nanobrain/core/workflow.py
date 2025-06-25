@@ -359,7 +359,12 @@ class WorkflowGraph:
         if target_id not in self.nodes:
             raise ValueError(f"Target step {target_id} not found in workflow graph")
         
-        self.edges[link_id] = link
+        # Store link with source/target IDs for validation
+        self.edges[link_id] = {
+            'link': link,
+            'source_id': source_id,
+            'target_id': target_id
+        }
         self.adjacency[source_id].add(target_id)
         self.reverse_adjacency[target_id].add(source_id)
         
@@ -375,9 +380,8 @@ class WorkflowGraph:
         
         # Remove all edges involving this step
         edges_to_remove = []
-        for link_id, link in self.edges.items():
-            if (hasattr(link, 'source') and getattr(link.source, 'name', None) == step_id) or \
-               (hasattr(link, 'target') and getattr(link.target, 'name', None) == step_id):
+        for link_id, link_info in self.edges.items():
+            if link_info['source_id'] == step_id or link_info['target_id'] == step_id:
                 edges_to_remove.append(link_id)
         
         for link_id in edges_to_remove:
@@ -403,11 +407,11 @@ class WorkflowGraph:
         if link_id not in self.edges:
             raise ValueError(f"Link {link_id} not found in workflow graph")
         
-        link = self.edges[link_id]
+        link_info = self.edges[link_id]
         
-        # Find source and target step IDs
-        source_id = getattr(link.source, 'name', None)
-        target_id = getattr(link.target, 'name', None)
+        # Get source and target step IDs from stored info
+        source_id = link_info['source_id']
+        target_id = link_info['target_id']
         
         if source_id and target_id:
             self.adjacency[source_id].discard(target_id)
@@ -423,7 +427,8 @@ class WorkflowGraph:
     
     def get_link(self, link_id: str) -> Optional[LinkBase]:
         """Get a link by ID."""
-        return self.edges.get(link_id)
+        link_info = self.edges.get(link_id)
+        return link_info['link'] if link_info else None
     
     def get_step_dependencies(self, step_id: str) -> Set[str]:
         """Get all steps that must execute before the given step."""
@@ -549,9 +554,9 @@ class WorkflowGraph:
             errors.append(f"Orphaned steps found (no connections): {orphaned_steps}")
         
         # Validate that all links have valid source and target steps
-        for link_id, link in self.edges.items():
-            source_id = getattr(link.source, 'name', None)
-            target_id = getattr(link.target, 'name', None)
+        for link_id, link_info in self.edges.items():
+            source_id = link_info['source_id']
+            target_id = link_info['target_id']
             
             if source_id not in self.nodes:
                 errors.append(f"Link {link_id} has invalid source step: {source_id}")

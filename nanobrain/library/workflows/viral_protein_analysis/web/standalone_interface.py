@@ -22,9 +22,9 @@ from dataclasses import dataclass
 try:
     from nanobrain.core.logger import get_logger
     from nanobrain.core.data_unit import DataUnitManager
-    from nanobrain.library.bioinformatics.resource_monitor import ResourceMonitor, ResourceMonitorConfig
-    from nanobrain.library.bioinformatics.email_manager import EmailManager
-    from nanobrain.library.bioinformatics.cache_manager import CacheManager
+    from nanobrain.library.infrastructure.monitoring.resource_monitor import ResourceMonitor, ResourceMonitorConfig
+    from nanobrain.library.infrastructure.data.email_manager import EmailManager
+    from nanobrain.library.infrastructure.data.cache_manager import CacheManager
     from nanobrain.library.workflows.viral_protein_analysis.eeev_workflow import EEEVWorkflow
     from nanobrain.library.tools.bioinformatics.pubmed_api_client import EnhancedPubMedAPIClient
 except ImportError:

@@ -1,9 +1,9 @@
 """
-Multi-tier Caching System for Viral Protein Analysis Workflow
-Phase 3 Implementation - Aggressive Caching with PubMed Deduplication
+Multi-tier Caching System for NanoBrain Framework
+Enhanced Implementation - Aggressive Caching with Service Deduplication
 
 Provides comprehensive caching with memory and disk tiers, service-specific
-strategies, and aggressive PubMed literature caching.
+strategies, and configurable deduplication for similar requests.
 """
 
 import os
@@ -22,14 +22,14 @@ from nanobrain.core.logging_system import get_logger
 
 class CacheManager:
     """
-    Multi-tier caching system with aggressive PubMed caching.
+    Multi-tier caching system with service-specific strategies.
     
     Features:
     - Memory cache (TTL-based with LRU eviction)
     - Disk cache (compressed with indexing)
     - Service-specific caching strategies
-    - Automatic cache warming for EEEV queries
-    - Deduplication for similar literature searches
+    - Automatic cache warming for frequently used queries
+    - Deduplication for similar service requests
     """
     
     def __init__(self, config_path: Optional[str] = None):
@@ -43,7 +43,7 @@ class CacheManager:
         
         # Load configuration
         if config_path is None:
-            config_path = "nanobrain/library/workflows/viral_protein_analysis/config/cache_config.yml"
+            config_path = "nanobrain/library/infrastructure/data/config/cache_config.yml"
         
         self.config = self._load_config(config_path)
         
@@ -101,16 +101,25 @@ class CacheManager:
                     "disk_cache": {"directory": "data/cache", "max_size_gb": 5, "ttl_days": 7}
                 },
                 "strategies": {
-                    "pubmed_references": {
+                    "api_service": {
                         "aggressive_caching": True,
                         "cache_duration_days": 30,
                         "deduplicate_similar": True,
                         "similarity_threshold": 0.95
                     },
-                    "bvbrc_data": {
+                    "data_service": {
                         "cache_duration_hours": 168,
                         "compress_large_responses": True
+                    },
+                    "external_service": {
+                        "cache_duration_hours": 24,
+                        "compress_large_responses": False
                     }
+                },
+                "preload": {
+                    "enabled": True,
+                    "common_queries": [],
+                    "warmup_on_startup": False
                 }
             }
         }
@@ -179,74 +188,79 @@ class CacheManager:
         except Exception as e:
             self.logger.error(f"Failed to cache response for {cache_key}: {e}")
     
-    async def warm_eeev_cache(self) -> None:
-        """Pre-warm cache with common EEEV queries."""
-        eeev_config = self.config.get("cache_config", {}).get("eeev_preload", {})
+    async def warm_cache(self, service: str = None) -> None:
+        """Pre-warm cache with common queries."""
+        preload_config = self.config.get("cache_config", {}).get("preload", {})
         
-        if not eeev_config.get("enabled", True):
+        if not preload_config.get("enabled", True):
             return
         
-        self.logger.info("Starting EEEV cache warming")
+        self.logger.info("Starting cache warming")
         
-        organisms = eeev_config.get("organisms", [])
-        protein_types = eeev_config.get("protein_types", [])
-        literature_terms = eeev_config.get("literature_terms", [])
-        
+        common_queries = preload_config.get("common_queries", [])
         warming_tasks = []
         
-        # Warm common search combinations
-        for organism in organisms:
-            for protein_type in protein_types:
-                cache_key = f"pubmed_{organism}_{protein_type}_boundary"
-                if not await self.get_cached_response(cache_key, "pubmed_references"):
-                    # Create placeholder for future warming
-                    placeholder_data = {
-                        "search_terms": f"{organism} {protein_type}",
-                        "pre_warmed": True,
-                        "results": []
-                    }
-                    warming_tasks.append(
-                        self.cache_response(cache_key, placeholder_data, "pubmed_references")
-                    )
+        # Warm common queries
+        for query_config in common_queries:
+            query_service = query_config.get("service", "default")
+            
+            # Filter by service if specified
+            if service and query_service != service:
+                continue
+                
+            cache_key = query_config.get("cache_key")
+            if not cache_key:
+                continue
+                
+            if not await self.get_cached_response(cache_key, query_service):
+                # Create placeholder for future warming
+                placeholder_data = {
+                    "query": query_config.get("query", ""),
+                    "pre_warmed": True,
+                    "results": query_config.get("default_results", [])
+                }
+                warming_tasks.append(
+                    self.cache_response(cache_key, placeholder_data, query_service)
+                )
         
         # Execute warming tasks
         if warming_tasks:
             await asyncio.gather(*warming_tasks, return_exceptions=True)
-            self.logger.info(f"Pre-warmed {len(warming_tasks)} EEEV cache entries")
+            self.logger.info(f"Pre-warmed {len(warming_tasks)} cache entries")
     
-    async def deduplicate_literature_searches(self, search_terms: List[str], service: str = "pubmed_references") -> List[str]:
+    async def deduplicate_requests(self, requests: List[str], service: str = "api_service") -> List[str]:
         """
-        Deduplicate similar literature searches based on similarity threshold.
+        Deduplicate similar requests based on similarity threshold.
         
         Args:
-            search_terms: List of search terms to deduplicate
+            requests: List of request strings to deduplicate
             service: Service for similarity threshold lookup
             
         Returns:
-            Deduplicated list of search terms
+            Deduplicated list of requests
         """
         strategy_config = self.config.get("cache_config", {}).get("strategies", {}).get(service, {})
         similarity_threshold = strategy_config.get("similarity_threshold", 0.95)
         
         if not strategy_config.get("deduplicate_similar", False):
-            return search_terms
+            return requests
         
         deduplicated = []
         
-        for term in search_terms:
+        for request in requests:
             is_similar = False
             
-            for existing_term in deduplicated:
-                similarity = self._calculate_text_similarity(term, existing_term)
+            for existing_request in deduplicated:
+                similarity = self._calculate_text_similarity(request, existing_request)
                 if similarity >= similarity_threshold:
                     is_similar = True
-                    self.logger.debug(f"Skipping similar term: '{term}' (similar to '{existing_term}', similarity: {similarity:.3f})")
+                    self.logger.debug(f"Skipping similar request: '{request}' (similar to '{existing_request}', similarity: {similarity:.3f})")
                     break
             
             if not is_similar:
-                deduplicated.append(term)
+                deduplicated.append(request)
         
-        self.logger.info(f"Deduplicated {len(search_terms)} → {len(deduplicated)} search terms")
+        self.logger.info(f"Deduplicated {len(requests)} → {len(deduplicated)} requests")
         return deduplicated
     
     def _calculate_text_similarity(self, text1: str, text2: str) -> float:

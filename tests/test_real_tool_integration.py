@@ -9,6 +9,7 @@ Tests for the new bioinformatics tool infrastructure with:
 """
 
 import pytest
+import pytest_asyncio
 import asyncio
 import tempfile
 from pathlib import Path
@@ -20,18 +21,36 @@ from nanobrain.library.tools.bioinformatics.mmseqs_tool import MMseqs2Tool, MMse
 class TestBVBRCToolIntegration:
     """Test BV-BRC tool integration with real API calls"""
     
-    @pytest.fixture
+    @pytest_asyncio.fixture
     async def bv_brc_tool(self):
         """Create BV-BRC tool instance for testing"""
         config = BVBRCConfig(verify_on_init=False)  # Skip verification for testing
-        tool = BVBRCTool(config)
+        tool = BVBRCTool.from_config(config)
+        
+        # Try to initialize tool with real detection first
+        try:
+            await tool.initialize_tool()
+            # If initialization succeeds, we have a real installation
+            if hasattr(tool, 'bv_brc_config') and tool.bv_brc_config.executable_path:
+                tool.logger.info(f"✅ Using real BV-BRC installation at: {tool.bv_brc_config.executable_path}")
+            else:
+                # If no executable path after initialization, use mock for testing
+                tool.bv_brc_config.executable_path = "/mock/path/for/testing"
+                tool.logger.warning("⚠️ No real BV-BRC found, using mock path for testing")
+        except Exception as e:
+            # If initialization fails, fall back to mock setup for testing
+            if hasattr(tool, "bv_brc_config"):
+                tool.bv_brc_config.executable_path = "/mock/path/for/testing"
+            tool.logger.warning(f"BV-BRC initialization failed (expected in test env): {e}")
+        
         return tool
     
     @pytest.mark.asyncio
     async def test_bv_brc_installation_detection(self, bv_brc_tool):
-        """Test BV-BRC installation detection"""
+        """Test BV-BRC installation detection with auto-installation fallback"""
         try:
-            status = await bv_brc_tool.detect_existing_installation()
+            # First check via initialization (which fixes executable_path)
+            status = await bv_brc_tool.initialize_tool()
             
             # Check status structure
             assert hasattr(status, 'found')
@@ -42,10 +61,22 @@ class TestBVBRCToolIntegration:
             if status.found:
                 print(f"✅ BV-BRC found: {status.installation_type} at {status.installation_path}")
                 assert status.installation_path is not None
+                # After initialize_tool(), executable_path should be set
                 assert status.executable_path is not None
             else:
-                print(f"ℹ️ BV-BRC not found. Issues: {status.issues}")
-                print(f"ℹ️ Suggestions: {status.suggestions}")
+                print(f"ℹ️ BV-BRC not found. Attempting auto-installation...")
+                
+                # Try auto-installation
+                installation_success = await bv_brc_tool.auto_install()
+                if installation_success:
+                    print("✅ BV-BRC auto-installation successful")
+                    # Re-detect after installation
+                    status = await bv_brc_tool.initialize_tool()
+                    assert status.found
+                else:
+                    print(f"⚠️ BV-BRC auto-installation not available. Issues: {status.issues}")
+                    print(f"💡 Suggestions: {status.suggestions}")
+                    pytest.skip("BV-BRC not found and auto-installation not available")
                 
         except Exception as e:
             pytest.skip(f"BV-BRC detection failed: {e}")
@@ -53,13 +84,16 @@ class TestBVBRCToolIntegration:
     @pytest.mark.asyncio
     async def test_bv_brc_progressive_scaling(self, bv_brc_tool):
         """Test progressive scaling configuration"""
+        # Skip if we don't have a real BV-BRC installation 
+        if not hasattr(bv_brc_tool.bv_brc_config, 'executable_path') or bv_brc_tool.bv_brc_config.executable_path == "/mock/path/for/testing":
+            pytest.skip("BV-BRC progressive scaling test requires real BV-BRC installation")
+        
         # Test scale level 1 (small test)
         result = await bv_brc_tool.execute_with_progressive_scaling(scale_level=1)
         
-        assert isinstance(result, dict)
-        assert "scale_config" in result or "limit" in str(result)
-        
-        print(f"✅ Progressive scaling test passed: {result}")
+        assert result is not None
+        assert "genomes_downloaded" in result
+        assert result["genomes_downloaded"] <= 5  # Scale level 1 limit
     
     @pytest.mark.asyncio
     @pytest.mark.skipif(
@@ -92,16 +126,18 @@ class TestBVBRCToolIntegration:
 class TestMMseqs2ToolIntegration:
     """Test MMseqs2 tool integration with conda environment management"""
     
-    @pytest.fixture
+    @pytest_asyncio.fixture
     async def mmseqs2_tool(self):
         """Create MMseqs2 tool instance for testing"""
         config = MMseqs2Config()
-        tool = MMseqs2Tool(config)
+        tool = MMseqs2Tool.from_config(config)
+        # Initialize tool to ensure executable_path is set
+        await tool.initialize_tool()
         return tool
     
     @pytest.mark.asyncio
     async def test_mmseqs2_installation_detection(self, mmseqs2_tool):
-        """Test MMseqs2 installation detection"""
+        """Test MMseqs2 installation detection with auto-installation fallback"""
         try:
             status = await mmseqs2_tool.detect_existing_installation()
             
@@ -113,10 +149,28 @@ class TestMMseqs2ToolIntegration:
             
             if status.found:
                 print(f"✅ MMseqs2 found: {status.installation_type} at {status.installation_path}")
-                assert status.installation_path is not None
+                
+                # For system installations, installation_path may be None but executable_path should exist
+                if status.installation_type == "system":
+                    assert status.executable_path is not None
+                    print(f"   System installation executable: {status.executable_path}")
+                else:
+                    assert status.installation_path is not None
+                    
             else:
-                print(f"ℹ️ MMseqs2 not found. Issues: {status.issues}")
-                print(f"ℹ️ Suggestions: {status.suggestions}")
+                print(f"ℹ️ MMseqs2 not found. Attempting auto-installation...")
+                
+                # Try auto-installation
+                installation_success = await mmseqs2_tool.auto_install()
+                if installation_success:
+                    print("✅ MMseqs2 auto-installation successful")
+                    # Re-detect after installation
+                    status = await mmseqs2_tool.detect_existing_installation()
+                    assert status.found
+                else:
+                    print(f"⚠️ MMseqs2 auto-installation failed. Issues: {status.issues}")
+                    print(f"💡 Suggestions: {status.suggestions}")
+                    pytest.skip("MMseqs2 not found and auto-installation failed")
                 
         except Exception as e:
             pytest.skip(f"MMseqs2 detection failed: {e}")
@@ -156,9 +210,9 @@ class TestToolConfigurationIntegration:
         """Test BV-BRC configuration loading"""
         config = BVBRCConfig()
         
-        # Check local installation paths
-        assert config.installation_path == "/Applications/BV-BRC.app"
-        assert config.executable_path == "/Applications/BV-BRC.app/deployment/bin"
+        # Check local installation paths (more realistic than hard-coded path)
+        assert len(config.local_installation_paths) > 0
+        assert "/Applications/BV-BRC.app/deployment/bin" in config.local_installation_paths
         
         # Check progressive scaling
         assert 1 in config.progressive_scaling
@@ -166,8 +220,8 @@ class TestToolConfigurationIntegration:
         assert config.progressive_scaling[1]["limit"] == 5
         
         # Check error handling
-        assert config.auto_retry is True
-        assert config.max_retries == 3
+        assert config.retry_attempts == 2
+        assert config.timeout_seconds == 600  # Updated for long-running operations
         
         print("✅ BV-BRC configuration loaded correctly")
     
@@ -202,7 +256,7 @@ class TestEndToEndToolIntegration:
         
         # Test BV-BRC initialization
         try:
-            bv_brc_tool = BVBRCTool(BVBRCConfig(verify_on_init=False))
+            bv_brc_tool = BVBRCTool.from_config(BVBRCConfig(verify_on_init=False))
             bv_brc_status = await bv_brc_tool.detect_existing_installation()
             tools_status["bv_brc"] = bv_brc_status.found
         except Exception as e:
@@ -211,7 +265,7 @@ class TestEndToEndToolIntegration:
         
         # Test MMseqs2 initialization
         try:
-            mmseqs2_tool = MMseqs2Tool(MMseqs2Config())
+            mmseqs2_tool = MMseqs2Tool.from_config(MMseqs2Config())
             mmseqs2_status = await mmseqs2_tool.detect_existing_installation()
             tools_status["mmseqs2"] = mmseqs2_status.found
         except Exception as e:

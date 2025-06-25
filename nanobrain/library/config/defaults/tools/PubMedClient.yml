@@ -1,0 +1,156 @@
+# PubMed Client Configuration
+name: "pubmed"
+description: "PubMed literature search client"
+
+# MANDATORY: Tool card section
+tool_card:
+  version: "1.0.0"
+  purpose: "PubMed literature search and retrieval client for biomedical research"
+  detailed_description: "Integrated client for accessing the PubMed database via NCBI E-utilities API, providing comprehensive literature search, metadata retrieval, and abstract access for biomedical and life sciences research."
+  category: "literature"
+  subcategory: "database_search"
+  tags: ["pubmed", "literature", "search", "biomedical", "ncbi", "research", "abstracts"]
+  
+  input_format:
+    primary_mode: "json"
+    supported_modes: ["json", "query"]
+    content_types: ["application/json"]
+    format_schema:
+      type: "object"
+      required_fields:
+        query:
+          type: "string"
+          description: "PubMed search query using standard syntax"
+        search_parameters:
+          type: "object"
+          description: "Search configuration and filters"
+      optional_fields:
+        max_results:
+          type: "integer"
+          description: "Maximum number of results to retrieve"
+        include_abstracts:
+          type: "boolean"
+          description: "Include full abstracts in results"
+        date_range:
+          type: "object"
+          description: "Publication date range filter"
+  
+  output_format:
+    primary_mode: "json"
+    supported_modes: ["json", "bibtex", "csv"]
+    content_types: ["application/json", "text/plain", "text/csv"]
+    format_schema:
+      type: "object"
+      guaranteed_fields:
+        search_results:
+          type: "array"
+          description: "Array of publication records"
+        result_count:
+          type: "integer"
+          description: "Total number of results found"
+        search_metadata:
+          type: "object"
+          description: "Search execution details and statistics"
+        pagination:
+          type: "object"
+          description: "Result pagination information"
+  
+  capabilities:
+    batch_processing: true
+    streaming: false
+    caching: true
+    rate_limiting: true
+    authentication_required: false
+    concurrent_requests: 3
+  
+  performance:
+    typical_response_time: "2-15 seconds"
+    max_response_time: "60 seconds"
+    memory_usage: "50-200 MB"
+    cpu_requirements: "Low"
+    concurrency_support: true
+    concurrent_limit: 3
+    rate_limit: "3 requests/second"
+    scaling_characteristics: "Network-bound, scales with result size"
+  
+  usage_examples:
+    - name: "Viral Research Literature Search"
+      description: "Search for recent publications on viral genomics"
+      input_example:
+        query: "viral genomics COVID-19"
+        search_parameters:
+          database: "pubmed"
+          include_mesh_terms: true
+          publication_types: ["Journal Article", "Review"]
+        max_results: 100
+        include_abstracts: true
+        date_range:
+          start_year: 2020
+          end_year: 2024
+      expected_output:
+        search_results:
+          - pmid: "12345678"
+            title: "Genomic analysis of SARS-CoV-2 variants"
+            authors: ["Smith J", "Doe A"]
+            journal: "Nature"
+            publication_date: "2023-06-15"
+            abstract: "Comprehensive genomic analysis reveals..."
+            mesh_terms: ["Genomics", "SARS-CoV-2", "Genetic Variation"]
+        result_count: 87
+        search_metadata:
+          query_time: 3.2
+          api_version: "2.0"
+        pagination:
+          current_page: 1
+          total_pages: 1
+    
+    - name: "Targeted Protein Research"
+      description: "Search for specific protein function studies"
+      input_example:
+        query: "spike protein structure function"
+        search_parameters:
+          min_publication_year: 2020
+          include_mesh_terms: false
+        max_results: 50
+        include_abstracts: false
+      expected_output:
+        search_results:
+          - pmid: "87654321"
+            title: "Structural basis of spike protein binding"
+            authors: ["Johnson B", "Wilson C"]
+            journal: "Cell"
+            publication_date: "2023-03-10"
+        result_count: 42
+        search_metadata:
+          query_time: 2.1
+
+# API configuration
+base_url: "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
+api_key: null  # Optional API key for higher rate limits
+email: null    # Required for API usage
+rate_limit: 3  # Requests per second
+max_retries: 5
+retry_backoff: 1.0
+
+# Search parameters
+default_database: "pubmed"
+max_results: 1000
+return_format: "json"
+include_abstracts: true
+include_full_text: false
+
+# Quality filters
+min_publication_year: 2000
+exclude_review_types: []
+include_mesh_terms: true
+
+# Caching
+cache_results: true
+cache_duration: 86400  # 24 hours
+cache_directory: "data/pubmed_cache"
+
+# Framework metadata
+_metadata:
+  config_type: "pubmed_client"
+  framework_version: "1.0.0"
+  description: "PubMed client for literature retrieval" 

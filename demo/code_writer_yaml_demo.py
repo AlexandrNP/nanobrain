@@ -19,7 +19,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Import NanoBrain components
-from nanobrain.core.config.component_factory import get_factory
+from nanobrain.core.config.component_factory import ComponentFactory
 import sys
 from pathlib import Path
 current_file = Path(__file__) if '__file__' in globals() else Path.cwd() / 'demo' / 'code_writer_yaml_demo.py'
@@ -32,7 +32,7 @@ async def demo_yaml_config_loading():
     print("🧠 CodeWriter YAML Configuration Demo")
     print("=" * 60)
     
-    factory = get_factory()
+    factory = ComponentFactory()
     
     # Demo 1: Load CodeWriterAgent from step_coder.yml template
     print("\n📋 DEMO 1: Loading CodeWriterAgent from step_coder.yml")

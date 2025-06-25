@@ -5,6 +5,79 @@
 # - nanobrain.library.agents.enhanced.collaborative_agent.CollaborativeAgent
 # - nanobrain.library.agents.conversational.enhanced_collaborative_agent.EnhancedCollaborativeAgent
 
+# MANDATORY: Agent card section for A2A protocol compliance
+agent_card:
+  version: "1.0.0"
+  purpose: "Default agent configuration template for general-purpose AI assistance"
+  detailed_description: "A configurable agent template supporting multiple agent types (simple, conversational, collaborative, enhanced) with comprehensive customization options."
+  domain: "general"
+  expertise_level: "intermediate"
+  
+  input_format:
+    primary_mode: "json"
+    supported_modes: ["text", "json"]
+    content_types: ["application/json", "text/plain"]
+    format_schema:
+      type: "object"
+      required_fields:
+        message:
+          type: "string"
+          description: "Natural language instruction or query"
+  
+  output_format:
+    primary_mode: "json"
+    supported_modes: ["json", "text"]
+    content_types: ["application/json", "text/plain"]
+    format_schema:
+      type: "object"
+      guaranteed_fields:
+        response:
+          type: "string"
+          description: "Natural language response"
+        metadata:
+          type: "object"
+          description: "Execution metadata"
+  
+  capabilities:
+    streaming: false
+    push_notifications: false
+    state_transition_history: false
+    multi_turn_conversation: true
+    context_retention: true
+    tool_usage: false
+    delegation: false
+    collaboration: false
+  
+  skills:
+    - id: "natural_language_processing"
+      name: "Natural Language Processing"
+      description: "Basic natural language understanding and generation"
+      complexity: "intermediate"
+      input_modes: ["text", "json"]
+      output_modes: ["text", "json"]
+      examples:
+        - "Process natural language queries"
+        - "Generate coherent responses"
+        - "Handle multi-turn conversations"
+  
+  performance:
+    typical_response_time: "1-5 seconds"
+    memory_usage: "50-200 MB"
+    cpu_requirements: "Low to Medium"
+    concurrency_support: true
+    max_concurrent_sessions: 50
+  
+  usage_examples:
+    - name: "General Query Processing"
+      description: "Basic question-answering and task assistance"
+      input_example:
+        message: "Explain the concept of machine learning"
+      expected_output:
+        response: "Machine learning is a subset of artificial intelligence..."
+        metadata:
+          processing_time: 2.3
+          confidence: 0.95
+
 # Basic agent settings
 name: "DefaultAgent"
 description: "Default agent configuration"

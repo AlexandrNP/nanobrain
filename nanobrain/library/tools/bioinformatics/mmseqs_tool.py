@@ -15,27 +15,43 @@ import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Union
+from pydantic import Field
 
-from .base_bioinformatics_tool import (
-    BioinformaticsExternalTool,
-    BioinformaticsToolConfig,
+from nanobrain.core.external_tool import (
+    ExternalTool,
+    ToolResult,
     InstallationStatus,
     DiagnosticReport,
     ToolInstallationError,
-    ToolExecutionError
+    ToolExecutionError,
+    ExternalToolConfig
 )
-from nanobrain.core.external_tool import ToolResult
+from nanobrain.core.progressive_scaling import ProgressiveScalingMixin
+from nanobrain.core.tool import ToolConfig
 from nanobrain.core.logging_system import get_logger
 
 
 @dataclass
-class MMseqs2Config(BioinformaticsToolConfig):
-    """Configuration for MMseqs2 tool"""
+class MMseqs2Config(ExternalToolConfig):
+    """Configuration for MMseqs2 protein clustering tool"""
+    # Tool identification
+    tool_name: str = "mmseqs2"
+    
+    # Default tool card
+    tool_card: Dict[str, Any] = field(default_factory=lambda: {
+        "name": "mmseqs2",
+        "description": "MMseqs2 tool for protein sequence clustering and analysis",
+        "version": "1.0.0",
+        "category": "bioinformatics", 
+        "capabilities": ["protein_clustering", "sequence_analysis", "similarity_search"]
+    })
+    
     # Installation configuration
     conda_package: str = "mmseqs2"
     conda_channel: str = "bioconda"
     git_repository: str = "https://github.com/soedinglab/MMseqs2.git"
     environment_name: str = "nanobrain-viral_protein-mmseqs2"
+    create_isolated_environment: bool = True
     
     # Clustering parameters
     min_seq_id: float = 0.3
@@ -45,10 +61,10 @@ class MMseqs2Config(BioinformaticsToolConfig):
     
     # Progressive scaling configuration
     progressive_scaling: Dict[int, Dict[str, Any]] = field(default_factory=lambda: {
-        1: {"max_sequences": 50, "sensitivity": 4.0},      # Fast test
-        2: {"max_sequences": 100, "sensitivity": 5.5},     # Basic validation
-        3: {"max_sequences": 500, "sensitivity": 7.0},     # Medium scale
-        4: {"max_sequences": 2000, "sensitivity": 7.5}     # Full scale
+        1: {"max_sequences": 50, "sensitivity": 4.0, "description": "Fast test"},
+        2: {"max_sequences": 100, "sensitivity": 5.5, "description": "Basic validation"},
+        3: {"max_sequences": 500, "sensitivity": 7.0, "description": "Medium scale"},
+        4: {"max_sequences": 2000, "sensitivity": 7.5, "description": "Full scale"}
     })
     
     # Performance settings
@@ -56,15 +72,12 @@ class MMseqs2Config(BioinformaticsToolConfig):
     memory_limit: str = "8G"
     tmp_dir: Optional[str] = None
     
-    def __post_init__(self):
-        # Set tool name
-        self.tool_name = "mmseqs2"
-        # MMseqs2 installation locations to check
-        self.local_installation_paths = [
-            "/usr/local/bin",
-            "/opt/homebrew/bin",
-            f"{os.path.expanduser('~')}/bin"
-        ]
+    # Installation paths
+    local_installation_paths: List[str] = field(default_factory=lambda: [
+        "/usr/local/bin",
+        "/opt/homebrew/bin",
+        "~/bin"
+    ])
 
 
 @dataclass
@@ -110,7 +123,7 @@ class MMseqs2InstallationError(ToolInstallationError):
     pass
 
 
-class MMseqs2Tool(BioinformaticsExternalTool):
+class MMseqs2Tool(ProgressiveScalingMixin, ExternalTool):
     """
     MMseqs2 (Many-against-Many sequence searching) tool wrapper.
     Enhanced with mandatory from_config pattern implementation.
@@ -124,39 +137,98 @@ class MMseqs2Tool(BioinformaticsExternalTool):
     """
     
     @classmethod
-    def from_config(cls, config: MMseqs2Config, **kwargs) -> 'MMseqs2Tool':
+    def from_config(cls, config: Union[ToolConfig, MMseqs2Config, Dict], **kwargs) -> 'MMseqs2Tool':
         """Mandatory from_config implementation for MMseqs2Tool"""
         logger = get_logger(f"{cls.__name__}.from_config")
         logger.info(f"Creating {cls.__name__} from configuration")
         
-        # Step 1: Validate configuration schema
-        cls.validate_config_schema(config)
+        # Convert any input to MMseqs2Config
+        if isinstance(config, MMseqs2Config):
+            # Already specific config, use as-is
+            pass
+        else:
+            # Convert ToolConfig, dict, or any other input to MMseqs2Config
+            if hasattr(config, 'model_dump'):
+                config_dict = config.model_dump()
+            elif isinstance(config, dict):
+                config_dict = config
+            else:
+                # Handle object with attributes
+                config_dict = {}
+                # Extract fields that are common to both ToolConfig and MMseqs2Config
+                for attr in ['name', 'description', 'tool_card']:
+                    if hasattr(config, attr):
+                        config_dict[attr] = getattr(config, attr)
+            
+            # Filter config_dict to only include fields that MMseqs2Config accepts
+            # Remove ToolConfig-specific fields that MMseqs2Config doesn't inherit
+            mmseqs2_compatible_fields = {
+                # Core fields from MMseqs2Config
+                'tool_name', 'tool_card', 'conda_package', 'conda_channel', 
+                'git_repository', 'environment_name', 'create_isolated_environment',
+                'min_seq_id', 'coverage', 'cluster_mode', 'sensitivity', 
+                'progressive_scaling', 'threads', 'memory_limit', 'tmp_dir',
+                'local_installation_paths',
+                # Core fields from ExternalToolConfig
+                'installation_path', 'executable_path', 'environment', 'timeout_seconds',
+                'retry_attempts', 'verify_on_init', 'pip_package', 'git_repository',
+                'initial_scale_level', 'detailed_diagnostics', 'suggest_fixes'
+            }
+            
+            filtered_config_dict = {k: v for k, v in config_dict.items() 
+                                   if k in mmseqs2_compatible_fields}
+            
+            logger.debug(f"Filtered config keys: {list(filtered_config_dict.keys())}")
+            logger.debug(f"Removed incompatible keys: {set(config_dict.keys()) - set(filtered_config_dict.keys())}")
+            
+            # Create MMseqs2Config from the filtered data
+            config = MMseqs2Config(**filtered_config_dict)
         
-        # Step 2: Extract component-specific configuration  
-        component_config = cls.extract_component_config(config)
+        # Mandatory tool_card validation and extraction
+        if hasattr(config, 'tool_card') and config.tool_card:
+            tool_card_data = config.tool_card.model_dump() if hasattr(config.tool_card, 'model_dump') else config.tool_card
+            logger.info(f"Tool {config.tool_name} loaded with tool card metadata")
+        elif isinstance(config, dict) and 'tool_card' in config:
+            tool_card_data = config['tool_card']
+            logger.info(f"Tool {config.tool_name} loaded with tool card metadata")
+        else:
+            raise ValueError(
+                f"Missing mandatory 'tool_card' section in configuration for {cls.__name__}. "
+                f"All tools must include tool card metadata for proper discovery and usage."
+            )
         
-        # Step 3: Resolve dependencies
-        dependencies = cls.resolve_dependencies(component_config, **kwargs)
+        # Create instance
+        instance = cls(config, **kwargs)
+        instance._tool_card_data = tool_card_data
         
-        # Step 4: Create instance
-        instance = cls.create_instance(config, component_config, dependencies)
-        
-        # Step 5: Post-creation initialization
-        instance._post_config_initialization()
-        
-        logger.info(f"Successfully created {cls.__name__}")
+        logger.info(f"Successfully created {cls.__name__} with tool card compliance")
         return instance
     
-    def _init_from_config(self, config: MMseqs2Config, component_config: Dict[str, Any],
-                         dependencies: Dict[str, Any]) -> None:
-        """Initialize MMseqs2Tool with resolved dependencies"""
+    def __init__(self, config: MMseqs2Config, **kwargs):
+        """Initialize MMseqs2Tool with configuration"""
         if config is None:
             config = MMseqs2Config()
             
-        super()._init_from_config(config, component_config, dependencies)
+        # Ensure name is set consistently
+        if not hasattr(config, 'tool_name') or not config.tool_name:
+            config.tool_name = "mmseqs2"
         
+        # Initialize parent classes
+        super().__init__(config, **kwargs)
+        
+        # MMseqs2 specific initialization
         self.mmseqs_config = config
-        self.logger = get_logger("mmseqs2_tool")
+        self.name = config.tool_name
+        self.logger = get_logger(f"bio_tool_{self.name}")
+        
+        # MMseqs2 specific attributes
+        self.min_seq_id = getattr(config, 'min_seq_id', 0.3)
+        self.coverage = getattr(config, 'coverage', 0.8)
+        self.cluster_mode = getattr(config, 'cluster_mode', 0)
+        self.sensitivity = getattr(config, 'sensitivity', 7.5)
+        self.threads = getattr(config, 'threads', 4)
+        self.memory_limit = getattr(config, 'memory_limit', "8G")
+        self.tmp_dir = getattr(config, 'tmp_dir', None)
         
         # Executable path
         self.mmseqs_executable = None
@@ -536,7 +608,7 @@ class MMseqs2Tool(BioinformaticsExternalTool):
             
             # Configure with cmake
             cmake_cmd = [
-                "conda", "run", "-n", self.environment_name,
+                "conda", "run", "-n", self.mmseqs_config.environment_name,
                 "cmake", "-B", build_dir, "-S", source_dir
             ]
             
@@ -553,7 +625,7 @@ class MMseqs2Tool(BioinformaticsExternalTool):
             
             # Build with make
             make_cmd = [
-                "conda", "run", "-n", self.environment_name,
+                "conda", "run", "-n", self.mmseqs_config.environment_name,
                 "make", "-C", build_dir, "-j", str(self.mmseqs_config.threads)
             ]
             
@@ -578,7 +650,7 @@ class MMseqs2Tool(BioinformaticsExternalTool):
     async def _generate_specific_suggestions(self) -> List[str]:
         """Generate MMseqs2 specific installation suggestions"""
         return [
-            f"Install via conda: conda create -n {self.environment_name} -c bioconda mmseqs2",
+            f"Install via conda: conda create -n {self.mmseqs_config.environment_name} -c bioconda mmseqs2",
             "Install via homebrew: brew install mmseqs2",
             "Download pre-compiled binaries from https://github.com/soedinglab/MMseqs2/releases",
             "Build from source: git clone https://github.com/soedinglab/MMseqs2.git",

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Test script to verify chat workflow setup works correctly with mocked OpenAI client.
+Test script to verify agent setup works correctly with mocked OpenAI client and mandatory cards.
 """
 
 import asyncio
@@ -13,44 +13,56 @@ parent_dir = os.path.dirname(os.path.dirname(__file__))  # nanobrain directory
 sys.path.insert(0, os.path.join(parent_dir, 'src'))     # for src modules
 sys.path.insert(0, parent_dir)                          # for demo modules
 
-from demo.chat_workflow_demo import ChatWorkflow
+from nanobrain.core.config.component_factory import ComponentFactory
+from nanobrain.core.agent import SimpleAgent
 
 async def test_setup_with_mock():
-    print('🧪 Testing chat workflow setup with mocked OpenAI client...')
+    print('🧪 Testing agent setup with mocked OpenAI client and mandatory cards...')
     
     with patch('openai.AsyncOpenAI') as mock_openai:
-        # Mock the OpenAI client
+        # Mock the OpenAI client and its response
         mock_client = AsyncMock()
         mock_openai.return_value = mock_client
         
-        workflow = ChatWorkflow()
+        # Mock a successful response
+        mock_response = AsyncMock()
+        mock_response.choices = [AsyncMock()]
+        mock_response.choices[0].message.content = "Hello! This is a mocked response from the agent."
+        mock_response.usage.total_tokens = 50
+        mock_client.chat.completions.create.return_value = mock_response
+        
+        factory = ComponentFactory()
+        
         try:
-            await workflow.setup()
-            print('✅ Setup completed successfully!')
+            # Create agent with proper agent card from default configuration
+            agent = factory.create_from_yaml_file(
+                'nanobrain/library/config/defaults/agent.yml',
+                'nanobrain.core.agent.SimpleAgent'
+            )
+            print('✅ Agent created successfully with mandatory card!')
             
-            # Test that all components were created
-            expected_components = [
-                'user_input_du', 'agent_input_du', 'agent_output_du',
-                'agent_step', 'user_trigger', 'agent_trigger', 'output_trigger',
-                'user_to_agent_link', 'agent_input_to_step_link', 'step_to_output_link'
-            ]
+            # Test agent initialization
+            await agent.initialize()
+            print('✅ Agent initialized successfully!')
             
-            for component in expected_components:
-                if component not in workflow.components:
-                    print(f'❌ Missing component: {component}')
-                    return False
-                else:
-                    print(f'✅ Component created: {component}')
+            # Test basic processing with mocked LLM
+            result = await agent.process("Hello, this is a test message")
+            print(f'✅ Agent processed message with mock: {result[:100] if result else "No response"}...')
             
-            # Verify CLI was created
-            if workflow.cli is None:
-                print('❌ CLI interface not created')
-                return False
+            # Verify agent has proper card data
+            assert hasattr(agent, '_a2a_card_data')
+            assert agent._a2a_card_data is not None
+            assert 'version' in agent._a2a_card_data
+            print('✅ Agent card validation successful!')
+            
+            # Test that LLM client was properly mocked
+            if mock_client.chat.completions.create.called:
+                print('✅ Mocked OpenAI client was called as expected!')
             else:
-                print('✅ CLI interface created')
+                print('⚠️ Mocked OpenAI client was not called (agent may have used fallback)')
             
-            await workflow.shutdown()
-            print('✅ Shutdown completed successfully!')
+            await agent.shutdown()
+            print('✅ Agent shutdown completed successfully!')
             return True
             
         except Exception as e:

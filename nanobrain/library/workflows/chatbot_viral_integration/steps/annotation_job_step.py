@@ -118,29 +118,108 @@ class AnnotationJobStep(Step):
     with concurrent job support and real-time progress streaming.
     """
     
-    def __init__(self, config: StepConfig):
-        super().__init__(config)
+    COMPONENT_TYPE = "step"
+    REQUIRED_CONFIG_FIELDS = ['name']
+    OPTIONAL_CONFIG_FIELDS = {
+        'backend_url': 'http://localhost:8001',
+        'max_concurrent_jobs': 3,
+        'job_timeout': 1800,
+        'progress_poll_interval': 2,
+        'connection_timeout': 30,
+        'request_timeout': 10,
+        'max_retries': 3
+    }
+    
+    @classmethod
+    def from_config(cls, config: StepConfig, **kwargs) -> 'AnnotationJobStep':
+        """Mandatory from_config implementation for AnnotationJobStep"""
+        from nanobrain.core.logging_system import get_logger
+        logger = get_logger(f"{cls.__name__}.from_config")
+        logger.info(f"Creating {cls.__name__} from configuration")
         
+        # Step 1: Validate configuration schema
+        cls.validate_config_schema(config)
+        
+        # Step 2: Extract component-specific configuration  
+        component_config = cls.extract_component_config(config)
+        
+        # Step 3: Resolve dependencies
+        dependencies = cls.resolve_dependencies(component_config, **kwargs)
+        
+        # Step 4: Create instance
+        instance = cls.create_instance(config, component_config, dependencies)
+        
+        # Step 5: Post-creation initialization
+        instance._post_config_initialization()
+        
+        logger.info(f"Successfully created {cls.__name__}")
+        return instance
+    
+    @classmethod
+    def extract_component_config(cls, config: StepConfig) -> Dict[str, Any]:
+        """Extract AnnotationJobStep configuration"""
         # Get nested config dict
         step_config = getattr(config, 'config', {})
         
+        return {
+            'name': config.name,
+            'description': getattr(config, 'description', 'Viral annotation job processing step'),
+            'debug_mode': getattr(config, 'debug_mode', False),
+            'enable_logging': getattr(config, 'enable_logging', True),
+            'processing_mode': getattr(config, 'processing_mode', 'combine'),
+            'add_metadata': getattr(config, 'add_metadata', True),
+            'backend_url': step_config.get('backend_url', 'http://localhost:8001'),
+            'max_concurrent_jobs': step_config.get('max_concurrent_jobs', 3),
+            'job_timeout': step_config.get('job_timeout', 1800),
+            'progress_poll_interval': step_config.get('polling_interval', 2),
+            'connection_timeout': step_config.get('connection_timeout', 30),
+            'request_timeout': step_config.get('request_timeout', 10),
+            'max_retries': step_config.get('max_retries', 3)
+        }
+    
+    @classmethod  
+    def resolve_dependencies(cls, component_config: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        """Resolve AnnotationJobStep dependencies"""
+        from nanobrain.core.executor import LocalExecutor
+        from nanobrain.core.executor import ExecutorConfig
+        
+        # Create a default executor if not provided
+        executor = kwargs.get('executor')
+        if not executor:
+            executor_config = ExecutorConfig(executor_type='local', max_workers=3)
+            executor = LocalExecutor.from_config(executor_config)
+        
+        return {
+            'enable_logging': kwargs.get('enable_logging', True),
+            'debug_mode': kwargs.get('debug_mode', False),
+            'executor': executor
+        }
+    
+    def _init_from_config(self, config: StepConfig, component_config: Dict[str, Any],
+                         dependencies: Dict[str, Any]) -> None:
+        """Initialize AnnotationJobStep with resolved dependencies"""
+        super()._init_from_config(config, component_config, dependencies)
+        
         # Backend configuration
-        self.backend_url = step_config.get('backend_url', 'http://localhost:8001')
-        self.max_concurrent_jobs = step_config.get('max_concurrent_jobs', 3)
-        self.job_timeout = step_config.get('job_timeout_seconds', 1800)  # 30 minutes
-        self.poll_interval = step_config.get('progress_poll_interval', 2)  # seconds
+        self.backend_url = component_config['backend_url']
+        self.max_concurrent_jobs = component_config['max_concurrent_jobs']
+        self.job_timeout = component_config['job_timeout']
+        self.poll_interval = component_config['progress_poll_interval']
         
         # HTTP client configuration
-        self.connection_timeout = step_config.get('connection_timeout', 30)
-        self.request_timeout = step_config.get('request_timeout', 10)
-        self.max_retries = step_config.get('max_retries', 3)
+        self.connection_timeout = component_config['connection_timeout']
+        self.request_timeout = component_config['request_timeout']
+        self.max_retries = component_config['max_retries']
         
         # Active job tracking
         self.active_jobs: Dict[str, AnnotationJobData] = {}
         # Progress bridges for active jobs
         self.progress_bridges: Dict[str, WorkflowProgressBridge] = {}
         
-        self.nb_logger.info(f"🔬 Annotation Job Step initialized (backend: {self.backend_url})")
+        if self.nb_logger:
+            self.nb_logger.info(f"🔬 Annotation Job Step initialized (backend: {self.backend_url})")
+    
+    # AnnotationJobStep inherits FromConfigBase.__init__ which prevents direct instantiation
     
     async def process(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -286,8 +365,28 @@ class AnnotationJobStep(Step):
             
             self.nb_logger.info(f"🔄 Starting local viral annotation workflow for job {job_data.job_id}")
             
-            # Create workflow instance with session ID for tracking
-            workflow = AlphavirusWorkflow(session_id=job_data.session_id)
+            # Create workflow instance using proper config path
+            import os
+            
+            # Use the existing AlphavirusWorkflow config file
+            # Current file is in nanobrain/library/workflows/chatbot_viral_integration/steps/
+            # Go back 2 levels to get to workflows/, then navigate to the viral_protein_analysis config
+            workflows_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+            workflow_config_path = os.path.join(
+                workflows_root, 
+                'viral_protein_analysis', 
+                'config', 
+                'CleanWorkflow.yml'
+            )
+            
+            # Use the create function that properly loads workflow config
+            from nanobrain.library.workflows.viral_protein_analysis.alphavirus_workflow import create_alphavirus_workflow
+            workflow = await create_alphavirus_workflow(
+                config_path=workflow_config_path,
+                session_id=job_data.session_id,
+                enable_logging=True,
+                debug_mode=False
+            )
             await workflow.initialize()
             
             # Prepare input parameters from the job request  
@@ -377,10 +476,10 @@ class AnnotationJobStep(Step):
             # Initialize progress
             await progress_bridge.update_progress('workflow_init', 0, 'running', 'Starting PSSM matrix generation')
             
-            # Execute the workflow
+            # Execute the workflow using the proper method
             try:
-                workflow_result = await workflow.process(workflow_input)
-                self.nb_logger.info(f"✅ Workflow process completed for job {job_data.job_id}")
+                workflow_result = await workflow.execute_full_workflow(workflow_input)
+                self.nb_logger.info(f"✅ Workflow execution completed for job {job_data.job_id}")
                 
                 # Ensure progress reaches 100% on successful completion
                 await progress_bridge.update_progress('workflow_complete', 100, 'completed', 'Analysis completed successfully')
@@ -432,17 +531,35 @@ class AnnotationJobStep(Step):
             if job_data.job_id in self.progress_bridges:
                 del self.progress_bridges[job_data.job_id]
     
-    async def _format_workflow_result_for_pssm(self, workflow_result: Dict[str, Any], job_data: AnnotationJobData) -> Dict[str, Any]:
+    async def _format_workflow_result_for_pssm(self, workflow_result, job_data: AnnotationJobData) -> Dict[str, Any]:
         """Format the workflow result into PSSM matrix output format"""
         
         try:
-            # Check if this is a fallback case
-            if workflow_result.get('fallback_pssm_data') or not workflow_result.get('success', True):
-                self.nb_logger.warning(f"Using fallback PSSM data for job {job_data.job_id}")
-                return self._create_fallback_pssm_data(job_data, workflow_result.get('error'))
+            # Handle WorkflowResult object vs dictionary
+            if hasattr(workflow_result, 'success'):
+                # This is a WorkflowResult object
+                success = workflow_result.success
+                error = workflow_result.error if hasattr(workflow_result, 'error') else None
+                workflow_data = workflow_result.workflow_data if hasattr(workflow_result, 'workflow_data') else None
+                viral_pssm_json = getattr(workflow_result, 'viral_pssm_json', None)
+            else:
+                # This is a dictionary
+                success = workflow_result.get('success', True)
+                error = workflow_result.get('error')
+                workflow_data = workflow_result.get('workflow_data')
+                viral_pssm_json = workflow_result.get('viral_pssm_json')
             
-            # Check if workflow has proper PSSM data
-            if 'pssm_matrix' in workflow_result or 'pssm_matrices' in workflow_result:
+            # Check if this is a fallback case
+            if not success or (isinstance(workflow_result, dict) and workflow_result.get('fallback_pssm_data')):
+                self.nb_logger.warning(f"Using fallback PSSM data for job {job_data.job_id}")
+                return self._create_fallback_pssm_data(job_data, error)
+            
+            # Check for viral PSSM JSON first (preferred format)
+            if viral_pssm_json:
+                return viral_pssm_json
+                
+            # Check if workflow has proper PSSM data in dictionary format
+            if isinstance(workflow_result, dict) and ('pssm_matrix' in workflow_result or 'pssm_matrices' in workflow_result):
                 # Use existing workflow result
                 return workflow_result
             

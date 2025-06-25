@@ -40,6 +40,7 @@ except ImportError:
 # Import NanoBrain components
 from nanobrain.core.logging_system import get_logger, OperationType
 from nanobrain.core.tool import ToolBase, ToolConfig
+from nanobrain.core.component_base import ComponentDependencyError
 
 
 @dataclass
@@ -237,24 +238,63 @@ def resolve_config_path(config_path: str, base_path: Optional[str] = None) -> st
 class MCPTool(ToolBase):
     """
     Tool wrapper for MCP server tools.
+    Enhanced with mandatory from_config pattern implementation.
     
     This class wraps tools from MCP servers to make them compatible with
     the NanoBrain tool system.
     """
     
-    def __init__(self, tool_info: MCPToolInfo, mcp_client: 'MCPClient', config: ToolConfig = None):
-        if config is None:
-            from .tool import ToolType
-            config = ToolConfig(
-                name=tool_info.name,
-                description=tool_info.description,
-                tool_type=ToolType.EXTERNAL
-            )
+    @classmethod
+    def from_config(cls, config: ToolConfig, **kwargs) -> 'MCPTool':
+        """Mandatory from_config implementation for MCPTool"""
+        logger = get_logger(f"{cls.__name__}.from_config")
+        logger.info(f"Creating {cls.__name__} from configuration")
         
-        super().__init__(config)
-        self.tool_info = tool_info
-        self.mcp_client = mcp_client
-        self.schema = tool_info.schema
+        # Step 1: Validate configuration schema
+        cls.validate_config_schema(config)
+        
+        # Step 2: Extract component-specific configuration  
+        component_config = cls.extract_component_config(config)
+        
+        # Step 3: Resolve dependencies
+        dependencies = cls.resolve_dependencies(component_config, **kwargs)
+        
+        # Step 4: Create instance
+        instance = cls.create_instance(config, component_config, dependencies)
+        
+        # Step 5: Post-creation initialization
+        instance._post_config_initialization()
+        
+        logger.info(f"Successfully created {cls.__name__}")
+        return instance
+    
+    @classmethod
+    def resolve_dependencies(cls, component_config: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        """Resolve MCPTool dependencies"""
+        tool_info = kwargs.get('tool_info')
+        mcp_client = kwargs.get('mcp_client')
+        
+        if not tool_info:
+            raise ComponentDependencyError("MCPTool requires 'tool_info' parameter")
+        if not mcp_client:
+            raise ComponentDependencyError("MCPTool requires 'mcp_client' parameter")
+        
+        base_deps = super().resolve_dependencies(component_config, **kwargs)
+        return {
+            **base_deps,
+            'tool_info': tool_info,
+            'mcp_client': mcp_client
+        }
+    
+    def _init_from_config(self, config: ToolConfig, component_config: Dict[str, Any],
+                         dependencies: Dict[str, Any]) -> None:
+        """Initialize MCPTool with resolved dependencies"""
+        super()._init_from_config(config, component_config, dependencies)
+        self.tool_info = dependencies['tool_info']
+        self.mcp_client = dependencies['mcp_client']
+        self.schema = self.tool_info.schema
+    
+    # MCPTool inherits FromConfigBase.__init__ which prevents direct instantiation
         
     async def execute(self, **kwargs) -> Any:
         """Execute the MCP tool on the remote server."""
@@ -808,7 +848,7 @@ class MCPSupportMixin:
             )
             
             print(f"DEBUG: Created tool config, about to create MCPTool for {tool_info.name}")
-            mcp_tool = MCPTool(tool_info, self.mcp_client, tool_config)
+            mcp_tool = MCPTool.from_config(tool_config, tool_info=tool_info, mcp_client=self.mcp_client)
             print(f"DEBUG: Created MCPTool, about to initialize for {tool_info.name}")
             await mcp_tool.initialize()
             

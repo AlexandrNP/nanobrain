@@ -1,0 +1,102 @@
+# Base Tool Configuration Template
+name: "default_tool"
+description: "Base tool configuration"
+
+# MANDATORY: Tool card section
+tool_card:
+  version: "1.0.0"
+  purpose: "Base tool configuration template for framework tools"
+  detailed_description: "Template configuration for creating new tools in the NanoBrain framework. Provides standard structure and default settings that can be customized for specific tool implementations."
+  category: "framework"
+  subcategory: "template"
+  tags: ["template", "base", "configuration", "framework", "default"]
+  
+  input_format:
+    primary_mode: "json"
+    supported_modes: ["json"]
+    content_types: ["application/json"]
+    format_schema:
+      type: "object"
+      required_fields:
+        operation:
+          type: "string"
+          description: "Operation to perform"
+        parameters:
+          type: "object"
+          description: "Operation parameters"
+  
+  output_format:
+    primary_mode: "json"
+    supported_modes: ["json"]
+    content_types: ["application/json"]
+    format_schema:
+      type: "object"
+      guaranteed_fields:
+        result:
+          type: "object"
+          description: "Operation result"
+        status:
+          type: "string"
+          description: "Execution status"
+        metadata:
+          type: "object"
+          description: "Execution metadata"
+  
+  capabilities:
+    batch_processing: false
+    streaming: false
+    caching: false
+    rate_limiting: false
+    authentication_required: false
+    concurrent_requests: 1
+  
+  performance:
+    typical_response_time: "< 1 second"
+    memory_usage: "< 50 MB"
+    cpu_requirements: "Low"
+    concurrency_support: false
+    concurrent_limit: 1
+  
+  usage_examples:
+    - name: "Basic Tool Operation"
+      description: "Example of basic tool usage"
+      input_example:
+        operation: "process"
+        parameters:
+          input_data: "sample data"
+      expected_output:
+        result:
+          processed_data: "processed sample data"
+        status: "success"
+        metadata:
+          processing_time: 0.1
+
+# Execution settings
+async_execution: true
+timeout: null  # seconds, null for no timeout
+
+# Parameters schema (JSON Schema format)
+parameters:
+  type: "object"
+  properties: {}
+  required: []
+
+# Performance settings
+performance:
+  max_retries: 3
+  retry_delay: 1.0
+  enable_caching: false
+  cache_duration: 3600
+
+# Logging settings
+logging:
+  log_calls: true
+  log_errors: true
+  log_performance: false
+
+# Framework metadata
+_metadata:
+  config_type: "tool"
+  framework_version: "1.0.0"
+  created_by: "nanobrain_framework"
+  description: "Base tool configuration template" 

@@ -26,9 +26,7 @@ from nanobrain.library.tools.bioinformatics.bv_brc_tool import (
 from nanobrain.library.tools.bioinformatics.pubmed_client import (
     PubMedClient, PubMedConfig, LiteratureReference, PubMedError
 )
-from nanobrain.library.tools.bioinformatics.base_bioinformatics_tool import (
-    InstallationStatus
-)
+from nanobrain.core.external_tool import InstallationStatus
 from nanobrain.core.logging_system import get_logger
 
 
@@ -44,21 +42,19 @@ class TestIntegrationWorkflows:
     def integration_setup(self):
         """Setup integration test environment"""
         return {
-            "bvbrc_tool": BVBRCTool(BVBRCConfig(
+            "bvbrc_tool": BVBRCTool.from_config(BVBRCConfig(
                 verify_on_init=False,
                 genome_batch_size=3,  # Small batches for integration testing
                 md5_batch_size=2,
                 timeout_seconds=30
             )),
-            "pubmed_client": PubMedClient(
+            "pubmed_client": PubMedClient.from_config(PubMedConfig(
+                verify_on_init=False,
                 email="integration@test.org",
                 fail_fast=False,  # Allow graceful degradation for integration
-                config=PubMedConfig(
-                    verify_on_init=False,
-                    cache_enabled=True,
-                    rate_limit=3
-                )
-            ),
+                cache_results=True,
+                rate_limit=3
+            )),
             "logger": get_logger("integration_test"),
             "temp_dir": tempfile.mkdtemp(prefix="nanobrain_integration_")
         }
@@ -299,7 +295,7 @@ class TestIntegrationWorkflows:
         logger.info("🧪 Testing caching integration")
         
         # Ensure caching is enabled
-        assert pubmed_client.pubmed_config.cache_enabled == True
+        assert pubmed_client.pubmed_config.cache_results == True
         
         # Clear cache for clean test start
         pubmed_client.search_cache.clear()
@@ -375,7 +371,7 @@ class TestIntegrationWorkflows:
         # Test PubMed configuration  
         pubmed_config = pubmed_client.pubmed_config
         assert pubmed_config.rate_limit == 3, "PubMed rate limit should be conservative"
-        assert pubmed_config.cache_enabled == True, "Caching should be enabled for integration"
+        assert pubmed_config.cache_results == True, "Caching should be enabled for integration"
         assert pubmed_config.fail_fast == False, "Should allow graceful degradation in integration"
         
         # Test configuration compatibility
@@ -387,9 +383,8 @@ class TestIntegrationWorkflows:
         bvbrc_logger = bvbrc_tool.logger
         pubmed_logger = pubmed_client.logger
         
-        assert bvbrc_logger.name == "bv_brc_tool"
-        assert pubmed_logger.name == "pubmed_client"
-        # Different logger names prevent conflicts
+        assert bvbrc_logger.name == "bio_tool_bv_brc"
+        assert pubmed_logger.name.startswith("pubmed_client"), f"PubMed logger name should start with pubmed_client, got: {pubmed_logger.name}"
         
         # Test environment compatibility
         assert bvbrc_config.verify_on_init == False, "Should not auto-initialize for integration testing"
@@ -485,7 +480,7 @@ class TestProductionReadinessIntegration:
     def production_setup(self):
         """Setup production-like test environment"""
         return {
-            "bvbrc_tool": BVBRCTool(BVBRCConfig(
+            "bvbrc_tool": BVBRCTool.from_config(BVBRCConfig(
                 verify_on_init=False,
                 genome_batch_size=50,    # Production batch sizes
                 md5_batch_size=25,
@@ -493,16 +488,14 @@ class TestProductionReadinessIntegration:
                 min_genome_length=8000,
                 max_genome_length=15000
             )),
-            "pubmed_client": PubMedClient(
+            "pubmed_client": PubMedClient.from_config(PubMedConfig(
+                verify_on_init=False,
                 email="production@nanobrain.org",
                 fail_fast=True,          # Production fail-fast
-                config=PubMedConfig(
-                    verify_on_init=False,
-                    cache_enabled=True,
-                    rate_limit=3,           # Conservative production rate limit
-                    max_results_per_search=20
-                )
-            ),
+                cache_results=True,
+                rate_limit=3,           # Conservative production rate limit
+                max_results=20
+            )),
             "logger": get_logger("production_integration_test")
         }
     
