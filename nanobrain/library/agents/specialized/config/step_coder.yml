@@ -15,17 +15,17 @@ agent_card:
     supported_modes: ["json", "text"]
     content_types: ["application/json", "text/plain"]
     format_schema:
-      type: "object"
+      class: nanobrain.core.data_unit.DataUnit
       required_fields:
         input:
-          type: "string"
+          class: nanobrain.core.data_unit.DataUnitString
           description: "Natural language description of code to generate"
       optional_fields:
         language:
-          type: "string"
+          class: nanobrain.core.data_unit.DataUnitString
           description: "Programming language (defaults to Python)"
         context:
-          type: "string"
+          class: nanobrain.core.data_unit.DataUnitString
           description: "Additional context or existing code snippets"
   
   output_format:
@@ -33,16 +33,16 @@ agent_card:
     supported_modes: ["json", "text"]
     content_types: ["application/json", "text/plain"]
     format_schema:
-      type: "object"
+      class: nanobrain.core.data_unit.DataUnit
       guaranteed_fields:
         generated_code:
-          type: "string"
+          class: nanobrain.core.data_unit.DataUnitString
           description: "Generated code content"
         file_path:
-          type: "string"
+          class: nanobrain.core.data_unit.DataUnitString
           description: "Path where code was saved"
         file_confirmation:
-          type: "string"
+          class: nanobrain.core.data_unit.DataUnitString
           description: "Confirmation of successful file creation"
   
   capabilities:
@@ -267,10 +267,10 @@ validation:
       type: int
 
 input_schema:
-  type: "object"
+  class: nanobrain.core.data_unit.DataUnit
   properties:
     input:
-      type: "string"
+      class: nanobrain.core.data_unit.DataUnitString
       description: >
         Detailed description of your code-related request. The input will be processed by a specialized agent that can:
         
@@ -287,12 +287,12 @@ input_schema:
         - "Create a RESTful API endpoint for user registration using Flask"
       required: true
     language:
-      type: "string"
+      class: nanobrain.core.data_unit.DataUnitString
       description: "Programming language to use (e.g., Python, JavaScript, TypeScript, Java, Go, etc.). Default is 'Python'"
       required: false
       default: "Python"
     context:
-      type: "string"
+      class: nanobrain.core.data_unit.DataUnitString
       description: "Additional context or code snippets that provide background information"
       required: false
 

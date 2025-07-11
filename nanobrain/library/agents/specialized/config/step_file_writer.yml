@@ -15,20 +15,20 @@ agent_card:
     supported_modes: ["json", "text"]
     content_types: ["application/json", "text/plain"]
     format_schema:
-      type: "object"
+      class: nanobrain.core.data_unit.DataUnit
       required_fields:
         input:
-          type: "string"
+          class: nanobrain.core.data_unit.DataUnitString
           description: "Natural language description of file operation to perform"
       optional_fields:
         operation:
-          type: "string"
+          class: nanobrain.core.data_unit.DataUnitString
           description: "Specific operation type (write, read, append, modify, delete)"
         path:
-          type: "string"
+          class: nanobrain.core.data_unit.DataUnitString
           description: "Target file path"
         content:
-          type: "string"
+          class: nanobrain.core.data_unit.DataUnitString
           description: "Content for write operations"
   
   output_format:
@@ -36,16 +36,16 @@ agent_card:
     supported_modes: ["json", "text"]
     content_types: ["application/json", "text/plain"]
     format_schema:
-      type: "object"
+      class: nanobrain.core.data_unit.DataUnit
       guaranteed_fields:
         result:
-          type: "object"
+          class: nanobrain.core.data_unit.DataUnit
           description: "File operation result with status and details"
         operation_performed:
-          type: "string"
+          class: nanobrain.core.data_unit.DataUnitString
           description: "Description of the operation that was performed"
         file_path:
-          type: "string"
+          class: nanobrain.core.data_unit.DataUnitString
           description: "Path of the file that was operated on"
   
   capabilities:
@@ -168,18 +168,18 @@ agent:
 # Input data configurations
 input_configs:
   instruction:
-    data_type: "memory"
+    class: nanobrain.core.data_unit.DataUnitMemory
     name: "instruction"
     description: "Natural language instruction for file operation"
   content:
-    data_type: "memory"
+    class: nanobrain.core.data_unit.DataUnitMemory
     name: "content"
     description: "Content to write to file (optional)"
     required: false
 
 # Output data configuration
 output_config:
-  data_type: "file"
+  class: nanobrain.core.data_unit.DataUnitFile
   name: "result"
   description: "Result of the file operation"
 
@@ -200,7 +200,7 @@ validation:
       type: "boolean"
       description: "Whether to create backups by default."
     backup_extension:
-      type: "string"
+      class: nanobrain.core.data_unit.DataUnitString
       description: "Extension to use for backup files."
       pattern: "^\\.[a-zA-Z0-9]+$"
     create_directories:
@@ -208,23 +208,23 @@ validation:
       description: "Whether to create parent directories if they don't exist."
 
 input_schema:
-  type: "object"
+  class: nanobrain.core.data_unit.DataUnit
   properties:
     input:
-      type: "string"
+      class: nanobrain.core.data_unit.DataUnitString
       description: "Natural language description of the file operation to perform"
       required: false
     operation:
-      type: "string"
+      class: nanobrain.core.data_unit.DataUnitString
       description: "Operation to perform (write, read, append, modify, delete, backup)"
       enum: ["write", "read", "append", "modify", "delete", "backup"]
       required: false
     path:
-      type: "string"
+      class: nanobrain.core.data_unit.DataUnitString
       description: "Path to the file to operate on"
       required: false
     content:
-      type: "string"
+      class: nanobrain.core.data_unit.DataUnitString
       description: "Content to write to the file (for write, append, and modify operations)"
       required: false
     backup:

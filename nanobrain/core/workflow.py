@@ -728,7 +728,7 @@ class ConfigLoader:
         self.logger.debug("Configuration cache cleared")
 
 
-class Workflow(BaseStep):
+class Workflow(Step):
     """
     Base workflow class extending Step.
     
@@ -794,7 +794,33 @@ class Workflow(BaseStep):
         
         # Core workflow components
         self.workflow_graph = WorkflowGraph()
-        self.config_loader = ConfigLoader(component_config.get('workflow_directory') or ".")
+        
+        # Resolve workflow directory properly
+        workflow_dir = component_config.get('workflow_directory') or "."
+        if not Path(workflow_dir).is_absolute():
+            # If relative path, search for it in common locations
+            possible_paths = [
+                Path(workflow_dir),  # Relative to current directory
+                Path.cwd() / workflow_dir,  # Relative to current working directory
+                Path(__file__).parent.parent / workflow_dir,  # Relative to nanobrain root
+                Path(__file__).parent.parent.parent / workflow_dir,  # One level up from nanobrain/core/
+            ]
+            
+            for possible_path in possible_paths:
+                if possible_path.exists():
+                    workflow_dir = str(possible_path.resolve())  # Use absolute path
+                    break
+            else:
+                # If none found, try to find nanobrain package root more systematically
+                current = Path(__file__).parent  # nanobrain/core/
+                while current.parent != current:  # Go up until filesystem root
+                    candidate = current / workflow_dir
+                    if candidate.exists():
+                        workflow_dir = str(candidate.resolve())
+                        break
+                    current = current.parent
+        
+        self.config_loader = ConfigLoader(workflow_dir)
         
         # Step and link management
         self.child_steps: Dict[str, BaseStep] = {}
@@ -1014,10 +1040,21 @@ class Workflow(BaseStep):
             else:
                 # Use inline configuration
                 config_data = step_config_dict.get('config', {})
-                # Ensure name is set for StepConfig
+                # Ensure name is set for config
                 config_data['name'] = step_id
                 config_data['description'] = step_config_dict.get('description', f"Step {step_id}")
-                step_config = StepConfig(**config_data)
+                
+                # Check if this is a workflow class and create appropriate config
+                step_class = step_config_dict.get('class', step_config_dict.get('step_type', 'Step'))
+                if 'workflow' in step_class.lower():
+                    # For workflows, create WorkflowConfig even when used as step
+                    # Add required workflow fields with defaults
+                    config_data.setdefault('steps', [])
+                    config_data.setdefault('links', [])
+                    step_config = WorkflowConfig(**config_data)
+                else:
+                    # For regular steps, use StepConfig
+                    step_config = StepConfig(**config_data)
             
             # Create step instance
             step = await self._create_step_instance(step_id, step_config, step_config_dict)

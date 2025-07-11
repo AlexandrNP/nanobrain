@@ -6,7 +6,7 @@ Simplified factory using direct import path resolution with from_config pattern.
 
 import logging
 import importlib
-from typing import Any, Dict, Union
+from typing import Any, Dict, Union, Optional
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -14,175 +14,106 @@ logger = logging.getLogger(__name__)
 
 def import_and_create_from_config(class_path: str, config: Any, **kwargs) -> Any:
     """
-    Import class and create instance using from_config pattern.
+    Universal component creation using from_config pattern
     
-    Args:
-        class_path: Full import path (e.g., 'module.submodule.ClassName')
-        config: Component configuration (dict or config object)
-        **kwargs: Additional dependencies for from_config
-        
-    Returns:
-        Component instance created via from_config
-        
-    Raises:
-        ValueError: If class_path is not a full import path or class doesn't implement from_config
-        ImportError: If class cannot be imported
+    NO HARDCODED VALUES OR MAPPINGS
+    - Every component must have from_config class method
+    - Configuration determines behavior entirely
+    - No special cases or conditional logic
     """
-    if '.' not in class_path:
-        raise ValueError(
-            f"Class path '{class_path}' must be a full import path. "
-            f"Short class names are no longer supported. "
-            f"Use format: 'module.submodule.ClassName'"
-        )
+    from ..logging_system import get_logger
+    logger = get_logger("component_factory")
     
+    # Basic validation
+    if not class_path or '.' not in class_path:
+        raise ValueError(f"Invalid class path: {class_path}. Must use full module.Class format")
+    
+    # Import the specified class
     try:
-        # Direct import - only supported method
         module_path, class_name = class_path.rsplit('.', 1)
         module = importlib.import_module(module_path)
         component_class = getattr(module, class_name)
-        
-        # Validate from_config implementation
-        if not hasattr(component_class, 'from_config'):
-            raise ValueError(
-                f"Class '{class_path}' must implement from_config method. "
-                f"All framework components must use the from_config pattern."
-            )
-        
-        # Convert dict to appropriate config object if needed
-        if isinstance(config, dict):
-            config = _convert_dict_to_config_object(class_path, config)
-        
-        # Create instance via from_config
-        logger.debug(f"Creating {class_path} via from_config pattern")
+    except (ImportError, AttributeError) as e:
+        raise ImportError(f"Failed to import component '{class_path}': {e}")
+    
+    # Verify class has from_config method
+    if not hasattr(component_class, 'from_config'):
+        raise AttributeError(
+            f"Component '{class_path}' does not implement required from_config method. "
+            f"All NanoBrain components must implement from_config pattern."
+        )
+    
+    # Create instance using from_config - NO PREPROCESSING
+    try:
         instance = component_class.from_config(config, **kwargs)
-        
-        logger.info(f"Successfully created {class_path} via from_config")
+        logger.debug(f"Created {class_path} via from_config")
         return instance
-        
-    except ImportError as e:
-        raise ImportError(f"Cannot import module '{module_path}': {e}")
-    except AttributeError as e:
-        raise ImportError(f"Class '{class_name}' not found in module '{module_path}': {e}")
     except Exception as e:
-        raise ValueError(f"Failed to create component '{class_path}': {e}")
+        from ..component_base import ComponentConfigurationError
+        raise ComponentConfigurationError(
+            f"Failed to create '{class_path}' via from_config: {e}"
+        )
 
 
-def _convert_dict_to_config_object(class_path: str, config_dict: Dict[str, Any]) -> Any:
+# REMOVED: _convert_dict_to_config_object function - NO PREPROCESSING
+# Components handle their own configuration conversion in from_config
+
+def validate_component_config(config: Dict[str, Any]) -> None:
     """
-    Convert dictionary configuration to appropriate config object based on component type.
-    
-    Args:
-        class_path: Full import path to determine config type
-        config_dict: Dictionary configuration
-        
-    Returns:
-        Appropriate config object
+    Validate component configuration has required fields
+    NO HARDCODED VALIDATION - only structural checks
     """
-    # MANDATORY: Check for agent_card/tool_card sections first
-    # All configurations with card sections must use standard config classes
-    if 'agent_card' in config_dict and 'agent' in class_path.lower():
-        from nanobrain.core.agent import AgentConfig
-        logger.debug(f"Using AgentConfig with agent_card for {class_path}")
-        return AgentConfig(**config_dict)
-    elif 'tool_card' in config_dict and any(term in class_path.lower() for term in ['tool', 'client']):
-        # Always use generic ToolConfig for tools with tool_card
-        # Individual tools will convert to specific configs in their from_config methods
-        from nanobrain.core.tool import ToolConfig
-        logger.debug(f"Using generic ToolConfig with tool_card for {class_path}")
-        return ToolConfig(**config_dict)
+    from pydantic import BaseModel
     
-    # Determine config class based on component class path (existing logic)
-    elif 'executor' in class_path.lower():
-        from nanobrain.core.executor import ExecutorConfig
-        return ExecutorConfig(**config_dict)
-    elif 'agent' in class_path.lower():
-        from nanobrain.core.agent import AgentConfig
-        return AgentConfig(**config_dict)
-    elif 'step' in class_path.lower():
-        from nanobrain.core.step import StepConfig
-        return StepConfig(**config_dict)
-    elif 'workflow' in class_path.lower():
-        from nanobrain.core.workflow import WorkflowConfig
-        return WorkflowConfig(**config_dict)
-    elif 'data_unit' in class_path.lower():
-        from nanobrain.core.data_unit import DataUnitConfig
-        return DataUnitConfig(**config_dict)
-    elif 'trigger' in class_path.lower():
-        from nanobrain.core.trigger import TriggerConfig
-        return TriggerConfig(**config_dict)
-    elif 'link' in class_path.lower():
-        from nanobrain.core.link import LinkConfig
-        return LinkConfig(**config_dict)
-    else:
-        # If we can't determine the type, try to import the config class
-        # by convention (ComponentName -> ComponentConfig)
-        try:
-            module_path, class_name = class_path.rsplit('.', 1)
-            config_class_name = class_name + "Config"
-            module = importlib.import_module(module_path)
-            config_class = getattr(module, config_class_name)
-            return config_class(**config_dict)
-        except (ImportError, AttributeError):
-            # Fall back to returning the dict - let the component handle it
-            logger.warning(f"Could not determine config class for {class_path}, passing dict directly")
-            return config_dict
+    if not isinstance(config, (dict, BaseModel)):
+        raise ValueError("Configuration must be dict or BaseModel")
+    
+    # Only validate that class field exists for dict configs
+    if isinstance(config, dict) and 'class' not in config:
+        raise ValueError("Component configuration must specify 'class' field")
 
 
-class ComponentFactory:
+# REMOVED ComponentFactory class - use functions directly
+
+def load_config_file(config_path: str) -> Dict[str, Any]:
+    """Load configuration from file - NO MODIFICATIONS"""
+    import yaml
+    
+    path = Path(config_path)
+    if not path.exists():
+        raise FileNotFoundError(f"Configuration file not found: {config_path}")
+    
+    with open(path, 'r') as f:
+        config = yaml.safe_load(f)
+        
+    if not isinstance(config, dict):
+        raise ValueError(f"Configuration file must contain a dictionary: {config_path}")
+    
+    # Return AS-IS - no modifications or hardcoded additions
+    return config
+
+
+# Component registry helpers (NO HARDCODING)
+class ComponentRegistry:
     """
-    Simplified factory for creating NanoBrain components using direct import paths.
-    
-    This factory enforces the modern from_config pattern and eliminates backward
-    compatibility complexity. All components must use full import paths and 
-    implement the from_config method.
+    Registry for component classes - NO HARDCODED MAPPINGS
+    Components register themselves, no predefined mappings
     """
+    _registry: Dict[str, type] = {}
     
-    def __init__(self):
-        """Initialize the simplified component factory."""
-        self.logger = logging.getLogger(__name__ + ".ComponentFactory")
-        self.logger.debug("Simplified ComponentFactory initialized")
+    @classmethod
+    def register(cls, component_class: type) -> None:
+        """Components self-register - no hardcoded registration"""
+        if hasattr(component_class, '__module__') and hasattr(component_class, '__name__'):
+            full_path = f"{component_class.__module__}.{component_class.__name__}"
+            cls._registry[full_path] = component_class
     
-    def create_component_from_config(self, class_path: str, config: Any, **kwargs) -> Any:
-        """
-        Create component using direct import path and from_config pattern.
-        
-        Args:
-            class_path: Full import path to component class
-            config: Component configuration (dict or config object)
-            **kwargs: Additional dependencies for from_config
-            
-        Returns:
-            Component instance
-        """
-        return import_and_create_from_config(class_path, config, **kwargs)
+    @classmethod
+    def get(cls, class_path: str) -> Optional[type]:
+        """Get registered component - no fallbacks or defaults"""
+        return cls._registry.get(class_path)
     
-    def create_from_yaml_file(self, yaml_path: Union[str, Path], class_path: str, **kwargs) -> Any:
-        """
-        Create component from YAML configuration file.
-        
-        Args:
-            yaml_path: Path to YAML configuration file
-            class_path: Full import path to component class
-            **kwargs: Additional dependencies for from_config
-            
-        Returns:
-            Component instance
-        """
-        import yaml
-        
-        yaml_path = Path(yaml_path)
-        if not yaml_path.exists():
-            raise FileNotFoundError(f"Configuration file not found: {yaml_path}")
-        
-        with open(yaml_path, 'r') as f:
-            config_dict = yaml.safe_load(f)
-        
-        # Convert dict to appropriate config object based on component type
-        return self.create_component_from_config(class_path, config_dict, **kwargs)
-    
-
-
-
-# Backwards compatibility note: Legacy global functions removed
-# Use ComponentFactory().create_component_from_config() or import_and_create_from_config() directly
-# For workflow creation, use direct: WorkflowClass.from_config(workflow_config) pattern 
+    @classmethod
+    def clear(cls) -> None:
+        """Clear registry - used for testing"""
+        cls._registry.clear() 

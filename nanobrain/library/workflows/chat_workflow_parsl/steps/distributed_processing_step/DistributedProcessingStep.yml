@@ -24,11 +24,11 @@ config:
     enable_parallel_execution: true
   data_units:
     input:
-      type: memory
+      class: nanobrain.core.data_unit.DataUnitMemory
       description: Input messages for distributed processing
       cache_size: 100
     output:
-      type: memory
+      class: nanobrain.core.data_unit.DataUnitMemory
       description: Results from distributed processing
       cache_size: 100
   logging:

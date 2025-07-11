@@ -15,7 +15,7 @@ from datetime import datetime
 from pathlib import Path
 
 # Core framework imports
-from nanobrain.core.data_unit import DataUnitMemory, DataUnitConfig, DataUnitType
+from nanobrain.core.data_unit import DataUnitMemory, DataUnitConfig
 from nanobrain.core.executor import ParslExecutor, ExecutorConfig, ExecutorType
 from nanobrain.core.logging_system import get_logger
 from nanobrain.core.agent import AgentConfig
@@ -130,7 +130,7 @@ class ParslChatWorkflow:
             if config.get('type') == 'memory':
                 data_unit_config = DataUnitConfig(
                     name=name,
-                    type=DataUnitType.MEMORY,
+                    **{"class": "nanobrain.core.data_unit.DataUnitMemory"},
                     description=config.get('description', ''),
                     cache_size=config.get('cache_size', 100)
                 )

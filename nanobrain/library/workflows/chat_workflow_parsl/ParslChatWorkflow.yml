@@ -39,26 +39,26 @@ config:
     config_file: config/EnhancedCollaborativeAgent_3.yml
   data_units:
     user_input:
-      type: memory
+      class: nanobrain.core.data_unit.DataUnitMemory
       description: User input for Parsl distributed processing
       cache_size: 100
     parsl_agent_input:
-      type: memory
+      class: nanobrain.core.data_unit.DataUnitMemory
       description: Processed input for Parsl agent distribution
       cache_size: 100
     parsl_agent_output:
-      type: memory
+      class: nanobrain.core.data_unit.DataUnitMemory
       description: Aggregated output from Parsl distributed agents
       cache_size: 100
     cli_output:
-      type: memory
+      class: nanobrain.core.data_unit.DataUnitMemory
       description: Final formatted output for CLI display
       cache_size: 100
     conversation_history:
-      type: conversation_history
+      class: nanobrain.core.data_unit.DataUnitMemory
       config_file: config/ConversationHistoryUnit.yml
     parsl_performance_metrics:
-      type: memory
+      class: nanobrain.core.data_unit.DataUnitMemory
       description: Parsl execution performance and monitoring data
       cache_size: 200
 steps:

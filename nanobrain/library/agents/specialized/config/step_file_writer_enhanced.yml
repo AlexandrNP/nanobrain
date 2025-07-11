@@ -15,20 +15,20 @@ agent_card:
     supported_modes: ["json", "text"]
     content_types: ["application/json", "text/plain"]
     format_schema:
-      type: "object"
+      class: nanobrain.core.data_unit.DataUnit
       required_fields:
         input:
-          type: "string"
+          class: nanobrain.core.data_unit.DataUnitString
           description: "Natural language description of file operation (supports complex and batch operations)"
       optional_fields:
         operation:
-          type: "string"
+          class: nanobrain.core.data_unit.DataUnitString
           description: "Specific operation type (write, read, append, modify, delete, backup, move, copy, search, replace)"
         template:
-          type: "string"
+          class: nanobrain.core.data_unit.DataUnitString
           description: "Template for file generation (python_module, config_file, etc.)"
         encoding:
-          type: "string"
+          class: nanobrain.core.data_unit.DataUnitString
           description: "File encoding (utf-8, ascii, latin-1, cp1252)"
   
   output_format:
@@ -36,16 +36,16 @@ agent_card:
     supported_modes: ["json", "text"]
     content_types: ["application/json", "text/plain"]
     format_schema:
-      type: "object"
+      class: nanobrain.core.data_unit.DataUnit
       guaranteed_fields:
         result:
-          type: "object"
+          class: nanobrain.core.data_unit.DataUnit
           description: "Comprehensive operation result with status, files affected, and metadata"
         operations_performed:
           type: "array"
           description: "List of all operations performed for batch processes"
         backup_info:
-          type: "object"
+          class: nanobrain.core.data_unit.DataUnit
           description: "Information about backups created during operations"
   
   capabilities:
@@ -208,28 +208,28 @@ validation:
     - content
   constraints:
     model:
-      type: string
+      class: nanobrain.core.data_unit.DataUnitString
       pattern: "^(gpt-|claude-|llama-)"
       message: "Model must be a supported LLM"
     backup_extension:
-      type: string
+      class: nanobrain.core.data_unit.DataUnitString
       pattern: "^\\.[a-zA-Z0-9]+$"
       message: "Backup extension must start with a dot and contain only alphanumeric characters"
     operation:
-      type: string
+      class: nanobrain.core.data_unit.DataUnitString
       enum: ["write", "read", "append", "modify", "delete", "backup", "move", "copy", "search", "replace"]
       message: "Operation must be one of the supported file operations"
     path:
-      type: string
+      class: nanobrain.core.data_unit.DataUnitString
       pattern: "^[^<>:\"|?*]+$"
       message: "Path must not contain invalid characters: < > : \" | ? *"
 
 # Input schema with comprehensive validation
 input_schema:
-  type: "object"
+  class: nanobrain.core.data_unit.DataUnit
   properties:
     input:
-      type: "string"
+      class: nanobrain.core.data_unit.DataUnitString
       description: >
         Natural language description of the file operation to perform. The enhanced agent can handle:
         
@@ -258,19 +258,19 @@ input_schema:
       max_length: 2000
     
     operation:
-      type: "string"
+      class: nanobrain.core.data_unit.DataUnitString
       description: "Specific operation to perform (optional, will be inferred from input if not provided)"
       required: false
       enum: ["write", "read", "append", "modify", "delete", "backup", "move", "copy", "search", "replace"]
     
     path:
-      type: "string"
+      class: nanobrain.core.data_unit.DataUnitString
       description: "Path to the file to operate on (optional, will be extracted from input if not provided)"
       required: false
       max_length: 500
     
     content:
-      type: "string"
+      class: nanobrain.core.data_unit.DataUnitString
       description: "Content to write/append/modify (optional, will be extracted from input if not provided)"
       required: false
       max_length: 50000
@@ -288,14 +288,14 @@ input_schema:
       default: true
     
     encoding:
-      type: "string"
+      class: nanobrain.core.data_unit.DataUnitString
       description: "File encoding to use"
       required: false
       default: "utf-8"
       enum: ["utf-8", "ascii", "latin-1", "cp1252"]
     
     template:
-      type: "string"
+      class: nanobrain.core.data_unit.DataUnitString
       description: "Template to use for file generation"
       required: false
       enum: ["python_module", "python_class", "python_function", "config_file", "readme", "dockerfile"]
@@ -306,12 +306,12 @@ parameters:
     description: "Parameters for writing a file"
     fields:
       path:
-        type: "string"
+        class: nanobrain.core.data_unit.DataUnitString
         description: "Path to the file to write"
         required: true
         max_length: 500
       content:
-        type: "string"
+        class: nanobrain.core.data_unit.DataUnitString
         description: "Content to write to the file"
         required: true
         max_length: 50000
@@ -321,7 +321,7 @@ parameters:
         default: true
         required: false
       encoding:
-        type: "string"
+        class: nanobrain.core.data_unit.DataUnitString
         description: "File encoding to use"
         default: "utf-8"
         required: false
@@ -335,12 +335,12 @@ parameters:
     description: "Parameters for reading a file"
     fields:
       path:
-        type: "string"
+        class: nanobrain.core.data_unit.DataUnitString
         description: "Path to the file to read"
         required: true
         max_length: 500
       encoding:
-        type: "string"
+        class: nanobrain.core.data_unit.DataUnitString
         description: "File encoding to use"
         default: "utf-8"
         required: false
@@ -354,12 +354,12 @@ parameters:
     description: "Parameters for appending to a file"
     fields:
       path:
-        type: "string"
+        class: nanobrain.core.data_unit.DataUnitString
         description: "Path to the file to append to"
         required: true
         max_length: 500
       content:
-        type: "string"
+        class: nanobrain.core.data_unit.DataUnitString
         description: "Content to append to the file"
         required: true
         max_length: 50000
@@ -369,7 +369,7 @@ parameters:
         default: true
         required: false
       encoding:
-        type: "string"
+        class: nanobrain.core.data_unit.DataUnitString
         description: "File encoding to use"
         default: "utf-8"
         required: false
@@ -383,12 +383,12 @@ parameters:
     description: "Parameters for modifying a file"
     fields:
       path:
-        type: "string"
+        class: nanobrain.core.data_unit.DataUnitString
         description: "Path to the file to modify"
         required: true
         max_length: 500
       content:
-        type: "string"
+        class: nanobrain.core.data_unit.DataUnitString
         description: "New content for the file or modification instructions"
         required: true
         max_length: 50000
@@ -398,12 +398,12 @@ parameters:
         default: true
         required: false
       backup_ext:
-        type: "string"
+        class: nanobrain.core.data_unit.DataUnitString
         description: "Extension to use for the backup file"
         default: ".bak"
         required: false
       encoding:
-        type: "string"
+        class: nanobrain.core.data_unit.DataUnitString
         description: "File encoding to use"
         default: "utf-8"
         required: false
@@ -412,7 +412,7 @@ parameters:
     description: "Parameters for deleting a file"
     fields:
       path:
-        type: "string"
+        class: nanobrain.core.data_unit.DataUnitString
         description: "Path to the file to delete"
         required: true
         max_length: 500
@@ -422,7 +422,7 @@ parameters:
         default: true
         required: false
       backup_ext:
-        type: "string"
+        class: nanobrain.core.data_unit.DataUnitString
         description: "Extension to use for the backup file"
         default: ".bak"
         required: false
@@ -436,12 +436,12 @@ parameters:
     description: "Parameters for searching within files"
     fields:
       path:
-        type: "string"
+        class: nanobrain.core.data_unit.DataUnitString
         description: "Path to the file or directory to search in"
         required: true
         max_length: 500
       pattern:
-        type: "string"
+        class: nanobrain.core.data_unit.DataUnitString
         description: "Search pattern or text to find"
         required: true
         max_length: 1000
@@ -465,17 +465,17 @@ parameters:
     description: "Parameters for find and replace operations"
     fields:
       path:
-        type: "string"
+        class: nanobrain.core.data_unit.DataUnitString
         description: "Path to the file to perform replacement in"
         required: true
         max_length: 500
       find:
-        type: "string"
+        class: nanobrain.core.data_unit.DataUnitString
         description: "Text or pattern to find"
         required: true
         max_length: 1000
       replace:
-        type: "string"
+        class: nanobrain.core.data_unit.DataUnitString
         description: "Text to replace with"
         required: true
         max_length: 1000

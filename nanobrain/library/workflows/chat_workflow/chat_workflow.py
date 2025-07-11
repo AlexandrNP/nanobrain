@@ -26,7 +26,7 @@ from datetime import datetime
 
 # Core framework imports with proper nanobrain package structure
 from nanobrain.core.component_base import FromConfigBase
-from nanobrain.core.data_unit import DataUnitMemory, DataUnitConfig, DataUnitType
+from nanobrain.core.data_unit import DataUnitMemory, DataUnitConfig
 from nanobrain.core.trigger import DataUpdatedTrigger, TriggerConfig, TriggerType
 from nanobrain.core.link import DirectLink, LinkConfig, LinkType
 from nanobrain.core.executor import LocalExecutor, ExecutorConfig

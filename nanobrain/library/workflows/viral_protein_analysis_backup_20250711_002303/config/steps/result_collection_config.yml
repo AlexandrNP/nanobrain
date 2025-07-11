@@ -1,0 +1,50 @@
+name: Result Collection
+description: Collect and finalize results from viral protein analysis workflow
+estimated_time: 120.0
+class: nanobrain.library.workflows.viral_protein_analysis.steps.result_collection_step.ResultCollectionStep
+step_type: simple
+debug_mode: false
+enable_logging: true
+
+# Collection configuration
+collection_config:
+  include_raw_data: false
+  include_processed_data: true
+  include_analysis_results: true
+  include_metadata: true
+  create_summary: true
+
+# Output configuration
+output_config:
+  format: "structured"
+  create_report: true
+  include_visualizations: true
+  include_statistics: true
+  save_to_file: true
+  output_directory: "results"
+
+# Validation configuration
+validation_config:
+  validate_completeness: true
+  validate_consistency: true
+  check_data_quality: true
+
+# Input data unit
+input_data_unit:
+  name: final_analysis_input
+  class: nanobrain.core.data_unit.DataUnit
+
+# Output data unit
+output_data_unit:
+  name: workflow_results_output
+  class: nanobrain.core.data_unit.DataUnit
+
+# Metadata
+logical_steps_covered: [14]
+step_description_detailed: 'Collect and finalize workflow results for presentation'
+
+_metadata:
+  last_updated: '2025-01-28'
+  updated_by: 'config_alignment'
+  migration_version: 2.0.0
+  uses_modular_config: true 

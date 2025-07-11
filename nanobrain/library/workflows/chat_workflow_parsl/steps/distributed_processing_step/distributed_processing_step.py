@@ -16,7 +16,7 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime
 
 from nanobrain.core.logging_system import get_logger, OperationType
-from nanobrain.core.data_unit import DataUnitMemory, DataUnitConfig, DataUnitType
+from nanobrain.core.data_unit import DataUnitMemory, DataUnitConfig
 
 
 class DistributedProcessingStep:
@@ -68,7 +68,7 @@ class DistributedProcessingStep:
         self.input_data_unit = DataUnitMemory.from_config(
             DataUnitConfig(
                 name=f"{self.name}_input",
-                data_type=DataUnitType.MEMORY,
+                **{"class": "nanobrain.core.data_unit.DataUnitMemory"},
                 description="Input messages for distributed processing"
             )
         )
@@ -78,7 +78,7 @@ class DistributedProcessingStep:
         self.output_data_unit = DataUnitMemory.from_config(
             DataUnitConfig(
                 name=f"{self.name}_output",
-                data_type=DataUnitType.MEMORY,
+                **{"class": "nanobrain.core.data_unit.DataUnitMemory"},
                 description="Results from distributed processing"
             )
         )

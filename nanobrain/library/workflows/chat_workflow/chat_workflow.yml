@@ -55,30 +55,30 @@ config:
       description: Delegate mathematical calculations
   data_units:
     user_input:
-      type: memory
+      class: nanobrain.core.data_unit.DataUnitMemory
       description: User input messages
       cache_size: 100
     agent_input:
-      type: memory
+      class: nanobrain.core.data_unit.DataUnitMemory
       description: Processed input for agent
       cache_size: 100
     agent_output:
-      type: memory
+      class: nanobrain.core.data_unit.DataUnitMemory
       description: Agent response output
       cache_size: 100
     cli_output:
-      type: memory
+      class: nanobrain.core.data_unit.DataUnitMemory
       description: Final output for CLI display
       cache_size: 100
     conversation_history:
-      type: conversation_history
+      class: nanobrain.core.data_unit.DataUnitMemory
       description: Persistent conversation history
       db_path: chat_workflow_history.db
       max_messages_per_conversation: 1000
       auto_cleanup: true
       cleanup_days: 30
     performance_metrics:
-      type: memory
+      class: nanobrain.core.data_unit.DataUnitMemory
       description: Performance tracking data
       cache_size: 50
 steps:

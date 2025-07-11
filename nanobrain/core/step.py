@@ -43,6 +43,9 @@ class StepConfig(BaseModel):
     enable_logging: bool = True
     log_data_transfers: bool = True
     log_executions: bool = True
+    
+    # NEW: Step-level tool configuration
+    tools: Optional[Dict[str, Dict[str, Any]]] = Field(default_factory=dict)
 
 
 class BaseStep(FromConfigBase, ABC):
@@ -106,7 +109,13 @@ class BaseStep(FromConfigBase, ABC):
     @classmethod  
     def resolve_dependencies(cls, component_config: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """Resolve BaseStep dependencies"""
-        executor = kwargs.get('executor') or LocalExecutor()
+        executor = kwargs.get('executor')
+        if executor is None:
+            # Import here to avoid circular imports
+            from .executor import ExecutorConfig
+            # Create default LocalExecutor using from_config pattern
+            default_config = ExecutorConfig(executor_type="local")
+            executor = LocalExecutor.from_config(default_config)
         return {
             'executor': executor
         }
@@ -132,6 +141,13 @@ class BaseStep(FromConfigBase, ABC):
         
         # Trigger for activation
         self.trigger: Optional[TriggerBase] = None
+        
+        # Initialize tool registry
+        self.tools: Dict[str, Any] = {}
+        
+        # Load tools from configuration
+        if hasattr(config, 'tools') and config.tools:
+            self._load_tools_from_config(config.tools)
         
         # State management
         self._is_initialized = False
@@ -232,28 +248,12 @@ class BaseStep(FromConfigBase, ABC):
             }
     
     def _create_data_unit(self, config: DataUnitConfig) -> DataUnitBase:
-        """Create a data unit from configuration using ComponentFactory."""
+        """Create a data unit from configuration using pure component factory."""
         # Import here to avoid circular imports
-        from .config.component_factory import import_and_create_from_config
-        from .data_unit import DataUnitType
+        from .data_unit import create_data_unit
         
-        # Map data unit type to full class path
-        data_type = config.data_type
-        if isinstance(data_type, str):
-            data_type = DataUnitType(data_type)
-        
-        class_path_map = {
-            DataUnitType.MEMORY: "nanobrain.core.data_unit.DataUnitMemory",
-            DataUnitType.FILE: "nanobrain.core.data_unit.DataUnitFile", 
-            DataUnitType.STRING: "nanobrain.core.data_unit.DataUnitString",
-            DataUnitType.STREAM: "nanobrain.core.data_unit.DataUnitStream"
-        }
-        
-        class_path = class_path_map.get(data_type)
-        if not class_path:
-            raise ValueError(f"Unknown data unit type: {data_type}")
-        
-        return import_and_create_from_config(class_path, config)
+        # Use the pure create_data_unit factory function
+        return create_data_unit(config)
     
     def _create_trigger(self, config: TriggerConfig) -> TriggerBase:
         """Create a trigger from configuration."""
@@ -434,6 +434,95 @@ class BaseStep(FromConfigBase, ABC):
                 self.nb_logger.error(f"Failed to propagate data through link {link_id}: {e}", 
                                    link_id=link_id,
                                    error_type=type(e).__name__)
+    
+    def _load_tools_from_config(self, tools_config: Dict[str, Dict[str, Any]]) -> None:
+        """Load tools configuration from step-level YAML configuration"""
+        logger = get_logger(f"step.{self.name}.tools")
+        
+        for tool_name, tool_config in tools_config.items():
+            try:
+                tool_instance = self._create_tool_from_config(tool_name, tool_config)
+                self._register_tool(tool_instance, tool_name)
+                logger.info(f"Loaded tool: {tool_name}")
+            except Exception as e:
+                logger.error(f"Failed to load tool {tool_name}: {e}")
+                raise
+
+    def _create_tool_from_config(self, tool_name: str, tool_config: Dict[str, Any]) -> Any:
+        """Create tool instance from step-level YAML configuration"""
+        from .config.component_factory import import_and_create_from_config
+        
+        # Start with a copy of the local tool config
+        merged_config = tool_config.copy()
+        
+        # Get tool class from config
+        tool_class = tool_config.get('class')
+        
+        # If no class specified or config_file is present, load from referenced config file
+        config_file = tool_config.get('config_file')
+        if config_file:
+            try:
+                tool_config_data = self._load_config_file(config_file)
+                # Merge external config with local config, prioritizing local config
+                external_config = tool_config_data.copy()
+                # Remove the tool_config section temporarily if it exists in external config
+                external_tool_config = external_config.pop('tool_config', {})
+                # Merge external config first, then local config overrides it
+                merged_config = {**external_config, **merged_config, **external_tool_config}
+                
+                # Get class from external config if not specified locally
+                if not tool_class:
+                    tool_class = tool_config_data.get('class')
+            except Exception as e:
+                logger = get_logger(f"step.{self.name}.tools")
+                logger.warning(f"Failed to load external config file {config_file}: {e}")
+        
+        if not tool_class:
+            raise ValueError(f"Tool '{tool_name}' configuration missing 'class' field")
+        
+        # Update the class in merged config
+        merged_config['class'] = tool_class
+        
+        # Merge tool_config section if present in local config
+        if 'tool_config' in tool_config:
+            tool_config_section = merged_config.pop('tool_config', {})
+            merged_config = {**merged_config, **tool_config_section, **tool_config['tool_config']}
+        
+        # Ensure name field is present (required by many components)
+        if 'name' not in merged_config and tool_name:
+            merged_config['name'] = tool_name
+        
+        # Create tool using pure component factory
+        return import_and_create_from_config(tool_class, merged_config)
+
+    def _load_config_file(self, config_file_path: str) -> Dict[str, Any]:
+        """Load configuration from file"""
+        import yaml
+        from pathlib import Path
+        
+        config_path = Path(config_file_path)
+        if not config_path.is_absolute():
+            # Make relative to step's workflow directory if available
+            workflow_dir = getattr(self.config, 'workflow_directory', '.')
+            config_path = Path(workflow_dir) / config_path
+        
+        if not config_path.exists():
+            raise FileNotFoundError(f"Configuration file not found: {config_path}")
+        
+        with open(config_path, 'r') as f:
+            return yaml.safe_load(f)
+
+    def _register_tool(self, tool: Any, name: str) -> None:
+        """Register tool with step for easy access"""
+        self.tools[name] = tool
+
+    def get_tool(self, name: str) -> Optional[Any]:
+        """Get tool by name for step usage"""
+        return self.tools.get(name)
+
+    def list_tools(self) -> List[str]:
+        """List all available tool names"""
+        return list(self.tools.keys())
     
     @abstractmethod
     async def process(self, input_data: Dict[str, Any], **kwargs) -> Any:

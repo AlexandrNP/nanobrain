@@ -9,8 +9,7 @@ import asyncio
 import logging
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional, List, Union
-from enum import Enum
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 from pathlib import Path
 import json
 import time
@@ -22,26 +21,36 @@ from .logging_system import get_logger, get_system_log_manager
 logger = logging.getLogger(__name__)
 
 
-class DataUnitType(Enum):
-    """Types of data units."""
-    MEMORY = "memory"
-    FILE = "file"
-    STRING = "string"
-    STREAM = "stream"
-    DATABASE = "database"
-
-
 class DataUnitConfig(BaseModel):
-    """Configuration for data units."""
+    """Configuration for data units - ONLY class field for type specification"""
     model_config = ConfigDict(use_enum_values=True)
     
-    data_type: DataUnitType = DataUnitType.MEMORY
+    # MANDATORY class field for data unit type specification
+    class_field: str = Field(alias="class", description="Full class path for data unit type")
+    
+    # Keep existing fields
+    name: str = ""
+    description: str = ""
     persistent: bool = False
     cache_size: int = Field(default=1000, ge=1)
     file_path: Optional[str] = None
     encoding: str = "utf-8"
-    initial_value: Optional[str] = None  # For string data units
-    name: str = ""
+    initial_value: Optional[str] = None
+    
+    @field_validator('class_field')
+    @classmethod
+    def validate_class_field(cls, v):
+        """Validate class field is properly specified"""
+        if not v or not v.strip():
+            raise ValueError("Data unit class must be specified")
+        if not v.startswith('nanobrain.core.data_unit.'):
+            raise ValueError("Data unit class must be from nanobrain.core.data_unit module")
+        return v.strip()
+    
+    @property
+    def class_path(self) -> str:
+        """Get the class path for component factory"""
+        return self.class_field
 
 
 class DataUnitBase(FromConfigBase, ABC):
@@ -55,27 +64,29 @@ class DataUnitBase(FromConfigBase, ABC):
     """
     
     COMPONENT_TYPE = "data_unit"
-    REQUIRED_CONFIG_FIELDS = ['data_type']
+    REQUIRED_CONFIG_FIELDS = ['class_field']
     OPTIONAL_CONFIG_FIELDS = {
         'persistent': False,
         'cache_size': 1000,
         'file_path': None,
         'encoding': 'utf-8',
         'initial_value': None,
-        'name': ''
+        'name': '',
+        'description': ''
     }
     
     @classmethod
     def extract_component_config(cls, config: DataUnitConfig) -> Dict[str, Any]:
         """Extract DataUnit configuration"""
         return {
-            'data_type': config.data_type,
+            'class_path': config.class_path,
             'persistent': getattr(config, 'persistent', False),
             'cache_size': getattr(config, 'cache_size', 1000),
             'file_path': getattr(config, 'file_path', None),
             'encoding': getattr(config, 'encoding', 'utf-8'),
             'initial_value': getattr(config, 'initial_value', None),
-            'name': getattr(config, 'name', '')
+            'name': getattr(config, 'name', ''),
+            'description': getattr(config, 'description', '')
         }
     
     @classmethod  
@@ -105,7 +116,7 @@ class DataUnitBase(FromConfigBase, ABC):
             # Register with system log manager
             system_manager = get_system_log_manager()
             system_manager.register_component("data_units", self.name, self, {
-                "data_type": component_config['data_type'].value if hasattr(component_config['data_type'], 'value') else str(component_config['data_type']),
+                "class_path": component_config['class_path'],
                 "persistent": component_config['persistent'],
                 "enable_logging": True
             })
@@ -651,9 +662,110 @@ class DataUnitStream(DataUnitBase):
         self._metadata.clear()
 
 
+class DataUnit(DataUnitBase):
+    """
+    Object-based data unit for efficient transportation of objects by reference.
+    
+    This data unit is designed to pass Python objects between workflow steps
+    without serialization, maintaining object references for efficient memory usage.
+    """
+    
+    @classmethod
+    def from_config(cls, config: DataUnitConfig, **kwargs) -> 'DataUnit':
+        """Mandatory from_config implementation for DataUnit"""
+        logger = get_logger(f"{cls.__name__}.from_config")
+        logger.info(f"Creating {cls.__name__} from configuration")
+        
+        # Step 1: Validate configuration schema
+        cls.validate_config_schema(config)
+        
+        # Step 2: Extract component-specific configuration  
+        component_config = cls.extract_component_config(config)
+        
+        # Step 3: Resolve dependencies
+        dependencies = cls.resolve_dependencies(component_config, **kwargs)
+        
+        # Step 4: Create instance
+        instance = cls.create_instance(config, component_config, dependencies)
+        
+        # Step 5: Post-creation initialization
+        instance._post_config_initialization()
+        
+        logger.info(f"Successfully created {cls.__name__}")
+        return instance
+    
+    def _init_from_config(self, config: DataUnitConfig, component_config: Dict[str, Any],
+                         dependencies: Dict[str, Any]) -> None:
+        """Initialize DataUnit with resolved dependencies"""
+        super()._init_from_config(config, component_config, dependencies)
+        self._object_ref = None
+        self._object_type = None
+        self._object_id = None
+        
+    async def get(self) -> Any:
+        """Get the object reference."""
+        if not self.is_initialized:
+            await self.initialize()
+        return self._object_ref
+    
+    async def set(self, data: Any) -> None:
+        """Set the object reference."""
+        if not self.is_initialized:
+            await self.initialize()
+        async with self._lock:
+            self._object_ref = data
+            self._object_type = type(data).__name__
+            self._object_id = id(data)
+            self._metadata['last_updated'] = time.time()
+            self._metadata['object_type'] = self._object_type
+            self._metadata['object_id'] = self._object_id
+    
+    async def clear(self) -> None:
+        """Clear the object reference."""
+        self._access_count["clear"] += 1
+        self._last_operation = "clear"
+        self._operation_count += 1
+        
+        # Log before clearing
+        if self.enable_logging and self.nb_logger:
+            had_object = self._object_ref is not None
+            self.nb_logger.log_data_unit_operation(
+                operation="clear",
+                data_unit_name=self.name,
+                metadata={
+                    "had_object": had_object,
+                    "previous_object_type": self._object_type,
+                    "previous_object_id": self._object_id,
+                    "metadata_count": len(self._metadata),
+                    "state_before": self._get_internal_state()
+                }
+            )
+        
+        async with self._lock:
+            self._object_ref = None
+            self._object_type = None
+            self._object_id = None
+            self._metadata.clear()
+            
+        # Log after clearing
+        if self.enable_logging and self.nb_logger:
+            self.nb_logger.debug(f"Clear completed for {self.name}",
+                               operation="clear_complete",
+                               internal_state=self._get_internal_state())
+    
+    def get_object_info(self) -> Dict[str, Any]:
+        """Get information about the stored object."""
+        return {
+            'has_object': self._object_ref is not None,
+            'object_type': self._object_type,
+            'object_id': self._object_id,
+            'metadata': self.metadata
+        }
+
+
 def create_data_unit(config: Union[Dict[str, Any], DataUnitConfig], **kwargs) -> DataUnitBase:
     """
-    MANDATORY from_config factory for all data unit types
+    Create data unit using ONLY class field - NO ENUM MAPPING
     
     Args:
         config: Data unit configuration (dict or DataUnitConfig)
@@ -663,37 +775,27 @@ def create_data_unit(config: Union[Dict[str, Any], DataUnitConfig], **kwargs) ->
         DataUnitBase instance created via from_config
         
     Raises:
-        ValueError: If data unit type is unknown
+        ValueError: If class field is missing or invalid
         ComponentConfigurationError: If configuration is invalid
     """
     logger = get_logger("data_unit.factory")
-    logger.info(f"Creating data unit via mandatory from_config")
     
     if isinstance(config, dict):
+        # Validate class field exists
+        if 'class' not in config:
+            raise ValueError("Data unit configuration must specify 'class' field")
         config = DataUnitConfig(**config)
     
-    # Handle both enum and string values (due to use_enum_values=True)
-    data_type = config.data_type
-    if isinstance(data_type, str):
-        data_type = DataUnitType(data_type)
+    class_path = config.class_path
+    if not class_path:
+        raise ValueError("Data unit configuration must specify 'class' field")
+    
+    # Use pure component factory - NO hardcoded mapping
+    from .config.component_factory import import_and_create_from_config
     
     try:
-        if data_type == DataUnitType.MEMORY:
-            data_unit_class = DataUnitMemory
-        elif data_type == DataUnitType.FILE:
-            data_unit_class = DataUnitFile
-        elif data_type == DataUnitType.STRING:
-            data_unit_class = DataUnitString
-        elif data_type == DataUnitType.STREAM:
-            data_unit_class = DataUnitStream
-        else:
-            raise ValueError(f"Unknown data unit type: {data_type}")
-        
-        # Create instance via from_config
-        instance = data_unit_class.from_config(config, **kwargs)
-        
-        logger.info(f"Successfully created {data_unit_class.__name__} via from_config")
-        return instance
-        
+        logger.info(f"Creating data unit via from_config: {class_path}")
+        return import_and_create_from_config(class_path, config, **kwargs)
     except Exception as e:
-        raise ValueError(f"Failed to create data unit '{data_type}' via from_config: {e}") 
+        logger.error(f"Failed to create data unit '{class_path}': {e}")
+        raise ValueError(f"Failed to create data unit '{class_path}' via from_config: {e}") 

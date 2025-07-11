@@ -73,17 +73,17 @@ agents:
 # Data units configuration
 data_units:
   input_data:
-    data_type: "memory"
+    class: nanobrain.core.data_unit.DataUnitMemory
     persistent: false
     name: "parsl_chat_input"
     
   output_data:
-    data_type: "memory"
+    class: nanobrain.core.data_unit.DataUnitMemory
     persistent: false
     name: "parsl_chat_output"
     
   performance_data:
-    data_type: "memory"
+    class: nanobrain.core.data_unit.DataUnitMemory
     persistent: true
     name: "parsl_performance_metrics"
 

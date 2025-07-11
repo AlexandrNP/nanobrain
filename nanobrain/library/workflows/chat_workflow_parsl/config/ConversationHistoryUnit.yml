@@ -4,7 +4,7 @@ class: ConversationHistoryUnit
 config:
   name: conversation_history
   description: Persistent conversation history with Parsl metadata tracking
-  data_type: conversation_history
+  class: nanobrain.core.data_unit.DataUnitMemory
   database:
     db_path: parsl_chat_workflow_history.db
     table_name: conversations

@@ -16,17 +16,17 @@ tool_card:
     supported_modes: ["fasta", "json"]
     content_types: ["text/plain", "application/json"]
     format_schema:
-      type: "object"
+      class: nanobrain.core.data_unit.DataUnit
       required_fields:
         sequences:
-          type: "string"
+          class: nanobrain.core.data_unit.DataUnitString
           description: "FASTA formatted sequences for alignment"
         alignment_parameters:
-          type: "object"
+          class: nanobrain.core.data_unit.DataUnit
           description: "Alignment configuration parameters"
       optional_fields:
         output_format:
-          type: "string"
+          class: nanobrain.core.data_unit.DataUnitString
           description: "Desired alignment output format"
           enum: ["fasta", "clustal", "msf", "phylip"]
         quality_analysis:
@@ -38,19 +38,19 @@ tool_card:
     supported_modes: ["fasta", "clustal", "json"]
     content_types: ["text/plain", "application/json"]
     format_schema:
-      type: "object"
+      class: nanobrain.core.data_unit.DataUnit
       guaranteed_fields:
         alignment:
-          type: "string"
+          class: nanobrain.core.data_unit.DataUnitString
           description: "Multiple sequence alignment in requested format"
         alignment_stats:
-          type: "object"
+          class: nanobrain.core.data_unit.DataUnit
           description: "Alignment quality and statistics"
         conservation_profile:
           type: "array"
           description: "Position-wise conservation scores"
         metadata:
-          type: "object"
+          class: nanobrain.core.data_unit.DataUnit
           description: "Alignment parameters and execution details"
   
   capabilities:

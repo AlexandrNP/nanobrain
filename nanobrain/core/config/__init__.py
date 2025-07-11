@@ -7,8 +7,8 @@ and schema validation capabilities with focus on from_config pattern.
 
 from .yaml_config import YAMLConfig, WorkflowConfig
 from .component_factory import (
-    ComponentFactory,
-    import_and_create_from_config
+    import_and_create_from_config,
+    ComponentRegistry
 )
 from .schema_validator import (
     SchemaValidator, ConfigSchema, FieldSchema, ParameterSchema,
@@ -63,8 +63,8 @@ __all__ = [
     'WorkflowConfig',
     
     # Simplified Component Factory
-    'ComponentFactory',
     'import_and_create_from_config',
+    'ComponentRegistry',
     
     # Schema Validation
     'SchemaValidator',

@@ -16,21 +16,21 @@ tool_card:
     supported_modes: ["json", "query"]
     content_types: ["application/json"]
     format_schema:
-      type: "object"
+      class: nanobrain.core.data_unit.DataUnit
       required_fields:
         query_type:
-          type: "string"
+          class: nanobrain.core.data_unit.DataUnitString
           description: "Type of BV-BRC query (genome, protein, metadata)"
           enum: ["genome_search", "protein_search", "metadata_query", "annotation_request"]
         search_parameters:
-          type: "object"
+          class: nanobrain.core.data_unit.DataUnit
           description: "Search criteria and filters"
       optional_fields:
         batch_size:
           type: "integer"
           description: "Number of results per batch"
         output_format:
-          type: "string"
+          class: nanobrain.core.data_unit.DataUnitString
           description: "Preferred output format"
   
   output_format:
@@ -38,10 +38,10 @@ tool_card:
     supported_modes: ["json", "csv", "fasta"]
     content_types: ["application/json", "text/csv", "text/plain"]
     format_schema:
-      type: "object"
+      class: nanobrain.core.data_unit.DataUnit
       guaranteed_fields:
         status:
-          type: "string"
+          class: nanobrain.core.data_unit.DataUnitString
           description: "Query execution status"
         result_count:
           type: "integer"
@@ -50,7 +50,7 @@ tool_card:
           type: "array"
           description: "Query results in requested format"
         metadata:
-          type: "object"
+          class: nanobrain.core.data_unit.DataUnit
           description: "Query execution metadata and statistics"
   
   capabilities:
@@ -77,8 +77,8 @@ tool_card:
         query_type: "genome_search"
         search_parameters:
           organism: "alphavirus"
-          genome_length_min: 8000
-          genome_length_max: 15000
+          genome_length_min: 6000
+          genome_length_max: 20000
         batch_size: 50
       expected_output:
         status: "success"

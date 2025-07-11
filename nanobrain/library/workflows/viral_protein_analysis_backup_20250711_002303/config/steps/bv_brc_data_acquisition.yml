@@ -1,0 +1,48 @@
+name: BV-BRC Data Acquisition
+description: Download genome data with CSV search and generate complete FASTA content
+class: BVBRCDataAcquisitionStep
+
+# Step configuration
+config:
+  name: bv_brc_data_acquisition
+  description: Download genome data with CSV search
+  debug_mode: false
+  enable_logging: true
+  log_data_transfers: true
+
+# Input data unit configuration - receives from virus name resolution
+input_configs:
+  resolution_result:
+    class: nanobrain.core.data_unit.DataUnitMemory
+    name: virus_resolution_input
+    description: Resolved virus species information
+    persistent: false
+
+# Output data unit configuration - passes to annotation mapping
+output_config:
+  class: nanobrain.core.data_unit.DataUnitFile
+  name: fasta_and_annotations
+  description: Complete FASTA file path and protein annotations
+  persistent: true
+  file_path: "data/bvbrc_cache/fasta_and_annotations.fasta"
+
+# Trigger configuration - activated when virus resolution complete
+trigger_config:
+  trigger_type: data_updated
+  name: data_acquisition_trigger
+  description: Trigger when virus species resolved
+  data_unit: resolution_result
+
+# CSV file configuration (CRITICAL for genome ID search)
+csv_file_path: "data/alphavirus_analysis/BVBRC_genome_alphavirus.csv"
+
+# Cache configuration
+cache_directory: "data/fasta_cache"
+genome_batch_size: 100
+
+# BV-BRC tool configuration
+bv_brc_config:
+  output_directory: "data/bvbrc_cache"
+  max_retries: 3
+  retry_delay: 2.0
+  timeout: 300.0 

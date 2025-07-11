@@ -9,15 +9,15 @@ executors:
     max_workers: 4
 data_units:
   code_input:
-    data_type: memory
+    class: nanobrain.core.data_unit.DataUnitMemory
     name: code_input
     description: Input for code generation requests
   generated_code:
-    data_type: memory
+    class: nanobrain.core.data_unit.DataUnitMemory
     name: generated_code
     description: Generated code output
   file_output:
-    data_type: file
+    class: nanobrain.core.data_unit.DataUnitFile
     name: file_output
     description: File output for saved code
     file_path: output/generated_code.py
@@ -83,11 +83,11 @@ steps:
       enable_logging: true
     input_configs:
       input:
-        data_type: memory
+        class: nanobrain.core.data_unit.DataUnitMemory
         name: input
         description: Code generation request
     output_config:
-      data_type: memory
+      class: nanobrain.core.data_unit.DataUnitMemory
       name: output
       description: Generated code
     trigger_config:
@@ -104,15 +104,15 @@ steps:
       enable_logging: true
     input_configs:
       code:
-        data_type: memory
+        class: nanobrain.core.data_unit.DataUnitMemory
         name: code
         description: Code to write to file
       filename:
-        data_type: memory
+        class: nanobrain.core.data_unit.DataUnitMemory
         name: filename
         description: Target filename
     output_config:
-      data_type: file
+      class: nanobrain.core.data_unit.DataUnitFile
       name: output
       description: Written file
     trigger_config:

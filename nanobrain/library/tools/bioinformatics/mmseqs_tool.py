@@ -72,6 +72,9 @@ class MMseqs2Config(ExternalToolConfig):
     memory_limit: str = "8G"
     tmp_dir: Optional[str] = None
     
+    # Cache directory for MMseqs2 databases
+    cache_dir: Optional[str] = None
+    
     # Installation paths
     local_installation_paths: List[str] = field(default_factory=lambda: [
         "/usr/local/bin",
@@ -230,6 +233,20 @@ class MMseqs2Tool(ProgressiveScalingMixin, ExternalTool):
         self.memory_limit = getattr(config, 'memory_limit', "8G")
         self.tmp_dir = getattr(config, 'tmp_dir', None)
         
+        # Cache directory for MMseqs2 databases - configurable path
+        cache_dir_config = getattr(config, 'cache_directory', None) or getattr(config, 'mmseqs2_cache_directory', None)
+        if cache_dir_config:
+            self.cache_dir = cache_dir_config
+        else:
+            # Fallback to default path
+            self.cache_dir = "data/mmseqs2_cache"
+        
+        # Initialize cache directory
+        from pathlib import Path
+        cache_path = Path(self.cache_dir)
+        cache_path.mkdir(parents=True, exist_ok=True)
+        self.logger.info(f"MMseqs2 cache directory: {cache_path.absolute()}")
+        
         # Executable path
         self.mmseqs_executable = None
         
@@ -275,7 +292,11 @@ class MMseqs2Tool(ProgressiveScalingMixin, ExternalTool):
     async def cluster_sequences(self, fasta_content: str, 
                                output_prefix: str = "clusters") -> ClusteringReport:
         """
-        Cluster protein sequences using MMseqs2
+        Cluster protein sequences using proper MMseqs2 workflow:
+        1. mmseqs createdb - Convert FASTA to MMseqs2 database format
+        2. mmseqs cluster - Perform clustering on the database  
+        3. mmseqs createtsv - Generate TSV output with cluster assignments
+        4. mmseqs createseqfiledb and result2flat - Generate FASTA output
         
         Args:
             fasta_content: Input FASTA sequences
@@ -284,53 +305,60 @@ class MMseqs2Tool(ProgressiveScalingMixin, ExternalTool):
         Returns:
             ClusteringReport: Comprehensive clustering analysis
         """
-        self.logger.info("🔄 Starting MMseqs2 protein clustering...")
+        self.logger.info("🔄 Starting MMseqs2 protein clustering with proper workflow...")
         
         # Get scale configuration
         scale_config = self.scale_config.get(self.current_scale_level, {})
         max_sequences = scale_config.get("max_sequences", 1000)
         sensitivity = scale_config.get("sensitivity", self.mmseqs_config.sensitivity)
         
-        # Create temporary directory
-        temp_dir = tempfile.mkdtemp(prefix="mmseqs2_")
+        # Use cache directory for database files
+        from pathlib import Path
+        cache_path = Path(self.cache_dir)
+        
+        # Create temporary directory for intermediate files
+        temp_dir = tempfile.mkdtemp(prefix="mmseqs2_tmp_")
         self.temp_dirs.append(temp_dir)
         
         try:
             start_time = asyncio.get_event_loop().time()
             
-            # Step 1: Prepare input sequences
-            input_sequences = await self._prepare_input_sequences(
-                fasta_content, temp_dir, max_sequences
+            # Step 1: Prepare input sequences and save FASTA to cache
+            input_sequences, fasta_path = await self._prepare_input_fasta(
+                fasta_content, cache_path, output_prefix, max_sequences
             )
             
             if len(input_sequences) == 0:
                 raise MMseqs2DataError("No valid sequences found for clustering")
             
-            # Step 2: Create MMseqs2 database
-            db_path = await self._create_mmseqs_database(
-                input_sequences, temp_dir, output_prefix
-            )
+            # Step 2: mmseqs createdb - Convert FASTA to MMseqs2 database format
+            db_path = await self._mmseqs_createdb(fasta_path, cache_path, output_prefix)
             
-            # Step 3: Perform clustering
-            cluster_db_path = await self._perform_clustering(
-                db_path, temp_dir, output_prefix, sensitivity
-            )
+            # Step 3: mmseqs cluster - Perform clustering on the database
+            cluster_db_path = await self._mmseqs_cluster(db_path, cache_path, temp_dir, output_prefix, sensitivity)
             
-            # Step 4: Parse clustering results
-            clusters = await self._parse_clustering_results(
-                db_path, cluster_db_path, input_sequences
-            )
+            # Step 4: mmseqs createtsv - Generate TSV output with cluster assignments
+            cluster_tsv_path = await self._mmseqs_createtsv(db_path, cluster_db_path, cache_path, output_prefix)
             
-            # Step 5: Generate comprehensive report
+            # Step 5: mmseqs createseqfiledb and result2flat - Generate FASTA output
+            cluster_fasta_path = await self._mmseqs_create_cluster_fasta(db_path, cluster_db_path, cache_path, output_prefix)
+            
+            # Step 6: Parse clustering results from TSV
+            clusters = await self._parse_mmseqs_tsv_results(cluster_tsv_path, input_sequences)
+            
+            # Step 7: Generate comprehensive report
             execution_time = asyncio.get_event_loop().time() - start_time
             report = await self._generate_clustering_report(
                 clusters, len(input_sequences), execution_time
             )
             
             self.logger.info(
-                f"✅ Clustering completed: {report.total_input_sequences} → "
+                f"✅ MMseqs2 clustering completed: {report.total_input_sequences} → "
                 f"{report.total_clusters} clusters in {execution_time:.2f}s"
             )
+            self.logger.info(f"💾 Database files cached in: {cache_path}")
+            self.logger.info(f"📄 TSV results: {cluster_tsv_path}")
+            self.logger.info(f"🧬 FASTA results: {cluster_fasta_path}")
             
             return report
             
@@ -338,16 +366,17 @@ class MMseqs2Tool(ProgressiveScalingMixin, ExternalTool):
             self.logger.error(f"❌ MMseqs2 clustering failed: {e}")
             raise MMseqs2DataError(f"Clustering failed: {e}")
         finally:
-            # Cleanup temporary directory
+            # Cleanup temporary directory (keep cache directory)
             await self._cleanup_temp_dir(temp_dir)
     
-    async def _prepare_input_sequences(self, fasta_content: str, 
-                                      temp_dir: str, max_sequences: int) -> List[Dict[str, str]]:
-        """Prepare and validate input sequences"""
+    async def _prepare_input_fasta(self, fasta_content: str, cache_path: Path, 
+                                  output_prefix: str, max_sequences: int) -> tuple[List[Dict[str, str]], str]:
+        """Prepare input sequences and save FASTA file to cache directory"""
         sequences = []
         current_header = None
         current_sequence = ""
         
+        # Parse FASTA content
         for line in fasta_content.split('\n'):
             line = line.strip()
             if not line:
@@ -386,47 +415,52 @@ class MMseqs2Tool(ProgressiveScalingMixin, ExternalTool):
             else:
                 self.logger.warning(f"Skipping short sequence: {seq_data['header']}")
         
-        self.logger.info(f"Prepared {len(valid_sequences)} valid sequences for clustering")
-        return valid_sequences
-    
-    async def _create_mmseqs_database(self, sequences: List[Dict[str, str]], 
-                                     temp_dir: str, output_prefix: str) -> str:
-        """Create MMseqs2 sequence database"""
-        # Write sequences to FASTA file
-        fasta_path = os.path.join(temp_dir, f"{output_prefix}_input.fasta")
+        # Save FASTA file to cache directory
+        fasta_path = cache_path / f"{output_prefix}.fasta"
         with open(fasta_path, 'w') as f:
-            for seq_data in sequences:
+            for seq_data in valid_sequences:
                 f.write(f"{seq_data['header']}\n{seq_data['sequence']}\n")
         
-        # Create MMseqs2 database
-        db_path = os.path.join(temp_dir, f"{output_prefix}_db")
+        self.logger.info(f"Prepared {len(valid_sequences)} valid sequences for clustering")
+        self.logger.info(f"💾 Saved FASTA to cache: {fasta_path}")
+        
+        return valid_sequences, str(fasta_path)
+    
+    async def _mmseqs_createdb(self, fasta_path: str, cache_path: Path, output_prefix: str) -> str:
+        """Step 2: mmseqs createdb - Convert FASTA to MMseqs2 database format"""
+        
+        # Database will be saved in cache directory
+        db_path = cache_path / f"{output_prefix}_DB"
         
         createdb_cmd = [
             self.mmseqs_executable, "createdb",
-            fasta_path, db_path
+            fasta_path, str(db_path)
         ]
         
-        result = await self.execute_with_retry(createdb_cmd)
+        self.logger.info(f"🔧 Running: mmseqs createdb {fasta_path} {db_path}")
+        result = await self._execute_with_retry(createdb_cmd)
         
         if not result.success:
             raise MMseqs2DataError(f"Failed to create MMseqs2 database: {result.stderr_text}")
         
-        self.logger.debug(f"Created MMseqs2 database: {db_path}")
-        return db_path
+        self.logger.info(f"✅ Created MMseqs2 database: {db_path}")
+        return str(db_path)
     
-    async def _perform_clustering(self, db_path: str, temp_dir: str, 
-                                 output_prefix: str, sensitivity: float) -> str:
-        """Perform MMseqs2 clustering"""
-        cluster_db_path = os.path.join(temp_dir, f"{output_prefix}_cluster")
+    async def _mmseqs_cluster(self, db_path: str, cache_path: Path, temp_dir: str, 
+                             output_prefix: str, sensitivity: float) -> str:
+        """Step 3: mmseqs cluster - Perform clustering on the database"""
+        
+        # Cluster database will be saved in cache directory  
+        cluster_db_path = cache_path / f"{output_prefix}_DB_clu"
         tmp_path = os.path.join(temp_dir, "tmp")
         
         # Create tmp directory
         os.makedirs(tmp_path, exist_ok=True)
         
-        # Clustering command
+        # Clustering command: mmseqs cluster DB DB_clu tmp
         cluster_cmd = [
             self.mmseqs_executable, "cluster",
-            db_path, cluster_db_path, tmp_path,
+            db_path, str(cluster_db_path), tmp_path,
             "--min-seq-id", str(self.mmseqs_config.min_seq_id),
             "--coverage", str(self.mmseqs_config.coverage),
             "--cluster-mode", str(self.mmseqs_config.cluster_mode),
@@ -438,13 +472,110 @@ class MMseqs2Tool(ProgressiveScalingMixin, ExternalTool):
         if self.mmseqs_config.memory_limit:
             cluster_cmd.extend(["--split-memory-limit", self.mmseqs_config.memory_limit])
         
-        result = await self.execute_with_retry(cluster_cmd, timeout=600)  # 10 minute timeout
+        self.logger.info(f"🔧 Running: mmseqs cluster {db_path} {cluster_db_path} {tmp_path}")
+        result = await self._execute_with_retry(cluster_cmd, timeout=600)  # 10 minute timeout
         
         if not result.success:
             raise MMseqs2DataError(f"MMseqs2 clustering failed: {result.stderr_text}")
         
-        self.logger.debug(f"Clustering completed: {cluster_db_path}")
-        return cluster_db_path
+        self.logger.info(f"✅ Clustering completed: {cluster_db_path}")
+        return str(cluster_db_path)
+    
+    async def _mmseqs_createtsv(self, db_path: str, cluster_db_path: str, cache_path: Path, output_prefix: str) -> str:
+        """Step 4: mmseqs createtsv - Generate TSV output with cluster assignments"""
+        
+        # TSV output will be saved in cache directory
+        cluster_tsv_path = cache_path / f"{output_prefix}_DB_clu.tsv"
+        
+        # Command: mmseqs createtsv DB DB DB_clu DB_clu.tsv
+        createtsv_cmd = [
+            self.mmseqs_executable, "createtsv",
+            db_path, db_path, cluster_db_path, str(cluster_tsv_path)
+        ]
+        
+        self.logger.info(f"🔧 Running: mmseqs createtsv {db_path} {db_path} {cluster_db_path} {cluster_tsv_path}")
+        result = await self._execute_with_retry(createtsv_cmd)
+        
+        if not result.success:
+            raise MMseqs2DataError(f"Failed to create cluster TSV: {result.stderr_text}")
+        
+        self.logger.info(f"✅ Created cluster TSV: {cluster_tsv_path}")
+        return str(cluster_tsv_path)
+    
+    async def _mmseqs_create_cluster_fasta(self, db_path: str, cluster_db_path: str, cache_path: Path, output_prefix: str) -> str:
+        """Step 5: mmseqs createseqfiledb and result2flat - Generate FASTA output with clustered sequences"""
+        
+        # Intermediate sequence file database
+        cluster_seq_db_path = cache_path / f"{output_prefix}_DB_clu_seq"
+        
+        # Final FASTA output
+        cluster_fasta_path = cache_path / f"{output_prefix}_DB_clu_seq.fasta"
+        
+        # Step 5a: mmseqs createseqfiledb DB DB_clu DB_clu_seq
+        createseqfiledb_cmd = [
+            self.mmseqs_executable, "createseqfiledb",
+            db_path, cluster_db_path, str(cluster_seq_db_path)
+        ]
+        
+        self.logger.info(f"🔧 Running: mmseqs createseqfiledb {db_path} {cluster_db_path} {cluster_seq_db_path}")
+        result = await self._execute_with_retry(createseqfiledb_cmd)
+        
+        if not result.success:
+            raise MMseqs2DataError(f"Failed to create sequence file database: {result.stderr_text}")
+        
+        # Step 5b: mmseqs result2flat DB DB DB_clu_seq DB_clu_seq.fasta
+        result2flat_cmd = [
+            self.mmseqs_executable, "result2flat",
+            db_path, db_path, str(cluster_seq_db_path), str(cluster_fasta_path)
+        ]
+        
+        self.logger.info(f"🔧 Running: mmseqs result2flat {db_path} {db_path} {cluster_seq_db_path} {cluster_fasta_path}")
+        result = await self._execute_with_retry(result2flat_cmd)
+        
+        if not result.success:
+            raise MMseqs2DataError(f"Failed to create cluster FASTA: {result.stderr_text}")
+        
+        self.logger.info(f"✅ Created cluster FASTA: {cluster_fasta_path}")
+        return str(cluster_fasta_path)
+    
+    async def _parse_mmseqs_tsv_results(self, cluster_tsv_path: str, input_sequences: List[Dict[str, str]]) -> List[ClusterResult]:
+        """Parse MMseqs2 TSV clustering results"""
+        
+        clusters_dict = {}
+        
+        try:
+            with open(cluster_tsv_path, 'r') as f:
+                for line in f:
+                    parts = line.strip().split('\t')
+                    if len(parts) >= 2:
+                        representative = parts[0]
+                        member = parts[1]
+                        
+                        if representative not in clusters_dict:
+                            clusters_dict[representative] = {
+                                'representative': representative,
+                                'members': []
+                            }
+                        
+                        clusters_dict[representative]['members'].append(member)
+            
+            # Convert to ClusterResult objects
+            clusters = []
+            for i, (rep_id, cluster_data) in enumerate(clusters_dict.items()):
+                cluster = ClusterResult(
+                    cluster_id=f"cluster_{i+1:03d}",
+                    representative_seq=rep_id,
+                    member_sequences=cluster_data['members'],
+                    cluster_size=len(cluster_data['members'])
+                )
+                clusters.append(cluster)
+            
+            self.logger.info(f"✅ Parsed {len(clusters)} clusters from TSV results")
+            return clusters
+            
+        except Exception as e:
+            self.logger.error(f"Failed to parse TSV results: {e}")
+            raise MMseqs2DataError(f"Failed to parse clustering results: {e}")
     
     async def _parse_clustering_results(self, db_path: str, cluster_db_path: str, 
                                        input_sequences: List[Dict[str, str]]) -> List[ClusterResult]:
@@ -458,7 +589,7 @@ class MMseqs2Tool(ProgressiveScalingMixin, ExternalTool):
             db_path, db_path, cluster_db_path, cluster_tsv_path
         ]
         
-        result = await self.execute_with_retry(createtsv_cmd)
+        result = await self._execute_with_retry(createtsv_cmd)
         
         if not result.success:
             raise MMseqs2DataError(f"Failed to create cluster TSV: {result.stderr_text}")
@@ -668,7 +799,7 @@ class MMseqs2Tool(ProgressiveScalingMixin, ExternalTool):
     
     async def execute_command(self, command: List[str], **kwargs) -> ToolResult:
         """Execute MMseqs2 command with retry logic"""
-        return await self.execute_with_retry(command, **kwargs)
+        return await self._execute_with_retry(command, **kwargs)
     
     async def parse_output(self, raw_output: str, output_type: str = "clustering") -> Any:
         """Parse MMseqs2 clustering output"""

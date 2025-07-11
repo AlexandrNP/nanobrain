@@ -23,6 +23,7 @@ import json
 import os
 import re
 import tempfile
+import aiohttp
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Union
@@ -58,6 +59,10 @@ class BVBRCConfig(ExternalToolConfig):
         "category": "bioinformatics",
         "capabilities": ["genome_analysis", "protein_extraction", "viral_data"]
     })
+    
+    # BV-BRC API configuration - NEW
+    api_base_url: str = "https://www.bv-brc.org/api"
+    use_http_api: bool = True  # NEW: Enable HTTP API fallback
     
     # BV-BRC specific installation paths
     local_installation_paths: List[str] = field(default_factory=lambda: [
@@ -295,7 +300,7 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
             
             if self._enhanced_components_available():
                 taxa_count = len(await self.virus_resolver.get_available_taxa())
-                self.logger.info(f"   - Cache directory: {self.cache_manager.cache_dir}")
+                self.logger.info(f"   - Cache directory: {self.cache_manager.cache_base_dir}")
                 self.logger.info(f"   - Virus resolver: {taxa_count} taxa available")
             else:
                 self.logger.info("   - Enhanced features: Not available (using legacy mode)")
@@ -335,7 +340,7 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
             # Import components dynamically to avoid circular imports
             from ...workflows.viral_protein_analysis.virus_name_resolver import VirusNameResolver
             from ...workflows.viral_protein_analysis.bvbrc_command_pipeline import BVBRCCommandPipeline
-            from ...workflows.viral_protein_analysis.bvbrc_cache_manager import BVBRCCacheManager
+            from ...workflows.viral_protein_analysis.virus_specific_cache_manager import VirusSpecificCacheManager
             
             # Initialize virus name resolver
             self.virus_resolver = VirusNameResolver()
@@ -348,8 +353,11 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
                 preserve_files=True  # Always preserve for debugging
             )
             
-            # Initialize cache manager
-            self.cache_manager = BVBRCCacheManager()
+            # Initialize cache manager with enhanced functionality
+            self.cache_manager = VirusSpecificCacheManager(
+                cache_base_dir="data/cache/bvbrc",
+                cache_ttl_hours=168  # 1 week default like BVBRCCacheManager
+            )
             
             self.logger.info("✅ Enhanced components initialized successfully")
             
@@ -1566,10 +1574,12 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
             raise BVBRCDataError("Enhanced BV-BRC functionality not available.")
             
         if expired_only:
-            return await self.cache_manager.clear_expired_entries()
+            # For virus-specific cache manager, clear cache manually by checking expiration
+            # This is a simple implementation - in production might need more sophisticated logic
+            return 0  # No expired-only method in virus-specific cache manager yet
         else:
-            await self.cache_manager.clear_all_cache()
-            return 0  # All cleared
+            success = self.cache_manager.clear_cache()
+            return 1 if success else 0
 
     async def get_working_files(self, taxon_id: str):
         """
@@ -1579,14 +1589,14 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
             taxon_id: Taxon ID to look up
             
         Returns:
-            PipelineFiles if found in cache, None otherwise
+            Cache result with file paths if found in cache, None otherwise
         """
         if not self._enhanced_components_available():
             raise BVBRCDataError("Enhanced BV-BRC functionality not available.")
             
-        cached_result = await self.cache_manager.get_cached_result(taxon_id)
+        cached_result = await self.cache_manager.get_cached_bvbrc_result(taxon_id)
         
-        if cached_result and cached_result.files:
-            return cached_result.files
+        if cached_result and cached_result.get('file_paths'):
+            return cached_result.get('file_paths')
         
         return None 

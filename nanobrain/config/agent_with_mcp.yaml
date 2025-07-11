@@ -48,11 +48,11 @@ workflow:
   # Data units for workflow state
   data_units:
     - name: "user_input"
-      type: "memory"
+      class: nanobrain.core.data_unit.DataUnitMemory
       description: "User input messages"
     
     - name: "agent_responses"
-      type: "memory" 
+      class: nanobrain.core.data_unit.DataUnitMemory 
       description: "Agent responses with tool usage"
   
   # Steps in the workflow

@@ -9,7 +9,7 @@ from .executor import (
 
 from .data_unit import (
     DataUnitBase, DataUnitMemory, DataUnitFile, DataUnitString, 
-    DataUnitStream, DataUnitConfig, DataUnitType, 
+    DataUnitStream, DataUnitConfig,
     create_data_unit
 )
 
@@ -65,6 +65,10 @@ from .sequence_manager import (
     create_sequence_manager, create_fasta_parser, create_sequence_validator
 )
 
+from .prompt_template_manager import (
+    PromptTemplateManager, PromptTemplate, PromptTemplateConfig
+)
+
 __all__ = [
     # Executors
     'ExecutorBase', 'LocalExecutor', 'ThreadExecutor', 'ProcessExecutor', 
@@ -72,7 +76,7 @@ __all__ = [
     
     # Data Units
     'DataUnitBase', 'DataUnitMemory', 'DataUnitFile', 'DataUnitString', 
-    'DataUnitStream', 'DataUnitConfig', 'DataUnitType', 
+    'DataUnitStream', 'DataUnitConfig',
     'create_data_unit',
     
     # Triggers
@@ -115,5 +119,8 @@ __all__ = [
     # Sequence Management
     'SequenceManager', 'SequenceValidator', 'FastaParser', 'SequenceFormat',
     'SequenceStats', 'SequenceValidationError',
-    'create_sequence_manager', 'create_fasta_parser', 'create_sequence_validator'
+    'create_sequence_manager', 'create_fasta_parser', 'create_sequence_validator',
+    
+    # Prompt Template Management
+    'PromptTemplateManager', 'PromptTemplate', 'PromptTemplateConfig'
 ] 

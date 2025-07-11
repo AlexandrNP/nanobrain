@@ -1,0 +1,47 @@
+name: Protein Synonym Agent
+description: Handle protein synonym resolution using specialized agent
+estimated_time: 120.0
+class: nanobrain.library.workflows.viral_protein_analysis.steps.protein_synonym_agent_step.ProteinSynonymAgentStep
+step_type: simple
+debug_mode: false
+enable_logging: true
+
+# Agent configuration
+agent_config:
+  enabled: true
+  class: nanobrain.library.agents.specialized.protein_synonym_agent.ProteinSynonymAgent
+  config_file: "nanobrain/library/agents/specialized/config/ProteinSynonymAgent.yml"
+  timeout: 300
+  max_retries: 3
+
+# Processing configuration
+processing_config:
+  batch_size: 50
+  parallel_processing: true
+  max_concurrent_requests: 5
+
+# Cache configuration
+cache_config:
+  enable_caching: true
+  cache_directory: "data/synonym_cache"
+  cache_ttl_hours: 24
+
+# Input data unit
+input_data_unit:
+  name: protein_annotation_input
+  class: nanobrain.core.data_unit.DataUnit
+
+# Output data unit
+output_data_unit:
+  name: protein_synonym_output
+  class: nanobrain.core.data_unit.DataUnit
+
+# Metadata
+logical_steps_covered: [8]
+step_description_detailed: 'Resolve protein synonyms using specialized agent'
+
+_metadata:
+  last_updated: '2025-01-28'
+  updated_by: 'config_alignment'
+  migration_version: 2.0.0
+  uses_modular_config: true 

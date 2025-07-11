@@ -192,6 +192,59 @@ class LinkBase(FromConfigBase, ABC):
             self.nb_logger = None
     
     # LinkBase inherits FromConfigBase.__init__ which prevents direct instantiation
+    
+    def _parse_data_unit_reference(self, reference: str) -> tuple[str, str]:
+        """Parse step.data_unit notation"""
+        if '.' not in reference:
+            raise ValueError(f"Invalid reference: {reference}. Must use 'step.data_unit' format")
+        
+        step_name, data_unit_name = reference.split('.', 1)
+        return step_name.strip(), data_unit_name.strip()
+
+    def _resolve_data_unit_reference(self, reference: str, workflow_context: Dict[str, Any]) -> Any:
+        """Resolve dot notation reference to actual DataUnit instance"""
+        step_name, data_unit_name = self._parse_data_unit_reference(reference)
+        
+        # Get step instance from workflow context
+        step_instance = workflow_context.get('steps', {}).get(step_name)
+        if not step_instance:
+            raise ValueError(f"Step '{step_name}' not found in workflow context")
+        
+        # Get data unit from step (output first, then input)
+        data_unit = None
+        if hasattr(step_instance, 'output_data_units') and step_instance.output_data_units:
+            data_unit = step_instance.output_data_units.get(data_unit_name)
+        
+        if not data_unit and hasattr(step_instance, 'input_data_units'):
+            data_unit = step_instance.input_data_units.get(data_unit_name)
+        
+        if not data_unit:
+            raise ValueError(f"Data unit '{data_unit_name}' not found in step '{step_name}'")
+        
+        return data_unit
+
+    def _validate_dot_notation_reference(self, reference: str) -> bool:
+        """Validate that reference uses proper step.data_unit format"""
+        try:
+            step_name, data_unit_name = self._parse_data_unit_reference(reference)
+            return len(step_name) > 0 and len(data_unit_name) > 0
+        except ValueError:
+            return False
+
+    def resolve_link_endpoints(self, source_ref: str, target_ref: str, 
+                             workflow_context: Dict[str, Any]) -> tuple[Any, Any]:
+        """Resolve both source and target references using dot notation"""
+        # Validate references
+        if not self._validate_dot_notation_reference(source_ref):
+            raise ValueError(f"Invalid source reference: {source_ref}")
+        if not self._validate_dot_notation_reference(target_ref):
+            raise ValueError(f"Invalid target reference: {target_ref}")
+        
+        # Resolve references
+        source_data_unit = self._resolve_data_unit_reference(source_ref, workflow_context)
+        target_data_unit = self._resolve_data_unit_reference(target_ref, workflow_context)
+        
+        return source_data_unit, target_data_unit
         
     @abstractmethod
     async def transfer(self, data: Any) -> None:

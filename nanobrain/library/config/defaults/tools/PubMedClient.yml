@@ -16,13 +16,13 @@ tool_card:
     supported_modes: ["json", "query"]
     content_types: ["application/json"]
     format_schema:
-      type: "object"
+      class: nanobrain.core.data_unit.DataUnit
       required_fields:
         query:
-          type: "string"
+          class: nanobrain.core.data_unit.DataUnitString
           description: "PubMed search query using standard syntax"
         search_parameters:
-          type: "object"
+          class: nanobrain.core.data_unit.DataUnit
           description: "Search configuration and filters"
       optional_fields:
         max_results:
@@ -32,7 +32,7 @@ tool_card:
           type: "boolean"
           description: "Include full abstracts in results"
         date_range:
-          type: "object"
+          class: nanobrain.core.data_unit.DataUnit
           description: "Publication date range filter"
   
   output_format:
@@ -40,7 +40,7 @@ tool_card:
     supported_modes: ["json", "bibtex", "csv"]
     content_types: ["application/json", "text/plain", "text/csv"]
     format_schema:
-      type: "object"
+      class: nanobrain.core.data_unit.DataUnit
       guaranteed_fields:
         search_results:
           type: "array"
@@ -49,10 +49,10 @@ tool_card:
           type: "integer"
           description: "Total number of results found"
         search_metadata:
-          type: "object"
+          class: nanobrain.core.data_unit.DataUnit
           description: "Search execution details and statistics"
         pagination:
-          type: "object"
+          class: nanobrain.core.data_unit.DataUnit
           description: "Result pagination information"
   
   capabilities:

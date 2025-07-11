@@ -1,0 +1,44 @@
+name: Query Classification
+description: Extract virus species using LLM agent
+class: QueryClassificationStep
+
+# LLM agent configuration
+extraction_agent:
+  class: SimpleSpecializedAgent
+  model: "gpt-4"
+  temperature: 0.1
+  max_tokens: 100
+  timeout: 30
+
+# Prompt template for virus species extraction (NO hardcoded patterns)
+virus_extraction_prompt: |
+  Analyze the following user query and extract any virus species mentioned:
+  
+  Query: "{user_query}"
+  
+  Extract virus species names if present. Return JSON format:
+  {{
+    "virus_species": "exact virus species name or null if none found",
+    "confidence": 0.0-1.0,
+    "reasoning": "brief explanation"
+  }}
+  
+  Examples of virus species: Chikungunya virus, Eastern equine encephalitis virus, Zika virus
+  
+  Return only the JSON response.
+
+# Input data unit
+input_data_unit:
+  class: DataUnit
+  description: User query input
+
+# Output data unit  
+output_data_unit:
+  class: DataUnit
+  description: Virus species extraction result
+
+# Trigger configuration (at step level)
+triggers:
+  - class: DataUnitChangeTrigger
+    data_unit: input_data_unit
+    description: Trigger processing when user query received

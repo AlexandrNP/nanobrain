@@ -15,17 +15,17 @@ agent_card:
     supported_modes: ["json", "text"]
     content_types: ["application/json", "text/plain"]
     format_schema:
-      type: "object"
+      class: nanobrain.core.data_unit.DataUnit
       required_fields:
         message:
-          type: "string"
+          class: nanobrain.core.data_unit.DataUnitString
           description: "Natural language instruction or query"
       optional_fields:
         context:
-          type: "object"
+          class: nanobrain.core.data_unit.DataUnit
           description: "Conversation context and session information"
         delegation_preferences:
-          type: "object"
+          class: nanobrain.core.data_unit.DataUnit
           description: "Agent delegation and tool selection preferences"
   
   output_format:
@@ -33,16 +33,16 @@ agent_card:
     supported_modes: ["json", "text", "structured"]
     content_types: ["application/json", "text/plain"]
     format_schema:
-      type: "object"
+      class: nanobrain.core.data_unit.DataUnit
       guaranteed_fields:
         response:
-          type: "string"
+          class: nanobrain.core.data_unit.DataUnitString
           description: "Natural language response"
         collaboration_metadata:
-          type: "object"
+          class: nanobrain.core.data_unit.DataUnit
           description: "Delegation and collaboration execution details"
         performance_metrics:
-          type: "object"
+          class: nanobrain.core.data_unit.DataUnit
           description: "Performance and timing information"
   
   capabilities:
@@ -274,10 +274,10 @@ validation:
       type: int
 
 input_schema:
-  type: "object"
+  class: nanobrain.core.data_unit.DataUnit
   properties:
     input:
-      type: "string"
+      class: nanobrain.core.data_unit.DataUnitString
       description: >
         Your message or question for the enhanced conversational agent.
         
@@ -294,11 +294,11 @@ input_schema:
         - "Search for information about machine learning"
       required: true
     context:
-      type: "string"
+      class: nanobrain.core.data_unit.DataUnitString
       description: "Additional context or background information"
       required: false
     preferences:
-      type: "object"
+      class: nanobrain.core.data_unit.DataUnit
       description: "User preferences for delegation and tool usage"
       properties:
         prefer_delegation:

@@ -16,17 +16,17 @@ tool_card:
     supported_modes: ["fasta", "json"]
     content_types: ["text/plain", "application/json"]
     format_schema:
-      type: "object"
+      class: nanobrain.core.data_unit.DataUnit
       required_fields:
         sequences:
-          type: "string"
+          class: nanobrain.core.data_unit.DataUnitString
           description: "FASTA formatted protein sequences"
         clustering_parameters:
-          type: "object"
+          class: nanobrain.core.data_unit.DataUnit
           description: "Clustering configuration parameters"
       optional_fields:
         output_format:
-          type: "string"
+          class: nanobrain.core.data_unit.DataUnitString
           description: "Desired output format"
         progressive_level:
           type: "integer"
@@ -37,7 +37,7 @@ tool_card:
     supported_modes: ["json", "tsv", "cluster"]
     content_types: ["application/json", "text/tab-separated-values"]
     format_schema:
-      type: "object"
+      class: nanobrain.core.data_unit.DataUnit
       guaranteed_fields:
         clusters:
           type: "array"
@@ -46,10 +46,10 @@ tool_card:
           type: "integer"
           description: "Total number of clusters identified"
         processing_stats:
-          type: "object"
+          class: nanobrain.core.data_unit.DataUnit
           description: "Clustering statistics and performance metrics"
         metadata:
-          type: "object"
+          class: nanobrain.core.data_unit.DataUnit
           description: "Execution metadata and parameters used"
   
   capabilities:

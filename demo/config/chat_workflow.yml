@@ -25,19 +25,19 @@ executors:
     debug_mode: true
 data_units:
   user_input:
-    data_type: memory
+    class: nanobrain.core.data_unit.DataUnitMemory
     name: user_input
     description: Stores user input from CLI interface
     persistent: false
     cache_size: 100
   agent_input:
-    data_type: memory
+    class: nanobrain.core.data_unit.DataUnitMemory
     name: agent_input
     description: Processed user input ready for agent processing
     persistent: false
     cache_size: 100
   agent_output:
-    data_type: memory
+    class: nanobrain.core.data_unit.DataUnitMemory
     name: agent_output
     description: Agent responses ready for CLI output
     persistent: false
@@ -114,13 +114,13 @@ steps:
       enable_logging: true
     input_configs:
       user_input:
-        data_type: memory
+        class: nanobrain.core.data_unit.DataUnitMemory
         name: agent_input
         description: User input for agent processing
         persistent: false
         cache_size: 100
     output_config:
-      data_type: memory
+      class: nanobrain.core.data_unit.DataUnitMemory
       name: agent_output
       description: Agent response output
       persistent: false

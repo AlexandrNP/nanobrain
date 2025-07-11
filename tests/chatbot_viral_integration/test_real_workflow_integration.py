@@ -388,8 +388,8 @@ class TestRealWorkflowIntegration:
     async def test_real_workflow_performance(self, real_workflow):
         """Test real workflow performance benchmarks"""
         test_cases = [
-            ("What is EEEV?", "conversational", 5.0),
-            ("Create PSSM matrix of EEEV", "annotation", 8.0)  # More time for annotation setup
+            ("What is EEEV?", "conversational", 8.0),  # Realistic time for LLM API calls
+            ("Create PSSM matrix of EEEV", "annotation", 12.0)  # More time for annotation setup
         ]
         
         for query, expected_intent, max_time in test_cases:

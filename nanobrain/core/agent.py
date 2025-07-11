@@ -13,6 +13,7 @@ import os
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional, List, Union, Type
 from pydantic import BaseModel, Field, ConfigDict
+from pathlib import Path
 
 # LangChain imports for tool compatibility
 try:
@@ -32,6 +33,7 @@ from .logging_system import (
     NanoBrainLogger, get_logger, OperationType, ToolCallLog, 
     AgentConversationLog, trace_function_calls
 )
+from .prompt_template_manager import PromptTemplateManager
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +53,8 @@ class AgentConfig(BaseModel):
     temperature: float = Field(default=0.7, ge=0.0, le=2.0)
     max_tokens: Optional[int] = None
     system_prompt: str = ""
-    prompt_templates: Optional[Dict[str, str]] = Field(default=None, description="Templates for different prompt types")
+    prompt_templates: Optional[Dict[str, Any]] = Field(default=None, description="Inline prompt templates")
+    prompt_template_file: Optional[str] = Field(default=None, description="Path to YAML file containing prompt templates")
     executor_config: Optional[ExecutorConfig] = None
     tools: List[Dict[str, Any]] = Field(default_factory=list)
     tools_config_path: Optional[str] = Field(default=None, description="Path to YAML file containing tool configurations")
@@ -63,6 +66,38 @@ class AgentConfig(BaseModel):
     
     # MANDATORY: Agent card section for A2A protocol compliance
     agent_card: Optional[Dict[str, Any]] = Field(default=None, description="Agent card metadata for A2A protocol compliance")
+    
+    @classmethod
+    def from_yaml(cls, yaml_path: str) -> 'AgentConfig':
+        """
+        Load AgentConfig from YAML file.
+        
+        Args:
+            yaml_path: Path to YAML configuration file
+            
+        Returns:
+            AgentConfig instance
+            
+        Raises:
+            FileNotFoundError: If config file not found
+            yaml.YAMLError: If YAML parsing fails
+            ValidationError: If config validation fails
+        """
+        path = Path(yaml_path)
+        if not path.exists():
+            raise FileNotFoundError(f"Agent config file not found: {yaml_path}")
+        
+        try:
+            with open(path, 'r') as f:
+                config_data = yaml.safe_load(f)
+            
+            # Create and validate config
+            return cls(**config_data)
+            
+        except yaml.YAMLError as e:
+            raise yaml.YAMLError(f"Error parsing YAML config {yaml_path}: {e}")
+        except Exception as e:
+            raise ValueError(f"Error creating AgentConfig from {yaml_path}: {e}")
 
 
 class Agent(ABC):
@@ -106,6 +141,10 @@ class Agent(ABC):
         # Tool registry for managing tools
         self.tool_registry = ToolRegistry()
         
+        # Initialize prompt template manager
+        self.prompt_manager: Optional[PromptTemplateManager] = None
+        self._init_prompt_manager()
+        
         # LLM client (will be set during initialization)
         self.llm_client = None
         
@@ -121,6 +160,73 @@ class Agent(ABC):
         self._start_time = time.time()
         self._last_activity_time = time.time()
         
+    def _init_prompt_manager(self) -> None:
+        """Initialize the prompt template manager if configured."""
+        try:
+            # Check for prompt template file first
+            if self.config.prompt_template_file:
+                # Resolve the path relative to the project root
+                template_path = self.config.prompt_template_file
+                if not Path(template_path).is_absolute():
+                    # Try multiple resolution strategies
+                    possible_paths = [
+                        Path(template_path),  # Current working directory
+                        Path(__file__).parent.parent / template_path,  # Relative to nanobrain package
+                        Path(__file__).parent.parent.parent / template_path,  # Relative to project root
+                    ]
+                    
+                    for path in possible_paths:
+                        if path.exists():
+                            template_path = str(path)
+                            break
+                    else:
+                        # If not found, use original path and let PromptTemplateManager handle the error
+                        self.agent_logger.warning(f"Prompt template file not found in expected locations: {self.config.prompt_template_file}")
+                
+                self.prompt_manager = PromptTemplateManager(template_path)
+                self.agent_logger.log_debug(
+                    f"Initialized prompt manager from file: {template_path}"
+                )
+            # Then check for inline templates
+            elif self.config.prompt_templates:
+                self.prompt_manager = PromptTemplateManager(self.config.prompt_templates)
+                self.agent_logger.log_debug(
+                    f"Initialized prompt manager with {len(self.config.prompt_templates.get('prompts', {}))} inline templates"
+                )
+            else:
+                self.agent_logger.log_debug("No prompt templates configured")
+                
+        except Exception as e:
+            self.agent_logger.warning(f"Failed to initialize prompt manager: {e}")
+            self.prompt_manager = None
+    
+    def get_prompt(self, prompt_name: str, **params) -> str:
+        """
+        Get a formatted prompt from templates.
+        
+        Args:
+            prompt_name: Name of the prompt template
+            **params: Parameters for template substitution
+            
+        Returns:
+            Formatted prompt string
+            
+        Raises:
+            RuntimeError: If prompt manager not initialized
+            KeyError: If prompt not found
+        """
+        if not self.prompt_manager:
+            raise RuntimeError("Prompt manager not initialized")
+        
+        return self.prompt_manager.get_prompt(prompt_name, params=params)
+    
+    def has_prompt_template(self, prompt_name: str) -> bool:
+        """Check if a prompt template exists."""
+        if not self.prompt_manager:
+            return False
+        
+        return prompt_name in self.prompt_manager.list_prompts()
+    
     async def initialize(self) -> None:
         """Initialize the agent and its components."""
         if self._is_initialized:

@@ -13,6 +13,8 @@ Available agents:
 - ConversationalCodeWriterAgent: Conversational code generation agent
 - FileWriterAgent: Simple file operations agent
 - ConversationalFileWriterAgent: Conversational file operations agent
+- ParslAgent: Parsl workflow execution agent
+- ProteinSynonymAgent: Protein synonym identification agent with ICTV standards
 
 Factory functions:
 - create_specialized_agent: Create specialized agents of different types
@@ -35,6 +37,7 @@ from .file_writer import (
     ConversationalFileWriterAgent
 )
 from .parsl_agent import ParslAgent
+from .protein_synonym_agent import ProteinSynonymAgent
 
 __all__ = [
     # Base classes
@@ -53,5 +56,7 @@ __all__ = [
     'FileWriterAgent',
     'ConversationalFileWriterAgent',
     
+    # Specialized agents
     'ParslAgent',
+    'ProteinSynonymAgent',
 ] 

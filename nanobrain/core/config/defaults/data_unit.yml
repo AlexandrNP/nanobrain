@@ -8,10 +8,10 @@
 # Basic data unit settings
 name: "DefaultDataUnit"
 description: "Default data unit configuration"
-data_type: "any"
+class: nanobrain.core.data_unit.DataUnit
 
 # Data storage settings
-storage_type: "memory"  # memory, file, string, stream
+storage_class: nanobrain.core.data_unit.DataUnitMemory
 persistent: false
 cache_enabled: true
 

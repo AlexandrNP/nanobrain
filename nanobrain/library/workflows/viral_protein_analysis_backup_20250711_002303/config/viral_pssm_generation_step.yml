@@ -1,0 +1,57 @@
+name: "viral_pssm_generation"
+type: "result_management"
+description: "Generates the final viral_pssm.json output"
+
+config:
+  # Metadata configuration for viral PSSM output
+  metadata:
+    workflow_name: "SimplifiedAlphavirusWorkflow"
+    version: "2.0.0"
+    organism: "Alphavirus"
+    method: "nanobrain_simplified_analysis"
+    framework: "NanoBrain"
+    framework_version: "2.0.0"
+    
+    # Additional metadata fields
+    additional_metadata:
+      analysis_type: "viral_protein_analysis"
+      target_family: "Alphavirus"
+      data_source: "BV-BRC"
+      pipeline_type: "automated"
+  
+  # Output format configuration
+  output_format:
+    validate_structure: true
+    include_legacy_fields: true
+    format_version: "1.0"
+    
+    # Structure validation settings
+    validation:
+      required_sections:
+        - "metadata"
+        - "genome_statistics"
+        - "analysis_results"
+        - "quality_metrics"
+        - "analysis_summary"
+      minimum_completeness_score: 0.8
+      validate_pssm_matrices: true
+  
+  # Quality metrics configuration
+  quality_metrics:
+    calculate_overall_score: true
+    include_step_metrics: true
+    confidence_thresholds:
+      high: 0.8
+      medium: 0.6
+      low: 0.4
+  
+  # Analysis summary configuration
+  analysis_summary:
+    include_protein_families: true
+    include_alignment_stats: true
+    calculate_conservation_metrics: true
+
+# Step execution parameters
+execution:
+  timeout_seconds: 90
+  retry_attempts: 1 

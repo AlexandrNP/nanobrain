@@ -73,7 +73,7 @@ class BVBRCCacheManager:
         Initialize cache manager.
         
         Args:
-            cache_dir: Directory for cache storage
+            cache_dir: Directory for cache storage (configurable)
             max_cache_size_mb: Maximum cache size in MB
             default_expiry_hours: Default cache expiration in hours
         """

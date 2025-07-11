@@ -1,0 +1,144 @@
+name: "SimplifiedAlphavirusWorkflow"
+version: "2.0.0"
+description: "Simplified Alphavirus workflow with delegated business logic"
+
+# Workflow-level configuration
+workflow:
+  type: "viral_protein_analysis"
+  target_organism: "Alphavirus"
+  framework: "NanoBrain"
+  framework_version: "2.0.0"
+  
+  # Default parameters
+  default_params:
+    virus_name: "Alphavirus"
+    min_genome_length: 8000
+    max_genome_length: 15000
+    clustering_threshold: 0.8
+
+# Step execution order and configuration
+steps:
+  # Main analysis pipeline
+  data_acquisition:
+    class: "nanobrain.library.workflows.viral_protein_analysis.steps.BVBRCDataAcquisitionStep"
+    config_file: "bv_brc_data_acquisition_step.yml"
+    timeout_seconds: 600
+    
+  annotation_mapping:
+    class: "nanobrain.library.workflows.viral_protein_analysis.steps.AnnotationMappingStep"
+    config_file: "annotation_mapping_step.yml"
+    timeout_seconds: 300
+    
+  synonym_agent:
+    class: "nanobrain.library.workflows.viral_protein_analysis.steps.ProteinSynonymAgentStep"
+    config_file: "protein_synonym_agent_step.yml"
+    timeout_seconds: 300
+    
+  sequence_curation:
+    class: "nanobrain.library.workflows.viral_protein_analysis.steps.SequenceCurationStep"
+    config_file: "sequence_curation_step.yml"
+    timeout_seconds: 300
+    
+  clustering:
+    class: "nanobrain.library.workflows.viral_protein_analysis.steps.ClusteringStep"
+    config_file: "clustering_step.yml"
+    timeout_seconds: 300
+    
+  alignment:
+    class: "nanobrain.library.workflows.viral_protein_analysis.steps.AlignmentStep"
+    config_file: "alignment_step.yml"
+    timeout_seconds: 300
+    
+  pssm_analysis:
+    class: "nanobrain.library.workflows.viral_protein_analysis.steps.PSSMAnalysisStep"
+    config_file: "pssm_analysis_step.yml"
+    timeout_seconds: 300
+    
+  # Result management pipeline
+  data_aggregation:
+    class: "nanobrain.library.workflows.viral_protein_analysis.steps.DataAggregationStep"
+    config_file: "data_aggregation_step.yml"
+    timeout_seconds: 120
+    
+  result_collection:
+    class: "nanobrain.library.workflows.viral_protein_analysis.steps.ResultCollectionStep"
+    config_file: "result_collection_step.yml"
+    timeout_seconds: 180
+    
+  viral_pssm_generation:
+    class: "nanobrain.library.workflows.viral_protein_analysis.steps.ViralPSSMGenerationStep"
+    config_file: "viral_pssm_generation_step.yml"
+    timeout_seconds: 120
+
+# Step execution flow
+execution_flow:
+  # Main analysis pipeline (sequential)
+  main_pipeline:
+    - data_acquisition
+    - annotation_mapping  # Synonym agent runs in parallel via Links
+    - sequence_curation
+    - clustering
+    - alignment
+    - pssm_analysis
+  
+  # Result management pipeline (sequential)
+  result_pipeline:
+    - data_aggregation
+    - result_collection
+    - viral_pssm_generation
+
+# Links between steps (data flow)
+links:
+  - source: data_acquisition
+    target: annotation_mapping
+    
+  - source: annotation_mapping
+    target: synonym_agent
+    name: synonym_request
+    
+  - source: synonym_agent
+    target: annotation_mapping
+    name: synonym_response
+    
+  - source: annotation_mapping
+    target: sequence_curation
+    
+  - source: sequence_curation
+    target: clustering
+    
+  - source: clustering
+    target: alignment
+    
+  - source: alignment
+    target: pssm_analysis
+    
+  # Result management links
+  - source: pssm_analysis
+    target: data_aggregation
+    description: "Aggregate all step results"
+    
+  - source: data_aggregation
+    target: result_collection
+    description: "Collect output files"
+    
+  - source: result_collection
+    target: viral_pssm_generation
+    description: "Generate final viral_pssm.json"
+
+# Error handling configuration
+error_handling:
+  continue_on_step_failure: false
+  max_retry_attempts: 2
+  timeout_behavior: "fail_workflow"
+  
+# Output configuration
+output:
+  primary_output_key: "viral_pssm_json"
+  collect_intermediate_results: true
+  generate_workflow_summary: true
+  
+# Monitoring and logging
+monitoring:
+  log_step_progress: true
+  track_execution_time: true
+  collect_quality_metrics: true 

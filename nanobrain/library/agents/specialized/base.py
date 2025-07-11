@@ -165,10 +165,15 @@ class SimpleSpecializedAgent(FromConfigBase, SpecializedAgentBase, SimpleAgent):
         }
     
     @classmethod
-    def from_config(cls, config: AgentConfig, **kwargs) -> 'SimpleSpecializedAgent':
+    def from_config(cls, config: Union[AgentConfig, Dict[str, Any]], **kwargs) -> 'SimpleSpecializedAgent':
         """Mandatory from_config implementation for SimpleSpecializedAgent"""
         logger = get_logger(f"{cls.__name__}.from_config")
         logger.info(f"Creating {cls.__name__} from configuration")
+        
+        # Convert dictionary to AgentConfig if needed
+        if isinstance(config, dict):
+            logger.debug(f"Converting dictionary config to AgentConfig for {cls.__name__}")
+            config = AgentConfig(**config)
         
         # Step 1: Validate configuration schema
         cls.validate_config_schema(config)
@@ -266,10 +271,15 @@ class ConversationalSpecializedAgent(FromConfigBase, SpecializedAgentBase, Conve
         }
     
     @classmethod
-    def from_config(cls, config: AgentConfig, **kwargs) -> 'ConversationalSpecializedAgent':
+    def from_config(cls, config: Union[AgentConfig, Dict[str, Any]], **kwargs) -> 'ConversationalSpecializedAgent':
         """Mandatory from_config implementation for ConversationalSpecializedAgent"""
         logger = get_logger(f"{cls.__name__}.from_config")
         logger.info(f"Creating {cls.__name__} from configuration")
+        
+        # Convert dictionary to AgentConfig if needed
+        if isinstance(config, dict):
+            logger.debug(f"Converting dictionary config to AgentConfig for {cls.__name__}")
+            config = AgentConfig(**config)
         
         # Step 1: Validate configuration schema
         cls.validate_config_schema(config)

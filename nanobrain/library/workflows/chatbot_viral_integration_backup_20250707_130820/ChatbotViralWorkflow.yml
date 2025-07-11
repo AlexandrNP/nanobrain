@@ -1,0 +1,146 @@
+name: ChatbotViralWorkflow
+description: Intelligent chatbot integration with viral annotation backend
+version: 4.2.0
+execution_strategy: sequential
+error_handling: continue
+enable_monitoring: true
+workflow_directory: nanobrain/library/workflows/chatbot_viral_integration
+enable_progress_reporting: true
+progress_batch_interval: 3.0
+progress_collapsed_by_default: true
+progress_show_technical_errors: true
+progress_preserve_session_history: true
+max_parallel_steps: 3
+step_timeout: 120.0
+retry_attempts: 2
+retry_delay: 1.0
+validate_graph: true
+allow_cycles: false
+require_connected_graph: true
+
+# Data directory configuration - configurable path for data storage and caching
+data_directory: "../../data"  # Base data directory - can be overridden by environment or config
+cache_directory: "../../data/cache"  # Cache directory for temporary files
+csv_file_path: "../../data/alphavirus_analysis/BVBRC_genome_alphavirus.csv"  # Path to genome CSV data
+
+steps:
+- step_id: query_classification
+  name: Query Classification
+  description: Classify user queries as annotation requests or conversational queries
+  class: nanobrain.library.workflows.chatbot_viral_integration.steps.query_classification_step.QueryClassificationStep
+  estimated_time: 2.0
+  config_file: config/steps/query_classification.yml
+- step_id: annotation_job_processing
+  name: Annotation Job Processing
+  description: Handle viral protein annotation job requests
+  class: nanobrain.library.workflows.chatbot_viral_integration.steps.annotation_job_step.AnnotationJobStep
+  estimated_time: 300.0
+  config_file: config/steps/annotation_job_processing.yml
+- step_id: conversational_response
+  name: Conversational Response
+  description: Generate intelligent conversational responses about alphaviruses
+  class: nanobrain.library.workflows.chatbot_viral_integration.steps.conversational_response_step.ConversationalResponseStep
+  estimated_time: 5.0
+  config_file: config/steps/conversational_response.yml
+- step_id: response_formatting
+  name: Response Formatting
+  description: Format responses for optimal user presentation
+  class: nanobrain.library.workflows.chatbot_viral_integration.steps.response_formatting_step.ResponseFormattingStep
+  estimated_time: 1.0
+  config_file: config/steps/response_formatting.yml
+links:
+- link_id: classification_to_annotation
+  source: query_classification
+  target: annotation_job_processing
+  link_type: conditional
+  condition:
+    field: routing_decision.next_step
+    operator: equals
+    value: annotation_job
+  data_mapping:
+    classification_data: classification_data
+    routing_decision: routing_decision
+    session_data: session_data
+- link_id: classification_to_conversational
+  source: query_classification
+  target: conversational_response
+  link_type: conditional
+  condition:
+    field: routing_decision.next_step
+    operator: equals
+    value: conversational_response
+  data_mapping:
+    classification_data: classification_data
+    routing_decision: routing_decision
+    session_data: session_data
+- link_id: annotation_to_formatting
+  source: annotation_job_processing
+  target: response_formatting
+  link_type: direct
+  data_mapping:
+    response_type: '''annotation_job'''
+    job_data: job_data
+    success: success
+    error: error
+    backend_available: backend_available
+- link_id: conversational_to_formatting
+  source: conversational_response
+  target: response_formatting
+  link_type: direct
+  data_mapping:
+    response_type: '''conversational'''
+    response_data: response_data
+    enable_streaming: enable_streaming
+data_units:
+- name: ChatSessionData
+  type: session_data
+  persistence: session
+- name: QueryClassificationData
+  type: classification_result
+  persistence: temporary
+- name: AnnotationJobData
+  type: job_information
+  persistence: persistent
+- name: ConversationalResponseData
+  type: response_content
+  persistence: temporary
+monitoring:
+  enabled: true
+  metrics:
+  - step_execution_time
+  - classification_accuracy
+  - job_success_rate
+  - response_quality
+  - user_satisfaction
+  alerts:
+  - condition: step_execution_time > 60
+    action: log_warning
+  - condition: job_success_rate < 0.8
+    action: notify_admin
+quality_checks:
+- step: query_classification
+  checks:
+  - confidence_score >= 0.6
+  - routing_decision is not null
+- step: annotation_job_processing
+  checks:
+  - backend_response_time < 30
+  - job_id is not null
+- step: conversational_response
+  checks:
+  - response_length > 50
+  - confidence_score >= 0.7
+testing:
+  mock_backend_responses: false
+  use_real_data: true
+  test_scenarios:
+  - simple_annotation_request
+  - complex_annotation_request
+  - conversational_query
+  - ambiguous_query
+  - error_handling
+_metadata:
+  last_updated: '2025-06-22T23:41:37.497669'
+  updated_by: modular_config_migration
+  migration_version: 1.0.0
+  uses_modular_config: true

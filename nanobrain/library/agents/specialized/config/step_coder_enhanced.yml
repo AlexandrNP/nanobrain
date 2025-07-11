@@ -15,20 +15,20 @@ agent_card:
     supported_modes: ["json", "text"]
     content_types: ["application/json", "text/plain"]
     format_schema:
-      type: "object"
+      class: nanobrain.core.data_unit.DataUnit
       required_fields:
         input:
-          type: "string"
+          class: nanobrain.core.data_unit.DataUnitString
           description: "Detailed natural language description of code requirements (supports complex architectural patterns)"
       optional_fields:
         language:
-          type: "string"
+          class: nanobrain.core.data_unit.DataUnitString
           description: "Programming language (Python, JavaScript, TypeScript, Java, Go, Rust, C++, C#)"
         complexity_level:
-          type: "string"
+          class: nanobrain.core.data_unit.DataUnitString
           description: "Code complexity level (simple, intermediate, advanced, expert)"
         architecture_pattern:
-          type: "string"
+          class: nanobrain.core.data_unit.DataUnitString
           description: "Architecture pattern to implement (MVC, Clean Architecture, Microservices, etc.)"
   
   output_format:
@@ -36,19 +36,19 @@ agent_card:
     supported_modes: ["json", "text"]
     content_types: ["application/json", "text/plain"]
     format_schema:
-      type: "object"
+      class: nanobrain.core.data_unit.DataUnit
       guaranteed_fields:
         generated_code:
-          type: "string"
+          class: nanobrain.core.data_unit.DataUnitString
           description: "High-quality generated code with documentation and type hints"
         explanation:
-          type: "string"
+          class: nanobrain.core.data_unit.DataUnitString
           description: "Detailed explanation of the code structure and design decisions"
         usage_examples:
           type: "array"
           description: "Code usage examples and integration instructions"
         test_code:
-          type: "string"
+          class: nanobrain.core.data_unit.DataUnitString
           description: "Unit tests for the generated code (when requested)"
   
   capabilities:
@@ -206,7 +206,7 @@ validation:
     - complexity_level
   constraints:
     model:
-      type: string
+      class: nanobrain.core.data_unit.DataUnitString
       pattern: "^(gpt-|claude-|llama-)"
       message: "Model must be a supported LLM (gpt-, claude-, or llama-)"
     temperature:
@@ -220,20 +220,20 @@ validation:
       max: 16000
       message: "Max tokens must be between 100 and 16000"
     complexity_level:
-      type: string
+      class: nanobrain.core.data_unit.DataUnitString
       enum: ["simple", "intermediate", "advanced", "expert"]
       message: "Complexity level must be one of: simple, intermediate, advanced, expert"
     language:
-      type: string
+      class: nanobrain.core.data_unit.DataUnitString
       enum: ["Python", "JavaScript", "TypeScript", "Java", "Go", "Rust", "C++", "C#"]
       message: "Language must be a supported programming language"
 
 # Input schema with enhanced validation
 input_schema:
-  type: "object"
+  class: nanobrain.core.data_unit.DataUnit
   properties:
     input:
-      type: "string"
+      class: nanobrain.core.data_unit.DataUnitString
       description: >
         Detailed description of your code-related request. The enhanced agent can handle:
         
@@ -265,20 +265,20 @@ input_schema:
       max_length: 5000
     
     language:
-      type: "string"
+      class: nanobrain.core.data_unit.DataUnitString
       description: "Programming language to use"
       required: false
       default: "Python"
       enum: ["Python", "JavaScript", "TypeScript", "Java", "Go", "Rust", "C++", "C#"]
     
     context:
-      type: "string"
+      class: nanobrain.core.data_unit.DataUnitString
       description: "Additional context, existing code, or architectural constraints"
       required: false
       max_length: 10000
     
     complexity_level:
-      type: "string"
+      class: nanobrain.core.data_unit.DataUnitString
       description: "Complexity level of the generated code"
       required: false
       default: "intermediate"
@@ -297,7 +297,7 @@ input_schema:
       default: true
     
     architecture_pattern:
-      type: "string"
+      class: nanobrain.core.data_unit.DataUnitString
       description: "Specific architecture pattern to implement"
       required: false
       enum: ["MVC", "MVP", "MVVM", "Clean Architecture", "Hexagonal", "Microservices", "Event-Driven"]
@@ -308,7 +308,7 @@ parameters:
     description: "Parameters for generating a function"
     fields:
       function_name:
-        type: "string"
+        class: nanobrain.core.data_unit.DataUnitString
         description: "Name of the function to generate"
         required: true
         pattern: "^[a-zA-Z_][a-zA-Z0-9_]*$"
@@ -317,7 +317,7 @@ parameters:
         description: "Function parameters with types"
         required: false
       return_type:
-        type: "string"
+        class: nanobrain.core.data_unit.DataUnitString
         description: "Return type of the function"
         required: false
       async_function:
@@ -330,7 +330,7 @@ parameters:
     description: "Parameters for generating a class"
     fields:
       class_name:
-        type: "string"
+        class: nanobrain.core.data_unit.DataUnitString
         description: "Name of the class to generate"
         required: true
         pattern: "^[A-Z][a-zA-Z0-9_]*$"
@@ -347,7 +347,7 @@ parameters:
         description: "Properties to include in the class"
         required: false
       design_pattern:
-        type: "string"
+        class: nanobrain.core.data_unit.DataUnitString
         description: "Design pattern to implement"
         required: false
         enum: ["Singleton", "Factory", "Observer", "Strategy", "Command", "Decorator"]
@@ -356,7 +356,7 @@ parameters:
     description: "Parameters for generating API code"
     fields:
       framework:
-        type: "string"
+        class: nanobrain.core.data_unit.DataUnitString
         description: "Web framework to use"
         required: true
         enum: ["FastAPI", "Flask", "Django", "Express", "Spring Boot", "Gin"]
@@ -365,12 +365,12 @@ parameters:
         description: "API endpoints to generate"
         required: true
       authentication:
-        type: "string"
+        class: nanobrain.core.data_unit.DataUnitString
         description: "Authentication method"
         required: false
         enum: ["JWT", "OAuth2", "API Key", "Basic Auth", "None"]
       database:
-        type: "string"
+        class: nanobrain.core.data_unit.DataUnitString
         description: "Database integration"
         required: false
         enum: ["PostgreSQL", "MySQL", "MongoDB", "SQLite", "Redis"]

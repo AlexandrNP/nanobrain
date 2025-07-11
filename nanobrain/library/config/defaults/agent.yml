@@ -18,10 +18,10 @@ agent_card:
     supported_modes: ["text", "json"]
     content_types: ["application/json", "text/plain"]
     format_schema:
-      type: "object"
+      class: nanobrain.core.data_unit.DataUnit
       required_fields:
         message:
-          type: "string"
+          class: nanobrain.core.data_unit.DataUnitString
           description: "Natural language instruction or query"
   
   output_format:
@@ -29,13 +29,13 @@ agent_card:
     supported_modes: ["json", "text"]
     content_types: ["application/json", "text/plain"]
     format_schema:
-      type: "object"
+      class: nanobrain.core.data_unit.DataUnit
       guaranteed_fields:
         response:
-          type: "string"
+          class: nanobrain.core.data_unit.DataUnitString
           description: "Natural language response"
         metadata:
-          type: "object"
+          class: nanobrain.core.data_unit.DataUnit
           description: "Execution metadata"
   
   capabilities:

@@ -4,10 +4,10 @@ tools:
     class: "src.agents.file_writer.FileWriterAgent"
     description: "Tool for writing files based on natural language descriptions"
     parameters:
-      type: "object"
+      class: nanobrain.core.data_unit.DataUnit
       properties:
         input:
-          type: "string"
+          class: nanobrain.core.data_unit.DataUnitString
           description: "Input text for the file writer agent"
       required: ["input"]
     config:
@@ -25,10 +25,10 @@ tools:
     class: "src.agents.code_writer.CodeWriterAgent"
     description: "Tool for generating software code based on natural language instructions"
     parameters:
-      type: "object"
+      class: nanobrain.core.data_unit.DataUnit
       properties:
         input:
-          type: "string"
+          class: nanobrain.core.data_unit.DataUnitString
           description: "Input text for the code writer agent"
       required: ["input"]
     config:
