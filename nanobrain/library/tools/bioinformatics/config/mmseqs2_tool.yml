@@ -1,0 +1,64 @@
+name: "MMseqs2 Clustering Tool"
+description: "Tool for protein sequence clustering using MMseqs2"
+class: nanobrain.library.tools.bioinformatics.mmseqs2_tool.MMseqs2Tool
+
+# Tool configuration
+tool_name: "mmseqs2"
+conda_package: "mmseqs2"
+conda_channel: "bioconda"
+environment_name: "mmseqs2_env"
+
+# Clustering parameters
+min_seq_id: 0.3
+coverage: 0.8
+cluster_mode: 2
+sensitivity: 7.5
+
+# Performance settings
+progressive_scaling: true
+threads: 4
+memory_limit: "8G"
+tmp_dir: "/tmp"
+timeout_seconds: 300
+
+# Installation settings
+verify_on_init: true
+auto_install: true
+installation_check: true
+
+# Input/Output configuration
+input_format: "fasta"
+output_format: "tsv"
+include_representative: true
+include_cluster_info: true
+
+# Advanced clustering parameters
+clustering_params:
+  min_seq_id: 0.3
+  coverage: 0.8
+  cluster_mode: 2        # 0: Set-Cover, 1: Connected component, 2: Greedy clustering
+  sensitivity: 7.5       # Higher = more sensitive, slower
+  max_iterations: 3
+  cluster_reassign: false
+
+# Performance optimization
+performance:
+  use_disk_cache: true
+  split_memory_limit: "4G"
+  max_seqs_per_file: 50000
+  parallel_clustering: true
+  compression_level: 6
+
+# Quality control
+quality_control:
+  min_cluster_size: 2
+  max_cluster_size: 1000
+  filter_singletons: false
+  validate_clusters: true
+
+# Cache configuration
+cache_config:
+  enable_caching: true
+  cache_directory: "data/mmseqs2_cache"
+  cache_ttl_hours: 168  # 1 week
+  cache_intermediate: true 

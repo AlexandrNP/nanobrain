@@ -1,0 +1,74 @@
+# Configuration for ProteinSynonymAgent
+name: ProteinSynonymAgent
+description: "Specialized agent for identifying protein product synonyms using LLM with dynamic ICTV standards inference"
+model: gpt-4
+temperature: 0.3  # Lower temperature for more consistent synonym identification
+
+# Agent-specific configuration
+config:
+  # CRITICAL FIX: Add name field inside config for from_config compatibility
+  name: ProteinSynonymAgent
+  
+  # Minimum confidence threshold for synonym relationships
+  min_confidence_threshold: 0.8
+  
+  # Maximum number of products to analyze in a single request
+  max_products_per_request: 200
+  
+  # Whether to use ICTV standards for canonical naming
+  use_ictv_standards: true
+  
+  # Cache directory for ICTV standards
+  cache_dir: "data/ictv_cache"
+  
+  # ICTV cache time-to-live in days
+  ictv_cache_ttl_days: 30
+  
+  # Batch processing settings
+  batch_size: 50
+  parallel_batches: 3
+
+# Path to prompt templates
+prompt_template_file: "nanobrain/library/agents/specialized/config/protein_synonym_prompts.yml"
+
+# System prompt
+system_prompt: |
+  You are a specialized bioinformatics agent focused on identifying protein product synonyms.
+  You have expert knowledge of:
+  - International Committee on Taxonomy of Viruses (ICTV) nomenclature standards
+  - Viral protein naming conventions across different databases
+  - Common abbreviations and alternative names for viral proteins
+  - Polyprotein processing and fragment relationships
+  
+  Your task is to identify synonym relationships with high accuracy and provide confidence scores.
+  Always prioritize ICTV standard nomenclature when available.
+
+# Tools configuration (if needed in future)
+tools: []
+
+# Executor configuration
+executor_config:
+  executor_type: local
+  max_workers: 1
+
+# Logging configuration
+enable_logging: true
+log_conversations: true
+log_tool_calls: true
+
+# A2A Protocol compliance
+agent_card:
+  version: "1.0"
+  metadata:
+    domain: "bioinformatics"
+    subdomain: "protein_annotation"
+    capabilities:
+      - "synonym_identification"
+      - "ictv_standard_inference"
+      - "confidence_scoring"
+    input_types:
+      - "protein_names"
+      - "virus_metadata"
+    output_types:
+      - "synonym_groups"
+      - "confidence_scores" 

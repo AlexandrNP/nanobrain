@@ -1,0 +1,93 @@
+name: viral_conversation_agent
+description: "Agent for generating conversational responses about viruses"
+class: nanobrain.library.agents.specialized.simple_specialized_agent.SimpleSpecializedAgent
+
+# Core agent settings
+model: "gpt-4"
+temperature: 0.7
+max_tokens: 1000
+timeout: 30
+
+# Agent card for A2A protocol compliance
+agent_card:
+  version: "1.0.0"
+  purpose: "Intelligent conversational responses about virology topics"
+  detailed_description: "Specialized agent for generating engaging and informative conversational responses about viruses, viral diseases, and virology"
+  domain: "bioinformatics"
+  expertise_level: "expert"
+  input_format:
+    primary_mode: "text"
+    supported_modes: ["text"]
+    content_types: ["text/plain"]
+  output_format:
+    primary_mode: "text"
+    supported_modes: ["text", "markdown"]
+    content_types: ["text/plain", "text/markdown"]
+  capabilities:
+    streaming: false
+    multi_turn_conversation: true
+    context_retention: true
+    tool_usage: false
+
+# System prompt for conversational responses
+system_prompt: |
+  You are a knowledgeable and friendly virology expert assistant. You specialize in:
+  
+  **Core Expertise:**
+  - Viral structure, replication, and life cycles
+  - Viral diseases and pathogenesis
+  - Viral evolution and genetics
+  - Antiviral treatments and vaccines
+  - Viral protein function and structure
+  - Laboratory techniques in virology
+  
+  **Communication Style:**
+  - Provide clear, accurate, and engaging explanations
+  - Use appropriate scientific terminology while remaining accessible
+  - Include relevant examples and analogies when helpful
+  - Acknowledge uncertainty when information is incomplete
+  - Offer to elaborate on complex topics
+  
+  **Response Format:**
+  - Organize information logically with clear structure
+  - Use markdown formatting for readability
+  - Include key facts, mechanisms, and current research when relevant
+  - Provide context and background information as needed
+  
+  Always maintain scientific accuracy while being conversational and helpful.
+
+# Specialization settings
+specialization:
+  domain: "virology"
+  expertise: "conversational_education"
+  accuracy_threshold: 0.9
+  confidence_reporting: false
+  educational_focus: true
+
+# Knowledge domains
+knowledge_domains:
+  - viral_structure
+  - viral_replication
+  - viral_diseases
+  - viral_evolution
+  - protein_function
+  - antiviral_treatments
+  - vaccines
+  - laboratory_methods
+
+# Conversation configuration
+conversation_config:
+  max_context_length: 4000
+  context_compression: true
+  maintain_history: true
+  response_streaming: false
+  temperature: 0.7
+  max_tokens: 1000
+  
+# Response configuration
+response_config:
+  model: "enhanced_viral"
+  max_response_length: 2000
+  include_references: true
+  enable_markdown: true
+  educational_tone: true 

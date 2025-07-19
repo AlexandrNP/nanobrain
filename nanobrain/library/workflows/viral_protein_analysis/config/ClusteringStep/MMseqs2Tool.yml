@@ -1,0 +1,122 @@
+name: "MMseqs2 Clustering Tool"
+description: "Tool for protein sequence clustering using MMseqs2 - Clustering Step Configuration"
+class: nanobrain.library.tools.bioinformatics.mmseqs_tool.MMseqs2Tool
+
+# Metadata (documentation only)
+_metadata:
+  workflow: "viral_protein_analysis"
+  step: "clustering"
+  component_type: "bioinformatics_tool"
+  last_updated: "2025-01-28"
+  configuration_completeness: "complete_for_component"
+
+# Complete tool configuration
+tool_name: "mmseqs2"
+
+# Complete bioinformatics tool card
+tool_card:
+  name: "mmseqs2"
+  description: "MMseqs2 tool for protein sequence clustering and analysis"
+  version: "1.0.0"
+  category: "bioinformatics"
+  capabilities: ["protein_clustering", "sequence_analysis", "similarity_search"]
+
+# Complete installation configuration
+conda_package: "mmseqs2"
+conda_channel: "bioconda"
+git_repository: "https://github.com/soedinglab/MMseqs2.git"
+environment_name: "nanobrain-viral_protein-mmseqs2"
+create_isolated_environment: true
+
+# Complete local installation paths
+local_installation_paths:
+  - "/usr/local/bin"
+  - "/opt/homebrew/bin"
+  - "~/bin"
+
+# Complete clustering parameters (optimized for viral protein clustering)
+min_seq_id: 0.3
+coverage: 0.8
+cluster_mode: 2  # Greedy clustering for viral proteins
+sensitivity: 7.5
+
+# Complete progressive scaling configuration (clustering optimized)
+progressive_scaling:
+  1:
+    max_sequences: 100
+    sensitivity: 5.0
+    description: "Fast clustering test"
+  2:
+    max_sequences: 500
+    sensitivity: 6.5
+    description: "Medium clustering validation"
+  3:
+    max_sequences: 2000
+    sensitivity: 7.0
+    description: "Large scale clustering"
+  4:
+    max_sequences: 10000
+    sensitivity: 7.5
+    description: "Full scale viral protein clustering"
+
+# Complete performance settings (optimized for clustering)
+threads: 4
+memory_limit: "8G"
+tmp_dir: null
+timeout_seconds: 600  # Extended timeout for clustering
+progressive_scaling_enabled: true
+verify_on_init: true
+auto_install: true
+installation_check: true
+
+# Complete cache configuration (clustering specific)
+cache_dir: "data/mmseqs2_cache"
+cache_config:
+  enable_caching: true
+  cache_directory: "data/mmseqs2_cache"
+  cache_ttl_hours: 168  # 1 week
+  cache_intermediate: true
+
+# Complete input/output configuration
+input_format: "fasta"
+output_format: "tsv"
+include_representative: true
+include_cluster_info: true
+
+# Complete advanced clustering parameters
+clustering_params:
+  min_seq_id: 0.3
+  coverage: 0.8
+  cluster_mode: 2        # Greedy clustering for viral proteins
+  sensitivity: 7.5       # High sensitivity for viral diversity
+  max_iterations: 3
+  cluster_reassign: false
+
+# Complete performance optimization (clustering specific)
+performance:
+  use_disk_cache: true
+  split_memory_limit: "4G"
+  max_seqs_per_file: 50000
+  parallel_clustering: true
+  compression_level: 6
+
+# Complete quality control configuration (clustering specific)
+quality_control:
+  min_cluster_size: 2
+  max_cluster_size: 1000
+  filter_singletons: false
+  validate_clusters: true
+
+# Complete logging configuration
+logging_config:
+  enable_logging: true
+  log_level: "INFO"
+  log_clustering_stats: true
+  log_performance_metrics: true
+
+# Complete error handling configuration
+error_handling:
+  fail_fast: true
+  log_errors: true
+  retry_on_failure: true
+  preserve_intermediate_files: true 

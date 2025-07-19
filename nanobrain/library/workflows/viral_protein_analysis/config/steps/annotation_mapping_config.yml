@@ -1,20 +1,40 @@
 name: Annotation Mapping
 description: Handle annotation inconsistencies using ICTV mapping and synonym resolution
 estimated_time: 60.0
-class: AnnotationMappingStep
+class: nanobrain.library.workflows.viral_protein_analysis.steps.annotation_mapping_step.AnnotationMappingStep
 step_type: simple
 debug_mode: true
 enable_logging: true
 
-# Tool configuration for synonym agent (NanoBrain pattern)
+# PURE CONFIG: Tool configuration via external file reference
 tools:
   synonym_agent:
     enabled: true
-    name: "ProteinSynonymAgent"  # REQUIRED: Add missing name field
-    class: nanobrain.library.agents.specialized.protein_synonym_agent.ProteinSynonymAgent
-    config_file: "nanobrain/library/agents/specialized/config/ProteinSynonymAgent.yml"
-    timeout: 300
-    max_retries: 3
+    config_file: "nanobrain/library/agents/specialized/config/synonym_resolution_agent.yml"
+
+# STEP-LEVEL DATA UNITS: Step owns its data units
+input_data_units:
+  fasta_and_annotations:
+    class: nanobrain.core.data_unit.DataUnitFile
+    name: fasta_and_annotations
+    description: "FASTA file with protein annotations from data acquisition"
+    persistent: true
+    file_path: "data/bvbrc_cache/fasta_and_annotations.fasta"
+
+output_data_units:
+  standardized_annotations:
+    class: nanobrain.core.data_unit.DataUnitMemory
+    name: standardized_annotations
+    description: "Standardized protein annotations with ICTV mapping"
+    persistent: false
+
+# STEP-LEVEL TRIGGER: Execute when FASTA data received
+triggers:
+  - trigger_id: input_data_received
+    class: nanobrain.core.trigger.DataUnitChangeTrigger
+    data_unit: fasta_and_annotations
+    event_type: "set"
+    description: "Execute step when FASTA annotation data is received"
 
 # Cache configuration (virus-specific)
 cache_config:
@@ -30,22 +50,6 @@ annotation_config:
   validate_annotations: true
   batch_size: 100
   enable_caching: true
-
-# UPDATED: Input configuration with class field
-input_configs:
-  fasta_and_annotations:
-    class: nanobrain.core.data_unit.DataUnitFile
-    name: fasta_and_annotations
-    description: "FASTA file with protein annotations from data acquisition"
-    persistent: true
-    file_path: "data/bvbrc_cache/fasta_and_annotations.fasta"
-
-# UPDATED: Output configuration with class field
-output_config:
-  class: nanobrain.core.data_unit.DataUnitMemory
-  name: standardized_annotations
-  description: "Standardized protein annotations with ICTV mapping"
-  persistent: false
 
 # Tool card format specification (corrected data flow format)
 input_format:

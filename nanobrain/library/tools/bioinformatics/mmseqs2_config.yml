@@ -1,0 +1,122 @@
+name: "MMseqs2 Clustering Tool"
+description: "Tool for protein sequence clustering using MMseqs2 - Complete Configuration"
+class: nanobrain.library.tools.bioinformatics.mmseqs_tool.MMseqs2Tool
+
+# Metadata (documentation only)
+_metadata:
+  framework: "nanobrain"
+  component_type: "bioinformatics_tool"
+  migration_source: "config/mmseqs2_tool.yml"
+  last_updated: "2025-01-28"
+  configuration_completeness: "complete_for_component"
+
+# Complete tool configuration
+tool_name: "mmseqs2"
+
+# Complete bioinformatics tool card
+tool_card:
+  name: "mmseqs2"
+  description: "MMseqs2 tool for protein sequence clustering and analysis"
+  version: "1.0.0"
+  category: "bioinformatics"
+  capabilities: ["protein_clustering", "sequence_analysis", "similarity_search"]
+
+# Complete installation configuration
+conda_package: "mmseqs2"
+conda_channel: "bioconda"
+git_repository: "https://github.com/soedinglab/MMseqs2.git"
+environment_name: "nanobrain-viral_protein-mmseqs2"
+create_isolated_environment: true
+
+# Complete local installation paths
+local_installation_paths:
+  - "/usr/local/bin"
+  - "/opt/homebrew/bin"
+  - "~/bin"
+
+# Complete clustering parameters
+min_seq_id: 0.3
+coverage: 0.8
+cluster_mode: 0
+sensitivity: 7.5
+
+# Complete progressive scaling configuration
+progressive_scaling:
+  1:
+    max_sequences: 50
+    sensitivity: 4.0
+    description: "Fast test"
+  2:
+    max_sequences: 100
+    sensitivity: 5.5
+    description: "Basic validation"
+  3:
+    max_sequences: 500
+    sensitivity: 7.0
+    description: "Medium scale"
+  4:
+    max_sequences: 2000
+    sensitivity: 7.5
+    description: "Full scale"
+
+# Complete performance settings
+threads: 4
+memory_limit: "8G"
+tmp_dir: null
+timeout_seconds: 300
+progressive_scaling_enabled: true
+verify_on_init: true
+auto_install: true
+installation_check: true
+
+# Complete cache configuration
+cache_dir: null
+cache_config:
+  enable_caching: true
+  cache_directory: "data/mmseqs2_cache"
+  cache_ttl_hours: 168  # 1 week
+  cache_intermediate: true
+
+# Complete input/output configuration
+input_format: "fasta"
+output_format: "tsv"
+include_representative: true
+include_cluster_info: true
+
+# Complete advanced clustering parameters
+clustering_params:
+  min_seq_id: 0.3
+  coverage: 0.8
+  cluster_mode: 2        # 0: Set-Cover, 1: Connected component, 2: Greedy clustering
+  sensitivity: 7.5       # Higher = more sensitive, slower
+  max_iterations: 3
+  cluster_reassign: false
+
+# Complete performance optimization
+performance:
+  use_disk_cache: true
+  split_memory_limit: "4G"
+  max_seqs_per_file: 50000
+  parallel_clustering: true
+  compression_level: 6
+
+# Complete quality control configuration
+quality_control:
+  min_cluster_size: 2
+  max_cluster_size: 1000
+  filter_singletons: false
+  validate_clusters: true
+
+# Complete logging configuration
+logging_config:
+  enable_logging: true
+  log_level: "INFO"
+  log_clustering_stats: true
+  log_performance_metrics: true
+
+# Complete error handling configuration
+error_handling:
+  fail_fast: true
+  log_errors: true
+  retry_on_failure: true
+  preserve_intermediate_files: true 

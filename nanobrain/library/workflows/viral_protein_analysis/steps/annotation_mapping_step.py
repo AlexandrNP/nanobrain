@@ -27,16 +27,17 @@ class AnnotationMappingStep(Step):
     COMPONENT_TYPE = "step"
     REQUIRED_CONFIG_FIELDS = ['name']
     
+    @classmethod
+    def _get_config_class(cls):
+        """UNIFIED PATTERN: Return StepConfig - ONLY method that differs from other components"""
+        return StepConfig
+    
     def __init__(self, config: StepConfig, **kwargs):
         super().__init__(config, **kwargs)
         self.synonym_agent = None
         self.cache_manager = None
         
-    @classmethod
-    def from_config(cls, config: StepConfig, **kwargs) -> 'AnnotationMappingStep':
-        """Create AnnotationMappingStep from configuration using mandatory pattern"""
-        # Use parent class from_config implementation
-        return super().from_config(config, **kwargs)
+    # Now inherits unified from_config implementation from FromConfigBase
     
     def _init_from_config(self, config: StepConfig, component_config: Dict[str, Any], 
                          dependencies: Dict[str, Any]) -> None:
@@ -298,8 +299,12 @@ Return only the JSON response.''')
             if hasattr(self, 'nb_logger') and self.nb_logger:
                 self.nb_logger.error(f"❌ LLM synonym resolution failed: {e}")
             
-            # Return fallback synonym resolution
-            return self._create_fallback_synonym_resolution(virus_species, protein_products)
+            # NO FALLBACKS - Workflow must fail when synonym resolution cannot be completed
+            raise ValueError(
+                f"Synonym resolution failed and cannot proceed without proper resolution. "
+                f"LLM processing failed: {e}. "
+                f"Please ensure proper agent configuration and data availability."
+            )
     
     def _parse_synonym_response(self, response: Dict[str, Any]) -> Tuple[Dict, Dict]:
         """Parse LLM response and extract synonym resolution information"""
@@ -330,55 +335,33 @@ Return only the JSON response.''')
                     else:
                         if hasattr(self, 'nb_logger') and self.nb_logger:
                             self.nb_logger.warning(f"⚠️ Incomplete LLM response for synonym resolution")
-                        return self._create_fallback_synonym_resolution('Unknown', [])
+                        raise ValueError(
+                            "Incomplete LLM response for synonym resolution. "
+                            "Cannot proceed without complete ICTV standards and synonym groups."
+                        )
                 else:
                     if hasattr(self, 'nb_logger') and self.nb_logger:
                         self.nb_logger.warning(f"⚠️ Non-JSON response from LLM")
-                    return self._create_fallback_synonym_resolution('Unknown', [])
+                    raise ValueError(
+                        "Non-JSON response from LLM. "
+                        "Cannot proceed without properly formatted synonym resolution data."
+                    )
                     
             except json.JSONDecodeError as e:
                 if hasattr(self, 'nb_logger') and self.nb_logger:
                     self.nb_logger.error(f"❌ JSON parsing failed: {e}")
-                return self._create_fallback_synonym_resolution('Unknown', [])
+                raise ValueError(
+                    f"JSON parsing failed for synonym resolution: {e}. "
+                    f"Cannot proceed without valid response format."
+                )
                     
         except Exception as e:
             if hasattr(self, 'nb_logger') and self.nb_logger:
                 self.nb_logger.error(f"❌ Response parsing failed: {e}")
-            return self._create_fallback_synonym_resolution('Unknown', [])
-    
-    def _create_fallback_synonym_resolution(self, virus_species: str, protein_products: List[str]) -> Tuple[Dict, Dict]:
-        """Create fallback synonym resolution when LLM fails"""
-        # Create basic ICTV standards
-        ictv_standards = {
-            'canonical_protein_names': ['polyprotein', 'capsid protein', 'envelope protein E1', 'envelope protein E2'],
-            'naming_guidelines': 'Standard ICTV alphavirus protein nomenclature'
-        }
-        
-        # Create basic synonym groups based on common patterns
-        synonym_groups = {}
-        
-        # Group common protein name variations
-        polyprotein_variants = []
-        capsid_variants = []
-        envelope_variants = []
-        
-        for product in protein_products:
-            product_lower = product.lower()
-            if any(term in product_lower for term in ['polyprotein', 'poly protein', 'large protein']):
-                polyprotein_variants.append(product)
-            elif any(term in product_lower for term in ['capsid', 'structural protein c', 'core protein']):
-                capsid_variants.append(product)
-            elif any(term in product_lower for term in ['envelope', 'e1', 'e2', 'e3', 'glycoprotein']):
-                envelope_variants.append(product)
-        
-        if polyprotein_variants:
-            synonym_groups['polyprotein'] = polyprotein_variants
-        if capsid_variants:
-            synonym_groups['capsid protein'] = capsid_variants
-        if envelope_variants:
-            synonym_groups['envelope protein'] = envelope_variants
-        
-        return ictv_standards, synonym_groups
+            raise ValueError(
+                f"Response parsing failed for synonym resolution: {e}. "
+                f"Cannot proceed without successful data parsing."
+            )
     
     def _apply_synonym_resolution(self, annotations: List[Dict], synonym_groups: Dict, virus_species: str) -> List[Dict]:
         """Apply synonym resolution to protein annotations"""

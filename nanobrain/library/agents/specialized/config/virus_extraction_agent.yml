@@ -1,0 +1,54 @@
+name: virus_extraction_agent
+description: "Agent for extracting virus species from user queries"
+class: nanobrain.library.agents.specialized.simple_specialized_agent.SimpleSpecializedAgent
+
+# Core agent settings
+model: "gpt-4"
+temperature: 0.1
+max_tokens: 100
+timeout: 30
+
+# Agent card for A2A protocol compliance
+agent_card:
+  version: "1.0.0"
+  purpose: "Virus species extraction from user queries using LLM"
+  detailed_description: "Specialized agent for extracting virus species names from natural language queries with high accuracy"
+  domain: "bioinformatics"
+  expertise_level: "intermediate"
+  input_format:
+    primary_mode: "text"
+    supported_modes: ["text"]
+    content_types: ["text/plain"]
+  output_format:
+    primary_mode: "json"
+    supported_modes: ["json"]
+    content_types: ["application/json"]
+  capabilities:
+    streaming: false
+    multi_turn_conversation: false
+    context_retention: false
+    tool_usage: false
+
+# System prompt for virus species extraction
+system_prompt: |
+  Analyze the following user query and extract any virus species mentioned:
+  
+  Query: "{user_query}"
+  
+  Extract virus species names if present. Return JSON format:
+  {{
+    "virus_species": "exact virus species name or null if none found",
+    "confidence": 0.0-1.0,
+    "reasoning": "brief explanation"
+  }}
+  
+  Examples of virus species: Chikungunya virus, Eastern equine encephalitis virus, Zika virus
+  
+  Return only the JSON response.
+
+# Specialization settings
+specialization:
+  domain: "virology"
+  expertise: "virus_nomenclature"
+  accuracy_threshold: 0.8
+  confidence_reporting: true 

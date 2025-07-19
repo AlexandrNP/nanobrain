@@ -1,0 +1,83 @@
+name: enhanced_query_analysis_agent
+description: "Enhanced agent for ultra-precise virus species extraction from user queries"
+class: nanobrain.library.agents.specialized.base.SimpleSpecializedAgent
+
+# Core agent settings for ultra-precision
+model: "gpt-4"
+temperature: 0.05  # Ultra-low temperature for maximum precision
+max_tokens: 150
+timeout: 30
+
+# Agent card for A2A protocol compliance
+agent_card:
+  version: "2.0.0"
+  purpose: "Ultra-precise virus species extraction with confidence scoring"
+  detailed_description: "Enhanced specialized agent for extracting virus species names from natural language queries with ultra-high precision and detailed confidence assessment"
+  domain: "bioinformatics"
+  expertise_level: "expert"
+  input_format:
+    primary_mode: "text"
+    supported_modes: ["text"]
+    content_types: ["text/plain"]
+  output_format:
+    primary_mode: "json"
+    supported_modes: ["json"]
+    content_types: ["application/json"]
+  capabilities:
+    streaming: false
+    multi_turn_conversation: false
+    context_retention: false
+    tool_usage: false
+
+# Enhanced system prompt for ultra-precise extraction
+system_prompt: |
+  You are an ultra-precise virus species extraction agent with expert knowledge of:
+  - Virus nomenclature and taxonomy (ICTV standards)
+  - Common virus abbreviations and informal names
+  - Scientific vs. common virus naming conventions
+  - Contextual virus species identification in research queries
+
+  CRITICAL PRECISION REQUIREMENTS:
+  1. Extract ONLY explicitly mentioned virus species
+  2. Do NOT infer or guess virus species from context
+  3. Provide detailed confidence assessment
+  4. Distinguish between virus species and general terms
+
+  Given this user query, extract any virus species mentioned:
+  Query: "{user_query}"
+
+  Return JSON format:
+  {{
+    "virus_species": "exact virus species name or null if none found",
+    "confidence": 0.0-1.0,
+    "extraction_reasoning": "detailed explanation of extraction decision",
+    "alternative_interpretations": ["list of other possible interpretations if any"],
+    "precision_metadata": {{
+      "extraction_method": "direct_mention|abbreviation_expansion|contextual_inference",
+      "certainty_level": "definitive|probable|possible|uncertain",
+      "contamination_risk": "none|low|medium|high"
+    }}
+  }}
+
+  EXAMPLES:
+  - "Analyze Chikungunya virus proteins" → "Chikungunya virus" (confidence: 0.95)
+  - "Study CHIKV structure" → "Chikungunya virus" (confidence: 0.90, abbreviation expanded)
+  - "Viral protein analysis" → null (confidence: 0.0, no specific virus mentioned)
+  - "Create PSSM for EEEV" → "Eastern equine encephalitis virus" (confidence: 0.92)
+
+  Return ONLY the JSON response with ultra-precise extraction.
+
+# Specialization settings for ultra-precision
+specialization:
+  domain: "virology"
+  expertise: "virus_nomenclature_extraction"
+  precision_threshold: 0.9
+  confidence_reporting: true
+  ultra_precision_mode: true
+  contamination_prevention: true
+
+# Performance settings
+performance:
+  max_processing_time: 30
+  enable_detailed_logging: true
+  track_precision_metrics: true 

@@ -1,0 +1,48 @@
+name: Data Aggregation
+description: Aggregate and combine processed viral protein data from multiple sources
+estimated_time: 180.0
+class: nanobrain.library.workflows.viral_protein_analysis.steps.data_aggregation_step.DataAggregationStep
+step_type: simple
+debug_mode: false
+enable_logging: true
+
+# Aggregation configuration
+aggregation_config:
+  merge_strategy: "comprehensive"
+  handle_duplicates: true
+  validate_consistency: true
+  include_metadata: true
+
+# Processing configuration
+processing_config:
+  batch_size: 100
+  parallel_processing: true
+  max_concurrent_requests: 10
+  memory_efficient: true
+
+# Output configuration
+output_config:
+  format: "json"
+  include_statistics: true
+  include_provenance: true
+  create_summary_report: true
+
+# Input data unit
+input_data_unit:
+  name: multi_source_data_input
+  class: nanobrain.core.data_unit.DataUnit
+
+# Output data unit
+output_data_unit:
+  name: aggregated_data_output
+  class: nanobrain.core.data_unit.DataUnit
+
+# Metadata
+logical_steps_covered: [13]
+step_description_detailed: 'Aggregate processed data from multiple analysis steps'
+
+_metadata:
+  last_updated: '2025-01-28'
+  updated_by: 'config_alignment'
+  migration_version: 2.0.0
+  uses_modular_config: true 

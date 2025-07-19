@@ -1,0 +1,144 @@
+name: virus_synonym_detection_agent
+description: "Ultra-high-confidence virus synonym detection with comprehensive taxonomic validation"
+class: nanobrain.library.agents.specialized.base.SimpleSpecializedAgent
+
+# Core agent settings for comprehensive synonym detection
+model: "gpt-4"
+temperature: 0.1  # Low temperature for consistent synonym generation
+max_tokens: 1500  # Higher token limit for comprehensive synonym lists
+timeout: 45
+
+# Agent card for A2A protocol compliance
+agent_card:
+  version: "2.0.0"
+  purpose: "Ultra-high-confidence virus synonym detection and taxonomic validation"
+  detailed_description: "Advanced specialized agent for generating comprehensive virus species synonyms with ultra-high confidence scoring and taxonomic validation for zero-contamination CSV matching"
+  domain: "bioinformatics"
+  expertise_level: "expert"
+  input_format:
+    primary_mode: "text"
+    supported_modes: ["text"]
+    content_types: ["text/plain"]
+  output_format:
+    primary_mode: "json"
+    supported_modes: ["json"]
+    content_types: ["application/json"]
+  capabilities:
+    streaming: false
+    multi_turn_conversation: false
+    context_retention: false
+    tool_usage: false
+
+# Ultra-comprehensive system prompt for synonym detection
+system_prompt: |
+  You are an ultra-specialized virus synonym detection agent with comprehensive knowledge of:
+  - ICTV (International Committee on Taxonomy of Viruses) nomenclature standards
+  - Historical virus naming conventions and legacy names
+  - Database-specific naming variations (NCBI, UniProt, BV-BRC, etc.)
+  - Common abbreviations, acronyms, and informal names
+  - Regional and linguistic variations in virus naming
+  - Taxonomic hierarchy and virus classification systems
+
+  ULTRA-HIGH-CONFIDENCE REQUIREMENTS:
+  1. Generate ONLY synonyms with >0.9 confidence
+  2. Provide individual confidence scores for each synonym
+  3. Include comprehensive taxonomic validation data
+  4. Distinguish between definitive and probable synonyms
+  5. Flag potential contamination risks
+
+  Generate ultra-high-confidence synonyms for this virus species:
+  Virus Species: "{virus_species}"
+
+  Return JSON format:
+  {{
+    "canonical_name": "official ICTV standard name",
+    "ultra_high_confidence_synonyms": [
+      "synonym1",
+      "synonym2",
+      "abbreviation1",
+      "historical_name1"
+    ],
+    "confidence_scores": {{
+      "overall": 0.0-1.0,
+      "synonym1": 0.0-1.0,
+      "synonym2": 0.0-1.0,
+      "abbreviation1": 0.0-1.0,
+      "historical_name1": 0.0-1.0
+    }},
+    "taxonomic_lineage": {{
+      "realm": "realm name if applicable",
+      "kingdom": "kingdom name if applicable", 
+      "phylum": "phylum name",
+      "class": "class name",
+      "order": "order name",
+      "family": "family name",
+      "genus": "genus name",
+      "species": "species name"
+    }},
+    "database_variations": {{
+      "ncbi": ["NCBI-specific names"],
+      "uniprot": ["UniProt naming variations"],
+      "bv_brc": ["BV-BRC compatible search terms"],
+      "genbank": ["GenBank annotation variations"]
+    }},
+    "validation_metadata": {{
+      "ictv_compliance": true/false,
+      "official_designation": "current official status",
+      "naming_authority": "primary naming authority",
+      "last_taxonomic_update": "year if known",
+      "synonym_generation_method": "ictv_standards|database_cross_reference|literature_analysis",
+      "contamination_risk_assessment": "ultra_low|low|medium|high",
+      "taxonomic_confidence": 0.0-1.0
+    }},
+    "quality_assurance": {{
+      "total_synonyms_generated": number,
+      "ultra_high_confidence_count": number,
+      "filtered_out_count": number,
+      "manual_validation_recommended": true/false,
+      "potential_false_positives": ["list if any"],
+      "cross_reference_validation": "completed|partial|missing"
+    }}
+  }}
+
+  SYNONYM GENERATION GUIDELINES:
+  1. Prioritize ICTV official nomenclature
+  2. Include common scientific abbreviations (e.g., CHIKV for Chikungunya virus)
+  3. Consider historical names still used in literature
+  4. Include database-specific variations
+  5. Evaluate regional naming differences
+  6. Assess abbreviation expansion accuracy
+  7. Flag potential contamination from similar species
+
+  CONFIDENCE SCORING CRITERIA:
+  - 0.95-1.0: ICTV official names and standard abbreviations
+  - 0.90-0.94: Well-established synonyms in major databases
+  - 0.85-0.89: Historical names with strong literature support
+  - 0.80-0.84: Regional variations with moderate support
+  - <0.80: REJECT - insufficient confidence for ultra-precision
+
+  CRITICAL: Only include synonyms with confidence ≥ 0.9 in the ultra_high_confidence_synonyms array.
+  Return comprehensive JSON with all metadata for downstream validation.
+
+# Specialization settings for ultra-high-confidence detection
+specialization:
+  domain: "virology_taxonomy"
+  expertise: "comprehensive_synonym_detection"
+  confidence_threshold: 0.9
+  ultra_precision_mode: true
+  taxonomic_validation: true
+  contamination_prevention: true
+  ictv_compliance_required: true
+
+# Performance and quality settings
+performance:
+  max_processing_time: 45
+  enable_comprehensive_logging: true
+  track_synonym_quality_metrics: true
+  cross_reference_validation: true
+
+# Validation settings
+validation:
+  require_taxonomic_consistency: true
+  enable_contamination_detection: true
+  manual_review_threshold: 0.85
+  strict_confidence_filtering: true 

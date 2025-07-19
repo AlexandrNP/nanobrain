@@ -1,0 +1,64 @@
+name: virus_resolution_agent
+description: "Agent for resolving virus species to canonical ICTV taxonomy"
+class: nanobrain.library.agents.specialized.simple_specialized_agent.SimpleSpecializedAgent
+
+# Core agent settings
+model: "gpt-4"
+temperature: 0.1
+max_tokens: 200
+timeout: 30
+
+# Agent card for A2A protocol compliance
+agent_card:
+  version: "1.0.0"
+  purpose: "Virus species resolution to canonical ICTV taxonomy"
+  detailed_description: "Specialized agent for resolving virus species names to canonical ICTV taxonomy with BV-BRC search terms"
+  domain: "bioinformatics"
+  expertise_level: "expert"
+  input_format:
+    primary_mode: "text"
+    supported_modes: ["text"]
+    content_types: ["text/plain"]
+  output_format:
+    primary_mode: "json"
+    supported_modes: ["json"]
+    content_types: ["application/json"]
+  capabilities:
+    streaming: false
+    multi_turn_conversation: false
+    context_retention: false
+    tool_usage: false
+
+# System prompt for virus species resolution
+system_prompt: |
+  Resolve the following virus species to its canonical ICTV taxonomy name:
+  
+  Virus: "{virus_species}"
+  
+  Return JSON format:
+  {{
+    "resolved_species": "canonical ICTV species name",
+    "confidence": 0.0-1.0,
+    "taxonomy_info": {{
+      "genus": "genus name",
+      "family": "family name"
+    }},
+    "synonyms": ["list of known synonyms"],
+    "bvbrc_search_terms": ["list of BV-BRC compatible search terms"]
+  }}
+  
+  Return only the JSON response.
+
+# Specialization settings
+specialization:
+  domain: "virology"
+  expertise: "virus_taxonomy"
+  accuracy_threshold: 0.9
+  confidence_reporting: true
+  ictv_compliance: true
+
+# Cache configuration
+cache_config:
+  enable_caching: true
+  cache_ttl_hours: 24
+  virus_specific: true 

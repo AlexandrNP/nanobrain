@@ -27,6 +27,7 @@ except ImportError:
     AsyncCallbackManagerForToolRun = object
     LANGCHAIN_AVAILABLE = False
 
+from .component_base import FromConfigBase
 from .executor import ExecutorBase, LocalExecutor, ExecutorConfig
 from .tool import ToolBase, ToolRegistry, ToolType, ToolConfig, create_tool
 from .logging_system import (
@@ -100,9 +101,10 @@ class AgentConfig(BaseModel):
             raise ValueError(f"Error creating AgentConfig from {yaml_path}: {e}")
 
 
-class Agent(ABC):
+class Agent(FromConfigBase, ABC):
     """
     Base class for Agents that use tool calling for AI processing.
+    FIXED: Now properly extends FromConfigBase with UNIFIED from_config pattern.
     
     Biological analogy: Prefrontal cortex orchestrating specialized brain regions.
     Justification: Like how the prefrontal cortex coordinates different brain
@@ -112,10 +114,33 @@ class Agent(ABC):
     This class is also compatible with LangChain tools when LangChain is available.
     """
     
-    def __init__(self, config: AgentConfig, executor: Optional[ExecutorBase] = None, **kwargs):
-        self.config = config
-        self.name = config.name
-        self.description = config.description
+    COMPONENT_TYPE = "agent"
+    REQUIRED_CONFIG_FIELDS = ['name']
+    OPTIONAL_CONFIG_FIELDS = {
+        'description': '',
+        'model': 'gpt-3.5-turbo',
+        'system_prompt': '',
+        'tools': [],
+        'temperature': 0.7,
+        'max_tokens': 1000,
+        'timeout': 30,
+        'retry_attempts': 3
+    }
+    
+    @classmethod
+    def _get_config_class(cls):
+        """UNIFIED PATTERN: Return AgentConfig - ONLY method that differs from other components"""
+        return AgentConfig
+    
+    # UNIFIED PATTERN: Override _init_from_config with SAME signature as all components  
+    def _init_from_config(self, config: Any, component_config: Dict[str, Any],
+                         dependencies: Dict[str, Any]) -> None:
+        """UNIFIED: Initialize agent - SAME signature as ALL components"""
+        # Call parent initialization with SAME signature
+        super()._init_from_config(config, component_config, dependencies)
+        
+        # Agent-specific initialization (preserving existing logic)
+        self.description = getattr(config, 'description', '')
         
         # Initialize specialized agent logging (automatically detects concrete instances)
         from nanobrain.core.agent_logging import create_agent_logger
@@ -124,18 +149,19 @@ class Agent(ABC):
         # Log agent lifecycle event for concrete instances only
         self.agent_logger.log_lifecycle_event("initialize", {
             "agent_type": self.__class__.__name__,
-            "model": config.model,
-            "description": config.description,
-            "log_conversations": config.log_conversations,
-            "enable_logging": config.enable_logging
+            "model": getattr(config, 'model', 'gpt-3.5-turbo'),
+            "description": self.description,
+            "log_conversations": getattr(config, 'log_conversations', True),
+            "enable_logging": getattr(config, 'enable_logging', True)
         })
         
-        # Executor for running the agent
+        # Executor for running the agent - get from dependencies or create default
+        executor = dependencies.get('executor')
         if executor:
             self.executor = executor
         else:
             # Create executor using from_config pattern
-            executor_config = config.executor_config or ExecutorConfig()
+            executor_config = getattr(config, 'executor_config', None) or ExecutorConfig()
             self.executor = LocalExecutor.from_config(executor_config)
         
         # Tool registry for managing tools
@@ -159,6 +185,9 @@ class Agent(ABC):
         # Performance tracking
         self._start_time = time.time()
         self._last_activity_time = time.time()
+    
+    # ARCHITECTURAL VIOLATION FIXED: Agent now properly inherits from FromConfigBase
+    # Direct instantiation is now prevented by inherited __init__ method
         
     def _init_prompt_manager(self) -> None:
         """Initialize the prompt template manager if configured."""
@@ -928,30 +957,7 @@ class AgentLangChainTool(BaseTool if LANGCHAIN_AVAILABLE else object):
 class SimpleAgent(Agent):
     """Simple agent implementation without conversation history."""
     
-    @classmethod
-    def from_config(cls, config: AgentConfig, **kwargs) -> 'SimpleAgent':
-        """Create SimpleAgent from configuration with mandatory agent_card section"""
-        logger = get_logger(f"{cls.__name__}.from_config")
-        logger.info(f"Creating {cls.__name__} from configuration")
-        
-        # Create instance using existing pattern
-        instance = cls(config, **kwargs)
-        
-        # Extract and store mandatory agent_card metadata
-        if hasattr(config, 'agent_card') and config.agent_card:
-            instance._a2a_card_data = config.agent_card.model_dump() if hasattr(config.agent_card, 'model_dump') else config.agent_card
-            logger.info(f"Agent {instance.name} loaded with A2A card metadata")
-        elif isinstance(config, dict) and 'agent_card' in config:
-            instance._a2a_card_data = config['agent_card']
-            logger.info(f"Agent {instance.name} loaded with A2A card metadata")
-        else:
-            raise ValueError(
-                f"Missing mandatory 'agent_card' section in configuration for {cls.__name__}. "
-                f"All agents must include A2A protocol compliant agent_card metadata."
-            )
-        
-        logger.info(f"Successfully created {cls.__name__} with A2A compliance")
-        return instance
+    # Now inherits unified from_config implementation from FromConfigBase
     
     async def process(self, input_text: str, **kwargs) -> str:
         """Process input text and return response."""
@@ -1008,34 +1014,16 @@ class SimpleAgent(Agent):
 class ConversationalAgent(Agent):
     """Agent that maintains conversation history and context."""
     
-    def __init__(self, config: AgentConfig, **kwargs):
-        super().__init__(config, **kwargs)
-        self.max_history_length = kwargs.get('max_history_length', 10)
+    def _init_from_config(self, config: Any, component_config: Dict[str, Any],
+                         dependencies: Dict[str, Any]) -> None:
+        """Initialize ConversationalAgent with conversation-specific settings"""
+        # Call parent initialization
+        super()._init_from_config(config, component_config, dependencies)
+        
+        # Conversational-specific settings
+        self.max_history_length = dependencies.get('max_history_length', 10)
     
-    @classmethod
-    def from_config(cls, config: AgentConfig, **kwargs) -> 'ConversationalAgent':
-        """Create ConversationalAgent from configuration with mandatory agent_card section"""
-        logger = get_logger(f"{cls.__name__}.from_config")
-        logger.info(f"Creating {cls.__name__} from configuration")
-        
-        # Create instance using existing pattern
-        instance = cls(config, **kwargs)
-        
-        # Extract and store mandatory agent_card metadata
-        if hasattr(config, 'agent_card') and config.agent_card:
-            instance._a2a_card_data = config.agent_card.model_dump() if hasattr(config.agent_card, 'model_dump') else config.agent_card
-            logger.info(f"Agent {instance.name} loaded with A2A card metadata")
-        elif isinstance(config, dict) and 'agent_card' in config:
-            instance._a2a_card_data = config['agent_card']
-            logger.info(f"Agent {instance.name} loaded with A2A card metadata")
-        else:
-            raise ValueError(
-                f"Missing mandatory 'agent_card' section in configuration for {cls.__name__}. "
-                f"All agents must include A2A protocol compliant agent_card metadata."
-            )
-        
-        logger.info(f"Successfully created {cls.__name__} with A2A compliance")
-        return instance
+    # Now inherits unified from_config implementation from FromConfigBase
     
     async def process(self, input_text: str, **kwargs) -> str:
         """Process input text with conversation history."""

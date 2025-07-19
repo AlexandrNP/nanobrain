@@ -68,52 +68,12 @@ class GenomeSearchStep(Step):
     """
     
     @classmethod
-    def from_config(cls, config: Union[StepConfig, GenomeSearchConfig, Dict], **kwargs) -> 'GenomeSearchStep':
-        """Mandatory from_config implementation for GenomeSearchStep"""
-        logger = get_logger(f"{cls.__name__}.from_config")
-        logger.info(f"Creating {cls.__name__} from configuration")
-        
-        # Convert any input to GenomeSearchConfig
-        if isinstance(config, GenomeSearchConfig):
-            # Already specific config, use as-is
-            pass
-        else:
-            # Convert StepConfig, dict, or any other input to GenomeSearchConfig
-            if hasattr(config, 'model_dump'):
-                config_dict = config.model_dump()
-            elif isinstance(config, dict):
-                config_dict = config
-            else:
-                # Handle object with attributes
-                config_dict = {}
-                for attr in ['step_name', 'description', 'timeout', 'retry_attempts']:
-                    if hasattr(config, attr):
-                        config_dict[attr] = getattr(config, attr)
-            
-            # Filter config_dict to only include fields that GenomeSearchConfig accepts
-            genome_search_compatible_fields = {
-                # Core fields from GenomeSearchConfig
-                'step_name', 'description', 'elasticsearch_config', 'confidence_threshold',
-                'max_results', 'enable_fuzzy_search', 'fallback_to_csv', 'csv_file_path',
-                'search_timeout', 'cache_results', 'cache_ttl',
-                # Core fields from StepConfig
-                'timeout', 'retry_attempts', 'parallel_execution', 'resource_requirements',
-                'dependencies', 'outputs', 'metadata'
-            }
-            
-            filtered_config_dict = {k: v for k, v in config_dict.items() 
-                                   if k in genome_search_compatible_fields}
-            
-            logger.debug(f"Filtered config keys: {list(filtered_config_dict.keys())}")
-            
-            # Create GenomeSearchConfig from the filtered data
-            config = GenomeSearchConfig(**filtered_config_dict)
-        
-        # Create instance
-        instance = cls(config, **kwargs)
-        
-        logger.info(f"Successfully created {cls.__name__} with mandatory from_config pattern")
-        return instance
+    def _get_config_class(cls):
+        """UNIFIED PATTERN: Return GenomeSearchConfig - ONLY method that differs from other components"""
+        return GenomeSearchConfig
+    
+    # Now inherits unified from_config implementation from FromConfigBase
+    # Uses GenomeSearchConfig returned by _get_config_class() to preserve all existing functionality
     
     def __init__(self, config: GenomeSearchConfig, **kwargs):
         """Initialize genome search step"""

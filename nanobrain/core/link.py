@@ -138,6 +138,11 @@ class LinkBase(FromConfigBase, ABC):
     }
     
     @classmethod
+    def _get_config_class(cls):
+        """UNIFIED PATTERN: Return LinkConfig - ONLY method that differs from other components"""
+        return LinkConfig
+    
+    @classmethod
     def extract_component_config(cls, config: LinkConfig) -> Dict[str, Any]:
         """Extract Link configuration"""
         return {
@@ -173,6 +178,9 @@ class LinkBase(FromConfigBase, ABC):
         self._last_transfer_time = None
         self._total_transfer_time = 0.0
         
+        # Store data mapping configuration for transform operations
+        self.data_mapping = getattr(config, 'data_mapping', None)
+        
         # Initialize centralized logging system
         self.enable_logging = dependencies.get('enable_logging', True)
         if self.enable_logging:
@@ -190,8 +198,100 @@ class LinkBase(FromConfigBase, ABC):
             })
         else:
             self.nb_logger = None
+        
+        # EVENT-DRIVEN ARCHITECTURE: Enhanced link system with automatic trigger binding
+        self.transfer_trigger = None
+        self._setup_automatic_transfer_if_possible()
     
     # LinkBase inherits FromConfigBase.__init__ which prevents direct instantiation
+    
+    def _setup_automatic_transfer_if_possible(self) -> None:
+        """Setup automatic transfer trigger if source data unit supports change listeners"""
+        try:
+            # Check if source has change listener support (from Phase 1 implementation)
+            if hasattr(self.source, 'register_change_listener'):
+                # Create automatic transfer trigger
+                self._create_transfer_trigger()
+                if self.enable_logging and self.nb_logger:
+                    self.nb_logger.info(f"🔗 Setup automatic transfer for link {self.name}")
+        except Exception as e:
+            if self.enable_logging and self.nb_logger:
+                self.nb_logger.debug(f"Could not setup automatic transfer: {e}")
+    
+    def _create_transfer_trigger(self) -> None:
+        """Create trigger for automatic data transfer on source data unit changes"""
+        from .trigger import DataUnitChangeTrigger, TriggerConfig
+        
+        try:
+            # Create trigger config
+            trigger_config = TriggerConfig(
+                trigger_type="data_updated",
+                name=f"link_transfer_{self.name}"
+            )
+            
+            # Create trigger with action binding
+            self.transfer_trigger = DataUnitChangeTrigger.from_config(
+                trigger_config,
+                data_unit=self.source,
+                event_type='set'
+            )
+            
+            # Bind automatic transfer action
+            self.transfer_trigger.bind_action(self._on_source_data_changed)
+            
+            if self.enable_logging and self.nb_logger:
+                self.nb_logger.debug(f"Created transfer trigger for link {self.name}")
+                
+        except Exception as e:
+            if self.enable_logging and self.nb_logger:
+                self.nb_logger.error(f"Failed to create transfer trigger: {e}")
+    
+    async def _on_source_data_changed(self, trigger_event: Dict[str, Any]) -> None:
+        """Handle source data unit change - automatically transfer data"""
+        try:
+            if self.enable_logging and self.nb_logger:
+                self.nb_logger.info(f"🔥 Link {self.name} triggered by source data change")
+            
+            # Get data from source
+            source_data = await self.source.get()
+            
+            # Apply any transformations or conditions
+            if await self._should_transfer(source_data):
+                transformed_data = await self._transform_data(source_data)
+                
+                # Transfer to target
+                await self.target.set(transformed_data)
+                
+                # Record transfer
+                await self._record_transfer(True, data_info={'auto_transfer': True})
+                
+                if self.enable_logging and self.nb_logger:
+                    self.nb_logger.info(f"📤 Auto-transferred data via link {self.name}")
+            
+        except Exception as e:
+            await self._record_transfer(False)
+            if self.enable_logging and self.nb_logger:
+                self.nb_logger.error(f"❌ Auto-transfer failed for link {self.name}: {e}")
+    
+    async def _should_transfer(self, data: Any) -> bool:
+        """Check if data should be transferred (apply conditions)"""
+        try:
+            return self.condition_func(data) if hasattr(self, 'condition_func') else True
+        except:
+            return True
+    
+    async def _transform_data(self, data: Any) -> Any:
+        """Apply data transformations (can be overridden by subclasses)"""
+        # Apply data mapping if configured
+        if hasattr(self, 'data_mapping') and self.data_mapping:
+            if isinstance(data, dict):
+                transformed = {}
+                for target_key, source_key in self.data_mapping.items():
+                    if source_key in data:
+                        transformed[target_key] = data[source_key]
+                return transformed
+        
+        return data
     
     def _parse_data_unit_reference(self, reference: str) -> tuple[str, str]:
         """Parse step.data_unit notation"""
@@ -254,11 +354,21 @@ class LinkBase(FromConfigBase, ABC):
     @abstractmethod
     async def start(self) -> None:
         """Start the link."""
+        # EVENT-DRIVEN ARCHITECTURE: Start automatic transfer trigger
+        if self.transfer_trigger:
+            await self.transfer_trigger.start_monitoring()
+            if self.enable_logging and self.nb_logger:
+                self.nb_logger.info(f"🚀 Started automatic transfer for link {self.name}")
         pass
     
     @abstractmethod
     async def stop(self) -> None:
         """Stop the link."""
+        # EVENT-DRIVEN ARCHITECTURE: Stop automatic transfer trigger
+        if self.transfer_trigger:
+            await self.transfer_trigger.stop_monitoring()
+            if self.enable_logging and self.nb_logger:
+                self.nb_logger.info(f"🛑 Stopped automatic transfer for link {self.name}")
         pass
     
     def _get_internal_state(self) -> Dict[str, Any]:
@@ -396,6 +506,9 @@ class DirectLink(LinkBase):
         
     async def start(self) -> None:
         """Start the direct link."""
+        # EVENT-DRIVEN ARCHITECTURE: Start automatic transfer trigger first
+        await super().start()
+        
         self._is_active = True
         logger.debug(f"DirectLink {self.name} started")
         
@@ -407,6 +520,9 @@ class DirectLink(LinkBase):
     
     async def stop(self) -> None:
         """Stop the direct link."""
+        # EVENT-DRIVEN ARCHITECTURE: Stop automatic transfer trigger first
+        await super().stop()
+        
         self._is_active = False
         logger.debug(f"DirectLink {self.name} stopped")
         

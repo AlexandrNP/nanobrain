@@ -35,10 +35,11 @@ class DataAggregationStep(Step):
     }
 
     @classmethod
-    def from_config(cls, config: StepConfig, **kwargs) -> 'DataAggregationStep':
-        """Create DataAggregationStep from configuration using mandatory pattern"""
-        # Use parent class from_config implementation
-        return super().from_config(config, **kwargs)
+    def _get_config_class(cls):
+        """UNIFIED PATTERN: Return StepConfig - ONLY method that differs from other components"""
+        return StepConfig
+    
+    # Now inherits unified from_config implementation from FromConfigBase
 
     @classmethod
     def extract_component_config(cls, config: StepConfig) -> Dict[str, Any]:

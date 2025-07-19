@@ -62,6 +62,11 @@ class ToolBase(FromConfigBase, ABC):
     }
     
     @classmethod
+    def _get_config_class(cls):
+        """UNIFIED PATTERN: Return ToolConfig - ONLY method that differs from other components"""
+        return ToolConfig
+    
+    @classmethod
     def extract_component_config(cls, config: ToolConfig) -> Dict[str, Any]:
         """Extract Tool configuration"""
         return {

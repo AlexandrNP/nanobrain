@@ -62,6 +62,11 @@ class TriggerBase(FromConfigBase, ABC):
     }
     
     @classmethod
+    def _get_config_class(cls):
+        """UNIFIED PATTERN: Return TriggerConfig - ONLY method that differs from other components"""
+        return TriggerConfig
+    
+    @classmethod
     def extract_component_config(cls, config: TriggerConfig) -> Dict[str, Any]:
         """Extract Trigger configuration"""
         return {
@@ -288,6 +293,129 @@ class TriggerBase(FromConfigBase, ABC):
     def is_active(self) -> bool:
         """Check if trigger is actively monitoring."""
         return self._is_active
+
+
+class DataUnitChangeTrigger(TriggerBase):
+    """
+    Event-driven trigger that fires when data unit changes occur.
+    Uses change listener system for immediate response without polling.
+    """
+    
+    @classmethod
+    def from_config(cls, config: TriggerConfig, **kwargs) -> 'DataUnitChangeTrigger':
+        """Mandatory from_config implementation for DataUnitChangeTrigger"""
+        logger = get_logger(f"{cls.__name__}.from_config")
+        logger.info(f"Creating {cls.__name__} from configuration")
+        
+        # Step 1: Validate configuration schema
+        cls.validate_config_schema(config)
+        
+        # Step 2: Extract component-specific configuration  
+        component_config = cls.extract_component_config(config)
+        
+        # Step 3: Resolve dependencies
+        dependencies = cls.resolve_dependencies(component_config, **kwargs)
+        
+        # Step 4: Create instance
+        instance = cls.create_instance(config, component_config, dependencies)
+        
+        # Step 5: Post-creation initialization
+        instance._post_config_initialization()
+        
+        logger.info(f"Successfully created {cls.__name__}")
+        return instance
+        
+    @classmethod
+    def resolve_dependencies(cls, component_config: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        """Resolve DataUnitChangeTrigger dependencies"""
+        base_deps = super().resolve_dependencies(component_config, **kwargs)
+        return {
+            **base_deps,
+            'data_unit': kwargs.get('data_unit'),
+            'event_type': kwargs.get('event_type', 'data_unit_updated')
+        }
+    
+    def _init_from_config(self, config: TriggerConfig, component_config: Dict[str, Any],
+                         dependencies: Dict[str, Any]) -> None:
+        """Initialize DataUnitChangeTrigger with resolved dependencies"""
+        super()._init_from_config(config, component_config, dependencies)
+        self.data_unit = dependencies.get('data_unit')
+        self.event_type = dependencies.get('event_type', 'data_unit_updated')
+        self.bound_actions = []
+        
+        if not self.data_unit:
+            raise ComponentConfigurationError("DataUnitChangeTrigger requires data_unit")
+    
+    def bind_action(self, action_func: Callable) -> None:
+        """Bind action to trigger for immediate execution on data unit changes"""
+        if action_func not in self.bound_actions:
+            self.bound_actions.append(action_func)
+            if self.enable_logging and self.nb_logger:
+                self.nb_logger.debug(f"Bound action to trigger {self.name}")
+    
+    def unbind_action(self, action_func: Callable) -> None:
+        """Unbind action from trigger"""
+        if action_func in self.bound_actions:
+            self.bound_actions.remove(action_func)
+            if self.enable_logging and self.nb_logger:
+                self.nb_logger.debug(f"Unbound action from trigger {self.name}")
+    
+    async def start_monitoring(self) -> None:
+        """Start monitoring by registering as change listener"""
+        if self._is_active:
+            return
+            
+        self._is_active = True
+        
+        # Register with data unit's change listener system
+        self.data_unit.register_change_listener(self._on_data_unit_changed)
+        
+        if self.enable_logging and self.nb_logger:
+            self.nb_logger.info(f"Started monitoring data unit {self.data_unit.name}")
+    
+    async def stop_monitoring(self) -> None:
+        """Stop monitoring by unregistering change listener"""
+        if not self._is_active:
+            return
+            
+        self._is_active = False
+        
+        # Unregister from data unit's change listener system
+        self.data_unit.unregister_change_listener(self._on_data_unit_changed)
+        
+        if self.enable_logging and self.nb_logger:
+            self.nb_logger.info(f"Stopped monitoring data unit {self.data_unit.name}")
+    
+    async def _on_data_unit_changed(self, change_event: Dict[str, Any]) -> None:
+        """Handle data unit change event"""
+        try:
+            # Check if event type matches (if specified)
+            if hasattr(self, 'event_type') and self.event_type != 'all':
+                if change_event.get('operation') != self.event_type:
+                    return
+            
+            # Create trigger event
+            trigger_event = {
+                'trigger_id': getattr(self, 'trigger_id', self.name),
+                'event_type': self.event_type,
+                'data_unit': self.data_unit.name,
+                'change_event': change_event,
+                'timestamp': time.time()
+            }
+            
+            # Execute bound actions immediately (no polling delay)
+            for action in self.bound_actions:
+                await action(trigger_event)
+            
+            # Also execute callbacks for compatibility
+            await self._execute_callbacks(change_event)
+            
+            if self.enable_logging and self.nb_logger:
+                self.nb_logger.info(f"🔥 Trigger {self.name} fired for data unit change")
+                
+        except Exception as e:
+            if self.enable_logging and self.nb_logger:
+                self.nb_logger.error(f"❌ Error in DataUnitChangeTrigger: {e}")
 
 
 class DataUpdatedTrigger(TriggerBase):

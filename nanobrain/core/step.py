@@ -46,6 +46,11 @@ class StepConfig(BaseModel):
     
     # NEW: Step-level tool configuration
     tools: Optional[Dict[str, Dict[str, Any]]] = Field(default_factory=dict)
+    
+    # EVENT-DRIVEN ARCHITECTURE: Step-level data units and triggers
+    input_data_units: Optional[Dict[str, Dict[str, Any]]] = Field(default_factory=dict)
+    output_data_units: Optional[Dict[str, Dict[str, Any]]] = Field(default_factory=dict)
+    triggers: Optional[List[Dict[str, Any]]] = Field(default_factory=list)
 
 
 class BaseStep(FromConfigBase, ABC):
@@ -70,28 +75,11 @@ class BaseStep(FromConfigBase, ABC):
     }
     
     @classmethod
-    def from_config(cls, config: StepConfig, **kwargs) -> 'BaseStep':
-        """Mandatory from_config implementation for BaseStep components"""
-        logger = get_logger(f"{cls.__name__}.from_config")
-        logger.info(f"Creating {cls.__name__} from configuration")
-        
-        # Step 1: Validate configuration schema
-        cls.validate_config_schema(config)
-        
-        # Step 2: Extract component-specific configuration  
-        component_config = cls.extract_component_config(config)
-        
-        # Step 3: Resolve dependencies
-        dependencies = cls.resolve_dependencies(component_config, **kwargs)
-        
-        # Step 4: Create instance
-        instance = cls.create_instance(config, component_config, dependencies)
-        
-        # Step 5: Post-creation initialization
-        instance._post_config_initialization()
-        
-        logger.info(f"Successfully created {cls.__name__}")
-        return instance
+    def _get_config_class(cls):
+        """UNIFIED PATTERN: Return StepConfig - ONLY method that differs from other components"""
+        return StepConfig
+    
+    # Now inherits unified from_config implementation from FromConfigBase
     
     @classmethod
     def extract_component_config(cls, config: StepConfig) -> Dict[str, Any]:
@@ -145,7 +133,63 @@ class BaseStep(FromConfigBase, ABC):
         # Initialize tool registry
         self.tools: Dict[str, Any] = {}
         
-        # Load tools from configuration
+        # EVENT-DRIVEN ARCHITECTURE: Create step-level data units from configuration
+        self.step_input_data_units = {}
+        self.step_output_data_units = {}
+        
+        # Load input data units from step config
+        input_configs = getattr(config, 'input_data_units', {})
+        for unit_name, unit_config in input_configs.items():
+            from .data_unit import create_data_unit, DataUnitConfig
+            # Create proper DataUnitConfig object
+            if isinstance(unit_config, dict):
+                data_unit_config = DataUnitConfig(**unit_config)
+            else:
+                data_unit_config = unit_config
+            # Extract class path and call create_data_unit correctly
+            class_path = data_unit_config.class_path
+            data_unit = create_data_unit(class_path, data_unit_config)
+            self.step_input_data_units[unit_name] = data_unit
+            self.nb_logger.info(f"Created step input data unit: {unit_name}")
+        
+        # Load output data units from step config
+        output_configs = getattr(config, 'output_data_units', {})
+        for unit_name, unit_config in output_configs.items():
+            from .data_unit import create_data_unit, DataUnitConfig
+            # Create proper DataUnitConfig object
+            if isinstance(unit_config, dict):
+                data_unit_config = DataUnitConfig(**unit_config)
+            else:
+                data_unit_config = unit_config
+            # Extract class path and call create_data_unit correctly
+            class_path = data_unit_config.class_path
+            data_unit = create_data_unit(class_path, data_unit_config)
+            self.step_output_data_units[unit_name] = data_unit
+            self.nb_logger.info(f"Created step output data unit: {unit_name}")
+        
+        # Register step-level triggers
+        self.step_triggers = {}
+        trigger_configs = getattr(config, 'triggers', [])
+        for trigger_config in trigger_configs:
+            trigger = self._create_trigger_from_config(trigger_config)
+            # Bind trigger to step execution
+            trigger.bind_action(self._execute_on_trigger)
+            self.step_triggers[trigger_config['trigger_id']] = trigger
+            self.nb_logger.info(f"Created step trigger: {trigger_config['trigger_id']}")
+        
+        # Load tools from external configuration files
+        self.step_tools = {}
+        tools_config = getattr(config, 'tools', {})
+        for tool_name, tool_ref in tools_config.items():
+            config_file = tool_ref.get('config_file')
+            if config_file:
+                tool_config = self._load_config_file(config_file)
+                from .config.component_factory import create_component
+                tool = create_component(tool_config['class'], tool_config)
+                self.step_tools[tool_name] = tool
+                self.nb_logger.info(f"Loaded step tool: {tool_name}")
+        
+        # Load tools from legacy configuration
         if hasattr(config, 'tools') and config.tools:
             self._load_tools_from_config(config.tools)
         
@@ -201,8 +245,28 @@ class BaseStep(FromConfigBase, ABC):
                 # Start monitoring
                 await self.trigger.start_monitoring()
             
+            # EVENT-DRIVEN ARCHITECTURE: Initialize step-level data units
+            self.nb_logger.debug(f"Initializing {len(self.step_input_data_units)} step input data units")
+            for unit_name, data_unit in self.step_input_data_units.items():
+                await data_unit.initialize()
+                self.nb_logger.debug(f"Initialized step input data unit: {unit_name}")
+            
+            self.nb_logger.debug(f"Initializing {len(self.step_output_data_units)} step output data units")
+            for unit_name, data_unit in self.step_output_data_units.items():
+                await data_unit.initialize()
+                self.nb_logger.debug(f"Initialized step output data unit: {unit_name}")
+            
+            # Initialize and start step-level triggers
+            self.nb_logger.debug(f"Starting {len(self.step_triggers)} step triggers")
+            for trigger_id, trigger in self.step_triggers.items():
+                await trigger.start_monitoring()
+                self.nb_logger.debug(f"Started step trigger: {trigger_id}")
+            
             self._is_initialized = True
             context.metadata['input_count'] = len(self.input_data_units)
+            context.metadata['step_input_count'] = len(self.step_input_data_units)
+            context.metadata['step_output_count'] = len(self.step_output_data_units)
+            context.metadata['step_trigger_count'] = len(self.step_triggers)
             context.metadata['has_output'] = self.output_data_unit is not None
             context.metadata['has_trigger'] = self.trigger is not None
             
@@ -228,6 +292,11 @@ class BaseStep(FromConfigBase, ABC):
             # Shutdown trigger
             if self.trigger:
                 await self.trigger.stop_monitoring()
+            
+            # EVENT-DRIVEN ARCHITECTURE: Shutdown step-level triggers
+            for trigger_id, trigger in self.step_triggers.items():
+                await trigger.stop_monitoring()
+                self.nb_logger.debug(f"Stopped step trigger: {trigger_id}")
             
             # Shutdown data units
             for data_unit in self.input_data_units.values():
@@ -260,6 +329,65 @@ class BaseStep(FromConfigBase, ABC):
         # Import here to avoid circular imports
         from .trigger import create_trigger
         return create_trigger(config)
+    
+    def _create_trigger_from_config(self, trigger_config: Dict[str, Any]) -> 'TriggerBase':
+        """Create trigger from configuration for event-driven architecture"""
+        from .trigger import DataUnitChangeTrigger, TriggerConfig
+        from .config.component_factory import create_component
+        
+        trigger_class_path = trigger_config.get('class', 'nanobrain.core.trigger.DataUnitChangeTrigger')
+        data_unit_name = trigger_config['data_unit']
+        
+        # Get the data unit from step's input data units
+        if data_unit_name not in self.step_input_data_units:
+            raise ValueError(f"Data unit '{data_unit_name}' not found in step input data units")
+        
+        data_unit = self.step_input_data_units[data_unit_name]
+        
+        # Create proper TriggerConfig
+        trigger_config_obj = TriggerConfig(
+            trigger_type="data_updated",  # Required field
+            name=trigger_config.get('trigger_id', 'step_trigger')
+        )
+        
+        # Create trigger with data unit using pure from_config pattern
+        trigger = create_component(trigger_class_path, trigger_config_obj, 
+                                  data_unit=data_unit,
+                                  event_type=trigger_config.get('event_type', 'set'))
+        
+        # Bind action to execute step when triggered
+        trigger.bind_action(self._execute_on_trigger)
+        
+        return trigger
+    
+    async def _execute_on_trigger(self, trigger_event: Dict[str, Any]) -> None:
+        """Execute step when triggered by data unit change (EVENT-DRIVEN EXECUTION)"""
+        try:
+            self.nb_logger.info(f"🔥 Step {self.name} triggered by {trigger_event['trigger_id']}")
+            
+            # Get input data from triggered data unit
+            input_data = {}
+            for unit_name, data_unit in self.step_input_data_units.items():
+                input_data[unit_name] = await data_unit.get()
+            
+            # Execute step business logic
+            result = await self.process(input_data)
+            
+            # Update output data units
+            for unit_name, data_unit in self.step_output_data_units.items():
+                if unit_name in result:
+                    await data_unit.set(result[unit_name])
+                    self.nb_logger.info(f"📤 Updated output data unit: {unit_name}")
+            
+            # Update execution statistics
+            self._execution_count += 1
+            self._last_result = result
+            self._last_activity_time = time.time()
+            
+        except Exception as e:
+            self._error_count += 1
+            self.nb_logger.error(f"❌ Step execution failed: {e}")
+            raise
     
     async def _on_trigger_activated(self, trigger_data: Dict[str, Any]) -> None:
         """Handle trigger activation."""
@@ -450,7 +578,7 @@ class BaseStep(FromConfigBase, ABC):
 
     def _create_tool_from_config(self, tool_name: str, tool_config: Dict[str, Any]) -> Any:
         """Create tool instance from step-level YAML configuration"""
-        from .config.component_factory import import_and_create_from_config
+        from .config.component_factory import create_component
         
         # Start with a copy of the local tool config
         merged_config = tool_config.copy()
@@ -489,11 +617,16 @@ class BaseStep(FromConfigBase, ABC):
             merged_config = {**merged_config, **tool_config_section, **tool_config['tool_config']}
         
         # Ensure name field is present (required by many components)
-        if 'name' not in merged_config and tool_name:
-            merged_config['name'] = tool_name
+        # For external tools, use 'tool_name' instead of 'name'
+        if 'name' not in merged_config and 'tool_name' not in merged_config and tool_name:
+            # Check if this is an external tool by checking the class path
+            if 'bioinformatics.bv_brc_tool' in tool_class or 'external_tool' in tool_class.lower():
+                merged_config['tool_name'] = tool_name
+            else:
+                merged_config['name'] = tool_name
         
         # Create tool using pure component factory
-        return import_and_create_from_config(tool_class, merged_config)
+        return create_component(tool_class, merged_config)
 
     def _load_config_file(self, config_file_path: str) -> Dict[str, Any]:
         """Load configuration from file"""
@@ -582,9 +715,9 @@ class BaseStep(FromConfigBase, ABC):
         if input_id not in self.input_data_units:
             # Create a default input data unit if it doesn't exist
             from .data_unit import DataUnitConfig, DataUnitType
-            from .config.component_factory import import_and_create_from_config
+            from .config.component_factory import create_component
             config = DataUnitConfig(data_type=DataUnitType.MEMORY, name=input_id)
-            data_unit = import_and_create_from_config(
+            data_unit = create_component(
                 "nanobrain.core.data_unit.DataUnitMemory", 
                 config, 
                 name=input_id

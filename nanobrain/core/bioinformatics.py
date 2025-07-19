@@ -473,30 +473,7 @@ class BioinformaticsTool(ToolBase):
     Enhanced with mandatory from_config pattern implementation.
     """
     
-    @classmethod
-    def from_config(cls, config: ToolConfig, **kwargs) -> 'BioinformaticsTool':
-        """Mandatory from_config implementation for BioinformaticsTool"""
-        from .logging_system import get_logger
-        logger = get_logger(f"{cls.__name__}.from_config")
-        logger.info(f"Creating {cls.__name__} from configuration")
-        
-        # Step 1: Validate configuration schema
-        cls.validate_config_schema(config)
-        
-        # Step 2: Extract component-specific configuration  
-        component_config = cls.extract_component_config(config)
-        
-        # Step 3: Resolve dependencies
-        dependencies = cls.resolve_dependencies(component_config, **kwargs)
-        
-        # Step 4: Create instance
-        instance = cls.create_instance(config, component_config, dependencies)
-        
-        # Step 5: Post-creation initialization
-        instance._post_config_initialization()
-        
-        logger.info(f"Successfully created {cls.__name__}")
-        return instance
+    # Inherits _get_config_class() and unified from_config() from ToolBase
     
     @classmethod
     def resolve_dependencies(cls, component_config: Dict[str, Any], **kwargs) -> Dict[str, Any]:

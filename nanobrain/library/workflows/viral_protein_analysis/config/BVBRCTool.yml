@@ -17,7 +17,7 @@ local_installation_paths:
   - /Applications/BV-BRC.app/deployment/bin
   - /Applications/BV-BRC.app/Contents/Resources/deployment/bin
 
-# BV-BRC specific settings
+# BV-BRC specific setting
 genome_batch_size: 50
 md5_batch_size: 25
 min_genome_length: 8000

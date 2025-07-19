@@ -1,0 +1,203 @@
+# DockerNetworkManager Default Configuration
+# This configuration enables creation of DockerNetworkManager instances via from_config pattern
+# Usage: DockerNetworkManager.from_config(load_yaml_config('DockerNetworkManager.yml'))
+
+# Component identification
+component_name: "docker_network_manager"
+enabled: true
+
+# Docker client configuration
+docker_client: null  # Will be auto-detected from environment
+
+# Network management settings
+check_interval: 30  # seconds between network checks
+auto_cleanup: true  # Automatically clean up unused networks
+
+# NanoBrain network configuration
+nanobrain_network_enabled: true
+default_network_driver: "bridge"
+default_subnet: "172.20.0.0/16"
+default_gateway: "172.20.0.1"
+
+# Network creation defaults
+network_defaults:
+  # Default driver for new networks
+  driver: "bridge"
+  # Enable IPv6 support
+  enable_ipv6: false
+  # Make networks attachable
+  attachable: true
+  # Internal networks (no external access)
+  internal: false
+  # Default IPAM configuration
+  ipam:
+    driver: "default"
+    config:
+      - subnet: "172.20.0.0/16"
+        gateway: "172.20.0.1"
+        ip_range: "172.20.0.0/24"
+
+# Network isolation settings
+isolation:
+  # Create isolated networks for different components
+  create_component_networks: true
+  # Prefix for component networks
+  component_network_prefix: "nanobrain-"
+  # Enable network segmentation
+  enable_segmentation: false
+  # Default security policies
+  security_policies:
+    # Block inter-container communication by default
+    block_inter_container: false
+    # Allow outbound internet access
+    allow_outbound: true
+    # Allow inbound connections
+    allow_inbound: false
+
+# Service discovery configuration
+service_discovery:
+  # Enable DNS-based service discovery
+  dns_enabled: true
+  # Custom DNS servers
+  dns_servers: []
+  # DNS search domains
+  dns_search: []
+  # Enable container hostname resolution
+  hostname_resolution: true
+
+# Load balancing configuration
+load_balancing:
+  # Enable built-in load balancing
+  enabled: false
+  # Load balancing algorithm
+  algorithm: "round_robin"  # round_robin, least_conn, ip_hash
+  # Health check configuration for load balancing
+  health_check:
+    enabled: true
+    interval: 30
+    timeout: 10
+    retries: 3
+
+# Network monitoring
+monitoring:
+  # Monitor network traffic
+  traffic_monitoring: false
+  # Monitor network performance
+  performance_monitoring: false
+  # Monitor network connectivity
+  connectivity_monitoring: true
+  # Network usage metrics
+  usage_metrics: false
+
+# Security configuration
+security:
+  # Enable network encryption (if supported)
+  encryption_enabled: false
+  # Network access control
+  access_control:
+    # Default policy for new networks
+    default_policy: "allow"
+    # Enable firewall rules
+    firewall_enabled: false
+    # Custom iptables rules
+    custom_rules: []
+
+# Multi-host networking (Docker Swarm/Overlay)
+multi_host:
+  # Enable overlay networks
+  overlay_enabled: false
+  # Swarm mode configuration
+  swarm:
+    enabled: false
+    advertise_addr: null
+    listen_addr: "0.0.0.0:2377"
+  # External network attachments
+  external_networks: []
+
+# Network cleanup policies
+cleanup:
+  # Remove unused networks automatically
+  auto_remove_unused: true
+  # Age threshold for unused networks (hours)
+  unused_age_threshold: 24
+  # Preserve system networks
+  preserve_system_networks: true
+  # Preserve networks with specific labels
+  preserve_labeled_networks:
+    - "nanobrain.framework=true"
+    - "keep=true"
+
+# Default labels applied to all managed networks
+labels:
+  nanobrain.framework: "true"
+  nanobrain.component: "docker-infrastructure"
+  nanobrain.component.name: "docker_network_manager"
+  nanobrain.component.type: "docker-infrastructure"
+  nanobrain.network.managed: "true"
+
+# Framework integration
+framework_integration:
+  # Use NanoBrain logging system
+  use_nanobrain_logging: true
+  # Generate A2A cards for networks
+  generate_a2a_cards: false
+  # Integration with service mesh
+  service_mesh_integration: false
+
+# Development vs Production settings
+environment:
+  # Environment type: development, staging, production
+  type: "development"
+  # Enable debug networking
+  debug_networking: false
+  # Create development-specific networks
+  create_dev_networks: true
+
+# Tool card metadata (mandatory for framework compliance)
+tool_card:
+  name: "DockerNetworkManager"
+  description: "Docker network management for container networking and isolation in NanoBrain framework"
+  version: "1.0.0"
+  category: "infrastructure"
+  capabilities:
+    - "network_creation_management"
+    - "container_network_attachment"
+    - "network_isolation_security"
+    - "service_discovery"
+    - "load_balancing"
+  requirements:
+    - "docker_daemon"
+  supported_platforms:
+    - "linux"
+    - "darwin"
+    - "windows"
+  configuration_schema:
+    type: "DockerNetworkManagerConfig"
+    required_fields: []
+    optional_fields:
+      - "docker_client"
+      - "nanobrain_network_enabled"
+      - "default_network_driver"
+      - "default_subnet"
+      - "default_gateway"
+  usage_examples:
+    - description: "Basic network management setup"
+      config:
+        component_name: "basic_network_manager"
+        nanobrain_network_enabled: true
+        default_network_driver: "bridge"
+    - description: "Production network management with isolation"
+      config:
+        component_name: "prod_network_manager"
+        nanobrain_network_enabled: true
+        default_subnet: "10.0.0.0/16"
+        isolation:
+          create_component_networks: true
+          enable_segmentation: true
+    - description: "Development network management with debugging"
+      config:
+        component_name: "dev_network_manager"
+        environment:
+          type: "development"
+          debug_networking: true
+          create_dev_networks: true 

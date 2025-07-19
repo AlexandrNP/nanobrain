@@ -55,6 +55,11 @@ class ExecutorBase(FromConfigBase, ABC):
     }
     
     @classmethod
+    def _get_config_class(cls):
+        """UNIFIED PATTERN: Return ExecutorConfig - ONLY method that differs from other components"""
+        return ExecutorConfig
+    
+    @classmethod
     def extract_component_config(cls, config: ExecutorConfig) -> Dict[str, Any]:
         """Extract Executor configuration"""
         return {

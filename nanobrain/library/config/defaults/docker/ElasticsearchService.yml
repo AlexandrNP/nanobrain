@@ -1,0 +1,373 @@
+# Elasticsearch Docker Service Configuration for NanoBrain Framework
+# This configuration enables Elasticsearch as a standalone service with MCP integration
+
+# Component identification
+component_name: "elasticsearch_service"
+enabled: true
+
+# Docker configuration
+docker_config:
+  image: "docker.elastic.co/elasticsearch/elasticsearch"
+  tag: "8.11.0"
+  container_name: "nanobrain-elasticsearch"
+  
+  # Elasticsearch specific ports
+  ports:
+    - "9200:9200"  # HTTP API
+    - "9300:9300"  # Transport
+  
+  # Elasticsearch environment variables
+  environment:
+    - "discovery.type=single-node"
+    - "xpack.security.enabled=false"
+    - "xpack.security.enrollment.enabled=false"
+    - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
+    - "ELASTIC_PASSWORD=nanobrain_elastic"
+    - "cluster.name=nanobrain-cluster"
+    - "node.name=nanobrain-node-1"
+    - "network.host=0.0.0.0"
+    - "http.port=9200"
+    - "transport.port=9300"
+  
+  # Volume management using DockerVolumeManager
+  volumes:
+    - type: "persistent"
+      name: "elasticsearch_data"
+      mount_path: "/usr/share/elasticsearch/data"
+      backup_enabled: true
+      retention_days: 30
+    - type: "config"
+      name: "elasticsearch_config"
+      mount_path: "/usr/share/elasticsearch/config/elasticsearch.yml"
+      source_file: "elasticsearch.yml"
+    - type: "logs"
+      name: "elasticsearch_logs"
+      mount_path: "/usr/share/elasticsearch/logs"
+      cleanup_policy: "size_based"
+      max_size: "1GB"
+  
+  # Resource limits
+  resource_limits:
+    memory: "2GB"
+    memory_swap: "2GB"
+    cpu_count: 2
+    cpu_percent: 80
+  
+  # Health checks
+  health_check:
+    test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=1s || exit 1"]
+    interval: "30s"
+    timeout: "10s"
+    retries: 5
+    start_period: "60s"
+  
+  # Restart policy
+  restart_policy: "unless-stopped"
+  
+  # Network configuration
+  network_mode: "bridge"
+  networks:
+    - "nanobrain-network"
+
+# Elasticsearch specific configuration
+elasticsearch_config:
+  cluster_name: "nanobrain-cluster"
+  node_name: "nanobrain-node-1"
+  
+  # Index settings
+  default_index_settings:
+    number_of_shards: 1
+    number_of_replicas: 0
+    refresh_interval: "1s"
+    
+  # Mapping templates
+  index_templates:
+    viral_proteins:
+      patterns: ["viral_proteins*"]
+      settings:
+        number_of_shards: 1
+        number_of_replicas: 0
+      mappings:
+        properties:
+          protein_id:
+            type: "keyword"
+          sequence:
+            type: "text"
+            analyzer: "standard"
+          organism:
+            type: "keyword"
+          function:
+            type: "text"
+            analyzer: "standard"
+          embedding:
+            type: "dense_vector"
+            dims: 384
+          metadata:
+            class: nanobrain.core.data_unit.DataUnit
+            enabled: true
+    
+    analysis_results:
+      patterns: ["analysis_results*"]
+      settings:
+        number_of_shards: 1
+        number_of_replicas: 0
+      mappings:
+        properties:
+          analysis_id:
+            type: "keyword"
+          timestamp:
+            type: "date"
+          results:
+            class: nanobrain.core.data_unit.DataUnit
+            enabled: true
+          protein_ids:
+            type: "keyword"
+          confidence_score:
+            type: "float"
+    
+    chat_interactions:
+      patterns: ["chat_interactions*"]
+      settings:
+        number_of_shards: 1
+        number_of_replicas: 0
+      mappings:
+        properties:
+          interaction_id:
+            type: "keyword"
+          timestamp:
+            type: "date"
+          query:
+            type: "text"
+            analyzer: "standard"
+          response:
+            type: "text"
+            analyzer: "standard"
+          intent:
+            class: nanobrain.core.data_unit.DataUnit
+            enabled: true
+          context_used:
+            type: "boolean"
+
+# NanoBrain framework integration
+framework_integration:
+  nanobrain_labels:
+    component_type: "search_service"
+    framework_version: "2.0"
+    service_category: "external_tool"
+    mcp_enabled: true
+    workflow_integration: true
+  
+  # Logging integration
+  logging:
+    level: "INFO"
+    format: "json"
+    output: "stdout"
+  
+  # Monitoring integration
+  monitoring:
+    enabled: true
+    metrics_port: 9201
+    health_endpoint: "/_cluster/health"
+    metrics_interval: 30
+
+# MCP Server configuration
+mcp_server:
+  enabled: true
+  port: 9202
+  host: "0.0.0.0"
+  tools_namespace: "elasticsearch"
+  max_connections: 10
+  connection_timeout: 30
+  request_timeout: 60
+  
+  # Authentication (disabled for internal use)
+  auth:
+    enabled: false
+    type: "none"
+  
+  # Tool configuration
+  tools:
+    - name: "index_document"
+      enabled: true
+      description: "Index a single document in Elasticsearch"
+      timeout: 30
+    - name: "bulk_index"
+      enabled: true
+      description: "Bulk index multiple documents"
+      timeout: 120
+    - name: "search"
+      enabled: true
+      description: "Search documents using Elasticsearch query DSL"
+      timeout: 30
+    - name: "semantic_search"
+      enabled: true
+      description: "Perform semantic search using vector embeddings"
+      timeout: 30
+    - name: "get_document"
+      enabled: true
+      description: "Retrieve a document by ID"
+      timeout: 10
+    - name: "delete_document"
+      enabled: true
+      description: "Delete a document by ID"
+      timeout: 10
+    - name: "create_index"
+      enabled: true
+      description: "Create a new index with mappings"
+      timeout: 30
+    - name: "delete_index"
+      enabled: true
+      description: "Delete an index"
+      timeout: 30
+
+# Service dependencies
+dependencies:
+  required:
+    - docker_manager
+    - docker_network_manager
+    - docker_volume_manager
+  optional:
+    - docker_health_monitor
+  
+  startup_order: 10
+  shutdown_order: 1
+
+# Environment-specific configurations
+environments:
+  development:
+    docker_config:
+      environment:
+        - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    elasticsearch_config:
+      default_index_settings:
+        refresh_interval: "5s"
+    mcp_server:
+      tools:
+        - name: "debug_cluster"
+          enabled: true
+          description: "Get cluster debug information"
+  
+  production:
+    docker_config:
+      resource_limits:
+        memory: "4GB"
+        memory_swap: "4GB"
+        cpu_count: 4
+      environment:
+        - "ES_JAVA_OPTS=-Xms2g -Xmx2g"
+    elasticsearch_config:
+      default_index_settings:
+        number_of_replicas: 1
+        refresh_interval: "30s"
+    mcp_server:
+      max_connections: 50
+      connection_timeout: 60
+
+# Tool card metadata (mandatory for NanoBrain framework)
+tool_card:
+  name: "elasticsearch_service"
+  description: "Elasticsearch search and analytics service with MCP integration for viral protein analysis"
+  version: "8.11.0"
+  category: "search_analytics"
+  tags: ["elasticsearch", "search", "analytics", "mcp", "viral", "bioinformatics"]
+  
+  capabilities:
+    - "full_text_search"
+    - "semantic_search"
+    - "document_indexing"
+    - "bulk_operations"
+    - "analytics"
+    - "real_time_search"
+    - "vector_search"
+    - "aggregations"
+  
+  requirements:
+    - "docker"
+    - "python>=3.8"
+    - "elasticsearch>=8.11.0"
+    - "aiohttp"
+  
+  configuration_schema:
+    class: nanobrain.core.data_unit.DataUnit
+    required: ["component_name", "docker_config"]
+    properties:
+      component_name:
+        class: nanobrain.core.data_unit.DataUnitString
+        description: "Unique identifier for the Elasticsearch service"
+      docker_config:
+        class: nanobrain.core.data_unit.DataUnit
+        description: "Docker container configuration"
+      elasticsearch_config:
+        class: nanobrain.core.data_unit.DataUnit
+        description: "Elasticsearch-specific configuration"
+      mcp_server:
+        class: nanobrain.core.data_unit.DataUnit
+        description: "MCP server configuration"
+  
+  usage_examples:
+    - name: "basic_setup"
+      description: "Basic Elasticsearch service setup"
+      code: |
+        from nanobrain.library.infrastructure.docker import DockerManager
+        from nanobrain.library.tools.search.elasticsearch_service import ElasticsearchService
+        
+        # Load configuration
+        config = load_yaml_config("ElasticsearchService.yml")
+        
+        # Create service
+        elasticsearch_service = ElasticsearchService.from_config(config)
+        
+        # Initialize and start
+        await elasticsearch_service.initialize()
+        await elasticsearch_service.start()
+    
+    - name: "mcp_integration"
+      description: "Using Elasticsearch via MCP client"
+      code: |
+        from nanobrain.core.mcp_support import MCPClient
+        
+        # Connect to Elasticsearch MCP server
+        mcp_client = MCPClient()
+        await mcp_client.add_server({
+            "name": "elasticsearch",
+            "url": "http://localhost:9202"
+        })
+        
+        # Index a document
+        result = await mcp_client.call_tool(
+            "elasticsearch", "index_document",
+            {
+                "index": "viral_proteins",
+                "document": {
+                    "protein_id": "P123",
+                    "sequence": "MKLLVV...",
+                    "organism": "CHIKV"
+                }
+            }
+        )
+        
+        # Search documents
+        search_results = await mcp_client.call_tool(
+            "elasticsearch", "search",
+            {
+                "index": "viral_proteins",
+                "query": {
+                    "match": {"organism": "CHIKV"}
+                }
+            }
+        )
+
+# Integration with existing workflows
+workflow_integration:
+  compatible_workflows:
+    - "chatbot_viral_integration"
+    - "viral_protein_analysis"
+    - "chat_workflow"
+  
+  integration_points:
+    - step: "data_indexing"
+      description: "Index viral protein data and analysis results"
+    - step: "search_enhancement"
+      description: "Enhance chat responses with search context"
+    - step: "analytics"
+      description: "Provide analytics on viral data and interactions" 

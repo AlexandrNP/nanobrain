@@ -279,7 +279,7 @@ class TestPhase3Integration:
         # Verify all triggers use class field
         for trigger in triggers:
             assert 'class' in trigger
-            assert trigger['class'] == 'nanobrain.core.triggers.DataUnitChangeTrigger'
+            assert trigger['class'] == 'nanobrain.core.trigger.DataUnitChangeTrigger'
 
 
 def run_phase3_validation():

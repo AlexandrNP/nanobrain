@@ -140,72 +140,13 @@ class MMseqs2Tool(ProgressiveScalingMixin, ExternalTool):
     """
     
     @classmethod
-    def from_config(cls, config: Union[ToolConfig, MMseqs2Config, Dict], **kwargs) -> 'MMseqs2Tool':
-        """Mandatory from_config implementation for MMseqs2Tool"""
-        logger = get_logger(f"{cls.__name__}.from_config")
-        logger.info(f"Creating {cls.__name__} from configuration")
-        
-        # Convert any input to MMseqs2Config
-        if isinstance(config, MMseqs2Config):
-            # Already specific config, use as-is
-            pass
-        else:
-            # Convert ToolConfig, dict, or any other input to MMseqs2Config
-            if hasattr(config, 'model_dump'):
-                config_dict = config.model_dump()
-            elif isinstance(config, dict):
-                config_dict = config
-            else:
-                # Handle object with attributes
-                config_dict = {}
-                # Extract fields that are common to both ToolConfig and MMseqs2Config
-                for attr in ['name', 'description', 'tool_card']:
-                    if hasattr(config, attr):
-                        config_dict[attr] = getattr(config, attr)
-            
-            # Filter config_dict to only include fields that MMseqs2Config accepts
-            # Remove ToolConfig-specific fields that MMseqs2Config doesn't inherit
-            mmseqs2_compatible_fields = {
-                # Core fields from MMseqs2Config
-                'tool_name', 'tool_card', 'conda_package', 'conda_channel', 
-                'git_repository', 'environment_name', 'create_isolated_environment',
-                'min_seq_id', 'coverage', 'cluster_mode', 'sensitivity', 
-                'progressive_scaling', 'threads', 'memory_limit', 'tmp_dir',
-                'local_installation_paths',
-                # Core fields from ExternalToolConfig
-                'installation_path', 'executable_path', 'environment', 'timeout_seconds',
-                'retry_attempts', 'verify_on_init', 'pip_package', 'git_repository',
-                'initial_scale_level', 'detailed_diagnostics', 'suggest_fixes'
-            }
-            
-            filtered_config_dict = {k: v for k, v in config_dict.items() 
-                                   if k in mmseqs2_compatible_fields}
-            
-            logger.debug(f"Filtered config keys: {list(filtered_config_dict.keys())}")
-            logger.debug(f"Removed incompatible keys: {set(config_dict.keys()) - set(filtered_config_dict.keys())}")
-            
-            # Create MMseqs2Config from the filtered data
-            config = MMseqs2Config(**filtered_config_dict)
-        
-        # Mandatory tool_card validation and extraction
-        if hasattr(config, 'tool_card') and config.tool_card:
-            tool_card_data = config.tool_card.model_dump() if hasattr(config.tool_card, 'model_dump') else config.tool_card
-            logger.info(f"Tool {config.tool_name} loaded with tool card metadata")
-        elif isinstance(config, dict) and 'tool_card' in config:
-            tool_card_data = config['tool_card']
-            logger.info(f"Tool {config.tool_name} loaded with tool card metadata")
-        else:
-            raise ValueError(
-                f"Missing mandatory 'tool_card' section in configuration for {cls.__name__}. "
-                f"All tools must include tool card metadata for proper discovery and usage."
-            )
-        
-        # Create instance
-        instance = cls(config, **kwargs)
-        instance._tool_card_data = tool_card_data
-        
-        logger.info(f"Successfully created {cls.__name__} with tool card compliance")
-        return instance
+    def _get_config_class(cls):
+        """UNIFIED PATTERN: Return MMseqs2Config - ONLY method that differs from other components"""
+        return MMseqs2Config
+    
+    # REMOVED: Custom from_config method - now inherits unified implementation
+    # Now inherits unified from_config implementation from FromConfigBase
+    # Uses MMseqs2Config returned by _get_config_class() to preserve all existing functionality
     
     def __init__(self, config: MMseqs2Config, **kwargs):
         """Initialize MMseqs2Tool with configuration"""

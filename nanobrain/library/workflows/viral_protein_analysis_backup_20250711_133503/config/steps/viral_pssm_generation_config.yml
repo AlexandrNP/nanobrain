@@ -1,0 +1,50 @@
+name: Viral PSSM Generation
+description: Generate Position-Specific Scoring Matrix (PSSM) for viral proteins
+estimated_time: 600.0
+class: nanobrain.library.workflows.viral_protein_analysis.steps.viral_pssm_generation_step.ViralPSSMGenerationStep
+step_type: simple
+debug_mode: false
+enable_logging: true
+
+# PSSM generation configuration
+pssm_config:
+  algorithm: "psiblast"
+  iterations: 3
+  e_value_threshold: 0.001
+  inclusion_threshold: 0.005
+  database: "nr"
+  word_size: 3
+
+# Processing configuration
+processing_config:
+  batch_size: 20
+  parallel_processing: true
+  max_concurrent_requests: 5
+  timeout_per_sequence: 300
+
+# Output configuration
+output_config:
+  format: "ascii"
+  include_statistics: true
+  include_alignments: true
+  save_checkpoint_files: true
+
+# Input data unit
+input_data_unit:
+  name: aligned_sequences_input
+  class: nanobrain.core.data_unit.DataUnit
+
+# Output data unit
+output_data_unit:
+  name: pssm_matrices_output
+  class: nanobrain.core.data_unit.DataUnit
+
+# Metadata
+logical_steps_covered: [11]
+step_description_detailed: 'Generate PSSM matrices for viral protein sequences'
+
+_metadata:
+  last_updated: '2025-01-28'
+  updated_by: 'config_alignment'
+  migration_version: 2.0.0
+  uses_modular_config: true 

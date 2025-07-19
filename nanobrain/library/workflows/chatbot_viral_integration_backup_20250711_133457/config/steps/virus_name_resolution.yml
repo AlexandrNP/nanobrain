@@ -1,0 +1,85 @@
+name: Virus Name Resolution
+description: Resolve virus species using LLM with cache-first approach
+class: VirusNameResolutionStep
+
+# Framework settings
+config:
+  name: virus_name_resolution
+  description: Resolve virus species using LLM with cache-first approach
+  debug_mode: false
+  enable_logging: true
+  log_data_transfers: true
+
+# UPDATED: Input data unit with class field
+input_configs:
+  query_input:
+    class: nanobrain.core.data_unit.DataUnitMemory
+    name: query_input
+    description: "Query classification result for virus name resolution"
+    persistent: false
+
+# UPDATED: Output data unit with class field
+output_config:
+  class: nanobrain.core.data_unit.DataUnitMemory
+  name: resolution_output
+  description: "Resolved virus species information for workflow input"
+  persistent: false
+  # Output format matches AlphavirusWorkflow input expectations
+
+# FIXED: Generic trigger configuration for event-driven execution with data unit binding
+trigger_config:
+  trigger_type: data_updated
+  name: input_data_received_trigger
+  description: "Trigger when input data is received"
+  data_units: ["query_input"]  # BIND trigger to specific input data unit
+
+# Resolution configuration
+resolution_agent:
+  class: SimpleAgent
+  name: virus_resolution_agent
+  model: "gpt-4"
+  temperature: 0.1
+  max_tokens: 200
+  timeout: 30
+  description: "Agent for resolving virus species names"
+
+# Cache configuration
+cache_config:
+  enable_caching: true
+  cache_manager_class: nanobrain.library.workflows.viral_protein_analysis.virus_specific_cache_manager.VirusSpecificCacheManager
+  cache_directory: "data/virus_resolution_cache"
+  cache_ttl_hours: 24
+
+# Prompt template for virus species resolution (NO hardcoded mappings)
+resolution_prompt: |
+  Resolve the following virus species to canonical ICTV taxonomy and BV-BRC search terms:
+  
+  Virus Species: "{virus_species}"
+  
+  Provide comprehensive resolution including:
+  1. Canonical ICTV name
+  2. BV-BRC database search terms
+  3. Genome characteristics (size ranges)
+  4. Taxonomic lineage
+  
+  Return JSON format:
+  {{
+    "canonical_name": "official ICTV name",
+    "bvbrc_search_terms": ["search_term1", "search_term2"],
+    "genome_characteristics": {{
+      "min_length": 10000,
+      "max_length": 15000
+    }},
+    "taxonomic_lineage": ["Viruses", "Family", "Genus"],
+    "confidence": 0.0-1.0
+  }}
+  
+  Return only the JSON response.
+
+# Output format specification
+output_format:
+  canonical_name: "str"
+  bvbrc_search_terms: "List[str]"
+  genome_characteristics: "Dict[str, int]"
+  taxonomic_lineage: "List[str]"
+  confidence: "float 0.0-1.0" 

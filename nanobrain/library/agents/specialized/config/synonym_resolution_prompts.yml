@@ -1,0 +1,178 @@
+# Synonym Resolution Prompts Configuration
+# LLM prompts for virus protein synonym resolution and ICTV mapping
+
+prompts:
+  ictv_standards_discovery:
+    description: "Discover ICTV official nomenclature mappings for virus species"
+    template: |
+      Based on ICTV (International Committee on Taxonomy of Viruses) standards, 
+      provide the official nomenclature mapping for {virus_species}.
+
+      Virus Species: {virus_species}
+      Sample protein products: {sample_products}
+
+      Please analyze the provided protein products and map them to ICTV-compliant 
+      official nomenclature. Consider common viral protein naming conventions:
+      - nsP1, nsP2, nsP3, nsP4 for nonstructural proteins
+      - E1, E2, E3 for envelope proteins
+      - C for capsid protein
+      - P1234 for polyprotein precursors
+
+      Provide ICTV-compliant mappings in JSON format:
+      {{
+        "ictv_standards": {{
+          "nsP1": "nonstructural protein 1",
+          "nsP2": "nonstructural protein 2",
+          "nsP3": "nonstructural protein 3",
+          "nsP4": "nonstructural protein 4",
+          "P1234": "nonstructural polyprotein precursor",
+          "E1": "envelope protein E1",
+          "E2": "envelope protein E2",
+          "C": "capsid protein"
+        }},
+        "confidence": "high",
+        "rationale": "Based on ICTV standards for alphaviruses"
+      }}
+    max_tokens: 1000
+    temperature: 0.1
+    
+  synonym_analysis:
+    description: "Analyze protein product names and identify synonym relationships"
+    template: |
+      Analyze these {virus_species} protein product names and identify ALL synonym relationships.
+      Group proteins that refer to the same functional entity using ICTV nomenclature standards.
+      
+      Virus Species: {virus_species}
+      ICTV Standards: {ictv_standards}
+      Protein Products: {unique_products}
+      
+      Instructions:
+      1. Use ICTV standards as canonical names when possible
+      2. Group synonyms by their canonical ICTV name
+      3. Provide confidence scores (0.0-1.0) for each synonym relationship
+      4. Consider variations like:
+         - "putative", "probable", "potential" prefixes
+         - "precursor", "polyprotein", "fragment" suffixes
+         - Abbreviations vs full names
+         - Different naming conventions
+      
+      Example groupings:
+      - "non-structural polyprotein precursor P1234" = "putative non-structural polyprotein precursor P1234"
+      - "nsP1" = "nonstructural protein 1" = "non-structural protein 1"
+      - "E1" = "envelope protein E1" = "envelope glycoprotein E1"
+      
+      Provide synonym groups in JSON format:
+      {{
+        "synonym_groups": {{
+          "nonstructural polyprotein precursor": [
+            ["P1234", 0.98],
+            ["putative non-structural polyprotein precursor P1234", 0.95],
+            ["non-structural polyprotein precursor P1234", 0.99],
+            ["polyprotein P1234", 0.90]
+          ],
+          "nonstructural protein 1": [
+            ["nsP1", 1.0],
+            ["non-structural protein 1", 0.99],
+            ["putative nsP1", 0.95]
+          ],
+          "envelope protein E1": [
+            ["E1", 1.0],
+            ["envelope glycoprotein E1", 0.98],
+            ["structural protein E1", 0.90]
+          ]
+        }},
+        "statistics": {{
+          "total_unique_products": 25,
+          "canonical_groups": 8,
+          "reduction_ratio": 0.68
+        }}
+      }}
+    max_tokens: 1500
+    temperature: 0.1
+    
+  virus_species_extraction:
+    description: "Extract virus species from user query or genome data"
+    template: |
+      Extract the virus species name from the following context:
+      
+      User Query: {user_query}
+      Genome Names: {genome_names}
+      Protein Annotations: {protein_samples}
+      
+      Instructions:
+      1. Identify the specific virus species mentioned
+      2. Use standard virus nomenclature (e.g., "Chikungunya virus", "Eastern equine encephalitis virus")
+      3. Avoid genus or family level classifications unless that's the most specific available
+      4. If multiple viruses are mentioned, prioritize the primary focus
+      
+      Provide the result in JSON format:
+      {{
+        "virus_species": "Chikungunya virus",
+        "confidence": "high",
+        "evidence": ["mentioned in user query", "found in genome names"],
+        "alternative_names": ["CHIKV", "Chikungunya fever virus"]
+      }}
+    max_tokens: 500
+    temperature: 0.1
+
+# Configuration for different virus families
+virus_family_patterns:
+  alphavirus:
+    common_proteins:
+      - "nsP1"
+      - "nsP2" 
+      - "nsP3"
+      - "nsP4"
+      - "P1234"
+      - "E1"
+      - "E2"
+      - "E3"
+      - "C"
+    ictv_mappings:
+      "nsP1": "nonstructural protein 1"
+      "nsP2": "nonstructural protein 2"
+      "nsP3": "nonstructural protein 3"
+      "nsP4": "nonstructural protein 4"
+      "P1234": "nonstructural polyprotein precursor"
+      "E1": "envelope protein E1"
+      "E2": "envelope protein E2"
+      "E3": "envelope protein E3"
+      "C": "capsid protein"
+      
+  flavivirus:
+    common_proteins:
+      - "NS1"
+      - "NS2A"
+      - "NS2B"
+      - "NS3"
+      - "NS4A"
+      - "NS4B"
+      - "NS5"
+      - "E"
+      - "M"
+      - "C"
+    ictv_mappings:
+      "NS1": "nonstructural protein 1"
+      "NS2A": "nonstructural protein 2A"
+      "NS2B": "nonstructural protein 2B"
+      "NS3": "nonstructural protein 3"
+      "NS4A": "nonstructural protein 4A"
+      "NS4B": "nonstructural protein 4B"
+      "NS5": "nonstructural protein 5"
+      "E": "envelope protein"
+      "M": "membrane protein"
+      "C": "capsid protein"
+
+# Confidence thresholds for synonym resolution
+confidence_thresholds:
+  high_confidence: 0.95
+  medium_confidence: 0.80
+  low_confidence: 0.60
+  minimum_acceptable: 0.50
+
+# Cache configuration
+cache_settings:
+  enable_ictv_caching: true
+  enable_synonym_caching: true
+  cache_ttl_days: 30
+  cache_validation: true 

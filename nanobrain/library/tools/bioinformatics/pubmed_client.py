@@ -119,51 +119,12 @@ class PubMedClient(ExternalTool):
     """
     
     @classmethod
-    def from_config(cls, config: Union[ToolConfig, PubMedConfig, Dict], **kwargs) -> 'PubMedClient':
-        """Mandatory from_config implementation for PubMedClient"""
-        logger = get_logger(f"{cls.__name__}.from_config")
-        logger.info(f"Creating {cls.__name__} from configuration")
-        
-        # Convert any input to PubMedConfig
-        if isinstance(config, PubMedConfig):
-            # Already specific config, use as-is
-            pass
-        else:
-            # Convert ToolConfig, dict, or any other input to PubMedConfig
-            if hasattr(config, 'model_dump'):
-                config_dict = config.model_dump()
-            elif isinstance(config, dict):
-                config_dict = config
-            else:
-                # Handle object with attributes
-                config_dict = {}
-                # Extract fields that are common to both ToolConfig and PubMedConfig
-                for attr in ['name', 'description', 'tool_card']:
-                    if hasattr(config, attr):
-                        config_dict[attr] = getattr(config, attr)
-            
-            # Create PubMedConfig from the extracted data
-            config = PubMedConfig(**config_dict)
-        
-        # Mandatory tool_card validation and extraction
-        if hasattr(config, 'tool_card') and config.tool_card:
-            tool_card_data = config.tool_card.model_dump() if hasattr(config.tool_card, 'model_dump') else config.tool_card
-            logger.info(f"Tool {config.tool_name} loaded with tool card metadata")
-        elif isinstance(config, dict) and 'tool_card' in config:
-            tool_card_data = config['tool_card']
-            logger.info(f"Tool {config.tool_name} loaded with tool card metadata")
-        else:
-            raise ValueError(
-                f"Missing mandatory 'tool_card' section in configuration for {cls.__name__}. "
-                f"All tools must include tool card metadata for proper discovery and usage."
-            )
-        
-        # Create instance
-        instance = cls(config, **kwargs)
-        instance._tool_card_data = tool_card_data
-        
-        logger.info(f"Successfully created {cls.__name__} with tool card compliance")
-        return instance
+    def _get_config_class(cls):
+        """UNIFIED PATTERN: Return PubMedConfig - ONLY method that differs from other components"""
+        return PubMedConfig
+    
+    # Now inherits unified from_config implementation from FromConfigBase
+    # Uses PubMedConfig returned by _get_config_class() to preserve all existing functionality
     
     def __init__(self, config: PubMedConfig, **kwargs):
         """Initialize PubMedClient with configuration"""

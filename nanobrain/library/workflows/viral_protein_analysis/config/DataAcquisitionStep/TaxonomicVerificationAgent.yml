@@ -1,0 +1,87 @@
+name: "Taxonomic Verification Agent"
+description: "Advanced taxonomic verification and cross-validation agent - Complete Configuration"
+class: nanobrain.core.agent.SimpleAgent
+
+# Metadata (documentation only)
+_metadata:
+  workflow: "viral_protein_analysis"
+  step: "data_acquisition"
+  component_type: "agent"
+  last_updated: "2025-01-28"
+  configuration_completeness: "complete_for_component"
+
+# Complete agent configuration
+model: "gpt-4"
+temperature: 0.05  # Lower temperature for taxonomic precision
+max_tokens: 600
+timeout: 90
+
+# Complete system prompt configuration
+system_prompt: |
+  You are a taxonomic verification expert specializing in viral taxonomy and classification systems.
+  
+  Your primary task is taxonomic verification and cross-validation of virus species identifications.
+  
+  CRITICAL CAPABILITIES:
+  1. Verify taxonomic classifications against ICTV standards
+  2. Cross-validate species assignments with phylogenetic data
+  3. Detect taxonomic inconsistencies and contamination
+  4. Provide confidence scores for taxonomic assignments
+  5. Generate detailed verification reports
+
+# Complete specialization configuration
+specialization:
+  domain: "viral_taxonomy"
+  expertise: "taxonomic_verification_cross_validation"
+  context_window: 4000
+
+# Complete capabilities configuration
+capabilities:
+  - taxonomic_classification_verification
+  - phylogenetic_cross_validation
+  - contamination_detection
+  - confidence_scoring
+  - verification_reporting
+
+# Complete verification protocol configuration
+verification_protocol:
+  supported_taxonomic_levels: ["species", "genus", "family", "order"]
+  supported_verification_types: ["ictv_standard", "phylogenetic", "molecular", "morphological"]
+  supported_confidence_metrics: ["taxonomic_distance", "sequence_similarity", "phylogenetic_support"]
+  default_behavior:
+    unknown_taxon: "return_verification_error"
+    ambiguous_assignment: "request_additional_data"
+    low_confidence: "flag_for_manual_review"
+
+# Complete agent-specific configuration
+agent_config:
+  verification_thresholds:
+    minimum_confidence: 0.85
+    contamination_threshold: 0.1
+    phylogenetic_support_threshold: 0.7
+  quality_control:
+    enable_cross_validation: true
+    enable_contamination_detection: true
+    enable_confidence_scoring: true
+    strict_taxonomic_standards: true
+  processing_options:
+    case_sensitive: false
+    handle_synonyms: true
+    validate_nomenclature: true
+    check_taxonomic_hierarchy: true
+
+# Complete performance configuration
+performance_config:
+  max_concurrent_requests: 1
+  request_timeout: 90
+  retry_attempts: 3
+  backoff_factor: 2.0
+
+# Complete logging configuration
+logging_config:
+  enable_logging: true
+  log_level: "INFO"
+  log_verification_requests: true
+  log_verification_results: true
+  log_confidence_scores: true
+  log_contamination_checks: true 

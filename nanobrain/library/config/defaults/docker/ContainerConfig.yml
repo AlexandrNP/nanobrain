@@ -1,0 +1,268 @@
+# ContainerConfig Default Configuration
+# This configuration enables creation of ContainerConfig instances via from_config pattern
+# Usage: ContainerConfig.from_config(load_yaml_config('ContainerConfig.yml'))
+
+# Core container configuration
+name: "nanobrain-container"
+enabled: true
+image: "alpine"
+tag: "latest"
+
+# Network configuration
+ports: []  # Example: ["8080:80", "9200:9200"]
+networks: []  # Example: ["nanobrain-network"]
+hostname: null
+
+# Environment and configuration
+environment: 
+  # Example environment variables: {"ENV_VAR": "value"}
+  # Add your environment variables here
+volumes: []  # Example: ["host_path:container_path", "volume_name:container_path"]
+working_dir: null
+user: null
+
+# Container behavior
+restart_policy: "unless-stopped"  # no, always, unless-stopped, on-failure
+
+# Health check configuration
+health_check:
+  type: "http"  # http, tcp, exec, none
+  path: "/health"
+  port: 8080
+  interval: 30  # seconds
+  timeout: 10   # seconds
+  retries: 3
+  start_period: 60  # seconds
+  failure_threshold: 3
+  success_threshold: 1
+  command: null  # For exec health checks
+
+# Resource limits
+resource_limits:
+  memory: null      # e.g., "2Gi", "512Mi"
+  cpu: null         # e.g., "1.0", "500m"
+  memory_request: null
+  cpu_request: null
+  mem_limit: null
+  cpu_quota: null
+  cpu_period: null
+
+# Metadata
+labels:
+  app: "nanobrain-container"
+  nanobrain.framework: "true"
+  nanobrain.version: "1.0.0"
+
+annotations: {}
+
+# Kubernetes-specific fields
+namespace: "default"
+replicas: 1
+service_type: "ClusterIP"  # ClusterIP, NodePort, LoadBalancer, ExternalName
+ingress_enabled: false
+ingress_host: null
+persistent_volume_claims: []
+
+# Kubernetes scheduling
+node_selector: {}
+tolerations: []
+affinity: null
+
+# Auto-scaling (Kubernetes)
+auto_scaling_enabled: false
+min_replicas: 1
+max_replicas: 5
+target_cpu_utilization: 70
+target_memory_utilization: 80
+
+# Security context
+security_context: {}
+
+# Container orchestrator configuration
+orchestrator: "docker"  # docker, kubernetes, docker-compose, docker-swarm, auto
+
+# Docker-specific configuration
+docker_config:
+  # Runtime configuration
+  runtime: "runc"  # runc, kata, gvisor
+  # Privileged mode
+  privileged: false
+  # Read-only root filesystem
+  read_only: false
+  # Temporary filesystem mounts
+  tmpfs: {}
+  # Device mappings
+  devices: []
+  # Capability modifications
+  cap_add: []
+  cap_drop: ["ALL"]
+  # Security options
+  security_opt: []
+  # DNS configuration
+  dns: []
+  dns_search: []
+  # Extra hosts
+  extra_hosts: []
+
+# Kubernetes-specific configuration
+kubernetes_config:
+  # Pod security context
+  pod_security_context:
+    run_as_user: 1000
+    run_as_group: 1000
+    fs_group: 1000
+  # Container security context
+  container_security_context:
+    allow_privilege_escalation: false
+    read_only_root_filesystem: true
+    run_as_non_root: true
+  # Service account
+  service_account: "default"
+  # Image pull secrets
+  image_pull_secrets: []
+
+# Docker Compose specific configuration
+compose_config:
+  # Compose file version
+  version: "3.8"
+  # Service dependencies
+  depends_on: []
+  # Build configuration
+  build:
+    context: null
+    dockerfile: null
+    args: {}
+  # Logging configuration
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+# Container lifecycle hooks
+lifecycle:
+  # Pre-start hook
+  pre_start:
+    enabled: false
+    command: []
+    timeout: 30
+  # Post-start hook
+  post_start:
+    enabled: false
+    command: []
+    timeout: 30
+  # Pre-stop hook
+  pre_stop:
+    enabled: false
+    command: []
+    timeout: 30
+
+# Monitoring and observability
+monitoring:
+  # Enable metrics collection
+  metrics_enabled: false
+  # Metrics port
+  metrics_port: 9090
+  # Metrics path
+  metrics_path: "/metrics"
+  # Enable logging
+  logging_enabled: true
+  # Log level
+  log_level: "info"
+  # Enable tracing
+  tracing_enabled: false
+
+# Development vs Production settings
+environment_settings:
+  # Environment type
+  type: "development"  # development, staging, production
+  # Debug mode
+  debug: false
+  # Hot reload (development)
+  hot_reload: false
+  # Development tools
+  dev_tools_enabled: false
+
+# Framework integration
+framework_integration:
+  # NanoBrain framework integration
+  nanobrain_integration: true
+  # A2A card generation
+  generate_a2a_cards: false
+  # Service mesh integration
+  service_mesh: false
+  # Istio sidecar injection
+  istio_injection: false
+
+# Tool card metadata (mandatory for framework compliance)
+tool_card:
+  name: "ContainerConfig"
+  description: "Universal container configuration supporting multiple orchestrators in NanoBrain framework"
+  version: "1.0.0"
+  category: "infrastructure"
+  capabilities:
+    - "multi_orchestrator_support"
+    - "container_configuration"
+    - "resource_management"
+    - "health_checking"
+    - "security_configuration"
+  requirements: []
+  supported_platforms:
+    - "linux"
+    - "darwin"
+    - "windows"
+  supported_orchestrators:
+    - "docker"
+    - "kubernetes"
+    - "docker-compose"
+    - "docker-swarm"
+  configuration_schema:
+    type: "ContainerConfig"
+    required_fields:
+      - "name"
+      - "image"
+    optional_fields:
+      - "tag"
+      - "ports"
+      - "environment"
+      - "volumes"
+      - "restart_policy"
+      - "health_check"
+      - "resource_limits"
+  usage_examples:
+    - description: "Basic web application container"
+      config:
+        name: "webapp"
+        image: "nginx"
+        tag: "alpine"
+        ports: ["80:80"]
+        environment:
+          NGINX_HOST: "localhost"
+    - description: "Database container with persistent storage"
+      config:
+        name: "database"
+        image: "postgres"
+        tag: "13"
+        environment:
+          POSTGRES_DB: "myapp"
+          POSTGRES_USER: "user"
+          POSTGRES_PASSWORD: "password"
+        volumes:
+          - "postgres_data:/var/lib/postgresql/data"
+        health_check:
+          type: "exec"
+          command: ["pg_isready", "-U", "user"]
+    - description: "Microservice with resource limits and health checks"
+      config:
+        name: "api-service"
+        image: "myapp/api"
+        tag: "v1.0.0"
+        ports: ["8080:8080"]
+        resource_limits:
+          memory: "512Mi"
+          cpu: "500m"
+        health_check:
+          type: "http"
+          path: "/health"
+          port: 8080
+          interval: 30 

@@ -1,0 +1,69 @@
+# Elasticsearch MCP Server Dockerfile for NanoBrain Framework
+# This creates a containerized MCP server for Elasticsearch integration
+
+ARG PYTHON_VERSION=3.9
+FROM python:${PYTHON_VERSION}-slim
+
+# Metadata
+LABEL maintainer="NanoBrain Framework"
+LABEL description="Elasticsearch MCP Server for viral protein analysis"
+LABEL version="1.0.0"
+LABEL nanobrain.component="mcp_server"
+LABEL nanobrain.service="elasticsearch"
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONPATH=/usr/local/lib/python3.9/site-packages
+ENV NANOBRAIN_ENV=docker
+
+# Create app user for security
+RUN groupadd -r nanobrain && useradd -r -g nanobrain nanobrain
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    gcc \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /app
+
+# Copy the entire NanoBrain project for installation
+COPY . /app/nanobrain-src/
+
+# Install NanoBrain framework with all dependencies
+RUN cd /app/nanobrain-src && \
+    pip install --no-cache-dir -e . && \
+    pip install --no-cache-dir -r nanobrain/library/tools/search/requirements-mcp.txt
+
+# Copy MCP server specific files
+COPY nanobrain/library/tools/search/elasticsearch_mcp_server.py /app/
+
+# Create directories for logs and data
+RUN mkdir -p /app/logs /app/data && \
+    chown -R nanobrain:nanobrain /app
+
+# Switch to non-root user
+USER nanobrain
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:${MCP_PORT:-9202}/health || exit 1
+
+# Expose MCP server port
+EXPOSE 9202
+
+# Default environment variables (can be overridden)
+ENV MCP_HOST=0.0.0.0
+ENV MCP_PORT=9202
+ENV ELASTICSEARCH_HOST=elasticsearch
+ENV ELASTICSEARCH_PORT=9200
+ENV ELASTICSEARCH_SCHEME=http
+ENV MCP_MAX_CONNECTIONS=10
+ENV MCP_CONNECTION_TIMEOUT=30
+ENV MCP_REQUEST_TIMEOUT=60
+
+# Start the MCP server
+CMD ["python", "elasticsearch_mcp_server.py"] 

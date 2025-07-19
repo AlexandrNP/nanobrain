@@ -1,0 +1,118 @@
+name: "MUSCLE Multiple Sequence Alignment Tool"
+description: "Tool for multiple sequence alignment using MUSCLE - Complete Configuration"
+class: nanobrain.library.tools.bioinformatics.muscle_tool.MUSCLETool
+
+# Metadata (documentation only)
+_metadata:
+  framework: "nanobrain"
+  component_type: "bioinformatics_tool"
+  migration_source: "config/muscle_tool.yml"
+  last_updated: "2025-01-28"
+  configuration_completeness: "complete_for_component"
+
+# Complete tool configuration
+tool_name: "muscle"
+
+# Complete bioinformatics tool card
+tool_card:
+  name: "muscle"
+  description: "MUSCLE tool for multiple sequence alignment"
+  version: "1.0.0"
+  category: "bioinformatics"
+  capabilities: ["sequence_alignment", "msa_generation", "conservation_analysis"]
+
+# Complete installation configuration
+conda_package: "muscle"
+conda_channel: "bioconda"
+environment_name: "nanobrain-viral_protein-muscle"
+create_isolated_environment: true
+
+# Complete local installation paths
+local_installation_paths:
+  - "/usr/local/bin"
+  - "/opt/homebrew/bin"
+  - "~/bin"
+
+# Complete alignment parameters
+max_iterations: 16
+diagonal_optimization: true
+gap_open_penalty: -12.0
+gap_extend_penalty: -1.0
+
+# Complete quality parameters
+min_sequences: 3
+max_sequences: 1000
+output_format: "fasta"  # fasta, clustal, msf, phylip
+
+# Complete conservation analysis configuration
+calculate_profile: true
+highly_conserved_threshold: 0.8
+position_scoring: true
+
+# Complete progressive scaling configuration
+progressive_scaling:
+  1:
+    max_sequences: 10
+    max_iterations: 4
+    description: "Fast test"
+  2:
+    max_sequences: 50
+    max_iterations: 8
+    description: "Basic validation"
+  3:
+    max_sequences: 200
+    max_iterations: 12
+    description: "Medium scale"
+  4:
+    max_sequences: 1000
+    max_iterations: 16
+    description: "Full scale"
+
+# Complete performance settings
+timeout_seconds: 600
+progressive_scaling_enabled: true
+verify_on_init: true
+auto_install: true
+installation_check: true
+
+# Complete cache configuration
+cache_config:
+  enable_caching: true
+  cache_directory: "data/muscle_cache"
+  cache_ttl_hours: 168  # 1 week
+  cache_alignments: true
+
+# Complete algorithm configuration
+algorithm_config:
+  refinement: true
+  profile_profile: true
+  anchor_optimization: true
+  tree_refinement: true
+
+# Complete output configuration
+output_config:
+  include_headers: true
+  sequence_numbering: false
+  line_length: 80
+  case_preservation: true
+
+# Complete quality control configuration
+quality_control:
+  validate_input: true
+  check_sequence_diversity: true
+  min_alignment_length: 10
+  max_gap_percentage: 95.0
+
+# Complete logging configuration
+logging_config:
+  enable_logging: true
+  log_level: "INFO"
+  log_alignment_stats: true
+  log_performance_metrics: true
+
+# Complete error handling configuration
+error_handling:
+  fail_fast: true
+  log_errors: true
+  retry_on_failure: true
+  preserve_intermediate_files: true 

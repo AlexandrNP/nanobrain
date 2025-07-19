@@ -1,0 +1,128 @@
+tool_name: "BV-BRC Data Access Tool"
+description: "Tool for accessing BV-BRC viral genome database - Complete Configuration"
+class: nanobrain.library.tools.bioinformatics.bv_brc_tool.BVBRCTool
+
+# Metadata (documentation only)
+_metadata:
+  framework: "nanobrain"
+  component_type: "bioinformatics_tool"
+  migration_source: "config/bv_brc_tool.yml"
+  last_updated: "2025-01-28"
+  configuration_completeness: "complete_for_component"
+
+# Complete tool configuration
+tool_name: "bv_brc_tool"
+installation_path: null  # Auto-detect or use system default
+executable_path: null    # Auto-detect or use system default
+
+# Complete bioinformatics tool card
+tool_card:
+  name: "bv_brc"
+  description: "BV-BRC tool for bacterial and viral genome analysis"
+  version: "1.0.0"
+  category: "bioinformatics"
+  capabilities: ["genome_analysis", "protein_extraction", "viral_data"]
+
+# Complete API configuration
+api_base_url: "https://www.bv-brc.org/api"
+use_http_api: true
+
+# Complete local installation paths
+local_installation_paths:
+  - "/Applications/BV-BRC.app/deployment/bin"
+  - "/Applications/BV-BRC.app/Contents/Resources/deployment/bin"
+
+# Complete data acquisition settings
+genome_batch_size: 100
+md5_batch_size: 50
+min_genome_length: 8000
+max_genome_length: 15000
+
+# Complete progressive scaling configuration
+progressive_scaling:
+  1:
+    limit: 5
+    batch_size: 5
+    description: "Small test"
+  2:
+    limit: 10
+    batch_size: 10
+    description: "Basic validation"
+  3:
+    limit: 20
+    batch_size: 15
+    description: "Medium test"
+  4:
+    limit: 50
+    batch_size: 25
+    description: "Full scale"
+
+# Complete performance settings
+timeout_seconds: 300
+retry_attempts: 3
+verify_on_init: true
+progressive_scaling_enabled: true
+use_cache: true
+
+# Complete API endpoints configuration
+endpoints:
+  genome: "/genome"
+  feature: "/feature"
+  protein: "/protein_feature"
+  taxonomy: "/taxonomy"
+
+# Complete request configuration
+request_config:
+  batch_size: 100
+  rate_limit_delay: 1.0
+  user_agent: "NanoBrain/1.0"
+  max_retries: 3
+  timeout: 300
+
+# Complete authentication configuration
+authentication:
+  type: "none"  # BV-BRC is public
+  key_env_var: null
+
+# Complete cache configuration
+cache_config:
+  enable_caching: true
+  cache_ttl_hours: 24
+  cache_directory: "data/bvbrc_cache"
+  cache_strategy: "progressive"
+
+# Complete data filtering configuration
+filtering:
+  enable_size_filter: true
+  enable_quality_filter: true
+  min_proteins_per_genome: 5
+  max_proteins_per_genome: 1000
+
+# Complete output configuration
+output_config:
+  format: "fasta"
+  include_annotations: true
+  include_metadata: true
+  standardize_headers: true
+
+# Complete installation configuration
+installation_config:
+  auto_detect: true
+  check_system_path: true
+  check_local_paths: true
+  create_cache_directory: true
+  verify_installation: true
+
+# Complete error handling configuration
+error_handling:
+  fail_fast: true
+  log_errors: true
+  retry_on_failure: true
+  preserve_intermediate_files: true
+
+# Complete logging configuration
+logging_config:
+  enable_logging: true
+  log_level: "INFO"
+  log_data_transfers: true
+  log_api_calls: true 

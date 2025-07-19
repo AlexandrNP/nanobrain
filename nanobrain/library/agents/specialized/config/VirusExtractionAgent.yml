@@ -1,0 +1,162 @@
+# Configuration for VirusExtractionAgent
+name: VirusExtractionAgent
+description: "Specialized agent for extracting virus species from user queries"
+class: nanobrain.library.agents.specialized.base.SimpleSpecializedAgent
+model: gpt-4
+temperature: 0.1  # Low temperature for consistent extraction
+max_tokens: 100
+timeout: 30
+
+# MANDATORY: Agent card section for A2A protocol compliance
+agent_card:
+  version: "1.0.0"
+  purpose: "Specialized agent for virus species extraction from natural language queries"
+  detailed_description: "VirusExtractionAgent is a specialized agent designed for extracting virus species names from user queries using natural language processing, with high accuracy and confidence scoring."
+  domain: "bioinformatics"
+  expertise_level: "intermediate"
+  
+  input_format:
+    primary_mode: "json"
+    supported_modes: ["json", "text"]
+    content_types: ["application/json", "text/plain"]
+    format_schema:
+      class: nanobrain.core.data_unit.DataUnit
+      required_fields:
+        user_query:
+          class: nanobrain.core.data_unit.DataUnitString
+          description: "Natural language user query to analyze"
+      optional_fields:
+        context:
+          class: nanobrain.core.data_unit.DataUnitString
+          description: "Additional context for extraction"
+  
+  output_format:
+    primary_mode: "json"
+    supported_modes: ["json", "text"]
+    content_types: ["application/json", "text/plain"]
+    format_schema:
+      class: nanobrain.core.data_unit.DataUnit
+      guaranteed_fields:
+        virus_species:
+          class: nanobrain.core.data_unit.DataUnitString
+          description: "Extracted virus species name or null if none found"
+        confidence:
+          class: nanobrain.core.data_unit.DataUnitString
+          description: "Confidence score (0.0-1.0)"
+        reasoning:
+          class: nanobrain.core.data_unit.DataUnitString
+          description: "Brief explanation of extraction decision"
+  
+  capabilities:
+    streaming: false
+    push_notifications: false
+    state_transition_history: false
+    multi_turn_conversation: false
+    context_retention: false
+    tool_usage: false
+    delegation: false
+    collaboration: false
+  
+  skills:
+    - id: "virus_species_extraction"
+      name: "Virus Species Extraction"
+      description: "Extract virus species names from natural language text"
+      complexity: "intermediate"
+      input_modes: ["json", "text"]
+      output_modes: ["json"]
+      examples:
+        - "Extract 'Chikungunya virus' from 'Tell me about Chikungunya virus'"
+        - "Identify virus species in research queries"
+        - "Classify queries as virus-related or general"
+  
+  performance:
+    typical_response_time: "1-3 seconds"
+    memory_usage: "50-100 MB"
+    cpu_requirements: "Low"
+    concurrency_support: true
+    max_concurrent_sessions: 20
+  
+  usage_examples:
+    - name: "Virus Species Extraction"
+      description: "Extract virus species from user query"
+      input_example:
+        user_query: "Create PSSM matrix for Chikungunya virus"
+      expected_output:
+        virus_species: "Chikungunya virus"
+        confidence: 0.95
+        reasoning: "Clear mention of specific virus species"
+
+# Agent-specific configuration
+config:
+  name: VirusExtractionAgent
+  description: "Agent for extracting virus species from user queries"
+  
+  # Extraction configuration
+  extraction_config:
+    confidence_threshold: 0.7
+    use_entity_recognition: true
+    validate_virus_names: true
+
+# System prompt for virus species extraction
+system_prompt: |
+  You are a specialized agent for extracting virus species names from user queries.
+  You have expert knowledge of:
+  - Virus nomenclature and common names
+  - Scientific and colloquial virus names
+  - Virus abbreviations and acronyms
+  - Query intent classification
+  
+  Your task is to accurately identify virus species mentioned in user queries and provide confidence scores.
+  Focus on exact virus species names, not general viral concepts.
+
+# Prompt template for virus species extraction
+extraction_prompt: |
+  Analyze the following user query and extract any virus species mentioned:
+  
+  Query: "{user_query}"
+  
+  Extract virus species names if present. Return JSON format:
+  {{
+    "virus_species": "exact virus species name or null if none found",
+    "confidence": 0.0-1.0,
+    "reasoning": "brief explanation"
+  }}
+  
+  Examples of virus species: Chikungunya virus, Eastern equine encephalitis virus, Zika virus
+  
+  Return only the JSON response.
+
+# Tools configuration
+tools: []
+
+# Executor configuration
+executor_config:
+  executor_type: local
+  max_workers: 1
+
+# Logging configuration
+enable_logging: true
+log_conversations: true
+log_tool_calls: true
+
+# Validation configuration
+validation:
+  required:
+    - model
+    - temperature
+    - max_tokens
+  optional:
+    - timeout
+  constraints:
+    temperature:
+      min: 0.0
+      max: 1.0
+      type: float
+    max_tokens:
+      min: 50
+      max: 500
+      type: int
+    timeout:
+      min: 10
+      max: 300
+      type: int 

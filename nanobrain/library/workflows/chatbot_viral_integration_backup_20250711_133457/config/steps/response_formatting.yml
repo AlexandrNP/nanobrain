@@ -1,0 +1,88 @@
+name: Response Formatting
+description: Format analysis results for chatbot response
+class: nanobrain.library.workflows.chatbot_viral_integration.steps.response_formatting_step.ResponseFormattingStep
+
+# Framework settings
+config:
+  name: response_formatting
+  description: Format analysis results for chatbot response
+  debug_mode: false
+  enable_logging: true
+  log_data_transfers: true
+
+# UPDATED: Input configuration to handle workflow output
+input_configs:
+  analysis_input:
+    class: nanobrain.core.data_unit.DataUnitFile
+    name: analysis_input
+    description: "Viral protein analysis workflow results"
+    persistent: true
+    file_path: "results/viral_protein_analysis.json"
+    # Expects AlphavirusWorkflow output format
+  
+  response_input:
+    class: nanobrain.core.data_unit.DataUnitMemory
+    name: response_input
+    description: "Conversational response input"
+    persistent: false
+    # For alternative conversational responses
+
+# UPDATED: Output configuration
+output_config:
+  class: nanobrain.core.data_unit.DataUnitMemory
+  name: formatted_response
+  description: "Formatted chatbot response"
+  persistent: false
+
+# Formatting configuration
+formatting_config:
+  output_format: "markdown"
+  include_summary: true
+  include_details: true
+  include_metadata: true
+  max_response_length: 2000
+  
+  # Workflow result parsing
+  workflow_result_keys:
+    - "step_results"
+    - "final_results"
+    - "execution_summary"
+    - "workflow_metadata"
+  
+  # Response templates
+  response_templates:
+    analysis_complete: |
+      ## Viral Protein Analysis Results
+
+      **Virus Species:** {virus_species}
+      **Analysis Status:** {status}
+      **Execution Time:** {execution_time}
+
+      ### Summary
+      {summary}
+
+      ### Detailed Results
+      {detailed_results}
+      
+      ### Protein Clusters
+      {protein_clusters}
+      
+      ---
+      *Analysis completed using NanoBrain framework*
+    
+    conversational: |
+      {response_content}
+    
+    error: |
+      I apologize, but I encountered an issue while processing your request:
+      
+      **Error:** {error_message}
+      
+      Please try again or rephrase your question.
+
+# Error handling configuration
+error_handling:
+  retry_failed_requests: true
+  max_retries: 3
+  backoff_strategy: exponential
+  fallback_response: "I apologize, but I'm unable to process your request at the moment. Please try again later."

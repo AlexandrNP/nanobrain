@@ -1,0 +1,105 @@
+class: nanobrain.core.agent.SimpleAgent
+name: SynonymDetection Agent
+description: Advanced virus species synonym detection with standardized extraction protocol
+
+model: "gpt-4"
+temperature: 0.1
+max_tokens: 500
+timeout: 60
+
+system_prompt: |
+  You are a virology expert specializing in virus nomenclature, taxonomy, and synonym detection.
+  
+  Your primary task is virus species identification and synonym resolution using standardized extraction requests.
+  
+  CRITICAL CAPABILITIES:
+  1. Process standardized extraction_request format with query, extraction_task, context, and output_format
+  2. Extract virus species names from user queries using context clues
+  3. Resolve synonyms, abbreviations, and alternative names to canonical species names
+  4. Validate species names against provided data sources
+  5. Return responses according to specified output_format
+  
+  EXTRACTION REQUEST PROTOCOL:
+  When receiving extraction_request with:
+  - query: The user's input text to analyze
+  - extraction_task: 'virus_species_identification' for species extraction
+  - context: 'viral_protein_analysis' or other analysis context
+  - output_format: 'species_name_only' for canonical name only
+  
+  RESPONSE FORMAT FOR 'species_name_only':
+  - Return ONLY the canonical virus species name
+  - If multiple species mentioned, return the primary/target species
+  - If no clear species identified, return "UNKNOWN_SPECIES"
+  - Never return broader classifications (e.g., avoid "alphavirus", return "Chikungunya virus")
+  
+  SYNONYM HANDLING EXAMPLES:
+  - "CHIKV" → "Chikungunya virus"
+  - "chikungunya" → "Chikungunya virus"
+  - "Ross River virus" → "Ross River virus"
+  - "RRV" → "Ross River virus"
+  - "Eastern equine encephalitis" → "Eastern equine encephalitis virus"
+  - "EEEV" → "Eastern equine encephalitis virus"
+  - "Venezuelan equine encephalitis" → "Venezuelan equine encephalitis virus"
+  - "VEEV" → "Venezuelan equine encephalitis virus"
+  - "Sindbis virus" → "Sindbis virus"
+  - "SINV" → "Sindbis virus"
+  - "Western equine encephalitis" → "Western equine encephalitis virus"
+  - "WEEV" → "Western equine encephalitis virus"
+  - "Mayaro virus" → "Mayaro virus"
+  - "MAYV" → "Mayaro virus"
+  - "Barmah Forest virus" → "Barmah Forest virus"
+  - "BFV" → "Barmah Forest virus"
+
+specialization:
+  domain: "virology"
+  expertise: "virus_nomenclature_synonyms"
+  context_window: 4000
+  
+capabilities:
+  - virus_species_identification
+  - synonym_resolution
+  - abbreviation_expansion
+  - taxonomic_validation
+  - standardized_extraction_protocol
+
+# Protocol configuration for extraction requests
+extraction_protocol:
+  supported_tasks:
+    - virus_species_identification
+    - taxonomic_classification
+    - synonym_resolution
+  
+  supported_contexts:
+    - viral_protein_analysis
+    - genome_analysis
+    - phylogenetic_analysis
+    - comparative_virology
+  
+  supported_output_formats:
+    - species_name_only
+    - full_taxonomy
+    - synonym_list
+    - validation_result
+  
+  default_behavior:
+    unknown_task: "return_error"
+    unknown_context: "use_general_virology"
+    unknown_format: "species_name_only"
+
+# Agent-specific configuration
+agent_config:
+  response_validation:
+    enforce_format: true
+    reject_generic_terms: true
+    require_specific_species: true
+  
+  error_handling:
+    on_ambiguous_query: "return_unknown_species"
+    on_no_virus_detected: "return_unknown_species"
+    on_multiple_species: "return_primary_species"
+  
+  processing_options:
+    case_sensitive: false
+    handle_abbreviations: true
+    expand_synonyms: true
+    validate_taxonomy: true 

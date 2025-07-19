@@ -1,0 +1,267 @@
+# DockerVolumeManager Default Configuration
+# This configuration enables creation of DockerVolumeManager instances via from_config pattern
+# Usage: DockerVolumeManager.from_config(load_yaml_config('DockerVolumeManager.yml'))
+
+# Component identification
+component_name: "docker_volume_manager"
+enabled: true
+
+# Docker client configuration
+docker_client: null  # Will be auto-detected from environment
+
+# Volume management settings
+check_interval: 30  # seconds between volume checks
+auto_cleanup: true  # Automatically clean up unused volumes
+
+# Backup configuration
+backup_dir: null  # Custom backup directory path (defaults to ~/.nanobrain/volume_backups)
+auto_backup_enabled: true
+default_retention_days: 30
+
+# Volume creation defaults
+volume_defaults:
+  # Default driver for new volumes
+  driver: "local"
+  # Default driver options
+  driver_opts: {}
+  # Default labels for volumes
+  labels:
+    nanobrain.framework: "true"
+    nanobrain.volume.managed: "true"
+  # Enable backup by default
+  backup_enabled: true
+  # Default backup schedule (cron format)
+  backup_schedule: "0 2 * * *"  # Daily at 2 AM
+  # Default retention period
+  retention_days: 30
+
+# Backup and restore settings
+backup_settings:
+  # Compression for backups
+  compression: "gzip"  # none, gzip, bzip2, xz
+  # Backup file naming pattern
+  naming_pattern: "{volume_name}_{timestamp}.tar.{compression}"
+  # Maximum concurrent backup operations
+  max_concurrent_backups: 3
+  # Backup verification
+  verify_backups: true
+  # Incremental backup support
+  incremental_backups: false
+  # Backup encryption (if supported)
+  encryption_enabled: false
+
+# Storage management
+storage_management:
+  # Monitor volume usage
+  usage_monitoring: true
+  # Disk space thresholds
+  space_thresholds:
+    warning: 80  # percentage
+    critical: 90  # percentage
+  # Automatic cleanup policies
+  cleanup_policies:
+    # Remove backups older than retention period
+    cleanup_old_backups: true
+    # Remove unused volumes after specified time
+    cleanup_unused_volumes: false
+    # Unused volume age threshold (days)
+    unused_volume_threshold: 7
+
+# Volume types and configurations
+volume_types:
+  # Persistent data volumes
+  persistent:
+    driver: "local"
+    backup_enabled: true
+    retention_days: 90
+    
+  # Temporary/cache volumes
+  temporary:
+    driver: "local"
+    backup_enabled: false
+    retention_days: 1
+    
+  # Configuration volumes
+  config:
+    driver: "local"
+    backup_enabled: true
+    retention_days: 60
+    
+  # Log volumes
+  logs:
+    driver: "local"
+    backup_enabled: false
+    retention_days: 14
+
+# Data migration settings
+migration:
+  # Enable data migration between volumes
+  enabled: false
+  # Migration strategies
+  strategies:
+    # Copy data and preserve original
+    copy: true
+    # Move data and remove original
+    move: false
+    # Sync data between volumes
+    sync: false
+  # Migration verification
+  verify_migration: true
+
+# Performance optimization
+performance:
+  # I/O optimization
+  io_optimization:
+    # Use direct I/O for large files
+    direct_io: false
+    # Buffer size for operations
+    buffer_size: "64k"
+    # Parallel operations
+    parallel_operations: 4
+  
+  # Volume pre-allocation
+  preallocation:
+    # Pre-allocate space for volumes
+    enabled: false
+    # Default size for pre-allocation
+    default_size: "1G"
+
+# Security settings
+security:
+  # Volume access permissions
+  permissions:
+    # Default owner UID
+    default_uid: 1000
+    # Default group GID
+    default_gid: 1000
+    # Default file permissions
+    default_mode: "0755"
+  
+  # Encryption settings
+  encryption:
+    # Enable volume encryption
+    enabled: false
+    # Encryption algorithm
+    algorithm: "aes-256-cbc"
+    # Key management
+    key_management: "local"  # local, external, kms
+
+# Monitoring and alerting
+monitoring:
+  # Volume usage monitoring
+  usage_monitoring: true
+  # Performance monitoring
+  performance_monitoring: false
+  # Health monitoring
+  health_monitoring: true
+  # Alert thresholds
+  alert_thresholds:
+    # Disk usage percentage
+    disk_usage: 85
+    # I/O error rate
+    io_error_rate: 0.01
+    # Backup failure threshold
+    backup_failures: 3
+
+# Default labels applied to all managed volumes
+labels:
+  nanobrain.framework: "true"
+  nanobrain.component: "docker-infrastructure"
+  nanobrain.component.name: "docker_volume_manager"
+  nanobrain.component.type: "docker-infrastructure"
+  nanobrain.volume.managed: "true"
+
+# Framework integration
+framework_integration:
+  # Use NanoBrain logging system
+  use_nanobrain_logging: true
+  # Generate A2A cards for volumes
+  generate_a2a_cards: false
+  # Integration with backup services
+  backup_service_integration: false
+
+# Development vs Production settings
+environment:
+  # Environment type: development, staging, production
+  type: "development"
+  # Enable debug logging
+  debug_logging: false
+  # Create development-specific volumes
+  create_dev_volumes: true
+  # Skip backup in development
+  skip_backup_in_dev: true
+
+# External storage integration
+external_storage:
+  # Cloud storage providers
+  cloud_providers:
+    # AWS S3 integration
+    s3:
+      enabled: false
+      bucket: null
+      region: "us-east-1"
+      access_key: null
+      secret_key: null
+    
+    # Google Cloud Storage integration
+    gcs:
+      enabled: false
+      bucket: null
+      project_id: null
+      credentials_file: null
+    
+    # Azure Blob Storage integration
+    azure:
+      enabled: false
+      account_name: null
+      account_key: null
+      container: null
+
+# Tool card metadata (mandatory for framework compliance)
+tool_card:
+  name: "DockerVolumeManager"
+  description: "Docker volume management for persistent storage and data operations in NanoBrain framework"
+  version: "1.0.0"
+  category: "infrastructure"
+  capabilities:
+    - "volume_creation_management"
+    - "data_backup_restore"
+    - "volume_sharing"
+    - "cleanup_maintenance"
+    - "storage_monitoring"
+  requirements:
+    - "docker_daemon"
+  supported_platforms:
+    - "linux"
+    - "darwin"
+    - "windows"
+  configuration_schema:
+    type: "DockerVolumeManagerConfig"
+    required_fields: []
+    optional_fields:
+      - "docker_client"
+      - "backup_dir"
+      - "auto_backup_enabled"
+      - "default_retention_days"
+  usage_examples:
+    - description: "Basic volume management setup"
+      config:
+        component_name: "basic_volume_manager"
+        auto_backup_enabled: true
+        default_retention_days: 30
+    - description: "Production volume management with custom backup directory"
+      config:
+        component_name: "prod_volume_manager"
+        backup_dir: "/var/backups/nanobrain/volumes"
+        auto_backup_enabled: true
+        default_retention_days: 90
+        backup_settings:
+          compression: "bzip2"
+          verify_backups: true
+    - description: "Development volume management without backups"
+      config:
+        component_name: "dev_volume_manager"
+        auto_backup_enabled: false
+        environment:
+          type: "development"
+          skip_backup_in_dev: true 

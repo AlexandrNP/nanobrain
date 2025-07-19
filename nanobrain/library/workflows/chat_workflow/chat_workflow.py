@@ -62,6 +62,11 @@ class ChatWorkflow(FromConfigBase):
     }
     
     @classmethod
+    def _get_config_class(cls):
+        """UNIFIED PATTERN: Return generic Dict - ChatWorkflow uses dictionary configuration"""
+        return dict
+    
+    @classmethod
     def extract_component_config(cls, config: Dict[str, Any]) -> Dict[str, Any]:
         """Extract ChatWorkflow configuration"""
         return {
@@ -85,26 +90,7 @@ class ChatWorkflow(FromConfigBase):
             'agent_config': component_config,
         }
     
-    @classmethod
-    def from_config(cls, config: Dict[str, Any], **kwargs) -> 'ChatWorkflow':
-        """Mandatory from_config implementation for ChatWorkflow"""
-        logger = get_logger(f"{cls.__name__}.from_config")
-        logger.info(f"Creating {cls.__name__} from configuration")
-        
-        # Step 1: Extract component-specific configuration  
-        component_config = cls.extract_component_config(config)
-        
-        # Step 2: Resolve dependencies
-        dependencies = cls.resolve_dependencies(component_config, **kwargs)
-        
-        # Step 3: Create instance
-        instance = cls.create_instance(config, component_config, dependencies)
-        
-        # Step 4: Post-creation initialization
-        instance._post_config_initialization()
-        
-        logger.info(f"Successfully created {cls.__name__}")
-        return instance
+    # Now inherits unified from_config implementation from FromConfigBase
         
     def _init_from_config(self, config: Dict[str, Any], component_config: Dict[str, Any],
                          dependencies: Dict[str, Any]) -> None:

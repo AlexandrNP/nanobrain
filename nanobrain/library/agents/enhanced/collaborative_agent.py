@@ -15,7 +15,7 @@ from .delegation_engine import DelegationEngine
 # from .performance_tracker import AgentPerformanceTracker  # Module not available, using None for now
 
 
-class CollaborativeAgent(FromConfigBase, A2ASupportMixin, MCPSupportMixin, ConversationalAgent):
+class CollaborativeAgent(A2ASupportMixin, MCPSupportMixin, ConversationalAgent):
     """Multi-protocol collaborative agent with delegation and coordination."""
     
     # Component configuration

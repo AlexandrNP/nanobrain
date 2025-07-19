@@ -7,6 +7,29 @@ class: nanobrain.library.workflows.viral_protein_analysis.steps.sequence_curatio
 debug_mode: true
 enable_logging: true
 
+# STEP-LEVEL DATA UNITS: Step owns its data units
+input_data_units:
+  standardized_annotations:
+    class: nanobrain.core.data_unit.DataUnitMemory
+    name: standardized_annotations
+    description: "Standardized annotations from annotation mapping step"
+    persistent: false
+
+output_data_units:
+  curated_sequences:
+    class: nanobrain.core.data_unit.DataUnitMemory
+    name: curated_sequences
+    description: "Curated sequences after quality control"
+    persistent: false
+
+# STEP-LEVEL TRIGGER: Execute when standardized annotations received
+triggers:
+  - trigger_id: input_data_received
+    class: nanobrain.core.trigger.DataUnitChangeTrigger
+    data_unit: standardized_annotations
+    event_type: "set"
+    description: "Execute step when standardized annotations are received"
+
 # Curation configuration
 curation_config:
   min_length: 50
@@ -15,33 +38,14 @@ curation_config:
   quality_threshold: 0.8
   max_ambiguous_percent: 5.0
 
-# UPDATED: Input configuration with class field
-input_configs:
-  standardized_annotations:
-    class: nanobrain.core.data_unit.DataUnitMemory
-    name: standardized_annotations
-    description: "Standardized annotations from annotation mapping step"
-    persistent: false
-
-# UPDATED: Output configuration with class field
-output_config:
-  class: nanobrain.core.data_unit.DataUnitMemory
-  name: curated_sequences
-  description: "Curated sequences after quality control"
-  persistent: false
+# Metadata
 logical_steps_covered:
-- 9
-- 10
-- 11
-step_description_detailed: 'This step combines 3 logical workflow steps:
-
-  9. Genome organization analysis
-
-  10. Sequence length analysis
-
-  11. Sequence curation based on quality metrics '
+  - 9
+  - 10
+  - 11
+step_description_detailed: 'This step combines 3 logical workflow steps: 9. Genome organization analysis, 10. Sequence length analysis, 11. Sequence curation based on quality metrics'
 _metadata:
-  last_updated: '2025-06-22T23:41:37.622892'
-  updated_by: modular_config_migration
-  migration_version: 1.0.0
-  uses_modular_config: true
+  last_updated: '2025-01-28'
+  updated_by: 'event_driven_architecture_compliance'
+  migration_version: 2.0.0
+  uses_step_level_data_units: true

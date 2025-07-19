@@ -1,0 +1,108 @@
+web_interface:
+  name: "nanobrain_chatbot_production"
+  version: "1.0.0"
+  description: "NanoBrain Chatbot Web Interface - Production"
+  
+  server:
+    host: "0.0.0.0"  # Production: all interfaces
+    port: 5002
+    workers: 4  # Multiple workers for production
+    reload: false
+    access_log: true
+    
+  api:
+    prefix: "/api"
+    title: "NanoBrain Chatbot API"
+    description: "Production API for NanoBrain Chatbot System with Viral Protein Analysis"
+    version: "1.0.0"
+    docs_url: null  # Disabled in production
+    redoc_url: null  # Disabled in production
+    
+  cors:
+    allow_origins: [
+      "https://yourdomain.com",
+      "https://www.yourdomain.com",
+      "https://nanobrain.yourdomain.com"
+    ]
+    allow_methods: ["GET", "POST", "OPTIONS"]
+    allow_headers: ["Content-Type", "Authorization", "X-Requested-With"]
+    allow_credentials: true
+    
+  chat:
+    default_temperature: 0.7
+    default_max_tokens: 2000
+    default_use_rag: false
+    enable_streaming: true
+    conversation_timeout_seconds: 1800  # 30 minutes
+    max_conversation_length: 50
+    
+  websocket:
+    enable_websocket: true
+    ping_interval: 60
+    ping_timeout: 30
+    max_connections: 200  # Production capacity
+    enable_compression: true
+    
+  frontend:
+    enable_static_files: true  # Production serves frontend
+    static_directory: "frontend/dist"
+    enable_api_docs: false
+    enable_error_details: false  # Hide details in production
+    
+  logging:
+    enable_request_logging: true
+    enable_response_logging: false
+    log_level: "INFO"
+    log_requests_body: false
+    log_responses_body: false
+    
+  security:
+    enable_rate_limiting: true
+    rate_limit_per_minute: 120
+    enable_auth: false  # Configure as needed
+    auth_secret_key: null
+    cors_enabled: true
+    
+  # NanoBrain workflow integration - EVENT-DRIVEN
+  workflow_integration:
+    workflow_type: "chatbot_viral_integration"
+    workflow_config: "nanobrain/library/workflows/chatbot_viral_integration/config/ChatbotViralWorkflow.yml"
+    enable_workflow_metrics: true
+    data_unit_communication: true  # Event-driven communication
+    communication_timeout: 30.0
+    
+  # Production-specific features
+  production:
+    enable_health_checks: true
+    enable_metrics: true
+    enable_security_headers: true
+    enable_response_compression: true
+    enable_request_id_tracking: true
+    
+  # Performance settings optimized for production
+  performance:
+    response_timeout: 30
+    max_request_size: "5MB"  # Stricter limit
+    enable_gzip: true
+    
+  # Custom settings for chatbot features
+  custom_settings:
+    chatbot_features:
+      viral_protein_analysis: true
+      alphavirus_specialization: true
+      real_time_updates: true
+      conversation_history: true
+      health_monitoring: true
+      
+    # Production monitoring
+    monitoring:
+      enable_prometheus_metrics: false  # Can be enabled with setup
+      enable_health_endpoints: true
+      log_performance_metrics: true
+      
+    # Production security
+    security_headers:
+      enable_hsts: true
+      enable_content_security_policy: true
+      enable_x_frame_options: true
+      enable_x_content_type_options: true 

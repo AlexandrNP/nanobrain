@@ -97,13 +97,13 @@ class QueryClassificationStep(Step):
     
     async def process(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Process user query to extract virus species using LLM agent
+        Process user query to extract virus species and determine analysis type using LLM agent
         
         Args:
             input_data: Contains 'user_query' key with query text
             
         Returns:
-            Dict with routing decision and extracted virus species
+            Dict with routing decision, extracted virus species, and analysis type
         """
         user_query = input_data.get('user_query', '')
         
@@ -114,28 +114,37 @@ class QueryClassificationStep(Step):
             }
         
         try:
-            # Extract virus species using LLM agent - NO hardcoded patterns
+            # Extract virus species and analysis type using enhanced LLM agent
             extraction_result = await self._extract_virus_species_llm(user_query)
             
-            if extraction_result.get('virus_species'):
-                # Virus species detected - route to virus name resolution
-                return {
-                    'routing_decision': 'virus_name_resolution',
-                    'extracted_virus_species': extraction_result['virus_species'],
-                    'confidence': extraction_result.get('confidence', 0.0),
-                    'reasoning': extraction_result.get('reasoning', ''),
-                    'user_query': user_query
-                }
+            # Use LLM-provided routing decision if available, otherwise use fallback logic
+            routing_decision = extraction_result.get('routing_decision', 'conversational_response')
+            
+            # Enhanced routing logic based on virus species AND analysis type
+            virus_species = extraction_result.get('virus_species')
+            analysis_type = extraction_result.get('analysis_type', 'conversational')
+            
+            if virus_species and analysis_type in ['pssm', 'protein_analysis']:
+                # Virus species detected AND analysis requested - route to virus name resolution
+                routing_decision = 'virus_name_resolution'
+            elif virus_species and analysis_type == 'conversational':
+                # Virus species detected but no analysis - could still route to virus resolution for info
+                routing_decision = 'virus_name_resolution' 
             else:
-                # No virus species detected - route to conversational response
-                return {
-                    'routing_decision': 'conversational_response',
-                    'user_query': user_query,
-                    'reasoning': extraction_result.get('reasoning', 'No virus species detected')
-                }
+                # No virus species or general conversation - route to conversational response
+                routing_decision = 'conversational_response'
+            
+            return {
+                'routing_decision': routing_decision,
+                'extracted_virus_species': virus_species,
+                'analysis_type': analysis_type,
+                'confidence': extraction_result.get('confidence', 0.0),
+                'reasoning': extraction_result.get('reasoning', ''),
+                'user_query': user_query
+            }
         
         except Exception as e:
-            self.nb_logger.error(f"❌ Error in query classification: {e}")
+            self.nb_logger.error(f"❌ Error in enhanced query classification: {e}")
             return {
                 'routing_decision': 'conversational_response',
                 'user_query': user_query,

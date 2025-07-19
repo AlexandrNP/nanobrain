@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 from nanobrain.core.logging_system import get_logger
+from nanobrain.core.component_base import FromConfigBase
 
 
 @dataclass
@@ -110,9 +111,10 @@ class ToolExecutionError(ExternalToolError):
     pass
 
 
-class ExternalTool(ABC):
+class ExternalTool(FromConfigBase, ABC):
     """
     Base class for external tool integration in NanoBrain framework.
+    Enhanced with mandatory from_config pattern implementation.
     
     This class provides:
     - Tool installation and verification
@@ -125,14 +127,52 @@ class ExternalTool(ABC):
     All tools MUST call ensure_initialized() before use.
     """
     
-    def __init__(self, config):
+    COMPONENT_TYPE = "external_tool"
+    REQUIRED_CONFIG_FIELDS = ['tool_name']
+    OPTIONAL_CONFIG_FIELDS = {
+        'installation_path': None,
+        'executable_path': None,
+        'environment': None,
+        'timeout_seconds': 300,
+        'retry_attempts': 3,
+        'verify_on_init': True
+    }
+    
+    @classmethod
+    def _get_config_class(cls):
+        """UNIFIED PATTERN: Return ExternalToolConfig - ONLY method that differs from other components"""
+        return ExternalToolConfig
+    
+    @classmethod
+    def extract_component_config(cls, config: ExternalToolConfig) -> Dict[str, Any]:
+        """Extract ExternalTool configuration"""
+        return {
+            'tool_name': config.tool_name,
+            'installation_path': getattr(config, 'installation_path', None),
+            'executable_path': getattr(config, 'executable_path', None),
+            'environment': getattr(config, 'environment', {}),
+            'timeout_seconds': getattr(config, 'timeout_seconds', 300),
+            'retry_attempts': getattr(config, 'retry_attempts', 3),
+            'verify_on_init': getattr(config, 'verify_on_init', True)
+        }
+    
+    @classmethod  
+    def resolve_dependencies(cls, component_config: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        """Resolve ExternalTool dependencies"""
+        return {
+            'enable_logging': kwargs.get('enable_logging', True)
+        }
+    
+    def _init_from_config(self, config: ExternalToolConfig, component_config: Dict[str, Any],
+                         dependencies: Dict[str, Any]) -> None:
+        """Initialize ExternalTool with resolved dependencies"""
         self.config = config
-        self.tool_name = getattr(config, 'name', 'unknown_tool')
-        self.installation_path = getattr(config, 'installation_path', None)
-        self.executable_path = getattr(config, 'executable_path', None)
-        self.environment = getattr(config, 'environment', {}) or {}
-        self.timeout_seconds = getattr(config, 'timeout_seconds', 300)
-        self.retry_attempts = getattr(config, 'retry_attempts', 3)
+        self.tool_name = component_config['tool_name']
+        self.installation_path = component_config['installation_path']
+        self.executable_path = component_config['executable_path']
+        self.environment = component_config['environment'] or {}
+        self.timeout_seconds = component_config['timeout_seconds']
+        self.retry_attempts = component_config['retry_attempts']
         self.logger = get_logger(f"external_tool_{self.tool_name}")
         
         # BREAKING CHANGE: Lazy initialization pattern
@@ -142,6 +182,8 @@ class ExternalTool(ABC):
         
         # NO ASYNC TASK CREATION IN __init__ - BREAKING CHANGE
         # Old problematic code removed: asyncio.create_task(self._initialize_tool())
+    
+    # ExternalTool inherits FromConfigBase.__init__ which prevents direct instantiation
     
     async def ensure_initialized(self) -> None:
         """

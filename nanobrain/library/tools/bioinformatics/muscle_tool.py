@@ -171,75 +171,12 @@ class MUSCLETool(ProgressiveScalingMixin, ExternalTool):
     """
     
     @classmethod
-    def from_config(cls, config: Union[ToolConfig, MUSCLEConfig, Dict], **kwargs) -> 'MUSCLETool':
-        """Mandatory from_config implementation for MUSCLETool"""
-        logger = get_logger(f"{cls.__name__}.from_config")
-        logger.info(f"Creating {cls.__name__} from configuration")
-        
-        # Convert any input to MUSCLEConfig
-        if isinstance(config, MUSCLEConfig):
-            # Already specific config, use as-is
-            pass
-        else:
-            # Convert ToolConfig, dict, or any other input to MUSCLEConfig
-            if hasattr(config, 'model_dump'):
-                config_dict = config.model_dump()
-            elif isinstance(config, dict):
-                config_dict = config
-            else:
-                # Handle object with attributes
-                config_dict = {}
-                # Extract fields that are common to both ToolConfig and MUSCLEConfig
-                for attr in ['name', 'description', 'tool_card']:
-                    if hasattr(config, attr):
-                        config_dict[attr] = getattr(config, attr)
-            
-            # Filter config_dict to only include fields that MUSCLEConfig accepts
-            # Remove ToolConfig-specific fields that MUSCLEConfig doesn't inherit
-            muscle_compatible_fields = {
-                # Core fields from MUSCLEConfig
-                'tool_name', 'tool_card', 'conda_package', 'conda_channel', 
-                'environment_name', 'create_isolated_environment', 'max_iterations',
-                'diagonal_optimization', 'gap_open_penalty', 'gap_extend_penalty',
-                'min_sequences', 'max_sequences', 'output_format', 'calculate_profile',
-                'highly_conserved_threshold', 'position_scoring', 'quality_scoring',
-                'parallel_processing', 'memory_optimization', 'export_conservation_profile',
-                'export_quality_metrics', 'keep_intermediate_files', 'retry_failed_alignments',
-                'max_retry_attempts', 'skip_problematic_clusters', 'local_installation_paths',
-                # Core fields from ExternalToolConfig
-                'installation_path', 'executable_path', 'environment', 'timeout_seconds',
-                'retry_attempts', 'verify_on_init', 'pip_package', 'git_repository',
-                'initial_scale_level', 'detailed_diagnostics', 'suggest_fixes'
-            }
-            
-            filtered_config_dict = {k: v for k, v in config_dict.items() 
-                                   if k in muscle_compatible_fields}
-            
-            logger.debug(f"Filtered config keys: {list(filtered_config_dict.keys())}")
-            logger.debug(f"Removed incompatible keys: {set(config_dict.keys()) - set(filtered_config_dict.keys())}")
-            
-            # Create MUSCLEConfig from the filtered data
-            config = MUSCLEConfig(**filtered_config_dict)
-        
-        # Mandatory tool_card validation and extraction
-        if hasattr(config, 'tool_card') and config.tool_card:
-            tool_card_data = config.tool_card.model_dump() if hasattr(config.tool_card, 'model_dump') else config.tool_card
-            logger.info(f"Tool {config.tool_name} loaded with tool card metadata")
-        elif isinstance(config, dict) and 'tool_card' in config:
-            tool_card_data = config['tool_card']
-            logger.info(f"Tool {config.tool_name} loaded with tool card metadata")
-        else:
-            raise ValueError(
-                f"Missing mandatory 'tool_card' section in configuration for {cls.__name__}. "
-                f"All tools must include tool card metadata for proper discovery and usage."
-            )
-        
-        # Create instance
-        instance = cls(config, **kwargs)
-        instance._tool_card_data = tool_card_data
-        
-        logger.info(f"Successfully created {cls.__name__} with tool card compliance")
-        return instance
+    def _get_config_class(cls):
+        """UNIFIED PATTERN: Return MUSCLEConfig - ONLY method that differs from other components"""
+        return MUSCLEConfig
+    
+    # Now inherits unified from_config implementation from FromConfigBase
+    # Uses MUSCLEConfig returned by _get_config_class() to preserve all existing functionality
     
     def __init__(self, config: MUSCLEConfig, **kwargs):
         """Initialize MUSCLETool with configuration"""

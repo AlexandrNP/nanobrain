@@ -1,0 +1,334 @@
+# Elasticsearch Tool Configuration for NanoBrain Framework
+# nanobrain/config/elasticsearch_tool.yml
+
+# Tool identification and metadata
+tool_name: "elasticsearch"
+tool_card:
+  name: "elasticsearch"
+  description: "Elasticsearch search engine with comprehensive auto-installation capabilities"
+  version: "8.14.0"
+  category: "search"
+  vendor: "Elastic N.V."
+  license: "Elastic License 2.0"
+  documentation_url: "https://www.elastic.co/guide/en/elasticsearch/reference/current/"
+  support_url: "https://www.elastic.co/support"
+  capabilities:
+    - "document_indexing"
+    - "full_text_search"
+    - "fuzzy_matching"
+    - "autocomplete"
+    - "aggregations"
+    - "real_time_search"
+    - "multi_field_search"
+    - "synonym_filtering"
+    - "virus_genome_search"
+  requirements:
+    - "Docker (for auto-installation)"
+    - "2GB+ RAM"
+    - "1GB+ disk space"
+  platforms:
+    - "Linux"
+    - "macOS" 
+    - "Windows"
+
+# Connection configuration
+host: "localhost"
+port: 9200
+scheme: "http"
+username: null  # Set for security-enabled clusters
+password: null  # Set for security-enabled clusters
+
+# Index configuration
+default_index: "nanobrain-search"
+virus_genome_index: "virus-genomes"
+
+# Search configuration
+fuzzy_fuzziness: "AUTO"
+max_search_results: 100
+highlight_enabled: true
+
+# Auto-installation configuration
+auto_installation:
+  enabled: true
+  method: "docker"  # docker, kubernetes, manual
+  
+  # Docker configuration
+  docker:
+    container_name: "nanobrain-elasticsearch"
+    image_name: "elasticsearch"
+    image_tag: "8.14.0"
+    
+    # Resource limits
+    memory_limit: "2Gi"
+    cpu_limit: "1.0"
+    memory_request: "1Gi"
+    cpu_request: "0.5"
+    
+    # Ports
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    
+    # Environment variables
+    environment:
+      discovery.type: "single-node"
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "-Xms1g -Xmx2g"
+      bootstrap.memory_lock: "true"
+      cluster.name: "nanobrain-cluster"
+      node.name: "nanobrain-node-1"
+      http.cors.enabled: "true"
+      http.cors.allow-origin: "*"
+      logger.level: "INFO"
+    
+    # Data persistence
+    data_volume_name: "nanobrain-elasticsearch-data"
+    backup_enabled: true
+    
+    # Network configuration
+    network_name: "nanobrain-network"
+    
+    # Health check
+    health_check:
+      enabled: true
+      type: "http"
+      path: "/_cluster/health"
+      port: 9200
+      interval: 30
+      timeout: 10
+      retries: 3
+      start_period: 120
+
+  # Kubernetes configuration
+  kubernetes:
+    namespace: "nanobrain"
+    deployment_name: "elasticsearch"
+    service_name: "elasticsearch-service"
+    replicas: 1
+    
+    # Storage
+    storage_class: "standard"
+    storage_size: "10Gi"
+    
+    # Service configuration
+    service_type: "ClusterIP"
+    
+    # Auto-scaling
+    auto_scaling:
+      enabled: false
+      min_replicas: 1
+      max_replicas: 3
+      target_cpu_utilization: 70
+
+  # Alternative installation methods
+  alternatives:
+    - method: "manual_docker"
+      description: "Manual Docker container setup"
+      command: "docker run -p 9200:9200 -p 9300:9300 -e 'discovery.type=single-node' elasticsearch:8.14.0"
+    
+    - method: "docker_compose"
+      description: "Docker Compose setup"
+      config_file: "docker-compose.elasticsearch.yml"
+    
+    - method: "native"
+      description: "Native installation"
+      download_url: "https://www.elastic.co/downloads/elasticsearch"
+    
+    - method: "homebrew"
+      description: "macOS Homebrew installation"
+      command: "brew install elasticsearch"
+
+# Index templates and mappings
+index_configuration:
+  # Default search index settings
+  default_index_settings:
+    number_of_shards: 1
+    number_of_replicas: 0
+    max_result_window: 10000
+    
+    analysis:
+      analyzer:
+        nanobrain_analyzer:
+          type: "custom"
+          tokenizer: "standard"
+          filter: ["lowercase", "stop", "snowball"]
+  
+  # Virus genome index settings with specialized analyzers
+  virus_genome_index_settings:
+    number_of_shards: 1
+    number_of_replicas: 0
+    max_result_window: 50000
+    
+    analysis:
+      filter:
+        virus_synonym_filter:
+          type: "synonym"
+          synonyms:
+            - "CHIKV,Chikungunya virus,Chikungunya"
+            - "EEEV,Eastern equine encephalitis virus,Eastern equine encephalitis"
+            - "WEEV,Western equine encephalitis virus,Western equine encephalitis"
+            - "VEEV,Venezuelan equine encephalitis virus,Venezuelan equine encephalitis"
+            - "SINV,Sindbis virus,Sindbis"
+            - "SFV,Semliki Forest virus,Semliki Forest"
+            - "RRV,Ross River virus,Ross River"
+            - "BFV,Barmah Forest virus,Barmah Forest"
+            - "MAYV,Mayaro virus,Mayaro"
+            - "UNAV,Una virus,Una"
+        
+        virus_stemmer:
+          type: "stemmer"
+          language: "english"
+        
+        edge_ngram:
+          type: "edge_ngram"
+          min_gram: 2
+          max_gram: 10
+      
+      analyzer:
+        virus_name_analyzer:
+          type: "custom"
+          tokenizer: "standard"
+          filter:
+            - "lowercase"
+            - "virus_synonym_filter"
+            - "virus_stemmer"
+        
+        virus_fuzzy_analyzer:
+          type: "custom"
+          tokenizer: "standard"
+          filter:
+            - "lowercase"
+            - "asciifolding"
+            - "virus_synonym_filter"
+        
+        virus_autocomplete_analyzer:
+          type: "custom"
+          tokenizer: "standard"
+          filter:
+            - "lowercase"
+            - "edge_ngram"
+
+# Monitoring and observability
+monitoring:
+  health_check_enabled: true
+  health_check_interval: 30
+  metrics_enabled: true
+  logging_enabled: true
+  
+  # Performance monitoring
+  performance_monitoring:
+    slow_query_threshold: 1000  # milliseconds
+    index_performance_tracking: true
+    memory_usage_tracking: true
+    
+  # Alerting thresholds
+  alerts:
+    cluster_health_red: true
+    high_memory_usage: 90  # percentage
+    slow_queries: 5000     # milliseconds
+    low_disk_space: 10     # percentage
+
+# Security configuration
+security:
+  enabled: false  # Disabled for development, enable for production
+  
+  # Authentication (when enabled)
+  authentication:
+    type: "native"  # native, ldap, saml
+    users:
+      - username: "nanobrain"
+        password: "nanobrain_secure_password"
+        roles: ["nanobrain_user"]
+  
+  # Network security
+  network:
+    bind_host: "0.0.0.0"
+    publish_host: "localhost"
+    cors_enabled: true
+    cors_allow_origin: "*"
+  
+  # TLS configuration (for production)
+  tls:
+    enabled: false
+    certificate_path: "/etc/elasticsearch/certs/elasticsearch.crt"
+    private_key_path: "/etc/elasticsearch/certs/elasticsearch.key"
+
+# Performance tuning
+performance:
+  # JVM settings
+  jvm:
+    heap_size: "2g"
+    gc_collector: "G1GC"
+    gc_tuning: true
+  
+  # Indexing performance
+  indexing:
+    refresh_interval: "1s"
+    number_of_indexing_threads: 4
+    bulk_size: 1000
+  
+  # Search performance
+  search:
+    query_cache_enabled: true
+    request_cache_enabled: true
+    max_concurrent_searches: 10
+
+# Backup and disaster recovery
+backup:
+  enabled: true
+  
+  # Snapshot configuration
+  snapshots:
+    repository_type: "fs"  # fs, s3, gcs, azure
+    repository_location: "/usr/share/elasticsearch/backup"
+    schedule: "0 2 * * *"  # Daily at 2 AM
+    retention: "30d"
+    
+  # Data volume backup (Docker)
+  volume_backup:
+    enabled: true
+    schedule: "0 1 * * *"  # Daily at 1 AM
+    retention_days: 30
+    backup_location: "~/.nanobrain/elasticsearch_backups"
+
+# Integration with NanoBrain framework
+nanobrain_integration:
+  # Framework compatibility
+  framework_version: "1.0.0"
+  required_python_version: ">=3.8"
+  
+  # Tool registration
+  tool_registry:
+    auto_register: true
+    category: "search"
+    priority: 1
+  
+  # Configuration validation
+  validation:
+    strict_mode: false
+    validate_on_startup: true
+    schema_validation: true
+  
+  # Logging integration
+  logging:
+    use_nanobrain_logger: true
+    log_level: "INFO"
+    structured_logging: true
+
+# Development and testing
+development:
+  # Development mode settings
+  dev_mode: false
+  debug_logging: false
+  
+  # Testing configuration
+  testing:
+    use_test_indices: true
+    test_data_auto_load: false
+    cleanup_after_tests: true
+  
+  # Local development
+  local_development:
+    auto_create_network: true
+    auto_create_volumes: true
+    expose_ports: true 

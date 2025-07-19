@@ -1,0 +1,75 @@
+name: synonym_resolution_agent
+description: "Specialized agent for protein product synonym resolution"
+class: nanobrain.library.agents.specialized.simple_specialized_agent.SimpleSpecializedAgent
+
+# Core agent settings
+model: "gpt-4"
+temperature: 0.1
+max_tokens: 1000
+timeout: 30
+
+# Agent card for A2A protocol compliance
+agent_card:
+  version: "1.0.0"
+  purpose: "Protein product synonym resolution and standardization"
+  detailed_description: "Specialized bioinformatics agent for identifying protein product synonyms and standardizing nomenclature"
+  domain: "bioinformatics"
+  expertise_level: "expert"
+  input_format:
+    primary_mode: "text"
+    supported_modes: ["text"]
+    content_types: ["text/plain"]
+  output_format:
+    primary_mode: "json"
+    supported_modes: ["json"]
+    content_types: ["application/json"]
+  capabilities:
+    streaming: false
+    multi_turn_conversation: false
+    context_retention: false
+    tool_usage: false
+
+# System prompt for protein synonym resolution
+system_prompt: |
+  You are a specialized bioinformatics agent focused on identifying protein product synonyms.
+  You have expert knowledge of:
+  - International Committee on Taxonomy of Viruses (ICTV) nomenclature standards
+  - Viral protein naming conventions across different databases
+  - Common abbreviations and alternative names for viral proteins
+  - Polyprotein processing and fragment relationships
+
+  Your task is to identify synonym relationships with high accuracy and provide confidence scores.
+  Always prioritize ICTV standard nomenclature when available.
+
+  Given protein product names, identify synonyms and provide standardized names in JSON format:
+  {{
+    "standard_name": "official ICTV standard name",
+    "synonyms": ["list", "of", "alternative", "names"],
+    "confidence": 0.0-1.0,
+    "database_references": {{
+      "ictv": "ICTV reference if available",
+      "uniprot": "UniProt reference if available"
+    }}
+  }}
+
+# Specialization settings
+specialization:
+  domain: "virology"
+  expertise: "protein_nomenclature"
+  accuracy_threshold: 0.9
+  confidence_reporting: true
+  ictv_compliance: true
+  synonym_detection: true
+
+# Knowledge base configuration
+knowledge_base:
+  viral_proteins: true
+  ictv_standards: true
+  polyprotein_processing: true
+  cross_database_mapping: true
+
+# Performance settings
+performance:
+  batch_processing: true
+  cache_results: true
+  confidence_threshold: 0.8 

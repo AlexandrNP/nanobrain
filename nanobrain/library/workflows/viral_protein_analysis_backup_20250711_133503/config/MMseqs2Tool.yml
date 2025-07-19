@@ -1,0 +1,48 @@
+tool_name: mmseqs2
+tool_card:
+  name: mmseqs2
+  description: MMseqs2 ultra-fast protein sequence clustering and similarity search
+  version: 1.0.0
+  category: bioinformatics
+  capabilities:
+    - protein_clustering
+    - sequence_search
+    - similarity_analysis
+
+# Installation configuration
+conda_package: mmseqs2
+conda_channel: bioconda
+environment_name: nanobrain-viral_protein-mmseqs2
+create_isolated_environment: true
+verify_on_init: false
+
+# MMseqs2 specific settings
+min_seq_id: 0.3
+coverage: 0.8
+cluster_mode: 0
+sensitivity: 7.5
+threads: 4
+memory_limit: 8GB
+tmp_dir: /tmp/mmseqs2
+
+# Progressive scaling configuration
+progressive_scaling:
+  1:
+    max_sequences: 50
+    sensitivity: 5.0
+    threads: 2
+    description: "Fast test"
+  2:
+    max_sequences: 200
+    sensitivity: 6.0
+    threads: 4
+    description: "Medium scale"
+  3:
+    max_sequences: 1000
+    sensitivity: 7.5
+    threads: 8
+    description: "Full scale"
+
+initial_scale_level: 1
+detailed_diagnostics: true
+suggest_fixes: true

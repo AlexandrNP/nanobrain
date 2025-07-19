@@ -1,0 +1,142 @@
+# DockerManager Default Configuration
+# This configuration enables creation of DockerManager instances via from_config pattern
+# Usage: DockerManager.from_config(load_yaml_config('DockerManager.yml'))
+
+# Component identification
+component_name: "docker_manager"
+enabled: true
+
+# Docker client configuration
+docker_client: null  # Will be auto-detected from environment
+
+# Container management settings
+check_interval: 30  # seconds between health checks
+auto_cleanup: true  # Automatically clean up stopped containers
+
+# Default labels applied to all managed containers
+labels:
+  nanobrain.framework: "true"
+  nanobrain.component: "docker-infrastructure"
+  nanobrain.component.name: "docker_manager"
+  nanobrain.component.type: "docker-infrastructure"
+
+# Docker daemon connection settings
+docker_connection:
+  # Docker socket path (auto-detected if null)
+  socket_path: null
+  # Connection timeout in seconds
+  timeout: 60
+  # API version (auto-detected if null)
+  api_version: null
+
+# Container lifecycle management
+container_management:
+  # Default restart policy for containers
+  default_restart_policy: "unless-stopped"
+  # Default resource limits
+  default_resource_limits:
+    memory: "1g"
+    cpu: "1.0"
+  # Container removal settings
+  remove_volumes_on_delete: false
+  force_remove_timeout: 30
+
+# Image management
+image_management:
+  # Automatically pull images if not present
+  auto_pull_images: true
+  # Remove unused images during cleanup
+  cleanup_unused_images: false
+  # Image pull timeout in seconds
+  pull_timeout: 300
+
+# Network configuration
+network_settings:
+  # Default network for containers
+  default_network: "bridge"
+  # Create isolated networks for NanoBrain
+  create_nanobrain_networks: true
+
+# Volume configuration  
+volume_settings:
+  # Default volume driver
+  default_driver: "local"
+  # Create persistent volumes for data
+  create_persistent_volumes: true
+
+# Monitoring and logging
+monitoring:
+  # Enable container health monitoring
+  health_monitoring_enabled: true
+  # Log container events
+  log_container_events: true
+  # Resource usage monitoring
+  resource_monitoring_enabled: true
+
+# Security settings
+security:
+  # Run containers as non-root when possible
+  prefer_non_root: true
+  # Apply security context constraints
+  apply_security_context: true
+  # Limit container capabilities
+  drop_capabilities:
+    - "ALL"
+  add_capabilities: []
+
+# Development vs Production settings
+environment:
+  # Environment type: development, staging, production
+  type: "development"
+  # Enable debug logging
+  debug_logging: false
+  # Preserve containers for debugging
+  preserve_containers_on_error: false
+
+# Framework integration
+framework_integration:
+  # Enable A2A card generation for containers
+  generate_a2a_cards: true
+  # Integration with NanoBrain logging system
+  use_nanobrain_logging: true
+  # Integration with NanoBrain monitoring
+  use_nanobrain_monitoring: true
+
+# Tool card metadata (mandatory for framework compliance)
+tool_card:
+  name: "DockerManager"
+  description: "Core Docker container management for NanoBrain framework"
+  version: "1.0.0"
+  category: "infrastructure"
+  capabilities:
+    - "container_lifecycle_management"
+    - "image_management"
+    - "resource_monitoring"
+    - "health_checking"
+  requirements:
+    - "docker_daemon"
+  supported_platforms:
+    - "linux"
+    - "darwin"
+    - "windows"
+  configuration_schema:
+    type: "DockerComponentConfig"
+    required_fields: []
+    optional_fields:
+      - "docker_client"
+      - "enabled"
+      - "check_interval"
+      - "auto_cleanup"
+  usage_examples:
+    - description: "Basic Docker manager setup"
+      config:
+        component_name: "my_docker_manager"
+        enabled: true
+    - description: "Production Docker manager with monitoring"
+      config:
+        component_name: "prod_docker_manager"
+        enabled: true
+        check_interval: 15
+        monitoring:
+          health_monitoring_enabled: true
+          resource_monitoring_enabled: true 

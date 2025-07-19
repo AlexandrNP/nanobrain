@@ -1,25 +1,33 @@
 """
 Component Factory for NanoBrain Framework
 
-Simplified factory using direct import path resolution with from_config pattern.
+Pure from_config pattern factory with dynamic class loading.
 """
 
 import logging
 import importlib
-from typing import Any, Dict, Union, Optional
+from typing import Any, Dict, Union, Optional, Type
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
 
-def import_and_create_from_config(class_path: str, config: Any, **kwargs) -> Any:
+def create_component(class_path: str, config: Any, **kwargs) -> Any:
     """
-    Universal component creation using from_config pattern
+    Create component using pure from_config pattern with dynamic class loading
     
-    NO HARDCODED VALUES OR MAPPINGS
-    - Every component must have from_config class method
-    - Configuration determines behavior entirely
-    - No special cases or conditional logic
+    Args:
+        class_path: Full module.Class path (e.g., "nanobrain.core.data_unit.DataUnitMemory") 
+        config: Configuration object or dict for component
+        **kwargs: Additional arguments passed to from_config
+        
+    Returns:
+        Component instance created via from_config pattern
+        
+    Raises:
+        ValueError: If class path is invalid
+        ImportError: If class cannot be imported
+        AttributeError: If class doesn't implement from_config
     """
     from ..logging_system import get_logger
     logger = get_logger("component_factory")
@@ -43,16 +51,45 @@ def import_and_create_from_config(class_path: str, config: Any, **kwargs) -> Any
             f"All NanoBrain components must implement from_config pattern."
         )
     
-    # Create instance using from_config - NO PREPROCESSING
+    # Create instance using from_config pattern
     try:
         instance = component_class.from_config(config, **kwargs)
-        logger.debug(f"Created {class_path} via from_config")
+        logger.debug(f"Created {class_path} via from_config pattern")
         return instance
     except Exception as e:
         from ..component_base import ComponentConfigurationError
         raise ComponentConfigurationError(
             f"Failed to create '{class_path}' via from_config: {e}"
         )
+
+
+def get_component_class(class_path: str) -> Type:
+    """
+    Import and return component class for direct from_config usage
+    
+    Args:
+        class_path: Full module.Class path
+        
+    Returns:
+        Component class ready for from_config usage
+    """
+    if not class_path or '.' not in class_path:
+        raise ValueError(f"Invalid class path: {class_path}. Must use full module.Class format")
+    
+    try:
+        module_path, class_name = class_path.rsplit('.', 1)
+        module = importlib.import_module(module_path)
+        component_class = getattr(module, class_name)
+        
+        # Verify class has from_config method
+        if not hasattr(component_class, 'from_config'):
+            raise AttributeError(
+                f"Component '{class_path}' does not implement required from_config method"
+            )
+            
+        return component_class
+    except (ImportError, AttributeError) as e:
+        raise ImportError(f"Failed to import component class '{class_path}': {e}")
 
 
 # REMOVED: _convert_dict_to_config_object function - NO PREPROCESSING

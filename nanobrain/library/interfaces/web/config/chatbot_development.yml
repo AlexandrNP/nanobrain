@@ -1,0 +1,96 @@
+web_interface:
+  name: "nanobrain_chatbot_development"
+  version: "1.0.0"
+  description: "NanoBrain Chatbot Web Interface - Development Mode"
+  
+  server:
+    host: "127.0.0.1"  # Development: localhost only
+    port: 5001
+    workers: 1
+    reload: true  # Hot reloading for development
+    access_log: true
+    
+  api:
+    prefix: "/api"
+    title: "NanoBrain Chatbot API - Development"
+    description: "Development API for NanoBrain Chatbot System with Viral Protein Analysis"
+    version: "1.0.0"
+    docs_url: "/docs"
+    redoc_url: "/redoc"
+    
+  cors:
+    allow_origins: [
+      "http://localhost:3000",
+      "http://localhost:3001", 
+      "http://localhost:3002",
+      "http://localhost:3003"
+    ]
+    allow_methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+    allow_headers: ["*"]
+    allow_credentials: false
+    
+  chat:
+    default_temperature: 0.7
+    default_max_tokens: 2000
+    default_use_rag: false
+    enable_streaming: true
+    conversation_timeout_seconds: 3600
+    max_conversation_length: 100
+    
+  websocket:
+    enable_websocket: true
+    ping_interval: 30
+    ping_timeout: 10
+    max_connections: 50  # Development limit
+    enable_compression: false  # Disabled for debugging
+    
+  frontend:
+    enable_static_files: false  # Development uses separate dev server
+    static_directory: "frontend/dist"
+    enable_api_docs: true
+    enable_error_details: true  # Detailed errors for development
+    
+  logging:
+    enable_request_logging: true
+    enable_response_logging: true
+    log_level: "DEBUG"  # Verbose logging for development
+    log_requests_body: true
+    log_responses_body: true
+    
+  security:
+    enable_rate_limiting: false  # Disabled for development
+    rate_limit_per_minute: 60
+    enable_auth: false
+    auth_secret_key: null
+    cors_enabled: true
+    
+  # NanoBrain workflow integration - EVENT-DRIVEN
+  workflow_integration:
+    workflow_type: "chatbot_viral_integration"
+    workflow_config: "nanobrain/library/workflows/chatbot_viral_integration/config/ChatbotViralWorkflow.yml"
+    enable_workflow_metrics: true
+    data_unit_communication: true  # Event-driven communication
+    communication_timeout: 30.0
+    
+  # Development-specific features
+  development:
+    enable_debug_endpoints: true
+    enable_hot_reload: true
+    enable_profiling: false
+    mock_slow_operations: false
+    detailed_error_responses: true
+    
+  # Performance settings optimized for development
+  performance:
+    response_timeout: 60  # Longer for debugging
+    max_request_size: "10MB"
+    enable_gzip: false  # Disabled for debugging
+    
+  # Custom settings for chatbot features
+  custom_settings:
+    chatbot_features:
+      viral_protein_analysis: true
+      alphavirus_specialization: true
+      real_time_updates: true
+      conversation_history: true
+      health_monitoring: true 

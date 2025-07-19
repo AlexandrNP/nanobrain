@@ -1,405 +1,236 @@
 """
-Simplified Alphavirus Workflow
+Event-Driven Alphavirus Workflow - Phase 1 Complete
 
-Refactored workflow that delegates business logic to individual steps.
-This replaces the complex AlphavirusWorkflow class.
+Pure event routing workflow with minimal logic.
+All business logic delegated to steps with event-driven execution.
+Transformed according to EVENT_DRIVEN_ARCHITECTURE_COMPLIANCE_PLAN.
 """
 
 import asyncio
 import time
 from typing import Dict, Any, List, Optional
 from pathlib import Path
+import os
 
 from nanobrain.core.workflow import Workflow, WorkflowConfig
 from nanobrain.core.logging_system import get_logger
-from nanobrain.core.step import StepConfig
-
-# Import the new result management steps
-from .steps import (
-    BVBRCDataAcquisitionStep,
-    AnnotationMappingStep, 
-    SequenceCurationStep,
-    ClusteringStep,
-    AlignmentStep,
-    PSSMAnalysisStep,
-    DataAggregationStep,
-    ResultCollectionStep,
-    ViralPSSMGenerationStep
-)
+from nanobrain.core.data_unit import create_data_unit
+from nanobrain.core.config.component_factory import load_config_file, create_component
 
 
 class AlphavirusWorkflow(Workflow):
     """
-    Viral Protein Analysis Workflow
+    Event-Driven Viral Protein Analysis Workflow
     
-    Comprehensive viral protein analysis workflow supporting any viral species.
-    Originally designed for Alphavirus analysis but supports all viral types.
+    Pure event routing workflow with minimal logic.
+    All execution happens via event-driven data flow.
     
-    This workflow orchestrates steps and delegates all business logic
-    to individual step implementations for clean separation of concerns.
+    PHASE 1: Core event system implementation
+    - No business logic in workflow
+    - Pure event routing
+    - Configuration-driven component creation
+    - Step-level data units and triggers
     """
     
     def _init_from_config(self, config: WorkflowConfig, component_config: Dict[str, Any],
                          dependencies: Dict[str, Any]) -> None:
-        """Initialize SimplifiedAlphavirusWorkflow with resolved dependencies"""
+        """Initialize event-driven workflow as pure event router"""
         super()._init_from_config(config, component_config, dependencies)
         
-        # Generic virus support attributes
-        config_dict = getattr(config, 'config', {})
-        self.virus_name = config_dict.get('virus_name', 'Viral species')
-        self.pipeline_config = config_dict.get('pipeline_config', {
-            'enable_parallel_processing': True,
-            'timeout_per_step': 300,
-            'max_retries': 3
-        })
-        self.error_handling_config = config_dict.get('error_handling', {
-            'continue_on_failure': True,
-            'detailed_error_reporting': True
-        })
+        # Create ONLY workflow-level input/output data units
+        self.input_data_unit = None
+        self.output_data_unit = None
         
-        # Step execution results
-        self.step_results = {}
+        # Initialize workflow input/output data units
+        if hasattr(config, 'input_data_units') and config.input_data_units:
+            input_configs = config.input_data_units
+            if 'workflow_input' in input_configs:
+                from nanobrain.core.data_unit import DataUnitConfig, create_data_unit
+                data_unit_config = DataUnitConfig(**input_configs['workflow_input'])
+                class_path = data_unit_config.class_path
+                self.input_data_unit = create_data_unit(class_path, data_unit_config)
         
-        # Step configurations
-        self.main_steps_config = getattr(config, 'main_steps_config', {
-            'data_acquisition': {'enabled': True},
-            'clustering': {'enabled': True},
-            'pssm_analysis': {'enabled': True}
-        })
-        self.result_steps_config = getattr(config, 'result_steps_config', {
-            'data_aggregation': {'enabled': True},
-            'result_collection': {'enabled': True},
-            'viral_pssm_generation': {'enabled': True}
-        })
+        if hasattr(config, 'output_data_units') and config.output_data_units:
+            output_configs = config.output_data_units
+            if 'workflow_output' in output_configs:
+                from nanobrain.core.data_unit import DataUnitConfig, create_data_unit
+                data_unit_config = DataUnitConfig(**output_configs['workflow_output'])
+                class_path = data_unit_config.class_path
+                self.output_data_unit = create_data_unit(class_path, data_unit_config)
         
-        self.workflow_logger.info(f"🧬 AlphavirusWorkflow initialized for viral protein analysis")
+        # Load steps from configuration files (NO inline configuration)
+        self.steps = {}
+        if hasattr(config, 'steps') and config.steps:
+            for step_config in config.steps:
+                step_id = step_config['step_id']
+                config_file = step_config.get('config_file')
+                if config_file:
+                    step = self._create_step_from_config_file(config_file)
+                    self.steps[step_id] = step
+        
+        # Load links from configuration (NO business logic)
+        self.links = {}
+        if hasattr(config, 'links') and config.links:
+            for link_config in config.links:
+                link_id = link_config['link_id']
+                link = self._create_link_from_config(link_config)
+                self.links[link_id] = link
+        
+        # NO triggers at workflow level - all are step-level
+        # NO tools at workflow level - all are step-level  
+        # NO business logic - pure event routing
     
-    async def execute(self, input_data: Dict[str, Any] = None) -> Dict[str, Any]:
-        """
-        Execute the simplified Alphavirus workflow
-        
-        Args:
-            input_data: Optional input data (uses default if None)
-            
-        Returns:
-            Dict containing workflow results
-        """
-        
-        workflow_start_time = time.time()
-        
+    def _create_step_from_config_file(self, config_file: str):
+        """Create step from external configuration file with proper path resolution"""
         try:
-            self.workflow_logger.info("🚀 Starting viral protein analysis workflow execution")
+            # Resolve config file path relative to workflow directory
+            workflow_dir = getattr(self.config, 'workflow_directory', '')
             
-            # Initialize input data if not provided
-            if input_data is None:
-                input_data = await self._create_default_input()
-            
-            # Execute the main analysis pipeline
-            pipeline_results = await self._execute_analysis_pipeline(input_data)
-            
-            # Execute result management pipeline
-            final_results = await self._execute_result_management_pipeline(pipeline_results)
-            
-            # Calculate overall workflow metrics
-            workflow_execution_time = time.time() - workflow_start_time
-            
-            self.workflow_logger.info(f"✅ Viral protein analysis workflow completed in {workflow_execution_time:.2f} seconds")
-            
-            # Build execution summary
-            successful_steps = sum(1 for result in self.step_results.values() 
-                                  if result.get('success', False))
-            total_steps = len(self.step_results)
-            
-            return {
-                'success': True,
-                'workflow_name': 'AlphavirusWorkflow',
-                'execution_time': workflow_execution_time,
-                'step_results': self.step_results,
-                'main_pipeline_results': {k: v for k, v in self.step_results.items() 
-                                        if k in ['data_acquisition', 'clustering', 'pssm_analysis']},
-                'result_pipeline_results': {k: v for k, v in self.step_results.items() 
-                                          if k in ['data_aggregation', 'result_collection', 'viral_pssm_generation']},
-                'final_results': final_results,
-                'execution_summary': {
-                    'total_steps_executed': total_steps,
-                    'successful_steps': successful_steps,
-                    'failed_steps': total_steps - successful_steps,
-                    'total_execution_time': workflow_execution_time,
-                    'framework_version': '2.0.0'
-                },
-                'workflow_metadata': {
-                    'total_steps_executed': total_steps,
-                    'successful_steps': successful_steps,
-                    'framework_version': '2.0.0'
-                }
-            }
-            
-        except Exception as e:
-            workflow_execution_time = time.time() - workflow_start_time
-            self.workflow_logger.error(f"❌ Viral protein analysis workflow failed: {e}")
-            
-            return {
-                'success': False,
-                'error': str(e),
-                'execution_time': workflow_execution_time,
-                'step_results': self.step_results
-            }
-    
-    async def _create_default_input(self) -> Dict[str, Any]:
-        """Create default input data for the workflow"""
-        
-        return {
-            'virus_name': 'Viral species',
-            'analysis_parameters': {
-                'min_genome_length': 8000,
-                'max_genome_length': 15000,
-                'clustering_threshold': 0.8
-            }
-        }
-    
-    async def _execute_analysis_pipeline(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Execute the main analysis pipeline steps"""
-        
-        self.workflow_logger.info("🔄 Executing main analysis pipeline")
-        
-        current_input = input_data
-        
-        # Step 1: Data Acquisition
-        acquisition_result = await self._execute_step(
-            'data_acquisition',
-            BVBRCDataAcquisitionStep,
-            current_input,
-            self._get_step_config('data_acquisition')
-        )
-        current_input = acquisition_result
-        
-        # Step 2: Clustering
-        clustering_result = await self._execute_step(
-            'clustering',
-            ClusteringStep,
-            current_input,
-            self._get_step_config('clustering')
-        )
-        
-        # Step 3: PSSM Analysis
-        pssm_result = await self._execute_step(
-            'pssm_analysis',
-            PSSMAnalysisStep,
-            clustering_result,
-            self._get_step_config('pssm_analysis')
-        )
-        
-        self.workflow_logger.info("✅ Main analysis pipeline completed")
-        
-        return self.step_results
-    
-    async def _execute_result_management_pipeline(self, pipeline_results: Dict[str, Any]) -> Dict[str, Any]:
-        """Execute the result management pipeline"""
-        
-        self.workflow_logger.info("🔄 Executing result management pipeline")
-        
-        # Data Aggregation Step
-        aggregation_result = await self._execute_step(
-            'data_aggregation',
-            DataAggregationStep,
-            pipeline_results,
-            self._get_step_config('data_aggregation')
-        )
-        
-        # Result Collection Step
-        collection_result = await self._execute_step(
-            'result_collection',
-            ResultCollectionStep,
-            self.step_results,
-            self._get_step_config('result_collection')
-        )
-        
-        # Viral PSSM Generation Step
-        pssm_generation_result = await self._execute_step(
-            'viral_pssm_generation',
-            ViralPSSMGenerationStep,
-            self.step_results,
-            self._get_step_config('viral_pssm_generation')
-        )
-        
-        self.workflow_logger.info("✅ Result management pipeline completed")
-        
-        # Return the final comprehensive result
-        return {
-            'aggregated_data': aggregation_result.get('aggregated_data'),
-            'output_files': collection_result.get('output_files'),
-            'viral_pssm_json': pssm_generation_result.get('viral_pssm_json'),
-            'pipeline_summary': {
-                'total_execution_time': sum(
-                    result.get('execution_time', 0) 
-                    for result in self.step_results.values()
-                ),
-                'steps_completed': len(self.step_results),
-                'success_rate': sum(1 for result in self.step_results.values() 
-                                  if result.get('success', False)) / len(self.step_results)
-            }
-        }
-    
-    async def _execute_step(self, step_name: str, step_class: type, 
-                           input_data: Dict[str, Any], 
-                           step_config: StepConfig) -> Dict[str, Any]:
-        """Execute a single step and store its result"""
-        
-        self.workflow_logger.info(f"🔄 Executing step: {step_name}")
-        
-        try:
-            # Create step instance using mandatory from_config pattern
-            step_instance = step_class.from_config(step_config, executor=self.executor)
-            step_result = await step_instance.process(input_data)
-            
-            # Store result
-            self.step_results[step_name] = step_result
-            
-            if step_result.get('success'):
-                self.workflow_logger.info(f"✅ Step {step_name} completed successfully")
+            # Build full path
+            if workflow_dir and not os.path.isabs(config_file):
+                full_config_path = os.path.join(workflow_dir, config_file)
             else:
-                self.workflow_logger.warning(f"⚠️ Step {step_name} completed with issues")
+                full_config_path = config_file
             
-            return step_result
+            # Verify file exists
+            if not os.path.exists(full_config_path):
+                raise FileNotFoundError(f"Step configuration file not found: {full_config_path}")
+            
+            # Use existing load_config_file function for pure YAML loading
+            step_config_data = load_config_file(full_config_path)
+            step_class = step_config_data.get('class')
+            
+            if not step_class:
+                raise ValueError(f"Step configuration must specify 'class' field: {full_config_path}")
+            
+            # Create StepConfig from loaded data
+            from nanobrain.core.step import StepConfig
+            step_config = StepConfig(**step_config_data)
+            
+            # Use pure from_config pattern with create_component function
+            step = create_component(step_class, step_config)
+            
+            if hasattr(self, 'nb_logger') and self.nb_logger:
+                self.nb_logger.info(f"✅ Created step from {full_config_path}")
+            return step
             
         except Exception as e:
-            self.workflow_logger.error(f"❌ Step {step_name} failed: {e}")
+            if hasattr(self, 'nb_logger') and self.nb_logger:
+                self.nb_logger.error(f"❌ Failed to create step from {config_file}: {e}")
+            raise
+    
+    def _create_link_from_config(self, link_config: Dict[str, Any]):
+        """Create link from configuration"""
+        from nanobrain.core.link import create_link, LinkConfig
+        
+        try:
+            # Create LinkConfig object  
+            config = LinkConfig(**link_config)
             
-            error_result = {
-                'success': False,
-                'error': str(e),
-                'step_name': step_name,
-                'execution_time': 0
-            }
+            # Resolve source and target data units
+            source_ref = link_config.get('source')
+            target_ref = link_config.get('target')
             
-            self.step_results[step_name] = error_result
-            return error_result
+            source_data_unit = self._resolve_data_unit_reference(source_ref)
+            target_data_unit = self._resolve_data_unit_reference(target_ref)
+            
+            return create_link(config, source=source_data_unit, target=target_data_unit)
+        except Exception as e:
+            if hasattr(self, 'nb_logger') and self.nb_logger:
+                self.nb_logger.error(f"Failed to create link: {e}")
+            raise
     
-    def _get_step_config(self, step_name: str) -> StepConfig:
-        """Get configuration for a specific step"""
+    def _resolve_data_unit_reference(self, reference: str):
+        """Resolve data unit reference (step.data_unit or workflow_input/workflow_output)"""
+        if not reference:
+            return None
         
-        # Default step configuration
-        default_config = {
-            'name': step_name,
-            'type': 'analysis',
-            'config': {}
-        }
+        # Handle workflow-level data unit references
+        if reference == 'workflow_input':
+            return self.input_data_unit
+        elif reference == 'workflow_output':
+            return self.output_data_unit
+            
+        # Handle step-level data unit references (step.data_unit)
+        if '.' in reference:
+            step_id, data_unit_name = reference.split('.', 1)
+            
+            if step_id in self.steps:
+                step = self.steps[step_id]
+                
+                # Check step input data units
+                if hasattr(step, 'step_input_data_units') and data_unit_name in step.step_input_data_units:
+                    return step.step_input_data_units[data_unit_name]
+                
+                # Check step output data units
+                if hasattr(step, 'step_output_data_units') and data_unit_name in step.step_output_data_units:
+                    return step.step_output_data_units[data_unit_name]
         
-        # Get step-specific configuration from workflow config
-        if hasattr(self.workflow_config, 'steps') and self.workflow_config.steps:
-            step_configs = self.workflow_config.steps
-            if step_name in step_configs:
-                step_specific_config = step_configs[step_name]
-                default_config['config'].update(step_specific_config)
+        return None
+    
+    async def initialize(self) -> None:
+        """Initialize workflow and all components"""
+        await super().initialize()
         
-        # Add result management step configurations
-        if step_name == 'data_aggregation':
-            default_config['config'].update({
-                'data_mappings': self._get_data_aggregation_mappings(),
-                'output_format': {'include_metadata': True}
-            })
-        elif step_name == 'result_collection':
-            default_config['config'].update({
-                'output_config': {
-                    'base_directory': 'data/viral_analysis',
-                    'timestamp_subdirectory': True,
-                    'generate_manifest': True
-                },
-                'file_types': self._get_file_type_configurations()
-            })
-        elif step_name == 'viral_pssm_generation':
-            default_config['config'].update({
-                'metadata': {
-                    'workflow_name': 'AlphavirusWorkflow',
-                    'version': '2.0.0',
-                    'organism': 'Viral species',
-                    'method': 'nanobrain_viral_protein_analysis'
-                },
-                'output_format': {'validate_structure': True}
-            })
+        # Initialize workflow data units
+        if self.input_data_unit:
+            await self.input_data_unit.initialize()
+        if self.output_data_unit:
+            await self.output_data_unit.initialize()
         
-        return StepConfig(**default_config)
-    
-    def _get_data_aggregation_mappings(self) -> Dict[str, Any]:
-        """Get data mapping configuration for the aggregation step"""
+        # Initialize all steps
+        for step_id, step in self.steps.items():
+            await step.initialize()
+            if hasattr(self, 'nb_logger') and self.nb_logger:
+                self.nb_logger.info(f"Initialized step: {step_id}")
         
-        return {
-            'data_acquisition': {
-                'source_fields': ['filtered_genomes', 'unique_proteins', 'protein_sequences'],
-                'target_section': 'genome_data',
-                'field_mappings': {}
-            },
-            'clustering': {
-                'source_fields': ['clusters', 'clustering_analysis'],
-                'target_section': 'analysis_data',
-                'field_mappings': {}
-            },
-            'pssm_analysis': {
-                'source_fields': ['pssm_matrices', 'viral_pssm_json'],
-                'target_section': 'analysis_data',
-                'field_mappings': {}
-            }
-        }
-    
-    def _get_file_type_configurations(self) -> Dict[str, Any]:
-        """Get file type configuration for the result collection step"""
-        
-        return {
-            'filtered_genomes': {
-                'filename': 'viral_filtered_genomes.json',
-                'format': 'json'
-            },
-            'unique_proteins': {
-                'filename': 'viral_unique_proteins.fasta',
-                'format': 'fasta'
-            },
-            'clusters': {
-                'filename': 'viral_clusters.json',
-                'format': 'json'
-            },
-            'pssm_matrices': {
-                'filename': 'viral_pssm_matrices.json',
-                'format': 'json'
-            },
-            'viral_pssm_json': {
-                'filename': 'viral_pssm.json',
-                'format': 'json'
-            }
-        }
-    
-    # Legacy method aliases for test compatibility
-    async def _execute_main_pipeline(self, input_data: Dict[str, Any] = None) -> Dict[str, Any]:
-        """Legacy method alias for test compatibility"""
-        if input_data is None:
-            input_data = await self._create_default_input()
-        return await self._execute_analysis_pipeline(input_data)
-    
-    async def _execute_result_pipeline(self, pipeline_results: Dict[str, Any]) -> Dict[str, Any]:
-        """Legacy method alias for test compatibility"""
-        return await self._execute_result_management_pipeline(pipeline_results)
-    
-    def _get_enabled_steps(self, steps_config: Dict[str, Any]) -> List[str]:
-        """Get list of enabled steps from configuration"""
-        enabled_steps = []
-        for step_name, step_config in steps_config.items():
-            if step_config.get('enabled', True):
-                enabled_steps.append(step_name)
-        return enabled_steps
-    
-    def get_workflow_config(self) -> Dict[str, Any]:
-        """Get workflow configuration for validation"""
-        return {
-            'virus_name': self.virus_name,
-            'pipeline_config': self.pipeline_config,
-            'error_handling_config': self.error_handling_config,
-            'main_steps_config': self.main_steps_config,
-            'result_steps_config': self.result_steps_config
-        }
+        # Initialize all links (sets up automatic transfer triggers)
+        for link_id, link in self.links.items():
+            await link.initialize()
+            if hasattr(self, 'nb_logger') and self.nb_logger:
+                self.nb_logger.info(f"Initialized link: {link_id}")
     
     async def process(self, input_data: Dict[str, Any] = None) -> Dict[str, Any]:
-        """Process method for Step interface compatibility"""
-        result = await self.execute(input_data)
-        # Ensure result always has success field
-        if result is None:
-            return {'success': True, 'message': 'Process completed'}
-        return result 
+        """
+        Process workflow via pure event-driven flow (PHASE 1: Event-Driven Implementation)
+        
+        Args:
+            input_data: Input data for the workflow
+            
+        Returns:
+            Dict containing workflow results via event-driven completion
+        """
+        try:
+            if not self.input_data_unit:
+                raise ValueError("Workflow input data unit not configured")
+            
+            # Set input data unit (triggers the entire workflow via events)
+            await self.input_data_unit.set(input_data or {})
+            
+            if hasattr(self, 'nb_logger') and self.nb_logger:
+                self.nb_logger.info(f"🚀 Started event-driven workflow execution")
+            
+            # Wait for workflow completion (output data unit updated via events)
+            timeout = 300  # 5 minutes timeout
+            poll_interval = 0.1  # 100ms polling
+            elapsed = 0
+            
+            while elapsed < timeout:
+                if self.output_data_unit:
+                    output_data = await self.output_data_unit.get()
+                    if output_data is not None:
+                        if hasattr(self, 'nb_logger') and self.nb_logger:
+                            self.nb_logger.info(f"✅ Event-driven workflow completed successfully")
+                        return output_data
+                
+                await asyncio.sleep(poll_interval)
+                elapsed += poll_interval
+            
+            # Timeout handling
+            raise TimeoutError(f"Workflow execution timed out after {timeout} seconds")
+            
+        except Exception as e:
+            if hasattr(self, 'nb_logger') and self.nb_logger:
+                self.nb_logger.error(f"❌ Event-driven workflow execution failed: {e}")
+            raise
+    

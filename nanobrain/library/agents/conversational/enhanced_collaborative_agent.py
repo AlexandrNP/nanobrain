@@ -26,7 +26,7 @@ from nanobrain.core.component_base import FromConfigBase, ComponentConfiguration
 from nanobrain.core.logging_system import get_logger
 
 
-class EnhancedCollaborativeAgent(FromConfigBase, A2ASupportMixin, MCPSupportMixin, ConversationalAgent):
+class EnhancedCollaborativeAgent(A2ASupportMixin, MCPSupportMixin, ConversationalAgent):
     """
     Enhanced conversational agent with A2A and MCP protocol support.
     Enhanced with mandatory from_config pattern implementation.

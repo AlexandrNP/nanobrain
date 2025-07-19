@@ -129,7 +129,7 @@ class SpecializedAgentBase(ABC):
         return False
 
 
-class SimpleSpecializedAgent(FromConfigBase, SpecializedAgentBase, SimpleAgent):
+class SimpleSpecializedAgent(SpecializedAgentBase, SimpleAgent):
     """
     Simple specialized agent that processes input without conversation history.
     
@@ -142,14 +142,28 @@ class SimpleSpecializedAgent(FromConfigBase, SpecializedAgentBase, SimpleAgent):
     OPTIONAL_CONFIG_FIELDS = {}
     
     @classmethod
+    def _get_config_class(cls):
+        """UNIFIED PATTERN: Return AgentConfig - ONLY method that differs from other components"""
+        return AgentConfig
+    
+    @classmethod
     def extract_component_config(cls, config: AgentConfig) -> Dict[str, Any]:
         """Extract SimpleSpecializedAgent configuration"""
-        return {
-            'name': config.name,
-            'description': config.description,
-            'model': config.model,
-            'system_prompt': config.system_prompt,
-        }
+        # Handle both dictionary and object configurations - NO HARDCODED DEFAULTS
+        if isinstance(config, dict):
+            return {
+                'name': config['name'],  # Required field - no default
+                'description': config.get('description', ''),  # Optional field can default to empty
+                'model': config['model'],  # Required field - no default  
+                'system_prompt': config.get('system_prompt', ''),  # Optional field can default to empty
+            }
+        else:
+            return {
+                'name': config.name,
+                'description': config.description,
+                'model': config.model,
+                'system_prompt': config.system_prompt,
+            }
     
     @classmethod  
     def resolve_dependencies(cls, component_config: Dict[str, Any], **kwargs) -> Dict[str, Any]:
@@ -164,34 +178,7 @@ class SimpleSpecializedAgent(FromConfigBase, SpecializedAgentBase, SimpleAgent):
             'executor': executor,
         }
     
-    @classmethod
-    def from_config(cls, config: Union[AgentConfig, Dict[str, Any]], **kwargs) -> 'SimpleSpecializedAgent':
-        """Mandatory from_config implementation for SimpleSpecializedAgent"""
-        logger = get_logger(f"{cls.__name__}.from_config")
-        logger.info(f"Creating {cls.__name__} from configuration")
-        
-        # Convert dictionary to AgentConfig if needed
-        if isinstance(config, dict):
-            logger.debug(f"Converting dictionary config to AgentConfig for {cls.__name__}")
-            config = AgentConfig(**config)
-        
-        # Step 1: Validate configuration schema
-        cls.validate_config_schema(config)
-        
-        # Step 2: Extract component-specific configuration  
-        component_config = cls.extract_component_config(config)
-        
-        # Step 3: Resolve dependencies
-        dependencies = cls.resolve_dependencies(component_config, **kwargs)
-        
-        # Step 4: Create instance
-        instance = cls.create_instance(config, component_config, dependencies)
-        
-        # Step 5: Post-creation initialization
-        instance._post_config_initialization()
-        
-        logger.info(f"Successfully created {cls.__name__}")
-        return instance
+    # Now inherits unified from_config implementation from FromConfigBase
         
     def _init_from_config(self, config: AgentConfig, component_config: Dict[str, Any],
                          dependencies: Dict[str, Any]) -> None:
@@ -235,7 +222,7 @@ class SimpleSpecializedAgent(FromConfigBase, SpecializedAgentBase, SimpleAgent):
         return await super().process(input_text, **kwargs)
 
 
-class ConversationalSpecializedAgent(FromConfigBase, SpecializedAgentBase, ConversationalAgent):
+class ConversationalSpecializedAgent(SpecializedAgentBase, ConversationalAgent):
     """
     Conversational specialized agent that maintains conversation history.
     
@@ -250,12 +237,21 @@ class ConversationalSpecializedAgent(FromConfigBase, SpecializedAgentBase, Conve
     @classmethod
     def extract_component_config(cls, config: AgentConfig) -> Dict[str, Any]:
         """Extract ConversationalSpecializedAgent configuration"""
-        return {
-            'name': config.name,
-            'description': config.description,
-            'model': config.model,
-            'system_prompt': config.system_prompt,
-        }
+        # Handle both dictionary and object configurations - NO HARDCODED DEFAULTS
+        if isinstance(config, dict):
+            return {
+                'name': config['name'],  # Required field - no default
+                'description': config.get('description', ''),  # Optional field can default to empty
+                'model': config['model'],  # Required field - no default
+                'system_prompt': config.get('system_prompt', ''),  # Optional field can default to empty
+            }
+        else:
+            return {
+                'name': config.name,
+                'description': config.description,
+                'model': config.model,
+                'system_prompt': config.system_prompt,
+            }
     
     @classmethod  
     def resolve_dependencies(cls, component_config: Dict[str, Any], **kwargs) -> Dict[str, Any]:
@@ -279,6 +275,7 @@ class ConversationalSpecializedAgent(FromConfigBase, SpecializedAgentBase, Conve
         # Convert dictionary to AgentConfig if needed
         if isinstance(config, dict):
             logger.debug(f"Converting dictionary config to AgentConfig for {cls.__name__}")
+            from nanobrain.core.agent import AgentConfig
             config = AgentConfig(**config)
         
         # Step 1: Validate configuration schema

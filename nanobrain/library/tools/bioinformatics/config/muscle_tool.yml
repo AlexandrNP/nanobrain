@@ -1,0 +1,77 @@
+name: "MUSCLE Alignment Tool"
+description: "Tool for multiple sequence alignment using MUSCLE"
+class: nanobrain.library.tools.bioinformatics.muscle_tool.MUSCLETool
+
+# Tool configuration
+tool_name: "muscle"
+installation_path: null  # Auto-detect or use system default
+executable_path: null    # Auto-detect or use system default
+
+# Alignment parameters
+max_iterations: 16
+diagonal_optimization: true
+gap_open_penalty: -12
+gap_extend_penalty: -1
+
+# Sequence constraints
+min_sequences: 2
+max_sequences: 5000
+min_cluster_size: 3
+max_cluster_size: 1000
+
+# Output configuration
+output_format: "fasta"
+include_tree: false
+include_stats: true
+
+# Performance settings
+timeout_seconds: 300
+verify_on_init: true
+use_memory_optimization: true
+parallel_processing: false
+
+# Quality control
+quality_control:
+  validate_input: true
+  check_sequence_quality: true
+  filter_low_quality: false
+  min_sequence_length: 10
+  max_sequence_length: 50000
+
+# Advanced alignment parameters
+alignment_params:
+  max_iterations: 16
+  diagonal_optimization: true
+  gap_penalties:
+    open: -12
+    extend: -1
+  matrix: "blosum62"
+  clustering_method: "upgma"
+
+# Input/Output handling
+input_config:
+  format: "fasta"
+  validate_sequences: true
+  auto_detect_type: true
+  remove_gaps: false
+
+output_config:
+  format: "fasta"
+  preserve_order: true
+  include_consensus: false
+  alignment_stats: true
+
+# Performance optimization
+performance:
+  use_fast_mode: false
+  memory_limit: "4G"
+  cpu_threads: 1
+  temp_directory: "/tmp"
+  cleanup_temp: true
+
+# Cache configuration
+cache_config:
+  enable_caching: true
+  cache_directory: "data/muscle_cache"
+  cache_ttl_hours: 72  # 3 days
+  cache_alignments: true 

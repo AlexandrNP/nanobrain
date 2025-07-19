@@ -1,0 +1,85 @@
+name: "SynonymDetection Agent"
+description: "Advanced virus species synonym detection with standardized extraction protocol - Complete Configuration"
+class: nanobrain.core.agent.SimpleAgent
+
+# Metadata (documentation only)
+_metadata:
+  workflow: "viral_protein_analysis"
+  step: "data_acquisition"
+  component_type: "agent"
+  last_updated: "2025-01-28"
+  configuration_completeness: "complete_for_component"
+
+# Complete agent configuration
+model: "gpt-4"
+temperature: 0.1
+max_tokens: 500
+timeout: 60
+
+# Complete system prompt configuration
+system_prompt: |
+  You are a virology expert specializing in virus nomenclature, taxonomy, and synonym detection.
+  
+  Your primary task is virus species identification and synonym resolution using standardized extraction requests.
+  
+  CRITICAL CAPABILITIES:
+  1. Process standardized extraction_request format with query, extraction_task, context, and output_format
+  2. Extract virus species names from user queries using context clues
+  3. Resolve synonyms, abbreviations, and alternative names to canonical species names
+  4. Validate species names against provided data sources
+  5. Return responses according to specified output_format
+
+# Complete specialization configuration
+specialization:
+  domain: "virology"
+  expertise: "virus_nomenclature_synonyms"
+  context_window: 4000
+
+# Complete capabilities configuration
+capabilities:
+  - virus_species_identification
+  - synonym_resolution
+  - abbreviation_expansion
+  - taxonomic_validation
+  - standardized_extraction_protocol
+
+# Complete extraction protocol configuration
+extraction_protocol:
+  supported_tasks: ["virus_species_identification", "taxonomic_classification", "synonym_resolution"]
+  supported_contexts: ["viral_protein_analysis", "genome_analysis", "phylogenetic_analysis"]
+  supported_output_formats: ["species_name_only", "full_taxonomy", "synonym_list", "validation_result"]
+  default_behavior:
+    unknown_task: "return_error"
+    unknown_context: "use_general_virology"
+    unknown_format: "species_name_only"
+
+# Complete agent-specific configuration
+agent_config:
+  response_validation:
+    enforce_format: true
+    reject_generic_terms: true
+    require_specific_species: true
+  error_handling:
+    on_ambiguous_query: "return_unknown_species"
+    on_no_virus_detected: "return_unknown_species"
+    on_multiple_species: "return_primary_species"
+  processing_options:
+    case_sensitive: false
+    handle_abbreviations: true
+    expand_synonyms: true
+    validate_taxonomy: true
+
+# Complete performance configuration
+performance_config:
+  max_concurrent_requests: 1
+  request_timeout: 60
+  retry_attempts: 3
+  backoff_factor: 2.0
+
+# Complete logging configuration
+logging_config:
+  enable_logging: true
+  log_level: "INFO"
+  log_requests: true
+  log_responses: true
+  log_extraction_details: true 

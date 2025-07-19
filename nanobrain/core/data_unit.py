@@ -8,7 +8,7 @@ Enhanced with mandatory from_config pattern implementation.
 import asyncio
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional, List, Union
+from typing import Any, Dict, Optional, List, Union, Callable
 from pydantic import BaseModel, Field, ConfigDict, field_validator
 from pathlib import Path
 import json
@@ -76,6 +76,11 @@ class DataUnitBase(FromConfigBase, ABC):
     }
     
     @classmethod
+    def _get_config_class(cls):
+        """UNIFIED PATTERN: Return DataUnitConfig - ONLY method that differs from other components"""
+        return DataUnitConfig
+    
+    @classmethod
     def extract_component_config(cls, config: DataUnitConfig) -> Dict[str, Any]:
         """Extract DataUnit configuration"""
         return {
@@ -128,8 +133,35 @@ class DataUnitBase(FromConfigBase, ABC):
         self._last_operation = None
         self._creation_time = time.time()
         self._access_count = {"get": 0, "set": 0, "clear": 0}
+        
+        # Event-driven architecture: Change listeners for triggers
+        self._change_listeners: List[Callable] = []
     
     # DataUnitBase inherits FromConfigBase.__init__ which prevents direct instantiation
+    
+    def register_change_listener(self, listener: Callable) -> None:
+        """Register a change listener for event-driven triggers"""
+        if listener not in self._change_listeners:
+            self._change_listeners.append(listener)
+            if self.enable_logging and self.nb_logger:
+                self.nb_logger.debug(f"Registered change listener for {self.name}")
+    
+    def unregister_change_listener(self, listener: Callable) -> None:
+        """Unregister a change listener"""
+        if listener in self._change_listeners:
+            self._change_listeners.remove(listener)
+            if self.enable_logging and self.nb_logger:
+                self.nb_logger.debug(f"Unregistered change listener for {self.name}")
+    
+    async def _notify_change_listeners(self, change_event: Dict[str, Any]) -> None:
+        """Notify all registered change listeners of data unit changes"""
+        if self._change_listeners:
+            for listener in self._change_listeners:
+                try:
+                    await listener(change_event)
+                except Exception as e:
+                    if self.enable_logging and self.nb_logger:
+                        self.nb_logger.error(f"Error in change listener for {self.name}: {e}")
         
     @abstractmethod
     async def get(self) -> Any:
@@ -295,7 +327,21 @@ class DataUnitBase(FromConfigBase, ABC):
                 }
             )
         
+        # Store old data for change event
+        old_data = self._data if hasattr(self, '_data') else None
+        
         await self.set(data)
+        
+        # Notify change listeners (EVENT-DRIVEN ARCHITECTURE)
+        change_event = {
+            'data_unit_name': self.name,
+            'operation': 'write',
+            'old_data': old_data,
+            'new_data': data,
+            'timestamp': time.time(),
+            'operation_count': self._operation_count
+        }
+        await self._notify_change_listeners(change_event)
         
         # Log state after change
         if self.enable_logging and self.nb_logger:
@@ -350,8 +396,20 @@ class DataUnitMemory(DataUnitBase):
         if not self.is_initialized:
             await self.initialize()
         async with self._lock:
+            old_data = self._data
             self._data = data
             self._metadata['last_updated'] = time.time()
+            
+            # Notify change listeners for event-driven execution
+            change_event = {
+                'data_unit_name': self.name,
+                'operation': 'set',
+                'old_data': old_data,
+                'new_data': data,
+                'timestamp': time.time(),
+                'operation_count': self._operation_count
+            }
+            await self._notify_change_listeners(change_event)
     
     async def clear(self) -> None:
         """Clear data from memory."""
@@ -461,6 +519,18 @@ class DataUnitFile(DataUnitBase):
             
         try:
             async with self._lock:
+                # Get old data for change event
+                old_data = None
+                if self.file_path.exists():
+                    try:
+                        old_content = self.file_path.read_text(encoding=self.config.encoding)
+                        try:
+                            old_data = json.loads(old_content)
+                        except json.JSONDecodeError:
+                            old_data = old_content
+                    except:
+                        old_data = None
+                
                 # Ensure parent directory exists
                 self.file_path.parent.mkdir(parents=True, exist_ok=True)
                 
@@ -473,6 +543,17 @@ class DataUnitFile(DataUnitBase):
                 # Write to file
                 self.file_path.write_text(content, encoding=self.config.encoding)
                 self._metadata['last_updated'] = time.time()
+                
+                # Notify change listeners for event-driven execution
+                change_event = {
+                    'data_unit_name': self.name,
+                    'operation': 'set',
+                    'old_data': old_data,
+                    'new_data': data,
+                    'timestamp': time.time(),
+                    'operation_count': self._operation_count
+                }
+                await self._notify_change_listeners(change_event)
                 
         except Exception as e:
             logger.error(f"Error writing file {self.file_path}: {e}")
@@ -541,8 +622,20 @@ class DataUnitString(DataUnitBase):
         if not self.is_initialized:
             await self.initialize()
         async with self._lock:
+            old_data = self._data
             self._data = str(data) if data is not None else ""
             self._metadata['last_updated'] = time.time()
+            
+            # Notify change listeners for event-driven execution
+            change_event = {
+                'data_unit_name': self.name,
+                'operation': 'set',
+                'old_data': old_data,
+                'new_data': self._data,
+                'timestamp': time.time(),
+                'operation_count': self._operation_count
+            }
+            await self._notify_change_listeners(change_event)
     
     async def append(self, data: str) -> None:
         """Append to string data."""
@@ -763,39 +856,26 @@ class DataUnit(DataUnitBase):
         }
 
 
-def create_data_unit(config: Union[Dict[str, Any], DataUnitConfig], **kwargs) -> DataUnitBase:
+def create_data_unit(class_path: str, config: Any, **kwargs) -> 'DataUnitBase':
     """
-    Create data unit using ONLY class field - NO ENUM MAPPING
+    Create data unit using pure from_config pattern with dynamic class loading
     
     Args:
-        config: Data unit configuration (dict or DataUnitConfig)
-        **kwargs: Framework-provided dependencies
+        class_path: Full module.Class path for data unit class
+        config: Configuration object or dict  
+        **kwargs: Additional arguments passed to from_config
         
     Returns:
-        DataUnitBase instance created via from_config
-        
-    Raises:
-        ValueError: If class field is missing or invalid
-        ComponentConfigurationError: If configuration is invalid
+        DataUnitBase instance created via from_config pattern
     """
-    logger = get_logger("data_unit.factory")
-    
-    if isinstance(config, dict):
-        # Validate class field exists
-        if 'class' not in config:
-            raise ValueError("Data unit configuration must specify 'class' field")
-        config = DataUnitConfig(**config)
-    
-    class_path = config.class_path
-    if not class_path:
-        raise ValueError("Data unit configuration must specify 'class' field")
+    logger = logging.getLogger(__name__)
     
     # Use pure component factory - NO hardcoded mapping
-    from .config.component_factory import import_and_create_from_config
+    from .config.component_factory import create_component
     
     try:
         logger.info(f"Creating data unit via from_config: {class_path}")
-        return import_and_create_from_config(class_path, config, **kwargs)
+        return create_component(class_path, config, **kwargs)
     except Exception as e:
         logger.error(f"Failed to create data unit '{class_path}': {e}")
         raise ValueError(f"Failed to create data unit '{class_path}' via from_config: {e}") 

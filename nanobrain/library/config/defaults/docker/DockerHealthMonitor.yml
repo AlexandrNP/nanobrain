@@ -1,0 +1,179 @@
+# DockerHealthMonitor Default Configuration
+# This configuration enables creation of DockerHealthMonitor instances via from_config pattern
+# Usage: DockerHealthMonitor.from_config(load_yaml_config('DockerHealthMonitor.yml'))
+
+# Component identification
+component_name: "docker_health_monitor"
+enabled: true
+
+# Docker client configuration
+docker_client: null  # Will be auto-detected from environment
+
+# Health monitoring settings
+check_interval: 30  # seconds between health checks
+auto_cleanup: true  # Automatically clean up monitoring data
+
+# Docker manager dependency (required)
+docker_manager: null  # Must be provided when creating instance
+
+# Alert thresholds for health monitoring
+alert_thresholds:
+  # CPU usage threshold (percentage)
+  cpu_threshold: 80.0
+  # Memory usage threshold (percentage)
+  memory_threshold: 85.0
+  # Number of consecutive failures before alert
+  consecutive_failures: 3
+  # Network I/O threshold (bytes per second)
+  network_io_threshold: 104857600  # 100MB/s
+  # Disk I/O threshold (bytes per second)
+  disk_io_threshold: 52428800     # 50MB/s
+
+# Health check history configuration
+history_limit: 100  # Number of health checks to keep in memory
+
+# Health check types and configurations
+health_checks:
+  # HTTP health check configuration
+  http:
+    enabled: true
+    default_path: "/health"
+    default_port: 8080
+    timeout: 10  # seconds
+    expected_status_codes: [200, 204]
+    follow_redirects: false
+    
+  # TCP health check configuration
+  tcp:
+    enabled: true
+    timeout: 5  # seconds
+    
+  # Exec health check configuration
+  exec:
+    enabled: true
+    timeout: 30  # seconds
+    shell: "/bin/sh"
+
+# Container monitoring configuration
+container_monitoring:
+  # Monitor resource usage
+  resource_monitoring: true
+  # Monitor container logs for errors
+  log_monitoring: false
+  # Monitor container restart events
+  restart_monitoring: true
+  # Monitor container network connectivity
+  network_monitoring: true
+
+# Alert configuration
+alerting:
+  # Enable alert notifications
+  enabled: true
+  # Alert channels
+  channels:
+    # Log alerts to framework logger
+    log: true
+    # Send alerts via webhook (if configured)
+    webhook: false
+    # Send alerts via email (if configured)
+    email: false
+  # Alert severity levels
+  severity_levels:
+    critical: ["consecutive_failures", "container_down"]
+    warning: ["cpu_threshold", "memory_threshold"]
+    info: ["container_restart", "health_check_recovered"]
+
+# Monitoring intervals (in seconds)
+monitoring_intervals:
+  # Resource metrics collection
+  resource_metrics: 15
+  # Health check execution
+  health_checks: 30
+  # Log analysis
+  log_analysis: 60
+  # Alert evaluation
+  alert_evaluation: 10
+
+# Data retention settings
+data_retention:
+  # Health check results retention (days)
+  health_results: 7
+  # Resource metrics retention (days)
+  resource_metrics: 3
+  # Alert history retention (days)
+  alert_history: 14
+
+# Performance settings
+performance:
+  # Maximum concurrent health checks
+  max_concurrent_checks: 10
+  # Health check timeout multiplier for slow containers
+  slow_container_multiplier: 2.0
+  # Batch size for bulk operations
+  batch_size: 5
+
+# Default labels applied to monitoring data
+labels:
+  nanobrain.framework: "true"
+  nanobrain.component: "docker-infrastructure"
+  nanobrain.component.name: "docker_health_monitor"
+  nanobrain.component.type: "docker-infrastructure"
+  nanobrain.monitoring.type: "health"
+
+# Framework integration
+framework_integration:
+  # Use NanoBrain logging system
+  use_nanobrain_logging: true
+  # Use NanoBrain metrics system
+  use_nanobrain_metrics: true
+  # Generate A2A cards for monitoring data
+  generate_a2a_cards: false
+
+# Tool card metadata (mandatory for framework compliance)
+tool_card:
+  name: "DockerHealthMonitor"
+  description: "Comprehensive health monitoring for Docker containers in NanoBrain framework"
+  version: "1.0.0"
+  category: "infrastructure"
+  capabilities:
+    - "container_health_monitoring"
+    - "resource_usage_tracking"
+    - "alert_notifications"
+    - "health_history_tracking"
+  requirements:
+    - "docker_daemon"
+    - "docker_manager"
+  supported_platforms:
+    - "linux"
+    - "darwin"
+    - "windows"
+  configuration_schema:
+    type: "DockerHealthMonitorConfig"
+    required_fields:
+      - "docker_manager"
+    optional_fields:
+      - "check_interval"
+      - "alert_thresholds"
+      - "history_limit"
+  usage_examples:
+    - description: "Basic health monitoring setup"
+      config:
+        component_name: "basic_health_monitor"
+        docker_manager: "{{ docker_manager_instance }}"
+        check_interval: 30
+    - description: "Production health monitoring with custom thresholds"
+      config:
+        component_name: "prod_health_monitor"
+        docker_manager: "{{ docker_manager_instance }}"
+        check_interval: 15
+        alert_thresholds:
+          cpu_threshold: 70.0
+          memory_threshold: 80.0
+          consecutive_failures: 2
+    - description: "Development health monitoring with extended history"
+      config:
+        component_name: "dev_health_monitor"
+        docker_manager: "{{ docker_manager_instance }}"
+        history_limit: 200
+        alerting:
+          enabled: false 

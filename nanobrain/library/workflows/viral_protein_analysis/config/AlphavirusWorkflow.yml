@@ -1,7 +1,7 @@
 name: AlphavirusWorkflow
-description: Comprehensive viral protein analysis workflow with clustering as final step
-version: 4.7.0
-execution_strategy: sequential
+description: Comprehensive viral protein analysis workflow with enhanced ultra-precision data acquisition
+version: 5.0.0
+execution_strategy: event_driven  # CRITICAL: Event-driven strategy
 error_handling: continue
 enable_monitoring: true
 workflow_directory: nanobrain/library/workflows/viral_protein_analysis
@@ -25,94 +25,69 @@ mmseqs2_cache_directory: "data/mmseqs2_cache"  # MMseqs2 cache directory
 cache_directory: "data/cache"  # General cache directory
 csv_file_path: "data/viral_analysis/BVBRC_genome_viral.csv"  # Path to genome CSV data
 
-# REMOVED: Tool dependencies at workflow level
-# Tools are now configured at step level
-
+# MIGRATED WORKFLOW CONFIGURATION: References to step-specific config directories
 steps:
-- step_id: data_acquisition
-  name: BV-BRC Data Acquisition
-  description: Acquire and filter viral genome data from BV-BRC database
-  class: nanobrain.library.workflows.viral_protein_analysis.steps.data_acquisition_step.BVBRCDataAcquisitionStep
-  estimated_time: 1200.0
-  timeout: 1200.0
-  config_file: config/steps/data_acquisition_config.yml
-  # Tools configured in step config file
-- step_id: annotation_mapping
-  name: Annotation Mapping
-  description: Map and standardize protein annotations
-  class: nanobrain.library.workflows.viral_protein_analysis.steps.annotation_mapping_step.AnnotationMappingStep
-  estimated_time: 60.0
-  timeout: 60.0
-  config_file: config/steps/annotation_mapping_config.yml
-- step_id: sequence_curation
-  name: Sequence Curation
-  description: Curate sequences based on quality metrics
-  class: nanobrain.library.workflows.viral_protein_analysis.steps.sequence_curation_step.SequenceCurationStep
-  estimated_time: 60.0
-  timeout: 60.0
-  config_file: config/steps/sequence_curation_config.yml
-- step_id: clustering_analysis
-  name: Protein Clustering Analysis
-  description: Cluster proteins by product names with LLM-generated summary (final step)
-  class: nanobrain.library.workflows.viral_protein_analysis.steps.clustering_step.ClusteringStep
-  estimated_time: 60.0
-  timeout: 60.0
-  config_file: config/steps/clustering_config.yml
-  # Tools configured in step config file if needed
+  - step_id: data_acquisition
+    config_file: config/DataAcquisitionStep/DataAcquisitionStep.yml
+  - step_id: annotation_mapping
+    config_file: config/steps/annotation_mapping_config.yml
+  - step_id: sequence_curation
+    config_file: config/steps/sequence_curation_config.yml
+  - step_id: clustering_analysis
+    config_file: config/ClusteringStep/ClusteringStep.yml
 
-# UPDATED: Links with dot notation (backward compatible)
+# EVENT-DRIVEN LINKS: Define data flow between step data units
 links:
-- link_id: acquisition_to_annotation
-  source: data_acquisition.fasta_and_annotations
-  target: annotation_mapping.fasta_and_annotations
-  
-- link_id: annotation_to_curation
-  source: annotation_mapping.standardized_annotations
-  target: sequence_curation.standardized_annotations
-  
-- link_id: curation_to_clustering
-  source: sequence_curation.curated_sequences
-  target: clustering_analysis.curated_sequences
+  - link_id: workflow_to_acquisition
+    source: workflow_input
+    target: data_acquisition.synonyms_input
+    description: "Route enhanced virus resolution output to enhanced data acquisition"
+    
+  - link_id: acquisition_to_annotation
+    source: data_acquisition.validated_genomes
+    target: annotation_mapping.fasta_and_annotations
+    description: "Route validated genomes to annotation mapping"
+    
+  - link_id: annotation_to_curation
+    source: annotation_mapping.standardized_annotations
+    target: sequence_curation.standardized_annotations
+    description: "Route standardized annotations to sequence curation"
+    
+  - link_id: curation_to_clustering
+    source: sequence_curation.curated_sequences
+    target: clustering_analysis.curated_sequences
+    description: "Route curated sequences to clustering analysis"
+    
+  - link_id: clustering_to_workflow
+    source: clustering_analysis.sequence_clusters
+    target: workflow_output
+    description: "Route clustering results to workflow output"
 
-# UPDATED: Data units use class field
-data_units:
-- name: GenomeData
-  class: nanobrain.core.data_unit.DataUnit
-  description: "Genomic sequences data"
-  persistent: true
-- name: ProteinData
-  class: nanobrain.core.data_unit.DataUnit
-  description: "Protein sequences data"
-  persistent: true
-- name: AnnotationData
-  class: nanobrain.core.data_unit.DataUnit
-  description: "Functional annotations data"
-  persistent: true
-- name: ClusterData
-  class: nanobrain.core.data_unit.DataUnit
-  description: "Sequence clusters data"
-  persistent: true
-
-# ADDED: Input/output data units for workflow-as-step usage (Phase 3 prep)
+# MINIMAL WORKFLOW DATA UNITS: Only input/output for workflow-as-step usage
 input_data_units:
-  virus_input:
+  workflow_input:
     class: nanobrain.core.data_unit.DataUnitMemory
-    name: virus_input
-    description: "Input data for viral protein analysis"
+    name: workflow_input
+    description: "Enhanced workflow input with ultra-high-confidence synonyms and validation criteria"
     persistent: false
 
 output_data_units:
-  analysis_results:
+  workflow_output:
     class: nanobrain.core.data_unit.DataUnitFile
-    name: analysis_results
-    description: "Complete viral protein analysis results"
+    name: workflow_output
+    description: "Complete workflow results with enhanced precision validation"
     persistent: true
-    file_path: "results/viral_protein_analysis.json"
+    file_path: "results/enhanced_viral_protein_analysis.json"
+
+# NO STEP-LEVEL DATA UNITS: All data units defined at step level
+# NO WORKFLOW-LEVEL TRIGGERS: All triggers defined at step level
+# NO TOOL CONFIGURATIONS: All tools configured at step level
 
 # Workflow metadata
 workflow_metadata:
-  framework_compliance: "from_config_mandatory"
-  migration_status: "phase2_complete"
+  framework_compliance: "event_driven_architecture"
+  migration_status: "enhanced_precision_complete"
   last_updated: "2025-01-28"
-  configuration_status: "production_ready"
-  notes: "Updated for generic viral species support with class-based data units"
+  configuration_status: "ultra_precision_event_driven"
+  enhanced_features: "ultra_high_confidence_validation_pipeline"
+  notes: "Updated for enhanced ultra-precision data acquisition with zero contamination tolerance"

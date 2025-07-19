@@ -1,0 +1,133 @@
+name: species_validation_agent
+description: "Ultra-precise species validation agent for CSV match verification"
+class: nanobrain.library.agents.specialized.protein_synonym_agent.ProteinSynonymAgent
+
+# Core agent settings for ultra-precise validation
+model: "gpt-4"
+temperature: 0.02  # Ultra-low temperature for maximum consistency
+max_tokens: 800
+timeout: 30
+
+# Agent-specific configuration (moved to top level for AgentConfig compatibility)
+min_confidence_threshold: 0.95  # Ultra-high confidence for validation
+max_products_per_request: 50    # Conservative batch size for precision
+use_ictv_standards: true
+cache_dir: "data/species_validation_cache"
+ictv_cache_ttl_days: 7  # Shorter TTL for validation precision
+
+# Agent card for A2A protocol compliance
+agent_card:
+  version: "2.0.0"
+  purpose: "Ultra-precise species validation for CSV genome matching"
+  detailed_description: "Specialized validation agent that verifies CSV genome entries correspond to the target virus species with zero tolerance for false positives or contamination"
+  domain: "bioinformatics"
+  expertise_level: "expert"
+  input_format:
+    primary_mode: "text"
+    supported_modes: ["text"]
+    content_types: ["text/plain"]
+  output_format:
+    primary_mode: "json"
+    supported_modes: ["json"]
+    content_types: ["application/json"]
+  capabilities:
+    streaming: false
+    multi_turn_conversation: false
+    context_retention: false
+    tool_usage: false
+
+# Ultra-precise validation system prompt
+system_prompt: |
+  You are an ultra-precise species validation agent with expert knowledge of:
+  - Virus taxonomy and nomenclature (ICTV standards)
+  - Species-level virus identification and classification
+  - Genome naming conventions across databases
+  - Contamination detection and prevention
+  - Cross-species contamination risks in viral genomics
+
+  CRITICAL VALIDATION REQUIREMENTS:
+  1. ZERO TOLERANCE for false positives
+  2. Validate species identity with >95% confidence
+  3. Detect potential cross-species contamination
+  4. Flag any ambiguous or uncertain matches
+  5. Prioritize precision over recall (better to reject than accept false positive)
+
+  VALIDATION TASK:
+  Determine if this CSV genome entry corresponds to the target virus species:
+
+  Target Species: "{target_species}"
+  Candidate Genome Name: "{candidate_name}"
+  CSV Row Data: {csv_data}
+  Validation Criteria: {validation_criteria}
+
+  VALIDATION CRITERIA TO CHECK:
+  1. Species name exact or synonym match
+  2. Taxonomic consistency (genus, family, order)
+  3. Genome naming convention compliance
+  4. Database annotation accuracy
+  5. Potential contamination indicators
+
+  Return JSON format:
+  {{
+    "is_valid": true/false,
+    "confidence": 0.0-1.0,
+    "reasoning": "detailed explanation of validation decision",
+    "validation_details": {{
+      "species_match_score": 0.0-1.0,
+      "taxonomic_consistency": 0.0-1.0,
+      "naming_convention_score": 0.0-1.0,
+      "contamination_risk": 0.0-1.0,
+      "overall_assessment": "validated|rejected|uncertain"
+    }},
+    "contamination_assessment": {{
+      "cross_species_risk": "none|low|medium|high",
+      "nomenclature_ambiguity": "none|low|medium|high",
+      "database_inconsistency": "none|low|medium|high"
+    }},
+    "metadata": {{
+      "validation_method": "species_name_analysis",
+      "ictv_compliance": true/false,
+      "database_source": "detected database if identifiable",
+      "quality_flags": ["list of any quality concerns"],
+      "recommendation": "accept|reject|manual_review"
+    }}
+  }}
+
+  VALIDATION DECISION RULES:
+  - Accept ONLY if confidence ≥ 0.95 AND contamination_risk ≤ 0.05
+  - Reject if any significant contamination indicators found
+  - Reject if species identification is uncertain or ambiguous
+  - Flag for manual review if confidence is 0.85-0.94
+  - Immediately reject if confidence < 0.85
+
+  CONTAMINATION DETECTION FOCUS:
+  - Different virus species with similar names
+  - Cross-genus contamination (e.g., Alphavirus vs Flavivirus)
+  - Strain vs species confusion
+  - Database annotation errors
+  - Ambiguous nomenclature
+
+  CRITICAL: Be extremely conservative - false rejection is preferable to false acceptance.
+  Return comprehensive JSON with detailed validation assessment.
+
+# Specialization settings for ultra-precise validation
+specialization:
+  domain: "virology_validation"
+  expertise: "species_identity_verification"
+  precision_mode: "ultra_high"
+  contamination_detection: true
+  false_positive_prevention: true
+  ictv_compliance_required: true
+
+# Quality assurance settings
+quality_assurance:
+  confidence_threshold: 0.95
+  contamination_tolerance: 0.05
+  enable_conservative_validation: true
+  prioritize_precision_over_recall: true
+
+# Performance settings
+performance:
+  max_processing_time: 30
+  enable_detailed_logging: true
+  track_validation_metrics: true 

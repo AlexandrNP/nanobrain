@@ -1,0 +1,167 @@
+prompts:
+  ictv_inference:
+    template: |
+      Based on the International Committee on Taxonomy of Viruses (ICTV) standards,
+      identify the standardized protein nomenclature for ${genus} viruses,
+      specifically ${species}.
+
+      Virus Information:
+      - Genus: ${genus}
+      - Species: ${species}
+      - Strain: ${strain}
+
+      Sample protein products from this dataset:
+      ${product_sample}
+
+      Please provide the ICTV standard nomenclature mapping for this virus, including:
+      1. Nonstructural proteins (e.g., nsP1 -> nonstructural protein 1)
+      2. Structural proteins (e.g., E1 -> envelope protein E1)
+      3. Polyproteins (e.g., P1234 -> nonstructural polyprotein P1234)
+      4. Any virus-specific proteins
+
+      Return JSON format:
+      {
+          "ictv_standards": {
+              "abbreviated_form": "full_ictv_name",
+              "nsP1": "nonstructural protein 1",
+              ...
+          },
+          "virus_specific_notes": "any special considerations for this virus",
+          "confidence": "high/medium/low"
+      }
+    description: "Infer ICTV standards for a specific virus"
+    required_params:
+      - genus
+      - species
+      - strain
+      - product_sample
+    
+  key_term_extraction:
+    template: |
+      Extract key protein identifiers from these product names:
+
+      ${products}
+
+      ${ictv_context}
+
+      For each product, identify:
+      1. Core protein identifier (E1, nsP1, capsid, etc.)
+      2. Type (structural/nonstructural/enzyme/glycoprotein)
+      3. Any numeric identifiers
+      4. Whether it's a fragment, domain, or full protein
+      5. If it matches an ICTV standard form
+
+      Return JSON format:
+      {
+          "product_analysis": [
+              {
+                  "product": "original name",
+                  "core_id": "E1",
+                  "type": "glycoprotein",
+                  "is_fragment": false,
+                  "ictv_match": "envelope protein E1",
+                  "key_terms": ["E1", "envelope", "glycoprotein"]
+              }
+          ]
+      }
+    description: "Extract key protein terms from product names"
+    required_params:
+      - products
+    optional_params:
+      - ictv_context
+  
+  global_synonym_analysis:
+    template: |
+      Analyze these protein product names and identify ALL synonyms across the entire list:
+
+      ${grouped_products}
+
+      ${ictv_context}
+
+      Instructions:
+      1. Identify ALL synonym relationships, even between products in different groups
+      2. Use the virus-specific ICTV standard nomenclature as canonical names when applicable
+      3. Consider these patterns:
+         - Abbreviations (E1 = E1 envelope glycoprotein = envelope protein E1)
+         - Alternative names (nsP1 = nsp1 = nonstructural protein 1)
+         - Order variations (E2 glycoprotein = glycoprotein E2)
+         - Partial names (capsid = capsid protein = structural protein C)
+         - Putative/predicted prefixes
+         - Fragment/domain relationships
+         - Virus-specific naming conventions
+
+      4. For each synonym group:
+         - Select the ICTV standard name if available
+         - Otherwise, select the most complete/descriptive name
+         - Include confidence scores (0-1) for each relationship
+
+      Return JSON format:
+      {
+          "synonym_groups": [
+              {
+                  "canonical": "ICTV standard or most complete name",
+                  "ictv_standard": true/false,
+                  "synonyms": [
+                      {"name": "synonym1", "confidence": 0.95, "reason": "ICTV abbreviation"},
+                      {"name": "synonym2", "confidence": 0.85, "reason": "alternative name"}
+                  ]
+              }
+          ],
+          "cross_references": [
+              {
+                  "name1": "product from group A",
+                  "name2": "product from group B", 
+                  "confidence": 0.8,
+                  "reason": "partial name match"
+              }
+          ]
+      }
+    description: "Identify synonyms across all products"
+    required_params:
+      - grouped_products
+    optional_params:
+      - ictv_context
+  
+  cross_reference_analysis:
+    template: |
+      Analyze these protein groups for potential cross-group relationships:
+
+      ${group_samples}
+
+      Look for:
+      1. Polyprotein relationships (P1234 contains nsP1, nsP2, nsP3, nsP4)
+      2. Fragment relationships (E1 N-terminal is part of E1)
+      3. Alternative classification schemes
+      4. Misclassified proteins
+
+      Return potential cross-references with confidence scores in JSON format:
+      {
+          "cross_references": [
+              {
+                  "group1": "protein_group_name",
+                  "group2": "related_group_name",
+                  "relationship": "contains|part_of|alternative_name",
+                  "confidence": 0.85,
+                  "explanation": "reason for relationship"
+              }
+          ]
+      }
+    description: "Find relationships between protein groups"
+    required_params:
+      - group_samples
+
+contexts:
+  ictv_standards_context:
+    template: |
+      Use these virus-specific ICTV standard names:
+      ${ictv_standards}
+    description: "ICTV standards context for prompts"
+  
+  no_ictv_context:
+    template: |
+      Note: ICTV standards for this virus are not available. 
+      Use best judgment for canonical naming based on completeness and clarity.
+    description: "Fallback when ICTV standards not available"
+
+version: "1.0.0"
+description: "Prompt templates for protein synonym identification agent" 

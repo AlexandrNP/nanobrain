@@ -1,0 +1,298 @@
+# Elasticsearch Tool Configuration with Comprehensive Auto-Installation
+# nanobrain/library/tools/search/config/elasticsearch_tool_auto_install.yml
+
+# Tool identification and metadata
+tool_name: "elasticsearch"
+tool_card:
+  name: "elasticsearch"
+  description: "Elasticsearch search engine with comprehensive auto-installation capabilities"
+  version: "8.14.0"
+  category: "search"
+  vendor: "Elastic N.V."
+  license: "Elastic License 2.0"
+  documentation_url: "https://www.elastic.co/guide/en/elasticsearch/reference/current/"
+  capabilities:
+    - "document_indexing"
+    - "full_text_search"
+    - "fuzzy_matching"
+    - "autocomplete"
+    - "aggregations"
+    - "real_time_search"
+    - "auto_installation"
+    - "docker_deployment"
+    - "health_monitoring"
+    - "backup_recovery"
+
+# Auto-installation configuration (PRIMARY FEATURE)
+installation_config:
+  # Installation strategy priority
+  auto_install_on_missing: true
+  installation_timeout: 300  # 5 minutes for Docker pull/start
+  health_check_timeout: 120  # 2 minutes for ES to become ready
+  max_retry_attempts: 3
+  
+  # Method 1: Docker container (PREFERRED)
+  docker:
+    enabled: true
+    prefer_docker: true
+    image: "elasticsearch:8.14.0"
+    container_name: "nanobrain-elasticsearch"
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    environment:
+      - "discovery.type=single-node"
+      - "xpack.security.enabled=false"
+      - "ES_JAVA_OPTS=-Xms1g -Xmx2g"
+      - "bootstrap.memory_lock=true"
+      - "cluster.name=nanobrain-cluster"
+      - "node.name=nanobrain-node-1"
+    volumes:
+      - "nanobrain_elasticsearch_data:/usr/share/elasticsearch/data"
+      - "nanobrain_elasticsearch_logs:/usr/share/elasticsearch/logs"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    restart_policy: "unless-stopped"
+    auto_remove: false
+    detach: true
+    
+    # Resource constraints
+    memory_limit: "4g"
+    cpu_limit: "2.0"
+    
+    # Health check configuration
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=10s || exit 1"]
+      interval: 30
+      timeout: 10
+      retries: 5
+      start_period: 60
+
+  # Method 2: Package installation (SECONDARY)
+  package_install:
+    # Python client libraries
+    pip_package: "elasticsearch[async]==8.14.0"
+    pip_extra_packages:
+      - "aiohttp>=3.8.0"
+      - "certifi>=2021.5.25"
+    
+    # Conda installation
+    conda_package: "elasticsearch"
+    conda_channel: "conda-forge"
+    conda_dependencies:
+      - "python>=3.8"
+      - "aiohttp"
+    
+    # Environment management
+    create_isolated_environment: true
+    environment_name: "nanobrain-elasticsearch"
+    python_version: "3.11"
+
+  # Method 3: Manual installation guidance (FALLBACK)
+  manual_install:
+    provide_guidance: true
+    documentation_links:
+      - "https://www.elastic.co/guide/en/elasticsearch/reference/current/install-elasticsearch.html"
+      - "https://www.elastic.co/guide/en/elasticsearch/reference/current/docker.html"
+    platform_specific:
+      macos:
+        homebrew: "brew install elasticsearch"
+        download_url: "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-8.14.0-darwin-x86_64.tar.gz"
+      linux:
+        apt: "apt-get install elasticsearch"
+        yum: "yum install elasticsearch"
+        download_url: "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-8.14.0-linux-x86_64.tar.gz"
+      windows:
+        chocolatey: "choco install elasticsearch"
+        download_url: "https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-8.14.0-windows-x86_64.zip"
+
+# Runtime configuration
+elasticsearch_config:
+  # Connection settings
+  host: "localhost"
+  port: 9200
+  scheme: "http"
+  timeout: 30
+  max_retries: 3
+  retry_on_timeout: true
+  verify_ssl: false
+  
+  # Authentication (disabled for development)
+  use_ssl: false
+  username: null
+  password: null
+  api_key: null
+  
+  # Connection pooling
+  maxsize: 25
+  pool_maxsize: 25
+  
+  # Cluster settings
+  sniff_on_start: false
+  sniff_on_connection_fail: false
+  sniffer_timeout: 60
+
+# Search and indexing configuration
+search_config:
+  # Default search parameters
+  default_size: 10
+  max_size: 10000
+  default_from: 0
+  default_timeout: "30s"
+  
+  # Fuzzy matching
+  default_fuzziness: "AUTO"
+  minimum_should_match: "60%"
+  
+  # Highlighting
+  enable_highlighting: true
+  highlight_fields: ["*"]
+  highlight_pre_tags: ["<mark>"]
+  highlight_post_tags: ["</mark>"]
+  
+  # Scoring and ranking
+  boost_exact_matches: 2.0
+  boost_phrase_matches: 1.5
+  boost_prefix_matches: 1.2
+
+# Index management configuration
+index_config:
+  # Default settings for new indices
+  default_shards: 1
+  default_replicas: 0
+  refresh_interval: "1s"
+  max_result_window: 10000
+  
+  # Analysis settings
+  default_analyzer: "standard"
+  custom_analyzers:
+    virus_analyzer:
+      tokenizer: "standard"
+      filters:
+        - "lowercase"
+        - "asciifolding"
+        - "virus_synonym_filter"
+  
+  # Index lifecycle
+  auto_create_index: true
+  auto_delete_old_indices: false
+  max_index_age_days: 90
+
+# Monitoring and health configuration
+monitoring_config:
+  # Health checks
+  enable_health_monitoring: true
+  health_check_interval: 30  # seconds
+  health_check_timeout: 10   # seconds
+  
+  # Performance monitoring
+  track_query_performance: true
+  slow_query_threshold: 1000  # milliseconds
+  
+  # Resource monitoring
+  monitor_memory_usage: true
+  monitor_disk_usage: true
+  memory_warning_threshold: 0.8  # 80%
+  disk_warning_threshold: 0.9    # 90%
+
+# Backup and recovery configuration
+backup_config:
+  # Automatic backups
+  enable_automatic_backup: false
+  backup_interval: "daily"
+  backup_retention_days: 7
+  
+  # Snapshot repository
+  snapshot_repository: "nanobrain_backups"
+  backup_location: "/var/lib/elasticsearch/backups"
+  
+  # Recovery settings
+  enable_automatic_recovery: true
+  recovery_timeout: 600  # 10 minutes
+
+# Development and testing configuration
+development_config:
+  # Debug settings
+  enable_debug_logging: true
+  log_all_queries: false
+  log_slow_queries: true
+  
+  # Testing features
+  enable_test_mode: false
+  test_index_prefix: "test_"
+  auto_cleanup_test_indices: true
+  
+  # Development shortcuts
+  skip_ssl_verification: true
+  allow_insecure_connections: true
+
+# Security configuration (for production)
+security_config:
+  # Basic security
+  enable_security: false  # Disabled for development
+  require_authentication: false
+  
+  # Network security
+  bind_host: "localhost"
+  allowed_hosts: ["localhost", "127.0.0.1"]
+  
+  # Data security
+  encrypt_at_rest: false
+  encrypt_in_transit: false
+
+# Error handling and recovery
+error_handling:
+  # Retry configuration
+  max_connection_retries: 3
+  retry_backoff_factor: 2
+  max_retry_delay: 60
+  
+  # Circuit breaker
+  enable_circuit_breaker: true
+  failure_threshold: 5
+  recovery_timeout: 300
+  
+  # Fallback behavior
+  enable_fallback: true
+  fallback_methods:
+    - "external_elasticsearch"  # User-managed ES instance
+    - "embedded_search"         # Simple in-memory search fallback
+    - "csv_based_search"        # Original CSV-based search
+
+# Notification and alerting
+notifications:
+  # Installation notifications
+  notify_on_installation_success: true
+  notify_on_installation_failure: true
+  
+  # Runtime notifications
+  notify_on_health_issues: true
+  notify_on_performance_issues: false
+  
+  # Alert channels
+  log_alerts: true
+  email_alerts: false
+  webhook_alerts: false
+
+# Integration with NanoBrain framework
+nanobrain_integration:
+  # Framework compliance
+  mandatory_from_config: true
+  tool_card_required: true
+  
+  # Logging integration
+  use_nanobrain_logging: true
+  log_level: "INFO"
+  
+  # Configuration management
+  config_validation: true
+  config_hot_reload: false
+  
+  # Performance integration
+  enable_progressive_scaling: false
+  initial_scale_level: 1 

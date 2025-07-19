@@ -1,0 +1,63 @@
+name: "BV-BRC Data Access Tool"
+description: "Tool for accessing BV-BRC viral genome database"
+class: nanobrain.library.tools.bioinformatics.bv_brc_tool.BVBRCTool
+
+# Tool configuration
+tool_name: "bv_brc_tool"
+installation_path: null  # Auto-detect or use system default
+executable_path: null    # Auto-detect or use system default
+
+# Data acquisition settings
+genome_batch_size: 100
+md5_batch_size: 50
+min_genome_length: 8000
+max_genome_length: 15000
+
+# Performance settings
+timeout_seconds: 300
+retry_attempts: 3
+verify_on_init: true
+progressive_scaling: true
+use_cache: true
+
+# API configuration
+base_url: "https://www.bvbrc.org/api"
+endpoints:
+  genome: "/genome"
+  feature: "/feature"
+  protein: "/protein_feature"
+  taxonomy: "/taxonomy"
+
+# Request configuration
+request_config:
+  batch_size: 100
+  rate_limit_delay: 1.0
+  user_agent: "NanoBrain/1.0"
+  max_retries: 3
+  timeout: 300
+
+# Authentication (if needed)
+authentication:
+  type: "none"  # BV-BRC is public
+  key_env_var: null
+
+# Cache configuration
+cache_config:
+  enable_caching: true
+  cache_ttl_hours: 24
+  cache_directory: "data/bvbrc_cache"
+  cache_strategy: "progressive"
+
+# Data filtering
+filtering:
+  enable_size_filter: true
+  enable_quality_filter: true
+  min_proteins_per_genome: 5
+  max_proteins_per_genome: 1000
+
+# Output configuration
+output_config:
+  format: "fasta"
+  include_annotations: true
+  include_metadata: true
+  standardize_headers: true 

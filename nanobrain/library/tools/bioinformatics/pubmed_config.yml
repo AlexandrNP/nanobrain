@@ -1,0 +1,139 @@
+name: "PubMed Literature Search Client"
+description: "Client for accessing PubMed database via NCBI E-utilities API - Complete Configuration"
+class: nanobrain.library.tools.bioinformatics.pubmed_client.PubMedClient
+
+# Metadata (documentation only)
+_metadata:
+  framework: "nanobrain"
+  component_type: "bioinformatics_tool"
+  migration_source: "library/config/defaults/tools/PubMedClient.yml"
+  last_updated: "2025-01-28"
+  configuration_completeness: "complete_for_component"
+
+# Complete tool configuration
+tool_name: "pubmed_client"
+
+# Complete bioinformatics tool card
+tool_card:
+  name: "pubmed_client"
+  description: "PubMed literature search client for biomedical research"
+  version: "1.0.0"
+  category: "literature"
+  subcategory: "database_search"
+  capabilities: ["literature_search", "abstract_retrieval", "bibliographic_data"]
+  tags: ["pubmed", "literature", "search", "biomedical", "ncbi", "research", "abstracts"]
+  
+  input_format:
+    primary_mode: "json"
+    supported_modes: ["json", "query"]
+    content_types: ["application/json"]
+  
+  output_format:
+    primary_mode: "json"
+    supported_modes: ["json", "bibtex", "csv"]
+    content_types: ["application/json", "text/plain", "text/csv"]
+  
+  capabilities_extended:
+    batch_processing: true
+    streaming: false
+    caching: true
+    rate_limiting: true
+    authentication_required: false
+    concurrent_requests: 3
+  
+  performance:
+    typical_response_time: "2-15 seconds"
+    max_response_time: "60 seconds"
+    memory_usage: "50-200 MB"
+    cpu_requirements: "Low"
+    concurrency_support: true
+    concurrent_limit: 3
+    rate_limit: "3 requests/second"
+    scaling_characteristics: "Network-bound, scales with result size"
+
+# Complete API configuration
+base_url: "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
+api_key: null  # Optional API key for higher rate limits
+email: null    # Required for API usage (NCBI compliance)
+timeout_seconds: 30
+user_agent: "NanoBrain-PubMed/1.0"
+
+# Complete rate limiting configuration
+rate_limit: 3  # Requests per second (without API key)
+rate_limit_with_key: 10  # Requests per second (with API key)
+max_retries: 5
+retry_backoff: 1.0
+fail_fast: true
+
+# Complete search parameters
+default_database: "pubmed"
+max_results: 1000
+return_format: "json"
+include_abstracts: true
+include_full_text: false
+include_mesh_terms: true
+
+# Complete quality filters
+min_publication_year: 2000
+max_publication_year: null  # Current year if null
+exclude_review_types: []
+publication_types: ["Journal Article", "Review", "Clinical Trial"]
+
+# Complete caching configuration
+cache_results: true
+cache_duration: 86400  # 24 hours in seconds
+cache_directory: "data/pubmed_cache"
+cache_config:
+  enable_caching: true
+  cache_ttl_hours: 24
+  cache_searches: true
+  cache_abstracts: true
+
+# Complete search configuration
+search_config:
+  default_sort: "relevance"
+  search_fields: ["title", "abstract", "mesh"]
+  boolean_operators: ["AND", "OR", "NOT"]
+  field_tags: ["ti", "ab", "mh", "au", "dp"]
+
+# Complete output configuration
+output_config:
+  include_pmid: true
+  include_doi: true
+  include_authors: true
+  include_journal: true
+  include_publication_date: true
+  include_mesh_terms: true
+  include_keywords: true
+  format_citations: true
+
+# Complete error handling configuration
+error_handling:
+  fail_fast: true
+  log_errors: true
+  retry_on_failure: true
+  handle_api_limits: true
+  graceful_degradation: true
+
+# Complete logging configuration
+logging_config:
+  enable_logging: true
+  log_level: "INFO"
+  log_search_queries: true
+  log_api_calls: true
+  log_rate_limiting: true
+
+# Complete performance settings
+performance_config:
+  batch_size: 20
+  concurrent_requests: 3
+  request_timeout: 30
+  connection_timeout: 10
+  read_timeout: 30
+
+# Complete BioPython configuration
+biopython_config:
+  required: true
+  min_version: "1.78"
+  entrez_email_required: true
+  entrez_api_key_optional: true 

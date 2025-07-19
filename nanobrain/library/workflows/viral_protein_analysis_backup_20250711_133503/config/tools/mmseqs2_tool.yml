@@ -1,0 +1,37 @@
+# MMseqs2 Tool Configuration for Protein Clustering
+# Matches MMseqs2Config class fields exactly
+
+# Tool identification (using tool_name field consistently)
+tool_name: mmseqs2
+
+# Installation configuration
+conda_package: mmseqs2
+conda_channel: bioconda
+git_repository: https://github.com/soedinglab/MMseqs2.git
+environment_name: nanobrain-viral_protein-mmseqs2
+
+# Clustering parameters
+min_seq_id: 0.7
+coverage: 0.8
+cluster_mode: 0
+sensitivity: 7.5
+
+# Progressive scaling configuration
+progressive_scaling:
+  1:
+    max_sequences: 50
+    sensitivity: 4.0
+  2:
+    max_sequences: 100
+    sensitivity: 5.5
+  3:
+    max_sequences: 500
+    sensitivity: 7.0
+  4:
+    max_sequences: 2000
+    sensitivity: 7.5
+
+# Performance settings
+threads: 4
+memory_limit: 8G
+tmp_dir: null

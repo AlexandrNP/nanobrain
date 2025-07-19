@@ -1,0 +1,58 @@
+tool_name: "bv_brc_tool"
+class: nanobrain.library.tools.bioinformatics.bv_brc_tool.BVBRCTool
+
+# Complete BV-BRC tool configuration (BVBRCConfig fields)
+installation_path: null  # Auto-detect or use system default
+executable_path: null    # Auto-detect or use system default
+
+# Complete bioinformatics tool card
+tool_card:
+  name: "bv_brc"
+  description: "BV-BRC tool for bacterial and viral genome analysis"
+  version: "1.0.0"
+  category: "bioinformatics"
+  capabilities: ["genome_analysis", "protein_extraction", "viral_data"]
+
+# Complete API configuration
+api_base_url: "https://www.bv-brc.org/api"
+use_http_api: true
+
+# Complete local installation paths
+local_installation_paths:
+  - "/Applications/BV-BRC.app/deployment/bin"
+  - "/Applications/BV-BRC.app/Contents/Resources/deployment/bin"
+
+# Complete data acquisition settings
+genome_batch_size: 50
+md5_batch_size: 25
+min_genome_length: 8000
+max_genome_length: 15000
+
+# Complete progressive scaling configuration
+progressive_scaling:
+  1:
+    limit: 5
+    batch_size: 5
+    description: "Small test"
+  2:
+    limit: 10
+    batch_size: 10
+    description: "Basic validation"
+  3:
+    limit: 20
+    batch_size: 15
+    description: "Medium test"
+  4:
+    limit: 50
+    batch_size: 25
+    description: "Full scale"
+
+# Complete performance settings
+timeout_seconds: 600  # 10 minutes for data retrieval operations
+retry_attempts: 2
+verify_on_init: false
+use_cache: true
+
+# Complete error handling
+detailed_diagnostics: true
+suggest_fixes: true 

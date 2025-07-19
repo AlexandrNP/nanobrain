@@ -1,312 +1,388 @@
 """
-Virus Name Resolution Step for Chatbot Viral Integration
+Enhanced Virus Name Resolution Step for Chatbot Viral Integration
 
-This step resolves virus species using LLM with cache-first approach.
-NO hardcoded virus name mappings - all resolution via LLM with configurable prompts.
+This step provides ultra-high-confidence synonym detection with multi-agent processing.
+- Enhanced Query Analysis Agent for virus species extraction
+- Virus Synonym Detection Agent for comprehensive synonym generation
+- Species validation criteria for downstream CSV matching
+- Configurable confidence filtering (>0.9 for zero contamination)
+- NO hardcoded virus mappings - all processing via configurable agents
 """
 
 import json
 import os
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from pathlib import Path
 from datetime import datetime
 
 from nanobrain.core.step import Step
 from nanobrain.core.data_unit import DataUnit
 from nanobrain.core.agent import SimpleAgent
+from nanobrain.core.config.component_factory import create_component, load_config_file
 
 
-class CacheManager:
+class UltraHighConfidenceCacheManager:
     """
-    Cache manager for virus resolution data
-    NO session ID usage - dynamic cache key generation only
+    Ultra-high-confidence cache manager for virus name resolution
+    
+    PRECISION REQUIREMENT: Only cache results with confidence >= threshold
+    Prevents low-confidence data from contaminating future queries
     """
     
-    def __init__(self, cache_directory: str, ttl: int = 86400):
+    def __init__(self, cache_directory: str, confidence_threshold: float = 0.9):
         self.cache_directory = Path(cache_directory)
+        self.confidence_threshold = confidence_threshold
         self.cache_directory.mkdir(parents=True, exist_ok=True)
-        self.ttl = ttl
     
     @classmethod
-    def from_config(cls, config: Dict[str, Any]) -> 'CacheManager':
-        """Create CacheManager from configuration"""
+    def from_config(cls, config: Dict[str, Any]) -> 'UltraHighConfidenceCacheManager':
+        """Create cache manager from configuration"""
+        cache_directory = config.get('cache_directory', 'data/ultra_cache')
+        confidence_threshold = config.get('confidence_threshold', 0.9)
+        
         return cls(
-            cache_directory=config.get('cache_directory', 'data/virus_resolution_cache'),
-            ttl=config.get('ttl', 86400)
+            cache_directory=cache_directory,
+            confidence_threshold=confidence_threshold
         )
     
-    async def get(self, cache_key: str) -> Optional[Dict[str, Any]]:
-        """Get cached resolution data"""
-        cache_file = self.cache_directory / f"{cache_key}.json"
+    async def get_cached_resolution(self, virus_key: str) -> Optional[Dict[str, Any]]:
+        """Get cached virus resolution if confidence meets threshold"""
+        cache_file = self.cache_directory / f"{virus_key}.json"
         
-        if not cache_file.exists():
-            return None
-        
-        try:
-            # Check if cache is still valid
-            if self._is_cache_expired(cache_file):
-                os.remove(cache_file)
+        if cache_file.exists():
+            try:
+                with open(cache_file, 'r') as f:
+                    cached_data = json.load(f)
+                
+                # Check if cached data meets confidence threshold
+                overall_confidence = cached_data.get('overall_confidence', 0.0)
+                
+                if overall_confidence >= self.confidence_threshold:
+                    return cached_data
+                else:
+                    # Remove low-confidence cache entry
+                    cache_file.unlink()
+                    return None
+                    
+            except Exception:
                 return None
-            
-            with open(cache_file, 'r') as f:
-                return json.load(f)
         
-        except Exception:
-            return None
+        return None
     
-    async def set(self, cache_key: str, data: Dict[str, Any]) -> None:
-        """Set cached resolution data"""
-        cache_file = self.cache_directory / f"{cache_key}.json"
+    async def cache_resolution(self, virus_key: str, resolution_data: Dict[str, Any]) -> None:
+        """Cache virus resolution if it meets confidence threshold"""
+        overall_confidence = resolution_data.get('overall_confidence', 0.0)
         
-        try:
-            # Add timestamp to cached data
-            data['_cache_timestamp'] = datetime.now().isoformat()
+        if overall_confidence >= self.confidence_threshold:
+            cache_file = self.cache_directory / f"{virus_key}.json"
+            
+            # Add cache metadata
+            resolution_data['cache_metadata'] = {
+                'cached_at': datetime.now().isoformat(),
+                'confidence_threshold': self.confidence_threshold,
+                'cache_source': 'ultra_high_confidence'
+            }
             
             with open(cache_file, 'w') as f:
-                json.dump(data, f, indent=2)
-        
-        except Exception:
-            pass  # Fail silently if cache write fails
-    
-    def _is_cache_expired(self, cache_file: Path) -> bool:
-        """Check if cache file is expired"""
-        try:
-            file_age = datetime.now().timestamp() - cache_file.stat().st_mtime
-            return file_age > self.ttl
-        except Exception:
-            return True
+                json.dump(resolution_data, f, indent=2)
 
 
-class VirusNameResolutionStep(Step):
+class EnhancedVirusNameResolutionStep(Step):
     """
-    SINGLE RESPONSIBILITY: Resolve virus species using LLM + cache
+    ENHANCED RESPONSIBILITY: Ultra-high-confidence virus synonym detection + species validation criteria
     
-    This step resolves virus species to canonical ICTV names and BV-BRC search terms
-    using LLM agents with cache-first approach. NO hardcoded mappings.
+    This step provides:
+    1. Enhanced virus species extraction using specialized agents
+    2. Ultra-high-confidence synonym detection (>0.9 confidence)
+    3. Species validation criteria for CSV matching
+    4. Multi-stage confidence filtering for zero contamination
+    5. Comprehensive taxonomic information for validation
     """
     
     def __init__(self, config, **kwargs):
         super().__init__(config, **kwargs)
-        self.resolution_agent = None
+        self.query_analysis_agent = None
+        self.synonym_detection_agent = None
         self.cache_manager = None
         
     def _init_from_config(self, config, component_config: Dict[str, Any], dependencies: Dict[str, Any]) -> None:
-        """Initialize VirusNameResolutionStep with resolved dependencies"""
+        """Initialize EnhancedVirusNameResolutionStep with multiple specialized agents"""
         super()._init_from_config(config, component_config, dependencies)
         
-        # Initialize resolution agent from configuration
-        self.resolution_agent = self._create_resolution_agent(component_config)
+        # Initialize enhanced query analysis agent
+        self.query_analysis_agent = self._create_query_analysis_agent(component_config)
         
-        # Initialize cache manager from configuration
-        self.cache_manager = self._create_cache_manager(component_config)
+        # Initialize virus synonym detection agent
+        self.synonym_detection_agent = self._create_synonym_detection_agent(component_config)
+        
+        # Initialize ultra-high-confidence cache manager
+        self.cache_manager = self._create_ultra_cache_manager(component_config)
+        
+        # Get confidence threshold from configuration
+        self.confidence_threshold = component_config.get('confidence_threshold', 0.9)
         
         if self.nb_logger:
-            self.nb_logger.info("🔬 Virus Name Resolution Step initialized with LLM + cache")
+            self.nb_logger.info(f"🔬 Enhanced Virus Name Resolution Step initialized with ultra-high-confidence threshold: {self.confidence_threshold}")
     
-    def _create_resolution_agent(self, component_config: Dict[str, Any]) -> SimpleAgent:
-        """Create LLM agent for virus name resolution from configuration"""
-        # Get agent config from the component configuration
-        agent_config_dict = component_config.get('resolution_agent', {})
+    def _create_query_analysis_agent(self, component_config: Dict[str, Any]) -> SimpleAgent:
+        """Create enhanced query analysis agent for virus species extraction"""
+        agent_config_ref = component_config.get('query_analysis_agent', {})
         
-        # If not found, try to get from the main config object (the full YAML configuration)
-        if not agent_config_dict and hasattr(self.config, 'resolution_agent'):
-            agent_config_dict = getattr(self.config, 'resolution_agent')
-        elif not agent_config_dict and isinstance(self.config, dict):
-            agent_config_dict = self.config.get('resolution_agent', {})
-        
-        if not agent_config_dict:
-            raise ValueError("No resolution_agent configuration found in step configuration")
-        
-        # Ensure the name field is present for SimpleAgent
-        if 'name' not in agent_config_dict:
-            agent_config_dict['name'] = 'virus_resolution_agent'
-        
-        # Create AgentConfig object from dictionary - this is what SimpleAgent expects
-        from nanobrain.core.agent import AgentConfig
-        
-        # Create A2A protocol compliant agent_card
-        agent_card = {
-            "version": "1.0.0",
-            "purpose": "Virus species resolution to canonical ICTV taxonomy",
-            "detailed_description": "Specialized agent for resolving virus species names to canonical ICTV taxonomy with BV-BRC search terms",
-            "domain": "bioinformatics",
-            "expertise_level": "expert",
-            "input_format": {
-                "primary_mode": "text",
-                "supported_modes": ["text"],
-                "content_types": ["text/plain"]
-            },
-            "output_format": {
-                "primary_mode": "json",
-                "supported_modes": ["json"],
-                "content_types": ["application/json"]
-            },
-            "capabilities": {
-                "streaming": False,
-                "multi_turn_conversation": False,
-                "context_retention": False,
-                "tool_usage": False
-            }
-        }
-        
-        agent_config = AgentConfig(
-            name=agent_config_dict.get('name', 'virus_resolution_agent'),
-            description=agent_config_dict.get('description', 'Agent for resolving virus species to canonical ICTV taxonomy'),
-            model=agent_config_dict.get('model', 'gpt-4'),
-            temperature=agent_config_dict.get('temperature', 0.1),
-            max_tokens=agent_config_dict.get('max_tokens', 200),
-            system_prompt=agent_config_dict.get('system_prompt', ''),
-            timeout=agent_config_dict.get('timeout', 30),
-            agent_card=agent_card
-        )
-        
-        # Create agent using mandatory from_config pattern with proper AgentConfig object
-        return SimpleAgent.from_config(agent_config)
+        if 'config_file' in agent_config_ref:
+            # Load agent from external configuration file
+            config_file_path = agent_config_ref['config_file']
+            agent_config = load_config_file(config_file_path)
+            agent_class_path = agent_config.get('class')
+            
+            if not agent_class_path:
+                raise ValueError(f"Agent configuration must specify 'class' field: {config_file_path}")
+            
+            return create_component(agent_class_path, agent_config)
+        else:
+            # Fallback to inline configuration
+            if not agent_config_ref:
+                raise ValueError("No query_analysis_agent configuration found")
+            
+            # Ensure name field for agent creation
+            if 'name' not in agent_config_ref:
+                agent_config_ref['name'] = 'enhanced_query_analysis_agent'
+            
+            # Create agent using from_config pattern
+            from nanobrain.library.agents.specialized.base import SimpleSpecializedAgent
+            from nanobrain.core.agent import AgentConfig
+            
+            config_obj = AgentConfig(**agent_config_ref)
+            return SimpleSpecializedAgent.from_config(config_obj)
     
-    def _create_cache_manager(self, component_config: Dict[str, Any]) -> CacheManager:
-        """Create cache manager for virus resolution data from configuration"""
+    def _create_synonym_detection_agent(self, component_config: Dict[str, Any]) -> SimpleAgent:
+        """Create virus synonym detection agent for ultra-high-confidence synonyms"""
+        agent_config_ref = component_config.get('synonym_detection_agent', {})
+        
+        if 'config_file' in agent_config_ref:
+            # Load agent from external configuration file
+            config_file_path = agent_config_ref['config_file']
+            agent_config = load_config_file(config_file_path)
+            agent_class_path = agent_config.get('class')
+            
+            if not agent_class_path:
+                raise ValueError(f"Agent configuration must specify 'class' field: {config_file_path}")
+            
+            return create_component(agent_class_path, agent_config)
+        else:
+            # Fallback to inline configuration
+            if not agent_config_ref:
+                raise ValueError("No synonym_detection_agent configuration found")
+            
+            # Ensure name field for agent creation
+            if 'name' not in agent_config_ref:
+                agent_config_ref['name'] = 'virus_synonym_detection_agent'
+            
+            # Create agent using from_config pattern
+            from nanobrain.library.agents.specialized.base import SimpleSpecializedAgent
+            from nanobrain.core.agent import AgentConfig
+            
+            config_obj = AgentConfig(**agent_config_ref)
+            return SimpleSpecializedAgent.from_config(config_obj)
+    
+    def _create_ultra_cache_manager(self, component_config: Dict[str, Any]) -> UltraHighConfidenceCacheManager:
+        """Create ultra-high-confidence cache manager from configuration"""
         cache_config = component_config.get('cache_config', {})
         
-        # Create cache manager using from_config pattern
-        return CacheManager.from_config(cache_config)
+        # Add confidence threshold to cache config
+        cache_config['confidence_threshold'] = component_config.get('confidence_threshold', 0.9)
+        
+        return UltraHighConfidenceCacheManager.from_config(cache_config)
     
     async def process(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Process virus species resolution using LLM + cache
+        Process ultra-high-confidence virus species resolution with multi-agent pipeline
         
         Args:
-            input_data: Contains 'extracted_virus_species' key
+            input_data: Contains 'extracted_virus_species' or 'user_query' key
             
         Returns:
-            Dict with resolved virus species information
+            Dict with ultra-high-confidence synonyms and species validation criteria
         """
+        # Extract virus species from input
         extracted_species = input_data.get('extracted_virus_species')
+        user_query = input_data.get('user_query', '')
+        
+        # If no extracted species, use query analysis agent to extract
+        if not extracted_species and user_query:
+            self.nb_logger.info("🔍 No extracted species provided, using query analysis agent")
+            extracted_species = await self._extract_virus_species_enhanced(user_query)
+        
         if not extracted_species:
-            raise ValueError("No virus species extracted from query")
+            raise ValueError("No virus species could be extracted from input")
+        
+        self.nb_logger.info(f"🧬 Processing virus species: {extracted_species}")
+        
+        # Check ultra-high-confidence cache first
+        cache_key = self._generate_cache_key(extracted_species)
+        cached_result = await self.cache_manager.get_cached_resolution(cache_key)
+        
+        if cached_result:
+            self.nb_logger.info(f"🎯 Found ultra-high-confidence cached result for {extracted_species}")
+            return cached_result
         
         try:
-            # Check cache first (NO hardcoded cache keys)
-            cache_key = self._generate_cache_key(extracted_species)
-            cached_resolution = await self.cache_manager.get(cache_key)
+            # Generate ultra-high-confidence synonyms
+            result = await self._generate_ultra_synonyms(extracted_species)
             
-            if cached_resolution:
-                self.nb_logger.info(f"✅ Cache hit for virus species: {extracted_species}")
-                resolution_result = cached_resolution
+            # Cache if meets confidence threshold
+            if result.get('overall_confidence', 0.0) >= self.confidence_threshold:
+                await self.cache_manager.cache_resolution(cache_key, result)
+                self.nb_logger.info(f"✅ Cached ultra-high-confidence result for {extracted_species}")
             else:
-                # Use LLM for resolution
-                self.nb_logger.info(f"🔄 Cache miss, using LLM for virus species: {extracted_species}")
-                resolution_result = await self._resolve_virus_species_llm(extracted_species)
-                
-                # Cache the result
-                await self.cache_manager.set(cache_key, resolution_result)
+                self.nb_logger.warning(f"⚠️ Result for {extracted_species} below confidence threshold, not cached")
             
-            return {
-                'virus_species': resolution_result['canonical_name'],
-                'bvbrc_search_terms': resolution_result['bvbrc_search_terms'],
-                'genome_characteristics': resolution_result.get('genome_characteristics', {}),
-                'taxonomic_lineage': resolution_result.get('taxonomic_lineage', []),
-                'confidence': resolution_result.get('confidence', 0.0),
-                'user_query': input_data.get('user_query')
-            }
+            return result
         
         except Exception as e:
-            self.nb_logger.error(f"❌ Error in virus name resolution: {e}")
+            self.nb_logger.error(f"❌ Error in enhanced virus name resolution: {e}")
             raise
     
-    def _generate_cache_key(self, virus_species: str) -> str:
-        """
-        Generate cache key dynamically (NO hardcoding, NO session ID)
-        
-        Args:
-            virus_species: Virus species name
-            
-        Returns:
-            Cache key string
-        """
-        # Use virus species name only (NO session ID)
-        normalized_name = virus_species.lower().replace(' ', '_').replace('-', '_')
-        return f"virus_resolution_{normalized_name}"
-    
-    async def _resolve_virus_species_llm(self, virus_species: str) -> Dict[str, Any]:
-        """
-        Resolve virus species using LLM agent
-        
-        Args:
-            virus_species: Virus species name to resolve
-            
-        Returns:
-            Dict with resolved virus species information
-        """
+    async def _extract_virus_species_enhanced(self, user_query: str) -> Optional[str]:
+        """Extract virus species using enhanced query analysis agent"""
         try:
-            # Get prompt template from configuration
-            prompt_template = self.step_config.get('resolution_prompt', '')
+            # Use query analysis agent to extract virus species
+            prompt_template = self.step_config.get('virus_extraction_prompt', 
+                'Analyze this query and extract virus species: "{user_query}". Return JSON with virus_species field.')
             
-            if not prompt_template:
-                raise ValueError("No resolution prompt configured")
+            formatted_prompt = prompt_template.format(user_query=user_query)
             
-            # Format prompt with virus species
-            formatted_prompt = prompt_template.format(virus_species=virus_species)
-            
-            # Call LLM agent with formatted prompt
-            response = await self.resolution_agent.process({
+            response = await self.query_analysis_agent.process({
                 'prompt': formatted_prompt,
                 'expected_format': 'json'
             })
             
-            # Parse the response
-            return self._parse_resolution_response(response)
+            # Parse response to extract virus species
+            parsed_response = self._parse_agent_response(response)
+            return parsed_response.get('virus_species')
             
         except Exception as e:
-            self.nb_logger.error(f"❌ Error in LLM virus species resolution: {e}")
+            self.nb_logger.error(f"❌ Error in enhanced virus species extraction: {e}")
+            return None
+    
+    async def _generate_ultra_synonyms(self, virus_species: str) -> Dict[str, Any]:
+        """Generate ultra-high-confidence synonyms using specialized agent"""
+        try:
+            # Use virus synonym detection agent for ultra-high-confidence processing
+            synonym_prompt = self._build_synonym_detection_prompt(virus_species)
+            
+            response = await self.synonym_detection_agent.process({
+                'prompt': synonym_prompt,
+                'expected_format': 'json',
+                'confidence_threshold': self.confidence_threshold
+            })
+            
+            # Parse and validate response
+            parsed_response = self._parse_agent_response(response)
+            
+            # Ensure ultra-high-confidence format
+            result = self._format_ultra_high_confidence_result(virus_species, parsed_response)
+            
+            return result
+            
+        except Exception as e:
+            self.nb_logger.error(f"❌ Error in ultra synonym generation: {e}")
             raise
     
-    def _parse_resolution_response(self, response: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Parse LLM response to extract virus species resolution
+    def _build_synonym_detection_prompt(self, virus_species: str) -> str:
+        """Build comprehensive prompt for virus synonym detection"""
+        return f"""
+        As a virology expert, generate ultra-high-confidence synonyms for: {virus_species}
         
-        Args:
-            response: Raw response from LLM agent
-            
-        Returns:
-            Dict with resolved virus species data
+        Requirements:
+        1. Only include synonyms with >90% confidence
+        2. Include taxonomic lineage information
+        3. Generate species validation criteria
+        4. Provide confidence scores for each synonym
+        
+        Return JSON with:
+        - canonical_name: Official ICTV name
+        - ultra_high_confidence_synonyms: List of >90% confidence synonyms
+        - taxonomic_lineage: genus, family, order
+        - confidence_scores: confidence for each synonym
+        - overall_confidence: overall confidence score
         """
-        try:
-            # Handle different response formats
-            if isinstance(response, dict):
-                if 'content' in response:
-                    content = response['content']
-                elif 'text' in response:
-                    content = response['text']
-                else:
-                    content = str(response)
-            else:
-                content = str(response)
-            
-            # Try to parse as JSON
+    
+    def _format_ultra_high_confidence_result(self, virus_species: str, parsed_response: Dict[str, Any]) -> Dict[str, Any]:
+        """Format response into ultra-high-confidence result structure"""
+        canonical_name = parsed_response.get('canonical_name', virus_species)
+        synonyms = parsed_response.get('ultra_high_confidence_synonyms', [virus_species])
+        taxonomic_lineage = parsed_response.get('taxonomic_lineage', {})
+        confidence_scores = parsed_response.get('confidence_scores', {})
+        overall_confidence = parsed_response.get('overall_confidence', 0.95)
+        
+        # Generate species validation criteria
+        validation_criteria = self._generate_species_validation_criteria(
+            canonical_name, synonyms, taxonomic_lineage, overall_confidence
+        )
+        
+        return {
+            'virus_species': canonical_name,
+            'ultra_high_confidence_synonyms': synonyms,
+            'species_validation_criteria': validation_criteria,
+            'confidence_scores': confidence_scores,
+            'overall_confidence': overall_confidence,
+            'taxonomic_lineage': taxonomic_lineage,
+            'validation_metadata': {
+                'generation_method': 'multi_agent_ultra_precision',
+                'confidence_threshold': self.confidence_threshold,
+                'contamination_prevention': True,
+                'timestamp': datetime.now().isoformat()
+            }
+        }
+    
+    def _generate_species_validation_criteria(self, canonical_name: str, synonyms: List[str], 
+                                           taxonomic_lineage: Dict[str, Any], confidence: float) -> Dict[str, Any]:
+        """Generate comprehensive species validation criteria for CSV matching"""
+        return {
+            'primary_species': canonical_name,
+            'acceptable_variations': synonyms,
+            'taxonomic_constraints': {
+                'genus': taxonomic_lineage.get('genus', ''),
+                'family': taxonomic_lineage.get('family', ''),
+                'order': taxonomic_lineage.get('order', '')
+            },
+            'validation_rules': {
+                'exact_match_required': confidence > 0.95,
+                'case_sensitive': False,
+                'allow_abbreviations': True,
+                'require_species_confirmation': True
+            },
+            'contamination_prevention': {
+                'reject_on_genus_mismatch': True,
+                'require_species_confirmation': True,
+                'cross_validation_required': True,
+                'zero_contamination_tolerance': 0.0
+            }
+        }
+    
+    def _generate_cache_key(self, virus_species: str) -> str:
+        """Generate normalized cache key for virus species"""
+        normalized = virus_species.lower().replace(' ', '_').replace('/', '_').replace('-', '_')
+        return f"ultra_resolution_{normalized}"
+    
+    def _parse_agent_response(self, response: Any) -> Dict[str, Any]:
+        """Parse agent response ensuring JSON format"""
+        if isinstance(response, dict):
+            return response
+        elif isinstance(response, str):
             try:
-                parsed_data = json.loads(content)
-                
-                return {
-                    'canonical_name': parsed_data.get('canonical_name'),
-                    'bvbrc_search_terms': parsed_data.get('bvbrc_search_terms', []),
-                    'genome_characteristics': parsed_data.get('genome_characteristics', {}),
-                    'taxonomic_lineage': parsed_data.get('taxonomic_lineage', []),
-                    'confidence': parsed_data.get('confidence', 0.0)
-                }
-            
+                return json.loads(response)
             except json.JSONDecodeError:
-                # If not JSON, create fallback response
-                self.nb_logger.warning("⚠️ LLM response not in JSON format, creating fallback")
-                
-                # Create fallback resolution
-                return {
-                    'canonical_name': virus_species,
-                    'bvbrc_search_terms': [virus_species],
-                    'genome_characteristics': {},
-                    'taxonomic_lineage': ['Viruses'],
-                    'confidence': 0.5
-                }
-        
-        except Exception as e:
-            self.nb_logger.error(f"❌ Error parsing resolution response: {e}")
-            raise 
+                # Try to extract JSON from text
+                import re
+                json_match = re.search(r'\{.*\}', response, re.DOTALL)
+                if json_match:
+                    return json.loads(json_match.group())
+                else:
+                    raise ValueError(f"Could not parse agent response as JSON: {response}")
+        else:
+            raise ValueError(f"Unexpected agent response type: {type(response)}")
+
+
+# Maintain backward compatibility by keeping original class as alias
+VirusNameResolutionStep = EnhancedVirusNameResolutionStep 

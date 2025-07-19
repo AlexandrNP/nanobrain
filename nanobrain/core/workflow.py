@@ -759,6 +759,11 @@ class Workflow(Step):
     }
     
     @classmethod
+    def _get_config_class(cls):
+        """UNIFIED PATTERN: Return WorkflowConfig - ONLY method that differs from other components"""
+        return WorkflowConfig
+    
+    @classmethod
     def extract_component_config(cls, config: WorkflowConfig) -> Dict[str, Any]:
         """Extract Workflow configuration"""
         base_config = super().extract_component_config(config)

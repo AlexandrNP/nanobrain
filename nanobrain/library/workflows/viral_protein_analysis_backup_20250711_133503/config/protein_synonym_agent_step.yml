@@ -1,0 +1,22 @@
+name: "ProteinSynonymAgentStep"
+description: "LLM-powered protein synonym resolution for viral protein analysis"
+
+# Agent configuration
+agent:
+  config_path: "nanobrain/library/agents/specialized/config/ProteinSynonymAgent.yml"
+  
+# Processing configuration  
+processing:
+  max_batch_size: 100
+  timeout_per_batch: 60
+  
+# Caching configuration
+cache:
+  enable: true
+  ttl_days: 30
+  cache_dir: "data/synonym_cache"
+  
+# Logging configuration
+logging:
+  level: "INFO"
+  enable_debug: false 

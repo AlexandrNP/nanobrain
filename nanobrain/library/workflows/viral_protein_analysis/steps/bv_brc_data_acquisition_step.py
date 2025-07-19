@@ -126,6 +126,25 @@ class BVBRCDataAcquisitionStep(Step):
                          dependencies: Dict[str, Any]) -> None:
         """Initialize BVBRCDataAcquisitionStep with tool integration via from_config pattern"""
         super()._init_from_config(config, component_config, dependencies)
+        
+        # Initialize SynonymDetection agent via nested configuration
+        agent_config = getattr(config, 'synonym_detection_agent', None)
+        if not agent_config or 'config_file' not in agent_config:
+            raise ValueError("SynonymDetection agent configuration required but not found")
+        
+        # Load agent configuration from external file
+        from nanobrain.core.config.component_factory import load_config_file, create_component
+        agent_config_path = agent_config['config_file']
+        agent_config_data = load_config_file(agent_config_path)
+        
+        # Create agent using from_config pattern
+        agent_class = agent_config_data['class']
+        self.synonym_detection_agent = create_component(agent_class, agent_config_data)
+        
+        if hasattr(self, 'nb_logger') and self.nb_logger:
+            self.nb_logger.info(f"🤖 SynonymDetection agent loaded from: {agent_config_path}")
+        
+        # Initialize BV-BRC tool
         self._initialize_tools(config, None)
         
     def _initialize_tools(self, config: StepConfig, bvbrc_config: Optional[Dict[str, Any]] = None):
@@ -199,143 +218,128 @@ class BVBRCDataAcquisitionStep(Step):
             self.nb_logger.info(f"⏱️ Timeout set to {self.timeout_seconds} seconds (20 minutes)")
             self.nb_logger.info(f"💾 Cache directory: {self.cache_dir}")
     
-    async def _extract_virus_name_from_query(self, user_query: str) -> str:
-        """Extract the full virus name from user query using LLM"""
+    async def _extract_virus_species_with_agent(self, user_query: str) -> str:
+        """Extract virus species using SynonymDetection agent with standardized format"""
+        
         if not user_query:
-            return "unknown_virus"
+            raise ValueError("Cannot extract virus species from empty query")
+        
+        # Create standardized extraction request
+        extraction_request = {
+            'query': user_query,
+            'extraction_task': 'virus_species_identification',
+            'context': 'viral_protein_analysis',
+            'output_format': 'species_name_only'
+        }
         
         try:
-            # Initialize OpenAI client (similar to Agent class)
-            from openai import AsyncOpenAI
-            import os
+            # Use agent with standardized request format
+            response = await self.synonym_detection_agent.process(extraction_request)
             
-            # Get API key
-            api_key = os.getenv('OPENAI_API_KEY')
-            if not api_key:
-                self.nb_logger.warning("⚠️ No OpenAI API key found, using fallback extraction")
-                return self._fallback_virus_extraction(user_query)
+            # Extract species name from response
+            species_name = response.get('content', '').strip()
             
-            # Create OpenAI client
-            client = AsyncOpenAI(api_key=api_key)
+            # Validate response format
+            if not species_name or species_name == "UNKNOWN_SPECIES":
+                raise ValueError(f"Agent could not extract virus species from query: '{user_query}'")
             
-            # Create extraction prompt
-            extraction_prompt = f"""Extract the virus name from the following user query and return it in a clean, cache-friendly format.
-
-User Query: "{user_query}"
-
-Instructions:
-1. Identify the specific virus mentioned in the query
-2. Return ONLY the virus name in lowercase with underscores instead of spaces
-3. Remove "virus" suffix if present
-4. Use common abbreviations when appropriate (e.g., "chikv" for chikungunya, "eeev" for eastern equine encephalitis)
-5. If multiple viruses are mentioned, return the primary/first one
-6. If no specific virus is found, return "alphavirus" as the default
-
-Examples:
-- "Create PSSM matrix for Chikungunya virus" → "chikungunya"
-- "Generate PSSM for EEEV" → "eastern_equine_encephalitis" 
-- "Analyze VEEV proteins" → "venezuelan_equine_encephalitis"
-- "Study Sindbis virus genome" → "sindbis"
-- "Process alphavirus data" → "alphavirus"
-
-Return only the clean virus name, nothing else:"""
-
-            # Make LLM call
-            response = await client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "user", "content": extraction_prompt}
-                ],
-                temperature=0.1,
-                max_tokens=50
-            )
-            
-            if response.choices and response.choices[0].message.content:
-                # Clean the response
-                virus_name = response.choices[0].message.content.strip().lower()
-                # Remove any extra text, keep only the virus name
-                virus_name = virus_name.split('\n')[0].split('.')[0].split(',')[0].strip()
-                # Ensure it's filename-safe
-                virus_name = virus_name.replace(' ', '_').replace('-', '_').replace('/', '_')
-                # Remove any remaining punctuation except underscores
-                import re
-                virus_name = re.sub(r'[^\w_]', '', virus_name)
-                
-                self.nb_logger.info(f"🤖 LLM extracted virus name: '{virus_name}' from query: '{user_query}'")
-                return virus_name if virus_name else "unknown_virus"
+            self.nb_logger.info(f"🧬 Agent extracted virus species: '{species_name}' from query: '{user_query}'")
+            return species_name
             
         except Exception as e:
-            self.nb_logger.warning(f"⚠️ LLM virus name extraction failed: {e}")
-            # Fallback to simple extraction
-            
-        # Fallback: Simple rule-based extraction if LLM fails
-        return self._fallback_virus_extraction(user_query)
-    
-    def _fallback_virus_extraction(self, user_query: str) -> str:
-        """Fallback virus name extraction using simple rules"""
-        query_lower = user_query.lower()
+            self.nb_logger.error(f"❌ Virus species extraction failed: {e}")
+            raise ValueError(f"Cannot extract virus species from query: '{user_query}'. Error: {e}")
+
+    async def _validate_species_against_csv(self, species_name: str) -> bool:
+        """Validate extracted species against CSV data using agent-based matching"""
         
-        # Simple keyword-based extraction
-        if 'chikungunya' in query_lower or 'chikv' in query_lower:
-            return 'chikungunya'
-        elif 'eastern equine' in query_lower or 'eeev' in query_lower:
-            return 'eastern_equine_encephalitis'
-        elif 'western equine' in query_lower or 'weev' in query_lower:
-            return 'western_equine_encephalitis'
-        elif 'venezuelan equine' in query_lower or 'veev' in query_lower:
-            return 'venezuelan_equine_encephalitis'
-        elif 'sindbis' in query_lower or 'sinv' in query_lower:
-            return 'sindbis'
-        elif 'semliki' in query_lower or 'sfv' in query_lower:
-            return 'semliki_forest'
-        elif 'ross river' in query_lower or 'rrv' in query_lower:
-            return 'ross_river'
-        elif 'mayaro' in query_lower or 'mayv' in query_lower:
-            return 'mayaro'
-        elif 'alphavirus' in query_lower:
-            return 'alphavirus'
-        else:
-            # Try to extract any word before "virus"
-            words = query_lower.split()
-            for i, word in enumerate(words):
-                if 'virus' in word and i > 0:
-                    virus_word = words[i-1].replace(' ', '_').replace('-', '_')
-                    # Filter out common non-virus words
-                    if virus_word not in ['the', 'a', 'an', 'for', 'of', 'with', 'study', 'analyze', 'process', 'create', 'generate']:
-                        return virus_word
+        csv_path = getattr(self.config, 'csv_file_path', 'data/viral_analysis/BVBRC_genome_viral.csv')
+        
+        try:
+            # Read CSV data to get available species
+            import pandas as pd
+            df = pd.read_csv(csv_path)
+            available_species = df['Genome Name'].unique().tolist()
             
-            # Default fallback
-            return 'alphavirus'
+            # Use agent to validate species against CSV entries
+            validation_request = {
+                'query': f"Is '{species_name}' present in this list: {available_species}",
+                'extraction_task': 'taxonomic_classification',
+                'context': 'viral_protein_analysis',
+                'output_format': 'validation_result'
+            }
+            
+            validation_response = await self.synonym_detection_agent.process(validation_request)
+            validation_result = validation_response.get('content', '').strip().lower()
+            
+            # Interpret validation result
+            is_valid = validation_result in ['yes', 'true', 'valid', 'found', 'present']
+            
+            if not is_valid:
+                self.nb_logger.warning(f"⚠️  Species '{species_name}' not found in CSV data")
+                return False
+            
+            self.nb_logger.info(f"✅ Species '{species_name}' validated against CSV data")
+            return True
+            
+        except Exception as e:
+            self.nb_logger.error(f"❌ CSV validation failed: {e}")
+            return False
 
     async def _get_virus_cache_key(self, input_params: Dict[str, Any]) -> str:
-        """Generate a cache key for virus-specific data based on user query"""
+        """Generate cache key using pure agent-based virus species resolution with CSV validation"""
         
-        # First priority: Extract virus name from user query
+        # Extract user query
         user_query = input_params.get('user_query', '')
-        if user_query:
-            virus_name = await self._extract_virus_name_from_query(user_query)
-            self.nb_logger.info(f"💾 Extracted virus name from query '{user_query}': {virus_name}")
-            return virus_name
+        if not user_query:
+            # Try other query sources
+            user_query = input_params.get('target_organism', '') or input_params.get('organism', '')
         
-        # Second priority: Use target organism if specified
-        target_organism = input_params.get('target_organism', '')
-        if target_organism:
-            virus_name = await self._extract_virus_name_from_query(target_organism)
-            self.nb_logger.info(f"💾 Using target organism: {virus_name}")
-            return virus_name
+        if not user_query:
+            raise ValueError(
+                "Cannot extract virus species: no query data provided. "
+                "Please provide 'user_query', 'target_organism', or 'organism' parameter with specific virus species."
+            )
         
-        # Third priority: Use organism parameter
-        organism = input_params.get('organism', '')
-        if organism:
-            virus_name = await self._extract_virus_name_from_query(organism)
-            self.nb_logger.info(f"💾 Using organism parameter: {virus_name}")
-            return virus_name
-        
-        # Final fallback: Use target genus
-        target_genus = input_params.get('target_genus', 'alphavirus')
-        virus_name = target_genus.lower().replace(' ', '_')
-        self.nb_logger.info(f"💾 Fallback to target genus: {virus_name}")
-        return virus_name
+        try:
+            # Step 1: Extract species using SynonymDetection agent
+            species_name = await self._extract_virus_species_with_agent(user_query)
+            
+            # Step 2: Validate against CSV data
+            if not await self._validate_species_against_csv(species_name):
+                raise ValueError(
+                    f"Virus species '{species_name}' not found in available data. "
+                    f"Please specify a virus species that exists in the dataset."
+                )
+            
+            # Generate cache-friendly key
+            import re
+            cache_key = species_name.lower().replace(' ', '_').replace('-', '_')
+            cache_key = re.sub(r'[^\w_]', '', cache_key)
+            
+            self.nb_logger.info(f"💾 Generated cache key: '{cache_key}' for species: '{species_name}'")
+            return cache_key
+            
+        except Exception as e:
+            # Provide user guidance for resolution
+            error_details = {
+                'error_type': 'virus_species_determination_failed',
+                'user_query': user_query,
+                'error_message': str(e),
+                'user_guidance': (
+                    "Please provide a more specific virus species in your query. "
+                    "Examples: 'Chikungunya virus', 'Eastern equine encephalitis virus', "
+                    "'Venezuelan equine encephalitis virus', 'Ross River virus'"
+                ),
+                'resolution_steps': [
+                    "1. Specify the exact virus species name",
+                    "2. Use common virus abbreviations (CHIKV, EEEV, VEEV, etc.)",
+                    "3. Ensure the virus species exists in the available dataset"
+                ]
+            }
+            
+            self.nb_logger.error(f"❌ Virus species determination failed: {e}")
+            raise ValueError(f"Virus species determination failed: {e}")
     
     def _get_cached_file_path(self, cache_key: str, file_type: str) -> Path:
         """Get the path for a cached file"""
@@ -366,12 +370,15 @@ Return only the clean virus name, nothing else:"""
         """
         self.nb_logger.info("🔄 Processing BV-BRC data acquisition step")
         
-        # Extract parameters from input_data
-        input_params = {
-            'target_genus': input_data.get('target_genus', 'Alphavirus'),
-            'organism': input_data.get('organism', 'Alphavirus'),
-            **input_data
-        }
+        # Extract parameters from input_data - NO HARDCODED DEFAULTS
+        input_params = input_data.copy()
+        
+        # Validate that target genus or organism is provided
+        if 'target_genus' not in input_params and 'organism' not in input_params:
+            raise ValueError(
+                "BV-BRC data acquisition requires 'target_genus' or 'organism' parameter. "
+                "Please specify the target virus genus or organism for data acquisition."
+            )
         
         # Call the original execute method
         result = await self.execute(input_params)
@@ -391,7 +398,14 @@ Return only the clean virus name, nothing else:"""
         """
         
         step_start_time = time.time()
-        target_genus = input_params.get('target_genus', 'Alphavirus')
+        
+        # Get target genus from input - NO HARDCODED DEFAULTS
+        target_genus = input_params.get('target_genus') or input_params.get('organism')
+        if not target_genus:
+            raise ValueError(
+                "No target genus or organism specified. "
+                "Please provide 'target_genus' or 'organism' parameter for BV-BRC data acquisition."
+            )
         
         # Generate virus-specific cache key
         cache_key = await self._get_virus_cache_key(input_params)
@@ -468,7 +482,12 @@ Return only the clean virus name, nothing else:"""
             else:
                 # No valid cache found - proceed with genome download
                 # 🚨 CRITICAL: Use CSV search function as primary method for genome acquisition
-                virus_species = input_params.get('virus_species', input_params.get('organism', 'Alphavirus'))
+                virus_species = input_params.get('virus_species') or input_params.get('organism')
+                if not virus_species:
+                    raise ValueError(
+                        "No virus species specified. "
+                        "Please provide 'virus_species' or 'organism' parameter for genome acquisition."
+                    )
                 
                 # Step 1A: Search CSV file for genome IDs first
                 self.nb_logger.info(f"🔄 Step 1A: Searching CSV file for genome IDs matching '{virus_species}'")
@@ -505,11 +524,16 @@ Return only the clean virus name, nothing else:"""
                     self.nb_logger.info(f"✅ Downloaded {len(original_genomes)} genomes for taxon_id {taxon_id}")
                     
                 else:
-                    # Download by genus (default for alphaviruses)
-                    target_genus = input_params.get('target_genus', 'Alphavirus')
-                    self.nb_logger.info(f"🔄 Step 1: Downloading {target_genus} genomes from BV-BRC")
-                    original_genomes = await self._download_genomes_by_genus(target_genus)
-                    self.nb_logger.info(f"✅ Downloaded {len(original_genomes)} {target_genus} genomes")
+                    # Download by genus - NO HARDCODED DEFAULTS
+                    target_genus_for_download = input_params.get('target_genus')
+                    if not target_genus_for_download:
+                        raise ValueError(
+                            "No target genus specified for genome download. "
+                            "Please provide 'target_genus' parameter."
+                        )
+                    self.nb_logger.info(f"🔄 Step 1: Downloading {target_genus_for_download} genomes from BV-BRC")
+                    original_genomes = await self._download_genomes_by_genus(target_genus_for_download)
+                    self.nb_logger.info(f"✅ Downloaded {len(original_genomes)} {target_genus_for_download} genomes")
             
             # Step 2: Filter genomes by size (skip if using cache)
             if original_genomes:
@@ -570,12 +594,13 @@ Return only the clean virus name, nothing else:"""
                 # Create mock genome data based on protein cache
                 reconstructed_genomes = []
                 for genome_id in unique_genome_ids:
-                    # Create mock genome data - we don't have length info from cache
+                    # Create mock genome data using target genus from input
+                    genus_name = target_genus or "Unknown"
                     genome = GenomeData(
                         genome_id=genome_id,
-                        genome_length=11000,  # Typical alphavirus genome length
-                        genome_name=f"Alphavirus genome {genome_id}",
-                        taxon_lineage="Alphavirus"
+                        genome_length=11000,  # Generic viral genome length
+                        genome_name=f"{genus_name} genome {genome_id}",
+                        taxon_lineage=genus_name
                     )
                     reconstructed_genomes.append(genome)
                 
@@ -585,10 +610,13 @@ Return only the clean virus name, nothing else:"""
                 
                 self.nb_logger.info(f"✅ Reconstructed {len(reconstructed_genomes)} genome entries from cached protein data")
             
-            # Extract virus species for annotation mapping
-            virus_species = input_params.get('target_genus', 'Alphavirus')
-            if target_genus != 'Alphavirus':
-                virus_species = target_genus
+            # Extract virus species for annotation mapping - NO HARDCODED DEFAULTS
+            virus_species = input_params.get('target_genus') or target_genus
+            if not virus_species:
+                raise ValueError(
+                    "No virus species available for annotation mapping. "
+                    "Unable to determine target genus from input parameters."
+                )
             
             # Extract unique protein products for synonym resolution
             unique_protein_products = list(set([

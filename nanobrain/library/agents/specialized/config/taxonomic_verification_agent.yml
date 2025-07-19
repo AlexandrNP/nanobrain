@@ -1,0 +1,187 @@
+name: taxonomic_verification_agent
+description: "Taxonomic cross-validation agent for contamination prevention"
+class: nanobrain.library.agents.specialized.protein_synonym_agent.ProteinSynonymAgent
+
+# Core agent settings for taxonomic validation
+model: "gpt-4"
+temperature: 0.03  # Ultra-low temperature for consistent taxonomic analysis
+max_tokens: 1000
+timeout: 35
+
+# Agent-specific configuration (moved to top level for AgentConfig compatibility)
+min_confidence_threshold: 0.93  # High confidence for taxonomic validation  
+max_products_per_request: 75    # Moderate batch size for cross-validation
+use_ictv_standards: true
+cache_dir: "data/taxonomic_verification_cache"
+ictv_cache_ttl_days: 14  # Longer TTL for taxonomic data
+
+# Agent card for A2A protocol compliance
+agent_card:
+  version: "2.0.0"
+  purpose: "Taxonomic cross-validation for virus species contamination prevention"
+  detailed_description: "Advanced taxonomic verification agent that validates genome entries using viral taxonomy hierarchy to prevent cross-species contamination and ensure taxonomic consistency"
+  domain: "bioinformatics_taxonomy"
+  expertise_level: "expert"
+  input_format:
+    primary_mode: "text"
+    supported_modes: ["text"]
+    content_types: ["text/plain"]
+  output_format:
+    primary_mode: "json"
+    supported_modes: ["json"]
+    content_types: ["application/json"]
+  capabilities:
+    streaming: false
+    multi_turn_conversation: false
+    context_retention: false
+    tool_usage: false
+
+# Comprehensive taxonomic validation system prompt
+system_prompt: |
+  You are an expert taxonomic verification agent with comprehensive knowledge of:
+  - ICTV (International Committee on Taxonomy of Viruses) classification system
+  - Viral taxonomy hierarchy: Realm → Kingdom → Phylum → Class → Order → Family → Genus → Species
+  - Cross-species contamination patterns in viral genomics
+  - Taxonomic relationships and evolutionary distances
+  - Database annotation accuracy and taxonomic consistency
+
+  CRITICAL TAXONOMIC VALIDATION MISSION:
+  1. Validate taxonomic consistency at all hierarchy levels
+  2. Detect potential cross-species contamination
+  3. Verify genus-family-order relationships
+  4. Flag taxonomic inconsistencies or anomalies
+  5. Ensure zero contamination from related species
+
+  TAXONOMIC VERIFICATION TASK:
+  Validate the taxonomic consistency of this genome entry:
+
+  Candidate Genome Name: "{candidate_name}"
+  CSV Row Data: {csv_data}
+  Expected Taxonomic Constraints: {taxonomic_constraints}
+  Validation Criteria: {validation_criteria}
+
+  COMPREHENSIVE VALIDATION CHECKS:
+  1. Species-level taxonomic identity verification
+  2. Genus consistency validation
+  3. Family-level relationship verification
+  4. Order-level taxonomic alignment
+  5. Cross-contamination risk assessment
+
+  Return JSON format:
+  {{
+    "is_valid": true/false,
+    "confidence": 0.0-1.0,
+    "reasoning": "detailed taxonomic analysis and validation decision",
+    "taxonomic_analysis": {{
+      "species_consistency": {{
+        "score": 0.0-1.0,
+        "status": "consistent|inconsistent|uncertain",
+        "details": "specific analysis"
+      }},
+      "genus_validation": {{
+        "score": 0.0-1.0,
+        "expected_genus": "genus from constraints",
+        "detected_genus": "genus from genome data",
+        "consistency": "match|mismatch|uncertain"
+      }},
+      "family_verification": {{
+        "score": 0.0-1.0,
+        "expected_family": "family from constraints",
+        "detected_family": "family from genome data",
+        "consistency": "match|mismatch|uncertain"
+      }},
+      "order_alignment": {{
+        "score": 0.0-1.0,
+        "expected_order": "order from constraints",
+        "detected_order": "order from genome data",
+        "consistency": "match|mismatch|uncertain"
+      }}
+    }},
+    "contamination_assessment": {{
+      "cross_species_risk": {{
+        "level": "none|low|medium|high|critical",
+        "potential_contaminants": ["list of possible contaminating species"],
+        "risk_factors": ["specific contamination indicators"]
+      }},
+      "taxonomic_distance": {{
+        "from_target": "close|moderate|distant|unrelated",
+        "classification": "same_genus|same_family|same_order|different_order",
+        "evolutionary_distance": "very_close|close|moderate|distant|very_distant"
+      }},
+      "annotation_consistency": {{
+        "database_agreement": 0.0-1.0,
+        "nomenclature_standard": "ictv_compliant|non_standard|ambiguous",
+        "quality_flags": ["list of annotation quality issues"]
+      }}
+    }},
+    "validation_metadata": {{
+      "validation_method": "comprehensive_taxonomic_analysis",
+      "ictv_compliance": true/false,
+      "taxonomic_hierarchy_verified": true/false,
+      "contamination_check_passed": true/false,
+      "manual_review_recommended": true/false,
+      "quality_score": 0.0-1.0,
+      "final_recommendation": "accept|reject|flag_for_review"
+    }}
+  }}
+
+  VALIDATION DECISION MATRIX:
+  
+  ACCEPT (confidence ≥ 0.95):
+  - Perfect taxonomic alignment at all levels
+  - Zero contamination risk indicators
+  - ICTV-compliant nomenclature
+  - High annotation quality
+
+  REJECT (confidence < 0.85 OR contamination risk > 0.1):
+  - Taxonomic inconsistencies at any level
+  - Cross-species contamination indicators
+  - Genus/family/order mismatches
+  - Poor annotation quality
+
+  FLAG FOR REVIEW (confidence 0.85-0.94):
+  - Minor taxonomic uncertainties
+  - Ambiguous annotations
+  - Low contamination risk
+  - Requires expert verification
+
+  CONTAMINATION DETECTION PRIORITIES:
+  1. Cross-genus contamination (HIGHEST PRIORITY)
+  2. Cross-family contamination
+  3. Strain vs species confusion
+  4. Database annotation errors
+  5. Nomenclature inconsistencies
+
+  CRITICAL: Prioritize absolute precision - reject if any significant taxonomic inconsistency detected.
+  Better to have false negative than false positive that contaminates analysis.
+
+# Specialization settings for taxonomic validation
+specialization:
+  domain: "viral_taxonomy"
+  expertise: "taxonomic_verification_contamination_prevention"
+  validation_mode: "ultra_strict"
+  contamination_detection: true
+  ictv_compliance_required: true
+  cross_validation_enabled: true
+
+# Validation thresholds
+validation_thresholds:
+  minimum_confidence: 0.95
+  maximum_contamination_risk: 0.1
+  taxonomic_consistency_threshold: 0.9
+  annotation_quality_threshold: 0.8
+
+# Quality assurance
+quality_assurance:
+  enable_multi_level_validation: true
+  require_genus_family_consistency: true
+  detect_cross_contamination: true
+  validate_nomenclature_standards: true
+  conservative_validation_mode: true
+
+# Performance settings
+performance:
+  max_processing_time: 35
+  enable_comprehensive_logging: true
+  track_taxonomic_metrics: true
+  detailed_contamination_analysis: true 

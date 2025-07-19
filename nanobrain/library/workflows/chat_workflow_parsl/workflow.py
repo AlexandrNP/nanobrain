@@ -15,6 +15,7 @@ from datetime import datetime
 from pathlib import Path
 
 # Core framework imports
+from nanobrain.core.component_base import FromConfigBase
 from nanobrain.core.data_unit import DataUnitMemory, DataUnitConfig
 from nanobrain.core.executor import ParslExecutor, ExecutorConfig, ExecutorType
 from nanobrain.core.logging_system import get_logger
@@ -64,12 +65,30 @@ class ConversationHistoryUnit:
         self.history.clear()
 
 
-class ParslChatWorkflow:
+class ParslChatWorkflow(FromConfigBase):
     """
     Simple chat workflow using existing NanoBrain ParslAgent for distributed processing.
+    Now follows unified from_config pattern.
     """
     
-    def __init__(self):
+    COMPONENT_TYPE = "parsl_chat_workflow"
+    REQUIRED_CONFIG_FIELDS = ['name']
+    OPTIONAL_CONFIG_FIELDS = {
+        'description': 'Parsl-based distributed chat workflow',
+        'parsl_config': {},
+        'max_workers': 4
+    }
+    
+    @classmethod
+    def _get_config_class(cls):
+        """UNIFIED PATTERN: Return generic Dict - ParslChatWorkflow uses dictionary configuration"""
+        return dict
+    
+    def _init_from_config(self, config: Dict[str, Any], component_config: Dict[str, Any],
+                         dependencies: Dict[str, Any]) -> None:
+        """Initialize ParslChatWorkflow with resolved dependencies"""
+        super()._init_from_config(config, component_config, dependencies)
+        
         self.config = None
         self.data_units = {}
         self.agents = []
