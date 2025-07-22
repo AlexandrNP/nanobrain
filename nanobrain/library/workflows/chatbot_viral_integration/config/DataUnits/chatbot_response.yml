@@ -1,0 +1,8 @@
+name: chatbot_response
+class: nanobrain.core.data_unit.DataUnitMemory
+description: "Final chatbot response output"
+persistent: false
+enable_logging: true
+config:
+  max_size: 1048576  # 1MB
+  ttl_seconds: 3600  # 1 hour 

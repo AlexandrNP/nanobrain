@@ -87,6 +87,11 @@ class WebInterface(FromConfigBase):
     }
     
     @classmethod
+    def _get_config_class(cls):
+        """Return WebInterfaceConfig for web interface components."""
+        return WebInterfaceConfig
+    
+    @classmethod
     def extract_component_config(cls, config: WebInterfaceConfig) -> Dict[str, Any]:
         """Extract WebInterface configuration"""
         return {

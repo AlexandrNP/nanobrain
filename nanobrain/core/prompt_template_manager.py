@@ -1,36 +1,41 @@
 """
 Prompt Template Manager for NanoBrain Framework
 
-Core utility for managing prompt templates across all NanoBrain components.
-Provides loading, validation, formatting, and caching of prompt templates.
+Provides dynamic prompt loading and template variable substitution for agents.
 """
 
-from typing import Dict, List, Any, Optional, Union
-from pathlib import Path
+import json
 import yaml
 import logging
-from string import Template
+from typing import Dict, Any, Optional, List, Union
+from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict
+
+from .logging_system import get_logger
+# Import new ConfigBase for constructor prohibition
+from .config.config_base import ConfigBase
 
 logger = logging.getLogger(__name__)
 
 
 class PromptTemplate(BaseModel):
-    """Model for a single prompt template."""
-    
+    """A single prompt template."""
     model_config = ConfigDict(extra="allow")
     
-    template: str
+    content: str
     description: Optional[str] = None
     required_params: List[str] = Field(default_factory=list)
     optional_params: List[str] = Field(default_factory=list)
     examples: List[Dict[str, Any]] = Field(default_factory=list)
     
 
-class PromptTemplateConfig(BaseModel):
-    """Configuration for prompt templates."""
+class PromptTemplateConfig(ConfigBase):
+    """
+    Configuration for prompt templates - INHERITS constructor prohibition.
     
-    model_config = ConfigDict(extra="allow")
+    ❌ FORBIDDEN: PromptTemplateConfig(prompts={...}, ...)
+    ✅ REQUIRED: PromptTemplateConfig.from_config('path/to/config.yml')
+    """
     
     prompts: Dict[str, PromptTemplate] = Field(default_factory=dict)
     contexts: Dict[str, PromptTemplate] = Field(default_factory=dict)
@@ -76,14 +81,14 @@ class PromptTemplateManager:
         """
         if isinstance(source, dict):
             # Load from dictionary
-            self.templates = PromptTemplateConfig(**source)
+            self.templates = PromptTemplateConfig.from_config(source)
         elif isinstance(source, (str, Path)):
             # First try to parse as YAML string (if it's a string and contains newlines or colons)
             if isinstance(source, str) and ('\n' in source or (': ' in source and not source.endswith('.yml') and not source.endswith('.yaml'))):
                 try:
                     data = yaml.safe_load(source)
                     if isinstance(data, dict):
-                        self.templates = PromptTemplateConfig(**data)
+                        self.templates = PromptTemplateConfig.from_config(data)
                     else:
                         raise ValueError(f"Invalid YAML content: expected dict, got {type(data)}")
                 except yaml.YAMLError as e:
@@ -96,14 +101,14 @@ class PromptTemplateManager:
                         # Load from file
                         with open(path, 'r') as f:
                             data = yaml.safe_load(f)
-                            self.templates = PromptTemplateConfig(**data)
+                            self.templates = PromptTemplateConfig.from_config(data)
                         logger.info(f"Loaded prompt templates from {path}")
                     else:
                         # Last attempt: parse as YAML string
                         try:
                             data = yaml.safe_load(str(source))
                             if isinstance(data, dict):
-                                self.templates = PromptTemplateConfig(**data)
+                                self.templates = PromptTemplateConfig.from_config(data)
                             else:
                                 raise ValueError(f"Invalid YAML content: expected dict, got {type(data)}")
                         except yaml.YAMLError:
@@ -113,7 +118,7 @@ class PromptTemplateManager:
                     try:
                         data = yaml.safe_load(str(source))
                         if isinstance(data, dict):
-                            self.templates = PromptTemplateConfig(**data)
+                            self.templates = PromptTemplateConfig.from_config(data)
                         else:
                             raise ValueError(f"Invalid YAML content: expected dict, got {type(data)}")
                     except yaml.YAMLError:

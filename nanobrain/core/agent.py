@@ -35,6 +35,8 @@ from .logging_system import (
     AgentConversationLog, trace_function_calls
 )
 from .prompt_template_manager import PromptTemplateManager
+# Import new ConfigBase for constructor prohibition
+from .config.config_base import ConfigBase
 
 logger = logging.getLogger(__name__)
 
@@ -44,9 +46,13 @@ class AgentToolSchema(BaseModel):
     input: str = Field(..., description="Input text for the agent to process")
 
 
-class AgentConfig(BaseModel):
-    """Configuration for agents."""
-    model_config = ConfigDict(arbitrary_types_allowed=True)
+class AgentConfig(ConfigBase):
+    """
+    Configuration for agents - INHERITS constructor prohibition.
+    
+    ❌ FORBIDDEN: AgentConfig(name="test", model="...")
+    ✅ REQUIRED: AgentConfig.from_config('path/to/config.yml')
+    """
     
     name: str
     description: str = ""
@@ -161,8 +167,8 @@ class Agent(FromConfigBase, ABC):
             self.executor = executor
         else:
             # Create executor using from_config pattern
-            executor_config = getattr(config, 'executor_config', None) or ExecutorConfig()
-            self.executor = LocalExecutor.from_config(executor_config)
+                    executor_config = getattr(config, 'executor_config', None) or ExecutorConfig.from_config({})
+        self.executor = LocalExecutor.from_config(executor_config)
         
         # Tool registry for managing tools
         self.tool_registry = ToolRegistry()
@@ -496,9 +502,10 @@ class Agent(FromConfigBase, ABC):
         
         self.agent_logger.log_debug(f"Registering tool from config: {tool_config.get('name', 'unnamed')}")
         
-        # Create tool configuration
-        config = ToolConfig(**{k: v for k, v in tool_config.items() 
-                              if k in ['tool_type', 'name', 'description', 'parameters', 'async_execution', 'timeout']})
+        # Create tool configuration using from_config
+        config_data = {k: v for k, v in tool_config.items() 
+                      if k in ['tool_type', 'name', 'description', 'parameters', 'async_execution', 'timeout']}
+        config = ToolConfig.from_config(config_data)
         
         # Create and register tool based on type
         if tool_type == ToolType.FUNCTION:
@@ -532,8 +539,8 @@ class Agent(FromConfigBase, ABC):
             agent_config_data.setdefault('name', config.name)
             agent_config_data.setdefault('description', config.description)
             
-            # Create AgentConfig instance (AgentConfig is available in this module)
-            agent_config = AgentConfig(**agent_config_data)
+            # Create AgentConfig instance using from_config
+            agent_config = AgentConfig.from_config(agent_config_data)
             
             # Create agent instance
             agent_instance = agent_class(agent_config)

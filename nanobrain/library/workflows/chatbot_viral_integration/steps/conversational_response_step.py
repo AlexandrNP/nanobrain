@@ -105,47 +105,48 @@ class ConversationalResponseStep(Step):
             self.nb_logger.info("✅ Conversational agent initialized with LLM client")
     
     def _initialize_conversational_agent(self) -> AlphavirusConversationalAgent:
-        """Initialize conversational agent with alphavirus expertise"""
+        """
+        Load conversational agent from standardized config file.
         
-        system_prompt = """You are an expert virologist specializing in alphaviruses. You provide accurate, scientific information about alphavirus biology, structure, replication, pathogenesis, and related topics.
-
-**Your expertise covers:**
-- Alphavirus structure (envelope proteins E1/E2, capsid, genome organization)
-- Viral replication cycles and molecular mechanisms
-- Pathogenesis and clinical aspects of alphavirus diseases
-- Epidemiology and vector biology
-- Molecular evolution and phylogenetics
-- Laboratory methods and diagnostic approaches
-
-**Guidelines:**
-- Provide accurate, up-to-date scientific information
-- Use clear explanations suitable for both students and researchers
-- Include specific molecular details when relevant
-- Mention key research findings and discoveries
-- Acknowledge limitations or uncertainties when appropriate
-- Focus on peer-reviewed scientific knowledge
-
-**Major alphavirus pathogens you should know about:**
-- Eastern Equine Encephalitis virus (EEEV)
-- Western Equine Encephalitis virus (WEEV)
-- Venezuelan Equine Encephalitis virus (VEEV)
-- Chikungunya virus (CHIKV)
-- Sindbis virus (SINV)
-- Ross River virus (RRV)
-
-Always provide helpful, educational responses that advance understanding of alphavirus biology."""
-
-        agent_config = AgentConfig(
-            name="alphavirus_expert",
-            description="Expert conversational agent for alphavirus information",
-            system_prompt=system_prompt,
-            temperature=self.temperature,
-            max_tokens=self.max_tokens
-        )
+        ✅ FRAMEWORK COMPLIANCE: Uses agent_config_file reference, no programmatic creation.
+        """
+        # Get agent config file path from step configuration
+        component_config = getattr(self.config, 'config', {}) if hasattr(self.config, 'config') else {}
+        agent_config_file = component_config.get('agent_config_file')
         
-        # Use the framework-compliant from_config method with our concrete implementation
-        agent = AlphavirusConversationalAgent.from_config(agent_config)
-        return agent
+        if not agent_config_file:
+            raise ValueError(
+                "❌ FRAMEWORK VIOLATION: No agent_config_file specified in step configuration.\n"
+                "   REQUIRED: Specify agent_config_file in step config YAML.\n"
+                "   EXAMPLE: agent_config_file: 'config/ConversationalResponseStep/ConversationalAgent.yml'"
+            )
+        
+        # ✅ FRAMEWORK COMPLIANCE: Load agent from config file using from_config pattern
+        from nanobrain.library.agents.specialized_agents.conversational_specialized_agent import ConversationalSpecializedAgent
+        
+        try:
+            # Resolve agent config file path relative to workflow directory
+            if hasattr(self, 'workflow_directory') and self.workflow_directory:
+                from pathlib import Path
+                agent_config_path = Path(self.workflow_directory) / agent_config_file
+            else:
+                # Fallback: resolve relative to current step's config location
+                from pathlib import Path
+                step_dir = Path(__file__).parent.parent
+                agent_config_path = step_dir / agent_config_file
+            
+            # Load agent using framework's from_config pattern
+            agent = ConversationalSpecializedAgent.from_config(str(agent_config_path))
+            
+            # Return as AlphavirusConversationalAgent (should be compatible)
+            return agent
+            
+        except Exception as e:
+            raise ValueError(
+                f"❌ FRAMEWORK ERROR: Failed to load ConversationalAgent from {agent_config_file}: {e}\n"
+                f"   SOLUTION: Ensure agent config file exists and is properly formatted.\n"
+                f"   PATH: {agent_config_file}"
+            ) from e
     
     async def process(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """

@@ -13,6 +13,8 @@ from enum import Enum
 from pydantic import BaseModel, Field, ConfigDict
 
 from .component_base import FromConfigBase, ComponentConfigurationError, ComponentDependencyError
+# Import new ConfigBase for constructor prohibition
+from .config.config_base import ConfigBase
 
 logger = logging.getLogger(__name__)
 
@@ -25,9 +27,13 @@ class ExecutorType(Enum):
     PROCESS = "process"
 
 
-class ExecutorConfig(BaseModel):
-    """Configuration for executors."""
-    model_config = ConfigDict(use_enum_values=True)
+class ExecutorConfig(ConfigBase):
+    """
+    Configuration for executors - INHERITS constructor prohibition.
+    
+    ❌ FORBIDDEN: ExecutorConfig(executor_type="local", ...)
+    ✅ REQUIRED: ExecutorConfig.from_config('path/to/config.yml')
+    """
     
     executor_type: ExecutorType = ExecutorType.LOCAL
     max_workers: int = Field(default=4, ge=1)
@@ -604,7 +610,7 @@ def create_executor(executor_type: Union[ExecutorType, str],
     if isinstance(executor_type, str):
         executor_type = ExecutorType(executor_type)
     
-    config = config or ExecutorConfig(executor_type=executor_type)
+    config = config or ExecutorConfig.from_config({"executor_type": executor_type})
     
     try:
         if executor_type == ExecutorType.LOCAL:

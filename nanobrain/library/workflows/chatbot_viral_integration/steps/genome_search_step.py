@@ -129,8 +129,8 @@ class GenomeSearchStep(Step):
     async def _initialize_elasticsearch_tool(self):
         """Initialize Elasticsearch tool for genome search"""
         try:
-            # Create Elasticsearch configuration
-            es_config = ElasticsearchConfig(**self.genome_config.elasticsearch_config)
+            # ✅ FRAMEWORK COMPLIANCE: Create Elasticsearch configuration using from_config
+            es_config = ElasticsearchConfig.from_config(self.genome_config.elasticsearch_config)
             
             # Create Elasticsearch tool instance
             self.elasticsearch_tool = await ElasticsearchTool.from_config(es_config)

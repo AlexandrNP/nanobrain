@@ -17,6 +17,8 @@ from pydantic import BaseModel, Field, ConfigDict
 from .component_base import FromConfigBase, ComponentConfigurationError, ComponentDependencyError
 # Import logging system
 from .logging_system import get_logger, get_system_log_manager
+# Import new ConfigBase for constructor prohibition
+from .config.config_base import ConfigBase
 
 logger = logging.getLogger(__name__)
 
@@ -105,16 +107,19 @@ class LinkType(Enum):
     CONDITIONAL = "conditional"
 
 
-class LinkConfig(BaseModel):
-    """Configuration for links."""
+class LinkConfig(ConfigBase):
+    """
+    Configuration for links - INHERITS constructor prohibition.
+    
+    ❌ FORBIDDEN: LinkConfig(link_type="direct", ...)
+    ✅ REQUIRED: LinkConfig.from_config('path/to/config.yml')
+    """
     link_type: LinkType = LinkType.DIRECT
     buffer_size: int = Field(default=100, ge=1)
     transform_function: Optional[str] = None
     condition: Optional[Union[str, Dict[str, Any]]] = None
     file_path: Optional[str] = None
     data_mapping: Optional[Dict[str, str]] = None
-    
-    model_config = ConfigDict(use_enum_values=True)
 
 
 class LinkBase(FromConfigBase, ABC):
@@ -992,7 +997,7 @@ def create_link(config: Union[Dict[str, Any], LinkConfig], **kwargs) -> LinkBase
         Configured link instance using from_config pattern
     """
     if isinstance(config, dict):
-        config = LinkConfig(**config)
+        config = LinkConfig.from_config(config)
     
     # Handle both enum values and string values for link_type
     link_type_value = config.link_type

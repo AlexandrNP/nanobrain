@@ -1,93 +1,35 @@
 """
-Configuration system for NanoBrain Framework.
+NanoBrain Configuration Framework
 
-Provides YAML-based configuration management, simplified component factory,
-and schema validation capabilities with focus on from_config pattern.
+Enhanced from_config pattern system providing:
+- Enhanced ConfigBase with integrated loading, schema support, and protocol integration
+- Recursive reference resolution for complex configurations
+- Comprehensive schema extraction and validation
+- Pure from_config pattern without additional managers
 """
 
-from .yaml_config import YAMLConfig, WorkflowConfig
-from .component_factory import (
-    create_component,
-    get_component_class,
-    ComponentRegistry,
-    load_config_file,
-    validate_component_config
-)
-from .schema_validator import (
-    SchemaValidator, ConfigSchema, FieldSchema, ParameterSchema,
-    FieldType, ConstraintType, FieldConstraint, ValidatorFunction,
-    create_schema_from_yaml, validate_config_with_schema
-)
-try:
-    from .config_manager import (
-        ConfigManager, ProviderConfig,
-        get_config_manager, get_api_key, get_provider_config,
-        get_default_model, initialize_config, get_logging_mode,
-        should_log_to_console, should_log_to_file, get_logging_config
-    )
-except ImportError:
-    # Config manager not available
-    ConfigManager = None
-    ProviderConfig = None
-    get_config_manager = None
-    get_api_key = None
-    get_provider_config = None
-    get_default_model = None
-    initialize_config = None
-    get_logging_mode = None
-    should_log_to_console = None
-    should_log_to_file = None
-    get_logging_config = None
+from .config_base import ConfigBase
+# Recursive resolution integrated into ConfigBase.from_config()
+# Schema management integrated into ConfigBase
 
-# Factory function - creates from YAML configuration (NO HARDCODING)
-def create_from_config_file(config_path: str, **kwargs) -> object:
-    """Create component from pure YAML configuration file"""
-    config = load_config_file(config_path)
-    validate_component_config(config)
-    
-    class_path = config.get('class')
-    if not class_path:
-        raise ValueError(f"Configuration file must specify 'class' field: {config_path}")
-    
-    return create_component(class_path, config, **kwargs)
+# Legacy components removed as per Phase 3: Legacy Component Removal
+# DeprecatedConfigManager and related deprecation helpers removed
+# All configuration loading now uses ConfigBase.from_config() exclusively
+#
+# ✅ FRAMEWORK COMPLIANCE:
+# - Pure ConfigBase.from_config() pattern throughout framework
+# - No deprecated managers or factory functions
+# - Complete configuration-driven component creation
+# - Unified interface without legacy compatibility layers
 
-
-# All exports
+# Export unified interface
 __all__ = [
-    # Core factory functions
-    'create_component',
-    'get_component_class', 
-    'create_from_config_file',
-    'load_config_file',
-    'validate_component_config',
-    
-    # Configuration classes
-    'YAMLConfig',
-    'WorkflowConfig',
-    'ComponentRegistry',
-    
-    # Schema validation
-    'SchemaValidator',
-    'ConfigSchema',
-    'FieldSchema', 
-    'ParameterSchema',
-    'FieldType',
-    'ConstraintType',
-    'FieldConstraint',
-    'ValidatorFunction',
-    'create_schema_from_yaml',
-    'validate_config_with_schema',
-    
-    # Config manager (if available)
-    'ConfigManager',
-    'ProviderConfig',
-    'get_config_manager',
-    'get_api_key',
-    'get_provider_config',
-    'get_default_model',
-    'initialize_config',
-    'get_logging_mode',
-    'should_log_to_console',
-    'should_log_to_file',
-    'get_logging_config',
-] 
+    'ConfigBase',
+    # Recursive resolution integrated into ConfigBase
+    # Schema management integrated into ConfigBase
+]
+
+# Version information
+__version__ = '2.0.0'
+__consolidation_date__ = '2025-01-28'
+__framework_pattern__ = 'enhanced_from_config' 

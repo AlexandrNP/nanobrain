@@ -1,0 +1,40 @@
+name: "virus_name_resolution"
+description: "Enhanced virus name resolution with synonym detection and taxonomy validation"
+class: "nanobrain.library.workflows.chatbot_viral_integration.steps.virus_name_resolution_step.EnhancedVirusNameResolutionStep"
+
+# Step configuration
+config:
+  name: "virus_name_resolution"
+  description: "Enhanced virus name resolution with multi-agent processing"
+  debug_mode: false
+  enable_logging: true
+  log_data_transfers: true
+  
+  # UPDATED: Agents configuration with class+config patterns (was inline)
+  agents:
+    query_analysis_agent:
+      class: "nanobrain.library.agents.specialized.query_analysis_agent.QueryAnalysisAgent"
+      config: "config/VirusNameResolutionStep/QueryAnalysisAgent.yml"
+    
+    synonym_detection_agent:
+      class: "nanobrain.library.agents.specialized.protein_synonym_agent.ProteinSynonymAgent"
+      config: "config/VirusNameResolutionStep/SynonymDetectionAgent.yml"
+
+# Input/Output data unit specifications (existing)
+input_data_units:
+  - "query_input"
+
+output_data_units:
+  - "resolution_result"
+
+# Step timeout and retry settings (existing)
+timeout: 120.0
+max_retries: 3
+retry_delay: 2.0
+
+# Enhanced resolution configuration (existing)
+resolution_config:
+  enable_synonym_detection: true
+  enable_taxonomy_validation: true
+  confidence_threshold: 0.7
+  max_synonyms_per_virus: 10 

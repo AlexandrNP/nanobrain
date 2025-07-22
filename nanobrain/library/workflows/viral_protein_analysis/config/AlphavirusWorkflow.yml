@@ -1,10 +1,12 @@
-name: AlphavirusWorkflow
-description: Comprehensive viral protein analysis workflow with enhanced ultra-precision data acquisition
-version: 5.0.0
-execution_strategy: event_driven  # CRITICAL: Event-driven strategy
-error_handling: continue
+name: "AlphavirusWorkflow"
+description: "Comprehensive viral protein analysis workflow with enhanced ultra-precision data acquisition"
+version: "5.1.0"  # Compliance update version
+execution_strategy: "event_driven"
+error_handling: "continue"
 enable_monitoring: true
-workflow_directory: nanobrain/library/workflows/viral_protein_analysis
+workflow_directory: "nanobrain/library/workflows/viral_protein_analysis"
+
+# Existing configuration preserved
 enable_progress_reporting: true
 progress_batch_interval: 3.0
 progress_collapsed_by_default: true
@@ -18,76 +20,123 @@ validate_graph: true
 allow_cycles: false
 require_connected_graph: true
 
-# Data directory configuration - configurable paths for data storage and caching
-data_directory: "data"  # Base data directory - can be overridden by environment or config
-bvbrc_cache_directory: "data/bvbrc_cache"  # BV-BRC specific cache directory
-mmseqs2_cache_directory: "data/mmseqs2_cache"  # MMseqs2 cache directory
-cache_directory: "data/cache"  # General cache directory
-csv_file_path: "data/viral_analysis/BVBRC_genome_viral.csv"  # Path to genome CSV data
+# Data directory configuration (existing)
+data_directory: "data"
+bvbrc_cache_directory: "data/bvbrc_cache"
+mmseqs2_cache_directory: "data/mmseqs2_cache"
+cache_directory: "data/cache"
+csv_file_path: "data/viral_analysis/BVBRC_genome_viral.csv"
 
-# MIGRATED WORKFLOW CONFIGURATION: References to step-specific config directories
+# UPDATED: Dict-based steps format (was list-based)
 steps:
-  - step_id: data_acquisition
-    config_file: config/DataAcquisitionStep/DataAcquisitionStep.yml
-  - step_id: annotation_mapping
-    config_file: config/steps/annotation_mapping_config.yml
-  - step_id: sequence_curation
-    config_file: config/steps/sequence_curation_config.yml
-  - step_id: clustering_analysis
-    config_file: config/ClusteringStep/ClusteringStep.yml
+  data_acquisition:
+    class: "nanobrain.library.workflows.viral_protein_analysis.steps.data_acquisition_step.BVBRCDataAcquisitionStep"
+    config: "config/DataAcquisitionStep/DataAcquisitionStep.yml"
+    step_id: "data_acquisition"
+  
+  annotation_mapping:
+    class: "nanobrain.library.workflows.viral_protein_analysis.steps.annotation_mapping_step.AnnotationMappingStep"
+    config: "config/AnnotationMappingStep/AnnotationMappingStep.yml"
+    step_id: "annotation_mapping"
+  
+  sequence_curation:
+    class: "nanobrain.library.workflows.viral_protein_analysis.steps.sequence_curation_step.SequenceCurationStep"
+    config: "config/SequenceCurationStep/SequenceCurationStep.yml"
+    step_id: "sequence_curation"
+  
+  clustering_analysis:
+    class: "nanobrain.library.workflows.viral_protein_analysis.steps.clustering_step.ClusteringStep"
+    config: "config/ClusteringStep/ClusteringStep.yml"
+    step_id: "clustering_analysis"
+  
+  alignment:
+    class: "nanobrain.library.workflows.viral_protein_analysis.steps.alignment_step.AlignmentStep"
+    config: "config/AlignmentStep/AlignmentStep.yml"
+    step_id: "alignment"
+  
+  pssm_analysis:
+    class: "nanobrain.library.workflows.viral_protein_analysis.steps.pssm_analysis_step.PSSMAnalysisStep"
+    config: "config/PSSMAnalysisStep/PSSMAnalysisStep.yml"
+    step_id: "pssm_analysis"
+  
+  data_aggregation:
+    class: "nanobrain.library.workflows.viral_protein_analysis.steps.data_aggregation_step.DataAggregationStep"
+    config: "config/DataAggregationStep/DataAggregationStep.yml"
+    step_id: "data_aggregation"
+  
+  result_collection:
+    class: "nanobrain.library.workflows.viral_protein_analysis.steps.result_collection_step.ResultCollectionStep"
+    config: "config/ResultCollectionStep/ResultCollectionStep.yml"
+    step_id: "result_collection"
 
-# EVENT-DRIVEN LINKS: Define data flow between step data units
+# UPDATED: Dict-based links format (was list-based)
 links:
-  - link_id: workflow_to_acquisition
-    source: workflow_input
-    target: data_acquisition.synonyms_input
+  workflow_to_acquisition:
+    source: "workflow_input"
+    target: "data_acquisition.synonyms_input"
     description: "Route enhanced virus resolution output to enhanced data acquisition"
-    
-  - link_id: acquisition_to_annotation
-    source: data_acquisition.validated_genomes
-    target: annotation_mapping.fasta_and_annotations
+  
+  acquisition_to_annotation:
+    source: "data_acquisition.validated_genomes"
+    target: "annotation_mapping.fasta_and_annotations"
     description: "Route validated genomes to annotation mapping"
-    
-  - link_id: annotation_to_curation
-    source: annotation_mapping.standardized_annotations
-    target: sequence_curation.standardized_annotations
+  
+  annotation_to_curation:
+    source: "annotation_mapping.standardized_annotations"
+    target: "sequence_curation.standardized_annotations"
     description: "Route standardized annotations to sequence curation"
-    
-  - link_id: curation_to_clustering
-    source: sequence_curation.curated_sequences
-    target: clustering_analysis.curated_sequences
-    description: "Route curated sequences to clustering analysis"
-    
-  - link_id: clustering_to_workflow
-    source: clustering_analysis.sequence_clusters
-    target: workflow_output
-    description: "Route clustering results to workflow output"
+  
+  curation_to_alignment:
+    source: "sequence_curation.curated_sequences"
+    target: "alignment.curated_sequences"
+    description: "Route curated sequences to alignment step"
+  
+  alignment_to_clustering:
+    source: "alignment.aligned_sequences"
+    target: "clustering_analysis.aligned_sequences"
+    description: "Route aligned sequences to clustering analysis"
+  
+  clustering_to_pssm:
+    source: "clustering_analysis.sequence_clusters"
+    target: "pssm_analysis.sequence_clusters"
+    description: "Route sequence clusters to PSSM analysis"
+  
+  pssm_to_aggregation:
+    source: "pssm_analysis.pssm_matrices"
+    target: "data_aggregation.pssm_data"
+    description: "Route PSSM matrices to data aggregation"
+  
+  aggregation_to_results:
+    source: "data_aggregation.aggregated_data"
+    target: "result_collection.analysis_data"
+    description: "Route aggregated data to result collection"
+  
+  results_to_workflow:
+    source: "result_collection.final_results"
+    target: "workflow_output"
+    description: "Route final results to workflow output"
 
-# MINIMAL WORKFLOW DATA UNITS: Only input/output for workflow-as-step usage
+# Existing input/output data units (preserved)
 input_data_units:
   workflow_input:
-    class: nanobrain.core.data_unit.DataUnitMemory
-    name: workflow_input
+    class: "nanobrain.core.data_unit.DataUnitMemory"
+    name: "workflow_input"
     description: "Enhanced workflow input with ultra-high-confidence synonyms and validation criteria"
     persistent: false
 
 output_data_units:
   workflow_output:
-    class: nanobrain.core.data_unit.DataUnitFile
-    name: workflow_output
+    class: "nanobrain.core.data_unit.DataUnitFile"
+    name: "workflow_output"
     description: "Complete workflow results with enhanced precision validation"
     persistent: true
     file_path: "results/enhanced_viral_protein_analysis.json"
 
-# NO STEP-LEVEL DATA UNITS: All data units defined at step level
-# NO WORKFLOW-LEVEL TRIGGERS: All triggers defined at step level
-# NO TOOL CONFIGURATIONS: All tools configured at step level
-
-# Workflow metadata
+# Existing metadata (preserved)
 workflow_metadata:
   framework_compliance: "event_driven_architecture"
   migration_status: "enhanced_precision_complete"
   last_updated: "2025-01-28"
   configuration_status: "ultra_precision_event_driven"
   enhanced_features: "ultra_high_confidence_validation_pipeline"
-  notes: "Updated for enhanced ultra-precision data acquisition with zero contamination tolerance"
+  notes: "Updated for framework compliance - Dict-based configuration format"

@@ -616,6 +616,11 @@ class DockerComponentBase(FromConfigBase):
         'enabled': True
     }
     
+    @classmethod
+    def _get_config_class(cls):
+        """Return DockerComponentConfig for docker components."""
+        return DockerComponentConfig
+    
     def __init__(self, *args, **kwargs):
         """Prevent direct instantiation - use from_config instead"""
         raise RuntimeError(
@@ -713,6 +718,11 @@ class ContainerManagerBase(FromConfigBase, ABC):
         'docker_client': None,
         'enabled': True
     }
+    
+    @classmethod
+    def _get_config_class(cls):
+        """Return DockerComponentConfig for container manager components."""
+        return DockerComponentConfig
     
     def __init__(self, *args, **kwargs):
         """Prevent direct instantiation - use from_config instead"""

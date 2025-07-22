@@ -1,0 +1,8 @@
+name: resolution_output
+class: nanobrain.core.data_unit.DataUnitMemory
+description: "Virus name resolution and synonym detection output"
+persistent: false
+enable_logging: true
+config:
+  max_size: 2097152  # 2MB
+  ttl_seconds: 3600  # 1 hour 

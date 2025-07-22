@@ -14,6 +14,8 @@ from pydantic import BaseModel, Field, ConfigDict
 
 from .component_base import FromConfigBase, ComponentConfigurationError, ComponentDependencyError
 from .logging_system import get_logger
+# Import new ConfigBase for constructor prohibition
+from .config.config_base import ConfigBase
 
 logger = logging.getLogger(__name__)
 
@@ -27,8 +29,13 @@ class ToolType(Enum):
     LANGCHAIN = "langchain"
 
 
-class ToolConfig(BaseModel):
-    """Configuration for tools."""
+class ToolConfig(ConfigBase):
+    """
+    Configuration for tools - INHERITS constructor prohibition.
+    
+    ❌ FORBIDDEN: ToolConfig(name="test", tool_type="...")
+    ✅ REQUIRED: ToolConfig.from_config('path/to/config.yml')
+    """
     tool_type: ToolType = ToolType.FUNCTION
     name: str
     description: str = ""
@@ -38,8 +45,6 @@ class ToolConfig(BaseModel):
     
     # MANDATORY: Tool card section for A2A protocol compliance
     tool_card: Optional[Dict[str, Any]] = Field(default=None, description="Tool card metadata for A2A protocol compliance")
-    
-    model_config = ConfigDict(use_enum_values=True, extra="allow")
 
 
 class ToolBase(FromConfigBase, ABC):
@@ -678,7 +683,7 @@ def create_tool(config: Union[Dict[str, Any], ToolConfig], **kwargs) -> ToolBase
     logger.info(f"Creating tool via mandatory from_config")
     
     if isinstance(config, dict):
-        config = ToolConfig(**config)
+        config = ToolConfig.from_config(config)
     
     # Handle both enum and string values (due to use_enum_values=True)
     tool_type = config.tool_type
@@ -721,12 +726,12 @@ def function_tool(name: str, description: str = "", parameters: Optional[Dict[st
         Decorator function
     """
     def decorator(func: Callable) -> ToolBase:
-        config = ToolConfig(
-            tool_type=ToolType.FUNCTION,
-            name=name,
-            description=description,
-            parameters=parameters or {}
-        )
+        config = ToolConfig.from_config({
+            'tool_type': 'function',
+            'name': name,
+            'description': description,
+            'parameters': parameters or {}
+        })
         return FunctionTool.from_config(config, func=func)
     
     return decorator 

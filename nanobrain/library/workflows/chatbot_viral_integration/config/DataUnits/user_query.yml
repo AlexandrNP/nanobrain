@@ -1,0 +1,8 @@
+name: user_query
+class: nanobrain.core.data_unit.DataUnitMemory
+description: "User query input for enhanced chatbot viral integration"
+persistent: false
+enable_logging: true
+config:
+  max_size: 1048576  # 1MB
+  ttl_seconds: 3600  # 1 hour 

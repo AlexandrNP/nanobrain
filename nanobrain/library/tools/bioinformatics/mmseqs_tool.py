@@ -12,7 +12,7 @@ This module provides a comprehensive wrapper for MMseqs2 clustering tool with:
 import asyncio
 import os
 import tempfile
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Union
 from pydantic import Field
@@ -31,14 +31,18 @@ from nanobrain.core.tool import ToolConfig
 from nanobrain.core.logging_system import get_logger
 
 
-@dataclass
 class MMseqs2Config(ExternalToolConfig):
-    """Configuration for MMseqs2 protein clustering tool"""
+    """
+    Configuration for MMseqs2 protein clustering tool - INHERITS constructor prohibition.
+    
+    ❌ FORBIDDEN: MMseqs2Config(tool_name="mmseqs2", ...)
+    ✅ REQUIRED: MMseqs2Config.from_config('path/to/config.yml')
+    """
     # Tool identification
     tool_name: str = "mmseqs2"
     
     # Default tool card
-    tool_card: Dict[str, Any] = field(default_factory=lambda: {
+    tool_card: Dict[str, Any] = Field(default_factory=lambda: {
         "name": "mmseqs2",
         "description": "MMseqs2 tool for protein sequence clustering and analysis",
         "version": "1.0.0",
@@ -60,7 +64,7 @@ class MMseqs2Config(ExternalToolConfig):
     sensitivity: float = 7.5
     
     # Progressive scaling configuration
-    progressive_scaling: Dict[int, Dict[str, Any]] = field(default_factory=lambda: {
+    progressive_scaling: Dict[int, Dict[str, Any]] = Field(default_factory=lambda: {
         1: {"max_sequences": 50, "sensitivity": 4.0, "description": "Fast test"},
         2: {"max_sequences": 100, "sensitivity": 5.5, "description": "Basic validation"},
         3: {"max_sequences": 500, "sensitivity": 7.0, "description": "Medium scale"},
@@ -76,7 +80,7 @@ class MMseqs2Config(ExternalToolConfig):
     cache_dir: Optional[str] = None
     
     # Installation paths
-    local_installation_paths: List[str] = field(default_factory=lambda: [
+    local_installation_paths: List[str] = Field(default_factory=lambda: [
         "/usr/local/bin",
         "/opt/homebrew/bin",
         "~/bin"
@@ -144,28 +148,25 @@ class MMseqs2Tool(ProgressiveScalingMixin, ExternalTool):
         """UNIFIED PATTERN: Return MMseqs2Config - ONLY method that differs from other components"""
         return MMseqs2Config
     
-    # REMOVED: Custom from_config method - now inherits unified implementation
-    # Now inherits unified from_config implementation from FromConfigBase
-    # Uses MMseqs2Config returned by _get_config_class() to preserve all existing functionality
+    def __init__(self, *args, **kwargs):
+        """PREVENTS direct instantiation - use from_config() instead"""
+        raise RuntimeError(
+            f"Direct instantiation of {self.__class__.__name__} is prohibited. "
+            f"Use {self.__class__.__name__}.from_config() instead"
+        )
     
-    def __init__(self, config: MMseqs2Config, **kwargs):
-        """Initialize MMseqs2Tool with configuration"""
-        if config is None:
-            config = MMseqs2Config()
-            
-        # Ensure name is set consistently
-        if not hasattr(config, 'tool_name') or not config.tool_name:
-            config.tool_name = "mmseqs2"
-        
-        # Initialize parent classes
-        super().__init__(config, **kwargs)
+    def _init_from_config(self, config: MMseqs2Config, component_config: Dict[str, Any],
+                         dependencies: Dict[str, Any]) -> None:
+        """UNIFIED: Initialize MMseqs2Tool - SAME signature as ALL components"""
+        # Call parent initialization with SAME signature
+        super()._init_from_config(config, component_config, dependencies)
         
         # MMseqs2 specific initialization
         self.mmseqs_config = config
-        self.name = config.tool_name
+        self.name = getattr(config, 'tool_name', 'mmseqs2')
         self.logger = get_logger(f"bio_tool_{self.name}")
         
-        # MMseqs2 specific attributes
+        # MMseqs2 specific attributes from configuration
         self.min_seq_id = getattr(config, 'min_seq_id', 0.3)
         self.coverage = getattr(config, 'coverage', 0.8)
         self.cluster_mode = getattr(config, 'cluster_mode', 0)

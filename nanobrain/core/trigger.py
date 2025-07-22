@@ -16,6 +16,8 @@ from pydantic import BaseModel, Field, ConfigDict
 from .component_base import FromConfigBase, ComponentConfigurationError, ComponentDependencyError
 # Import logging system
 from .logging_system import get_logger, get_system_log_manager
+# Import new ConfigBase for constructor prohibition
+from .config.config_base import ConfigBase
 
 logger = logging.getLogger(__name__)
 
@@ -29,9 +31,13 @@ class TriggerType(Enum):
     CONDITION = "condition"
 
 
-class TriggerConfig(BaseModel):
-    """Configuration for triggers."""
-    model_config = ConfigDict(use_enum_values=True)
+class TriggerConfig(ConfigBase):
+    """
+    Configuration for triggers - INHERITS constructor prohibition.
+    
+    ❌ FORBIDDEN: TriggerConfig(trigger_type="data_updated", ...)
+    ✅ REQUIRED: TriggerConfig.from_config('path/to/config.yml')
+    """
     
     trigger_type: TriggerType = TriggerType.DATA_UPDATED
     debounce_ms: int = Field(default=100, ge=0)
@@ -819,7 +825,7 @@ def create_trigger(config: Union[Dict[str, Any], TriggerConfig], **kwargs) -> Tr
     logger.info(f"Creating trigger via mandatory from_config")
     
     if isinstance(config, dict):
-        config = TriggerConfig(**config)
+        config = TriggerConfig.from_config(config)
     
     # Handle both enum and string values (due to use_enum_values=True)
     trigger_type = config.trigger_type

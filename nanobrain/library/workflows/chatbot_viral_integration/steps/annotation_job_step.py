@@ -188,7 +188,8 @@ class AnnotationJobStep(Step):
         # Create a default executor if not provided
         executor = kwargs.get('executor')
         if not executor:
-            executor_config = ExecutorConfig(executor_type='local', max_workers=3)
+            # ✅ FRAMEWORK COMPLIANCE: Use from_config instead of constructor
+            executor_config = ExecutorConfig.from_config({'executor_type': 'local', 'max_workers': 3})
             executor = LocalExecutor.from_config(executor_config)
         
         return {
@@ -375,9 +376,9 @@ class AnnotationJobStep(Step):
             with open(workflow_config_path, 'r') as f:
                 workflow_config_dict = yaml.safe_load(f)
             
-            # Create WorkflowConfig
+            # ✅ FRAMEWORK COMPLIANCE: Create WorkflowConfig using from_config
             from nanobrain.core.workflow import WorkflowConfig
-            workflow_config = WorkflowConfig(**workflow_config_dict)
+            workflow_config = WorkflowConfig.from_config(workflow_config_dict)
             
             # Create AlphavirusWorkflow instance using from_config
             from nanobrain.library.workflows.viral_protein_analysis import AlphavirusWorkflow

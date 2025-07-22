@@ -1,0 +1,36 @@
+name: "query_classification"
+description: "Classify user queries and extract virus species using LLM agent"
+class: "nanobrain.library.workflows.chatbot_viral_integration.steps.query_classification_step.QueryClassificationStep"
+
+# Step configuration
+config:
+  name: "query_classification"
+  description: "Classify user queries using LLM agent"
+  debug_mode: false
+  enable_logging: true
+  log_data_transfers: true
+  
+  # UPDATED: Agent configuration with class+config pattern (was inline)
+  extraction_agent:
+    class: "nanobrain.library.agents.specialized.conversational_specialized_agent.ConversationalSpecializedAgent"
+    config: "config/QueryClassificationStep/VirusExtractionAgent.yml"
+
+# Input/Output data unit specifications (existing)
+input_data_units:
+  - "user_query"
+
+output_data_units:
+  - "extraction_result"
+
+# Step timeout and retry settings (existing)
+timeout: 30.0
+max_retries: 3
+retry_delay: 1.0
+
+# Classification configuration (existing)
+classification_config:
+  confidence_threshold: 0.7
+  enable_fallback_routing: true
+  routing_strategies:
+    virus_detection: "high_confidence_routing"
+    analysis_detection: "context_aware_routing" 

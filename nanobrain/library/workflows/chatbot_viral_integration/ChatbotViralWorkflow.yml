@@ -1,10 +1,12 @@
-name: ChatbotViralWorkflow
-description: Intelligent chatbot integration with enhanced viral annotation backend
-version: 5.0.0  # Updated version for enhanced ultra-precision support
-execution_strategy: event_driven
-error_handling: continue
+name: "ChatbotViralWorkflow"
+description: "Intelligent chatbot integration with enhanced viral annotation backend"
+version: "5.1.0"  # Compliance update version
+execution_strategy: "event_driven"
+error_handling: "continue"
 enable_monitoring: true
-workflow_directory: nanobrain/library/workflows/chatbot_viral_integration
+workflow_directory: "nanobrain/library/workflows/chatbot_viral_integration"
+
+# Existing configuration preserved
 enable_progress_reporting: true
 progress_batch_interval: 3.0
 progress_collapsed_by_default: true
@@ -18,150 +20,148 @@ validate_graph: true
 allow_cycles: false
 require_connected_graph: true
 
-# Data directory configuration - configurable path for data storage and caching
-data_directory: "../../data"  # Base data directory - can be overridden by environment or config
-cache_directory: "../../data/cache"  # Cache directory for temporary files
-csv_file_path: "../../data/alphavirus_analysis/BVBRC_genome_alphavirus.csv"  # Path to genome CSV data
+# Data directory configuration (existing)
+data_directory: "../../data"
+cache_directory: "../../data/cache"
+csv_file_path: "../../data/alphavirus_analysis/BVBRC_genome_alphavirus.csv"
 
-# WORKFLOW-LEVEL INPUT/OUTPUT DATA UNITS (Only at workflow level)
+# WORKFLOW-LEVEL INPUT/OUTPUT DATA UNITS (preserved)
 input_data_units:
   user_query:
-    class: nanobrain.core.data_unit.DataUnitMemory
-    name: user_query
+    class: "nanobrain.core.data_unit.DataUnitMemory"
+    name: "user_query"
     description: "User query input for enhanced chatbot viral integration"
     persistent: false
 
 output_data_units:
   chatbot_response:
-    class: nanobrain.core.data_unit.DataUnitMemory
-    name: chatbot_response
+    class: "nanobrain.core.data_unit.DataUnitMemory"
+    name: "chatbot_response"
     description: "Complete chatbot response with enhanced viral analysis"
     persistent: false
 
-# STEPS: External configuration file references only (enhanced execution chain)
+# UPDATED: Dict-based steps format (was list-based)
 steps:
-- step_id: query_classification
-  name: Query Classification
-  description: Classify user queries and extract virus species using LLM agent
-  class: nanobrain.library.workflows.chatbot_viral_integration.steps.query_classification_step.QueryClassificationStep
-  estimated_time: 2.0
-  config_file: config/steps/query_classification.yml
+  query_classification:
+    class: "nanobrain.library.workflows.chatbot_viral_integration.steps.query_classification_step.QueryClassificationStep"
+    config: "config/QueryClassificationStep/QueryClassificationStep.yml"
+    name: "Query Classification"
+    description: "Classify user queries and extract virus species using LLM agent"
+    estimated_time: 2.0
+  
+  virus_name_resolution:
+    class: "nanobrain.library.workflows.chatbot_viral_integration.steps.virus_name_resolution_step.EnhancedVirusNameResolutionStep"
+    config: "config/VirusNameResolutionStep/VirusNameResolutionStep.yml"
+    name: "Enhanced Virus Name Resolution"
+    description: "Ultra-high-confidence virus synonym detection with multi-agent processing"
+    estimated_time: 10.0
+  
+  viral_protein_analysis:
+    class: "nanobrain.library.workflows.viral_protein_analysis.alphavirus_workflow.AlphavirusWorkflow"
+    config: "../viral_protein_analysis/config/AlphavirusWorkflow.yml"
+    name: "Enhanced Viral Protein Analysis Workflow"
+    description: "Complete enhanced viral protein analysis workflow with ultra-precision validation"
+    estimated_time: 1800.0
+    timeout: 1800.0
+  
+  conversational_response:
+    class: "nanobrain.library.workflows.chatbot_viral_integration.steps.conversational_response_step.ConversationalResponseStep"
+    config: "config/ConversationalResponseStep/ConversationalResponseStep.yml"
+    name: "Conversational Response"
+    description: "Generate intelligent conversational responses about viruses"
+    estimated_time: 5.0
+  
+  response_formatting:
+    class: "nanobrain.library.workflows.chatbot_viral_integration.steps.response_formatting_step.ResponseFormattingStep"
+    config: "config/ResponseFormattingStep/ResponseFormattingStep.yml"
+    name: "Response Formatting"
+    description: "Format enhanced analysis results for chatbot response"
+    estimated_time: 5.0
 
-- step_id: virus_name_resolution
-  name: Enhanced Virus Name Resolution
-  description: Ultra-high-confidence virus synonym detection with multi-agent processing
-  class: nanobrain.library.workflows.chatbot_viral_integration.steps.virus_name_resolution_step.EnhancedVirusNameResolutionStep
-  estimated_time: 10.0
-  config_file: config/steps/enhanced_virus_name_resolution.yml
-
-- step_id: viral_protein_analysis
-  name: Enhanced Viral Protein Analysis Workflow
-  description: Complete enhanced viral protein analysis workflow with ultra-precision validation
-  class: nanobrain.library.workflows.viral_protein_analysis.alphavirus_workflow.AlphavirusWorkflow
-  estimated_time: 1800.0
-  timeout: 1800.0
-  config_file: ../viral_protein_analysis/config/AlphavirusWorkflow.yml
-
-- step_id: conversational_response
-  name: Conversational Response
-  description: Generate intelligent conversational responses about viruses
-  class: nanobrain.library.workflows.chatbot_viral_integration.steps.conversational_response_step.ConversationalResponseStep
-  estimated_time: 5.0
-  config_file: config/steps/conversational_response.yml
-
-- step_id: response_formatting
-  name: Response Formatting
-  description: Format enhanced analysis results for chatbot response
-  class: nanobrain.library.workflows.chatbot_viral_integration.steps.response_formatting_step.ResponseFormattingStep
-  estimated_time: 5.0
-  config_file: config/steps/response_formatting.yml
-
-# EVENT-DRIVEN LINKS: Define complete data flow for enhanced ultra-precision workflow execution
+# UPDATED: Dict-based links format (was list-based)
 links:
-- link_id: workflow_to_query_classification
-  source: user_query
-  target: query_classification.user_query
-  description: "Route user input to query classification"
+  workflow_to_query_classification:
+    source: "user_query"
+    target: "query_classification.user_query"
+    description: "Route user input to query classification"
+  
+  classification_to_enhanced_virus_resolution:
+    source: "query_classification.extraction_result"
+    target: "virus_name_resolution.query_input"
+    condition:
+      field: "routing_decision"
+      operator: "equals"
+      value: "virus_name_resolution"
+    description: "Route classification result to enhanced virus resolution for ultra-precision analysis"
+  
+  enhanced_virus_resolution_to_viral_analysis:
+    source: "virus_name_resolution.resolution_result"
+    target: "viral_protein_analysis.virus_input"
+    condition:
+      field: "analysis_type"
+      operator: "in"
+      values: ["pssm", "protein_analysis"]
+    description: "Route ultra-high-confidence synonyms to enhanced viral protein analysis"
+  
+  enhanced_viral_analysis_to_response_formatting:
+    source: "viral_protein_analysis.analysis_results"
+    target: "response_formatting.analysis_input"
+    description: "Route enhanced viral analysis results to response formatting"
+  
+  formatted_enhanced_analysis_to_workflow:
+    source: "response_formatting.formatted_response"
+    target: "chatbot_response"
+    description: "Route formatted enhanced analysis response to workflow output"
+  
+  classification_to_conversational_response:
+    source: "query_classification.extraction_result"
+    target: "conversational_response.query_input"
+    condition:
+      field: "routing_decision"
+      operator: "equals"
+      value: "conversational_response"
+    description: "Route classification result to conversational response"
+  
+  conversational_to_response_formatting:
+    source: "conversational_response.response_data"
+    target: "response_formatting.response_input"
+    description: "Route conversational response to formatting"
+  
+  formatted_conversational_to_workflow:
+    source: "response_formatting.formatted_response"
+    target: "chatbot_response"
+    description: "Route formatted conversational response to workflow output"
 
-# Enhanced Analysis Route: query → enhanced_virus_resolution → enhanced_viral_protein_analysis → response_formatting
-- link_id: classification_to_enhanced_virus_resolution
-  source: query_classification.extraction_result
-  target: virus_name_resolution.query_input
-  condition:
-    field: routing_decision
-    operator: equals
-    value: virus_name_resolution
-  description: "Route classification result to enhanced virus resolution for ultra-precision analysis"
-
-- link_id: enhanced_virus_resolution_to_viral_analysis
-  source: virus_name_resolution.resolution_result
-  target: viral_protein_analysis.virus_input
-  condition:
-    field: analysis_type
-    operator: in
-    values: ["pssm", "protein_analysis"]
-  description: "Route ultra-high-confidence synonyms to enhanced viral protein analysis"
-
-- link_id: enhanced_viral_analysis_to_response_formatting
-  source: viral_protein_analysis.analysis_results
-  target: response_formatting.analysis_input
-  description: "Route enhanced viral analysis results to response formatting"
-
-- link_id: formatted_enhanced_analysis_to_workflow
-  source: response_formatting.formatted_response
-  target: chatbot_response
-  description: "Route formatted enhanced analysis response to workflow output"
-
-# Conversational Route: query → conversational_response → response_formatting
-- link_id: classification_to_conversational_response
-  source: query_classification.extraction_result
-  target: conversational_response.query_input
-  condition:
-    field: routing_decision
-    operator: equals
-    value: conversational_response
-  description: "Route classification result to conversational response"
-
-- link_id: conversational_to_response_formatting
-  source: conversational_response.response_data
-  target: response_formatting.response_input
-  description: "Route conversational response to formatting"
-
-- link_id: formatted_conversational_to_workflow
-  source: response_formatting.formatted_response
-  target: chatbot_response
-  description: "Route formatted conversational response to workflow output"
-
-# Triggers
+# UPDATED: Dict-based triggers format (was list-based)
 triggers:
-- trigger_id: user_query_received
-  class: nanobrain.core.trigger.DataUnitChangeTrigger
-  data_unit: user_query
-  description: "Trigger when user query received"
+  user_query_received:
+    class: "nanobrain.core.trigger.DataUnitChangeTrigger"
+    data_unit: "user_query"
+    description: "Trigger when user query received"
   
-- trigger_id: query_classification_completed
-  class: nanobrain.core.trigger.DataUnitChangeTrigger
-  data_unit: extracted_query_data
-  description: "Trigger when query classification completed"
+  query_classification_completed:
+    class: "nanobrain.core.trigger.DataUnitChangeTrigger"
+    data_unit: "extracted_query_data"
+    description: "Trigger when query classification completed"
   
-- trigger_id: enhanced_virus_resolution_completed
-  class: nanobrain.core.trigger.DataUnitChangeTrigger
-  data_unit: resolution_output
-  description: "Trigger when enhanced virus name resolution completed"
+  enhanced_virus_resolution_completed:
+    class: "nanobrain.core.trigger.DataUnitChangeTrigger"
+    data_unit: "resolution_output"
+    description: "Trigger when enhanced virus name resolution completed"
   
-- trigger_id: enhanced_viral_analysis_completed
-  class: nanobrain.core.trigger.DataUnitChangeTrigger
-  data_unit: analysis_results
-  description: "Trigger when enhanced viral protein analysis completed"
+  enhanced_viral_analysis_completed:
+    class: "nanobrain.core.trigger.DataUnitChangeTrigger"
+    data_unit: "analysis_results"
+    description: "Trigger when enhanced viral protein analysis completed"
 
-# Execution configuration
+# Existing execution configuration (preserved)
 execution:
-  start_with: query_classification
-  error_handling: continue
+  start_with: "query_classification"
+  error_handling: "continue"
   parallel_execution: false
   timeout: 600.0
 
-# Workflow metadata
+# Existing metadata (preserved)
 workflow_metadata:
   framework_compliance: "from_config_mandatory"
   migration_status: "enhanced_ultra_precision_complete"
@@ -170,4 +170,4 @@ workflow_metadata:
   zero_contamination_guarantee: "enabled"
   last_updated: "2025-01-28"
   configuration_status: "enhanced_production_ready"
-  notes: "Enhanced for ultra-precision workflow execution with zero contamination tolerance and multi-agent validation"
+  notes: "Updated for framework compliance - Dict-based configuration format"

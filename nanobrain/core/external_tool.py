@@ -19,11 +19,18 @@ from typing import Any, Dict, List, Optional, Union
 
 from nanobrain.core.logging_system import get_logger
 from nanobrain.core.component_base import FromConfigBase
+# Import new ConfigBase for constructor prohibition
+from nanobrain.core.config.config_base import ConfigBase
+from pydantic import Field
 
 
-@dataclass
-class ExternalToolConfig:
-    """Configuration for external tools"""
+class ExternalToolConfig(ConfigBase):
+    """
+    Configuration for external tools - INHERITS constructor prohibition.
+    
+    ❌ FORBIDDEN: ExternalToolConfig(tool_name="test", ...)
+    ✅ REQUIRED: ExternalToolConfig.from_config('path/to/config.yml')
+    """
     tool_name: str
     installation_path: Optional[str] = None
     executable_path: Optional[str] = None
@@ -39,10 +46,10 @@ class ExternalToolConfig:
     git_repository: Optional[str] = None
     create_isolated_environment: bool = False
     environment_name: Optional[str] = None
-    local_installation_paths: List[str] = field(default_factory=list)
+    local_installation_paths: List[str] = Field(default_factory=list)
     
     # NEW: Progressive scaling support
-    progressive_scaling: Dict[int, Dict[str, Any]] = field(default_factory=dict)
+    progressive_scaling: Dict[int, Dict[str, Any]] = Field(default_factory=dict)
     initial_scale_level: int = 1
     
     # NEW: Enhanced error handling

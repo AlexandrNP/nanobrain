@@ -19,9 +19,11 @@ from pydantic import BaseModel, Field, ConfigDict, field_validator
 
 from .step import Step, StepConfig
 from .agent import Agent, AgentConfig
-from .tool import ToolBase, ToolConfig, ToolType
+from .tool import ToolBase, ToolConfig
 from .data_unit import DataUnitBase, DataUnitConfig
 from .logging_system import get_logger, OperationType
+# Import new ConfigBase for constructor prohibition
+from .config.config_base import ConfigBase
 
 logger = logging.getLogger(__name__)
 
@@ -40,9 +42,13 @@ class SequenceType(Enum):
     NUCLEOTIDE = "nucleotide"
 
 
-class BioinformaticsConfig(BaseModel):
-    """Configuration for bioinformatics components."""
-    model_config = ConfigDict(arbitrary_types_allowed=True)
+class BioinformaticsConfig(ConfigBase):
+    """
+    Configuration for bioinformatics components - INHERITS constructor prohibition.
+    
+    ❌ FORBIDDEN: BioinformaticsConfig(coordinate_system="one_based", ...)
+    ✅ REQUIRED: BioinformaticsConfig.from_config('path/to/config.yml')
+    """
     
     coordinate_system: CoordinateSystem = CoordinateSystem.ONE_BASED
     sequence_type: SequenceType = SequenceType.DNA

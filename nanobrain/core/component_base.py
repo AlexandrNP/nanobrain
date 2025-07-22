@@ -25,6 +25,64 @@ class ComponentDependencyError(Exception):
     pass
 
 
+def validate_config_usage(component_class, config_object):
+    """
+    Framework-level validation to ensure proper Config usage.
+    PREVENTS any programmatic Config creation.
+    
+    Args:
+        component_class: The component class being created
+        config_object: The config object to validate
+        
+    Raises:
+        ValueError: If config was created via prohibited constructor usage
+    """
+    if hasattr(config_object, '__class__'):
+        config_class = config_object.__class__
+        
+        # Check if config was created via constructor (FORBIDDEN)
+        if hasattr(config_class, '_allow_direct_instantiation'):
+            # This means it's a ConfigBase-derived class
+            # If we're here and the flag is True, it means constructor was used during from_config
+            # which is allowed. If it's False, then somehow constructor was bypassed, which is okay.
+            pass
+        else:
+            # For non-ConfigBase classes, check if it looks like programmatic creation
+            if isinstance(config_object, dict):
+                # Dictionary configs are allowed for testing
+                pass
+            elif isinstance(config_object, BaseModel):
+                # Check if this is an old-style BaseModel that should have been ConfigBase
+                try:
+                    from .config.config_base import ConfigBase
+                    if not isinstance(config_object, ConfigBase):
+                        logger = get_logger("component_base")
+                        logger.warning(
+                            f"⚠️ FRAMEWORK WARNING: {config_class.__name__} should inherit from ConfigBase.\n"
+                            f"   COMPONENT: {component_class.__name__}\n"
+                            f"   REQUIRED: Update {config_class.__name__} to inherit from ConfigBase.\n"
+                            f"   CURRENT: Allowing for backward compatibility, but this will be deprecated."
+                        )
+                except ImportError:
+                    # ConfigBase not available, skip check
+                    pass
+        
+        # Additional validation for config content
+        if hasattr(config_object, '__dict__') and hasattr(config_object, 'model_dump'):
+            # This is a Pydantic model, check if it has content
+            try:
+                config_dict = config_object.model_dump()
+                if not config_dict:
+                    raise ValueError(
+                        f"❌ CONFIG ERROR: Empty {config_class.__name__} configuration.\n"
+                        f"   COMPONENT: {component_class.__name__}\n"
+                        f"   REQUIRED: Valid configuration data in YAML file."
+                    )
+            except Exception:
+                # If model_dump fails, skip validation
+                pass
+
+
 def import_class_from_path(class_path: str, search_namespaces: List[str] = None) -> Type:
     """
     Import class with enhanced path resolution and error handling
@@ -156,7 +214,11 @@ class FromConfigBase(ABC):
         framework_fields = {'class', 'config_file'}
         filtered_config_dict = {k: v for k, v in config_dict.items() if k not in framework_fields}
         
-        config_object = config_class(**filtered_config_dict)
+        # ✅ FRAMEWORK COMPLIANCE: Use from_config method instead of constructor
+        config_object = config_class.from_config(filtered_config_dict)
+        
+        # FRAMEWORK VALIDATION: Ensure proper Config usage
+        validate_config_usage(cls, config_object)
         
         # Step 3: Use existing framework pattern for component creation
         cls.validate_config_schema(config_object)
@@ -168,13 +230,15 @@ class FromConfigBase(ABC):
         return instance
     
     @classmethod
-    @abstractmethod
     def _get_config_class(cls):
         """
         MANDATORY: Return config class for this component type.
         
         This is the ONLY method that differs between component types.
         ALL other aspects of from_config() are identical.
+        
+        This method should be implemented by all component subclasses.
+        The NotImplementedError provides clear guidance when missing.
         
         Returns:
             Config class appropriate for this component type

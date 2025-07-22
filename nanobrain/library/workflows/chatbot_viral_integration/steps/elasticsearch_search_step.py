@@ -114,13 +114,13 @@ class ElasticsearchSearchStep(BaseStep):
         logger = get_logger(f"{cls.__name__}.from_config")
         logger.info(f"Creating {cls.__name__} from configuration")
         
-        # Convert to ElasticsearchSearchConfig if needed
+        # ✅ FRAMEWORK COMPLIANCE: Convert to ElasticsearchSearchConfig using from_config
         if isinstance(config, dict):
-            config = ElasticsearchSearchConfig(**config)
+            config = ElasticsearchSearchConfig.from_config(config)
         elif not isinstance(config, ElasticsearchSearchConfig):
             # Convert other config types
             config_dict = config.model_dump() if hasattr(config, 'model_dump') else {}
-            config = ElasticsearchSearchConfig(**config_dict)
+            config = ElasticsearchSearchConfig.from_config(config_dict)
         
         # Validate tool card
         if not hasattr(config, 'tool_card') or not config.tool_card:
@@ -158,23 +158,23 @@ class ElasticsearchSearchStep(BaseStep):
         await super().initialize()
         
         try:
-            # Initialize MCP client
-            mcp_client_config = MCPClientConfig(
-                default_timeout=self.config.connection_timeout,
-                default_max_retries=3,
-                default_retry_delay=1.0
-            )
+            # ✅ FRAMEWORK COMPLIANCE: Initialize MCP client using from_config
+            mcp_client_config = MCPClientConfig.from_config({
+                'default_timeout': self.config.connection_timeout,
+                'default_max_retries': 3,
+                'default_retry_delay': 1.0
+            })
             
             self.mcp_client = MCPClient(mcp_client_config, logger=self.logger)
             await self.mcp_client.initialize()
             
-            # Add Elasticsearch MCP server
-            elasticsearch_server_config = MCPServerConfig(
-                name=self.config.mcp_server_name,
-                url=self.config.mcp_server_url,
-                description="Elasticsearch MCP server for viral protein search",
-                timeout=self.config.request_timeout
-            )
+            # ✅ FRAMEWORK COMPLIANCE: Add Elasticsearch MCP server using from_config
+            elasticsearch_server_config = MCPServerConfig.from_config({
+                'name': self.config.mcp_server_name,
+                'url': self.config.mcp_server_url,
+                'description': "Elasticsearch MCP server for viral protein search",
+                'timeout': self.config.request_timeout
+            })
             
             self.mcp_client.add_server(elasticsearch_server_config)
             

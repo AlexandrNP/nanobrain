@@ -36,64 +36,46 @@ class QueryClassificationStep(Step):
             self.nb_logger.info("🔍 Query Classification Step initialized with LLM-based virus species extraction")
     
     def _create_extraction_agent(self, component_config: Dict[str, Any]) -> SimpleAgent:
-        """Create LLM agent for virus species extraction from configuration"""
-        # Get agent config from the component configuration
-        agent_config_dict = component_config.get('extraction_agent', {})
+        """
+        Load LLM agent for virus species extraction from standardized config file.
         
-        # If not found, try to get from the main config object (the full YAML configuration)
-        if not agent_config_dict and hasattr(self.config, 'extraction_agent'):
-            agent_config_dict = getattr(self.config, 'extraction_agent')
-        elif not agent_config_dict and isinstance(self.config, dict):
-            agent_config_dict = self.config.get('extraction_agent', {})
+        ✅ FRAMEWORK COMPLIANCE: Uses agent_config_file reference, no programmatic creation.
+        """
+        # Get agent config file path from step configuration
+        agent_config_file = component_config.get('agent_config_file')
         
-        if not agent_config_dict:
-            raise ValueError("No extraction_agent configuration found in step configuration")
+        if not agent_config_file:
+            raise ValueError(
+                "❌ FRAMEWORK VIOLATION: No agent_config_file specified in step configuration.\n"
+                "   REQUIRED: Specify agent_config_file in step config YAML.\n"
+                "   EXAMPLE: agent_config_file: 'config/QueryClassificationStep/VirusExtractionAgent.yml'"
+            )
         
-        # Ensure the name field is present for SimpleAgent
-        if 'name' not in agent_config_dict:
-            agent_config_dict['name'] = 'virus_extraction_agent'
+        # ✅ FRAMEWORK COMPLIANCE: Load agent from config file using from_config pattern
+        from nanobrain.library.agents.specialized_agents.conversational_specialized_agent import ConversationalSpecializedAgent
         
-        # Create AgentConfig object from dictionary - this is what SimpleAgent expects
-        from nanobrain.core.agent import AgentConfig
-        
-        # Create A2A protocol compliant agent_card
-        agent_card = {
-            "version": "1.0.0",
-            "purpose": "Virus species extraction from user queries using LLM",
-            "detailed_description": "Specialized agent for extracting virus species names from natural language queries with high accuracy",
-            "domain": "bioinformatics",
-            "expertise_level": "intermediate",
-            "input_format": {
-                "primary_mode": "text",
-                "supported_modes": ["text"],
-                "content_types": ["text/plain"]
-            },
-            "output_format": {
-                "primary_mode": "json",
-                "supported_modes": ["json"],
-                "content_types": ["application/json"]
-            },
-            "capabilities": {
-                "streaming": False,
-                "multi_turn_conversation": False,
-                "context_retention": False,
-                "tool_usage": False
-            }
-        }
-        
-        agent_config = AgentConfig(
-            name=agent_config_dict.get('name', 'virus_extraction_agent'),
-            description=agent_config_dict.get('description', 'Agent for extracting virus species from user queries'),
-            model=agent_config_dict.get('model', 'gpt-4'),
-            temperature=agent_config_dict.get('temperature', 0.1),
-            max_tokens=agent_config_dict.get('max_tokens', 100),
-            system_prompt=agent_config_dict.get('system_prompt', ''),
-            timeout=agent_config_dict.get('timeout', 30),
-            agent_card=agent_card
-        )
-        
-        # Create agent using mandatory from_config pattern with proper AgentConfig object
-        return SimpleAgent.from_config(agent_config)
+        try:
+            # Resolve agent config file path relative to workflow directory
+            if hasattr(self, 'workflow_directory') and self.workflow_directory:
+                import os
+                from pathlib import Path
+                agent_config_path = Path(self.workflow_directory) / agent_config_file
+            else:
+                # Fallback: resolve relative to current step's config location
+                import os
+                from pathlib import Path
+                step_dir = Path(__file__).parent.parent
+                agent_config_path = step_dir / agent_config_file
+            
+            # Load agent using framework's from_config pattern
+            return ConversationalSpecializedAgent.from_config(str(agent_config_path))
+            
+        except Exception as e:
+            raise ValueError(
+                f"❌ FRAMEWORK ERROR: Failed to load agent from {agent_config_file}: {e}\n"
+                f"   SOLUTION: Ensure agent config file exists and is properly formatted.\n"
+                f"   PATH: {agent_config_file}"
+            ) from e
     
     async def process(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """

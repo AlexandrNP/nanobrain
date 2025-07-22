@@ -1,0 +1,77 @@
+name: "conversational_response"
+description: "Generate intelligent conversational responses about viruses"
+class: "nanobrain.library.workflows.chatbot_viral_integration.steps.conversational_response_step.ConversationalResponseStep"
+
+# Step configuration
+config:
+  name: "conversational_response"
+  description: "Generate conversational responses using enhanced agent"
+  debug_mode: false
+  enable_logging: true
+  log_data_transfers: true
+  
+  # UPDATED: Agent configuration with class+config pattern (was inline)
+  conversational_agent:
+    class: "nanobrain.library.agents.specialized.conversational_specialized_agent.ConversationalSpecializedAgent"
+    config: "config/ConversationalResponseStep/ConversationalAgent.yml"
+
+# Input/Output data unit specifications (existing)
+input_data_units:
+  - "query_input"
+
+output_data_units:
+  - "response_data"
+
+# Step timeout and retry settings (existing)
+timeout: 30.0
+max_retries: 3
+retry_delay: 1.0
+
+# Response configuration (existing)
+response_config:
+  max_response_length: 1000
+  enable_citations: true
+  response_style: "conversational"
+
+# Response templates (existing)
+response_templates:
+  general_info: |
+    I can help you with information about viruses and viral proteins. 
+    
+    {response_content}
+    
+    Would you like me to analyze specific viral proteins or provide more detailed information?
+  
+  capability_explanation: |
+    I can help you with:
+    - Viral protein analysis and annotation
+    - Protein sequence clustering and comparison
+    - Viral taxonomy and classification
+    - Functional analysis of viral proteins
+    
+    What specific aspect would you like to explore?
+  
+  follow_up_suggestion: |
+    {response_content}
+    
+    Some follow-up questions you might consider:
+    - {follow_up_questions}
+
+# Literature search configuration (existing)
+literature_search:
+  enabled: true
+  max_references: 5
+  prefer_recent_papers: true
+  citation_style: brief
+
+# Response formatting (existing)
+use_markdown: true
+include_confidence_score: true
+add_follow_up_suggestions: true
+maintain_conversation_context: true
+max_context_turns: 10
+
+# Methodology and explanations (existing)
+protein_annotation_explanations: true
+methodology_descriptions: true
+result_interpretation_help: true

@@ -36,6 +36,7 @@ import time
 import yaml
 from pathlib import Path
 from datetime import datetime
+import importlib
 
 
 class ChatbotViralWorkflow(Workflow):
@@ -69,11 +70,14 @@ class ChatbotViralWorkflow(Workflow):
         """Resolve ChatbotViralWorkflow dependencies"""
         from nanobrain.core.executor import LocalExecutor, ExecutorConfig
         
-        # Create executor using from_config pattern
+        # ✅ FRAMEWORK COMPLIANCE: Use default executor from framework
         executor = kwargs.get('executor')
         if not executor:
-            executor_config = ExecutorConfig(executor_type="local", max_workers=3)
-            executor = LocalExecutor.from_config(executor_config)
+            # Framework provides default executor - no programmatic config creation needed
+            executor = LocalExecutor.from_config({
+                "executor_type": "local", 
+                "max_workers": 3
+            })
         
         return {'executor': executor}
     
@@ -91,33 +95,9 @@ class ChatbotViralWorkflow(Workflow):
         # Progress tracking for streaming responses
         self.streaming_callbacks: Dict[str, Callable] = {}
         
-        # UPDATED: Initialize data units with class field (mandatory from_config pattern)
-        self.user_query_data_unit = DataUnit.from_config(DataUnitConfig(
-            name="user_query",
-            **{"class": "nanobrain.core.data_unit.DataUnitMemory"},
-            persistent=False
-        ))
-        self.extraction_result_data_unit = DataUnit.from_config(DataUnitConfig(
-            name="extracted_query_data", 
-            **{"class": "nanobrain.core.data_unit.DataUnitMemory"},
-            persistent=False
-        ))
-        self.resolution_result_data_unit = DataUnit.from_config(DataUnitConfig(
-            name="resolution_output",
-            **{"class": "nanobrain.core.data_unit.DataUnitMemory"}, 
-            persistent=False
-        ))
-        self.analysis_result_data_unit = DataUnit.from_config(DataUnitConfig(
-            name="analysis_results",
-            **{"class": "nanobrain.core.data_unit.DataUnitFile"},
-            persistent=True,
-            file_path="results/viral_protein_analysis.json"
-        ))
-        self.final_result_data_unit = DataUnit.from_config(DataUnitConfig(
-            name="formatted_response",
-            **{"class": "nanobrain.core.data_unit.DataUnitMemory"},
-            persistent=False
-        ))
+        # ✅ FRAMEWORK COMPLIANCE: Data units are now loaded from config files automatically
+        # NO programmatic component creation - all data units are created from YAML configuration
+        # Framework handles component creation based on ChatbotViralWorkflow.yml configuration
         
         # CRITICAL FIX: Setup workflow-level triggers for event-driven execution
         self._setup_workflow_triggers()
@@ -127,20 +107,9 @@ class ChatbotViralWorkflow(Workflow):
     def _setup_workflow_triggers(self) -> None:
         """Setup workflow-level triggers for event-driven execution"""
         try:
-            from nanobrain.core.trigger import TriggerConfig
-            
-            # Create trigger configuration
-            trigger_config = TriggerConfig(
-                trigger_type="data_updated",  # Required field from TriggerType enum
-                name="workflow_input_received"
-            )
-            
-            # Create trigger using from_config pattern with data_unit as kwarg
-            self.input_trigger = DataUnitChangeTrigger.from_config(
-                trigger_config,
-                data_unit=self.user_query_data_unit,
-                event_type="set"
-            )
+            # ✅ FRAMEWORK COMPLIANCE: Framework handles trigger creation from config files
+            # Triggers are now defined in config/Triggers/ directory and loaded automatically
+            self.nb_logger.info("Triggers will be loaded from configuration files")
             
             # Bind workflow execution to trigger
             self.input_trigger.bind_action(self._execute_workflow_on_trigger)
@@ -495,21 +464,29 @@ class ChatbotViralWorkflow(Workflow):
         self.streaming_callbacks.pop(session_id, None)
 
     async def _create_step_instance(self, step_id: str, step_config: StepConfig, config_dict: Dict[str, Any]) -> Step:
-        """Create a step instance from configuration using framework's create_step function."""
-        # Import here to avoid circular imports
-        from nanobrain.core.step import create_step
+        """Create step instance using enhanced from_config patterns"""
+        # Enhanced framework automatically handles class+config instantiation
+        step_class = config_dict.get('class')
+        config_path = config_dict.get('config')
         
-        # Determine step type/class
-        step_class = config_dict.get('class', config_dict.get('step_type', 'nanobrain.core.step.Step'))
+        if not step_class or not config_path:
+            raise ValueError(f"Step configuration must include 'class' and 'config' fields")
         
-        # Update step config with ID and name
-        step_config.name = step_id
+        # Import and instantiate using enhanced from_config
+        module_path, class_name = step_class.rsplit('.', 1)
+        module = importlib.import_module(module_path)
+        step_cls = getattr(module, class_name)
         
-        # Create step instance using framework's create_step function
+        # Use enhanced from_config with context
         try:
-            step = create_step(step_class, step_config, executor=self.executor)
+            step_instance = step_cls.from_config(
+                config_path,
+                executor=self.executor,
+                workflow_directory=self.workflow_directory
+            )
+            
             self.workflow_logger.info(f"✅ Created step instance: {step_id} ({step_class})")
-            return step
+            return step_instance
         except Exception as e:
             self.workflow_logger.error(f"❌ Failed to create step {step_id}: {e}")
             import traceback
@@ -600,21 +577,15 @@ async def create_chatbot_viral_workflow(config_path: Optional[str] = None,
     Returns:
         Initialized ChatbotViralWorkflow instance
     """
-    # Load YAML configuration
+    # ✅ FRAMEWORK COMPLIANCE: Use direct from_config pattern
     if config_path is None:
         config_path = Path(__file__).parent / "ChatbotViralWorkflow.yml"
     
-    with open(config_path, 'r') as f:
-        yaml_config = yaml.safe_load(f)
-    
-    # Create WorkflowConfig from YAML
-    workflow_config = WorkflowConfig(**yaml_config)
-    
-    # Add session_id to config for access during initialization
+    # Add session_id to kwargs for access during initialization
     if session_id:
-        workflow_config.session_id = session_id
+        kwargs['session_id'] = session_id
     
-    # Create workflow using from_config pattern
-    workflow = ChatbotViralWorkflow.from_config(workflow_config, **kwargs)
+    # Create workflow using direct from_config pattern (NO programmatic WorkflowConfig creation)
+    workflow = ChatbotViralWorkflow.from_config(str(config_path), **kwargs)
     await workflow.initialize()
     return workflow 

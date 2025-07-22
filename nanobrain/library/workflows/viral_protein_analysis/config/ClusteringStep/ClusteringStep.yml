@@ -1,24 +1,18 @@
-name: "Protein Clustering Analysis Step"
-description: "Cluster proteins by product names with LLM-generated summary - Complete Configuration"
+name: Protein Clustering Analysis
+description: Cluster proteins by product names with LLM-generated summary (final step)
 class: nanobrain.library.workflows.viral_protein_analysis.steps.clustering_step.ClusteringStep
+estimated_time: 60.0
+timeout: 60.0
+debug_mode: false
+enable_logging: true
 
-# Metadata (documentation only)
-_metadata:
-  workflow: "viral_protein_analysis"
-  component_type: "bioinformatics_step"
-  last_updated: "2025-01-28"
-  configuration_completeness: "complete_for_component"
+# STANDARDIZED CONFIG: Tool configuration via local standardized file reference
+tools:
+  mmseqs2_tool:
+    enabled: true
+    config_file: "config/ClusteringStep/MMseqs2Tool.yml"
 
-# Complete step configuration
-config:
-  name: protein_clustering_analysis
-  description: Cluster proteins by product names with LLM-generated summary
-  debug_mode: false
-  enable_logging: true
-  estimated_time: 60.0
-  timeout: 60.0
-
-# Complete step-level data units
+# STEP-LEVEL DATA UNITS: Step owns its data units
 input_data_units:
   curated_sequences:
     class: nanobrain.core.data_unit.DataUnitMemory
@@ -33,7 +27,7 @@ output_data_units:
     description: "Protein sequence clusters with analysis summary"
     persistent: false
 
-# Complete step-level triggers
+# STEP-LEVEL TRIGGER: Execute when curated sequences received
 triggers:
   - trigger_id: input_data_received
     class: nanobrain.core.trigger.DataUnitChangeTrigger
@@ -41,13 +35,7 @@ triggers:
     event_type: "set"
     description: "Execute step when curated sequences are received"
 
-# Component references (complete configs in separate files)
-tools:
-  mmseqs2_tool:
-    enabled: true
-    config_file: "MMseqs2Tool.yml"
-
-# Complete clustering configuration
+# Clustering configuration
 clustering_config:
   min_seq_id: 0.3
   coverage: 0.8
@@ -56,37 +44,15 @@ clustering_config:
   min_cluster_size: 2
   max_cluster_size: 1000
 
-# Complete cache configuration
+# Cache configuration
 cache_config:
   enable_caching: true
   cache_directory: "data/mmseqs2_cache"
   cache_ttl_hours: 168  # 1 week
   virus_specific: true
 
-# Complete analysis configuration
+# Analysis configuration
 analysis_config:
   generate_summary: true
   include_statistics: true
   cluster_validation: true
-
-# Complete performance configuration
-performance_config:
-  max_memory_usage: "8G"
-  max_threads: 4
-  batch_processing: true
-  parallel_clustering: true
-
-# Complete quality control configuration
-quality_control:
-  validate_input_sequences: true
-  check_sequence_diversity: true
-  filter_low_quality_clusters: true
-  minimum_cluster_quality: 0.7
-
-# Complete logging configuration
-logging_config:
-  enable_logging: true
-  log_level: "INFO"
-  log_clustering_progress: true
-  log_cluster_statistics: true
-  log_quality_metrics: true 

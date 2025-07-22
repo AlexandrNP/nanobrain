@@ -1,0 +1,8 @@
+name: analysis_results
+class: nanobrain.core.data_unit.DataUnitMemory
+description: "Workflow execution results and analysis output"
+persistent: false
+enable_logging: true
+config:
+  max_size: 5242880  # 5MB
+  ttl_seconds: 7200   # 2 hours 

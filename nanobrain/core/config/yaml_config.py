@@ -149,8 +149,8 @@ class YAMLConfig(BaseModel):
         return result
 
 
-class WorkflowConfig(YAMLConfig):
-    """Configuration for complete workflows."""
+class YAMLWorkflowConfig(YAMLConfig):
+    """YAML-based configuration for complete workflows (renamed to avoid conflict with core.workflow.WorkflowConfig)."""
     
     name: str
     description: str = ""
@@ -214,7 +214,7 @@ class WorkflowConfig(YAMLConfig):
         return errors
 
 
-def load_config(file_path: Union[str, Path], config_class: type = WorkflowConfig) -> YAMLConfig:
+def load_config(file_path: Union[str, Path], config_class: type = YAMLWorkflowConfig) -> YAMLConfig:
     """
     Load configuration from YAML file.
     
@@ -247,14 +247,14 @@ def save_config(config: YAMLConfig, file_path: Union[str, Path]) -> None:
         raise
 
 
-def create_example_config() -> WorkflowConfig:
+def create_example_config() -> YAMLWorkflowConfig:
     """
     Create an example workflow configuration.
     
     Returns:
         Example configuration
     """
-    return WorkflowConfig(
+    return YAMLWorkflowConfig(
         name="example_workflow",
         description="Example NanoBrain workflow configuration",
         version="1.0.0",

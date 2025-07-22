@@ -34,7 +34,7 @@ from .component_base import (
 )
 
 from .step import (
-    BaseStep, Step, TransformStep, StepConfig, create_step
+    BaseStep, Step, TransformStep, StepConfig
 )
 
 from .workflow import (
@@ -96,7 +96,7 @@ __all__ = [
     'import_class_from_path',
     
     # Steps
-    'BaseStep', 'Step', 'TransformStep', 'StepConfig', 'create_step',
+    'BaseStep', 'Step', 'TransformStep', 'StepConfig',
     
     # Workflows
     'Workflow', 'WorkflowConfig', 'WorkflowGraph', 'ConfigLoader', 

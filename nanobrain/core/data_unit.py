@@ -17,13 +17,19 @@ import time
 from .component_base import FromConfigBase, ComponentConfigurationError, ComponentDependencyError
 # Import logging system
 from .logging_system import get_logger, get_system_log_manager
+# Import new ConfigBase for constructor prohibition
+from .config.config_base import ConfigBase
 
 logger = logging.getLogger(__name__)
 
 
-class DataUnitConfig(BaseModel):
-    """Configuration for data units - ONLY class field for type specification"""
-    model_config = ConfigDict(use_enum_values=True)
+class DataUnitConfig(ConfigBase):
+    """
+    Configuration for data units - INHERITS constructor prohibition.
+    
+    ❌ FORBIDDEN: DataUnitConfig(name="test", class="...")
+    ✅ REQUIRED: DataUnitConfig.from_config('path/to/config.yml')
+    """
     
     # MANDATORY class field for data unit type specification
     class_field: str = Field(alias="class", description="Full class path for data unit type")

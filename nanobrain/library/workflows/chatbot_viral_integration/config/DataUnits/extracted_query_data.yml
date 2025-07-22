@@ -1,0 +1,8 @@
+name: extracted_query_data
+class: nanobrain.core.data_unit.DataUnitMemory
+description: "Query classification and virus species extraction result"
+persistent: false
+enable_logging: true
+config:
+  max_size: 1048576  # 1MB
+  ttl_seconds: 3600  # 1 hour 

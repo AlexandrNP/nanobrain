@@ -11,6 +11,7 @@ import logging
 import time
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional, List, Union
+from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict
 
 from .component_base import (
@@ -24,13 +25,19 @@ from .link import LinkBase, DirectLink, LinkConfig
 from .logging_system import (
     NanoBrainLogger, get_logger, OperationType, trace_function_calls
 )
+# Import new ConfigBase for constructor prohibition
+from .config.config_base import ConfigBase
 
 logger = logging.getLogger(__name__)
 
 
-class StepConfig(BaseModel):
-    """Configuration for steps."""
-    model_config = ConfigDict(arbitrary_types_allowed=True, extra="allow")
+class StepConfig(ConfigBase):
+    """
+    Configuration for steps - INHERITS constructor prohibition.
+    
+    ❌ FORBIDDEN: StepConfig(name="test", class="...")
+    ✅ REQUIRED: StepConfig.from_config('path/to/config.yml')
+    """
     
     name: str
     description: str = ""
@@ -79,6 +86,30 @@ class BaseStep(FromConfigBase, ABC):
         """UNIFIED PATTERN: Return StepConfig - ONLY method that differs from other components"""
         return StepConfig
     
+    @classmethod
+    def from_config(cls, config_path: Union[str, Path], **context) -> 'BaseStep':
+        """
+        Load step instance from configuration file
+        
+        This method MUST be implemented by all step classes.
+        
+        Args:
+            config_path: Path to step configuration file
+            **context: Additional context (executor, workflow_directory, etc.)
+            
+        Returns:
+            Fully initialized step instance
+        """
+        raise NotImplementedError(
+            f"❌ IMPLEMENTATION ERROR: {cls.__name__}.from_config not implemented\n"
+            f"   REQUIRED: All step classes must implement from_config classmethod\n"
+            f"   EXAMPLE:\n"
+            f"      @classmethod\n"
+            f"      def from_config(cls, config_path, **context):\n"
+            f"          # Load configuration and create instance\n"
+            f"          return cls(config, **context)"
+        )
+    
     # Now inherits unified from_config implementation from FromConfigBase
     
     @classmethod
@@ -101,9 +132,9 @@ class BaseStep(FromConfigBase, ABC):
         if executor is None:
             # Import here to avoid circular imports
             from .executor import ExecutorConfig
-            # Create default LocalExecutor using from_config pattern
-            default_config = ExecutorConfig(executor_type="local")
-            executor = LocalExecutor.from_config(default_config)
+                    # Create default LocalExecutor using from_config pattern
+        default_config = ExecutorConfig.from_config({"executor_type": "local"})
+        executor = LocalExecutor.from_config(default_config)
         return {
             'executor': executor
         }
@@ -141,9 +172,9 @@ class BaseStep(FromConfigBase, ABC):
         input_configs = getattr(config, 'input_data_units', {})
         for unit_name, unit_config in input_configs.items():
             from .data_unit import create_data_unit, DataUnitConfig
-            # Create proper DataUnitConfig object
+            # Create proper DataUnitConfig object using from_config
             if isinstance(unit_config, dict):
-                data_unit_config = DataUnitConfig(**unit_config)
+                data_unit_config = DataUnitConfig.from_config(unit_config)
             else:
                 data_unit_config = unit_config
             # Extract class path and call create_data_unit correctly
@@ -156,9 +187,9 @@ class BaseStep(FromConfigBase, ABC):
         output_configs = getattr(config, 'output_data_units', {})
         for unit_name, unit_config in output_configs.items():
             from .data_unit import create_data_unit, DataUnitConfig
-            # Create proper DataUnitConfig object
+            # Create proper DataUnitConfig object using from_config
             if isinstance(unit_config, dict):
-                data_unit_config = DataUnitConfig(**unit_config)
+                data_unit_config = DataUnitConfig.from_config(unit_config)
             else:
                 data_unit_config = unit_config
             # Extract class path and call create_data_unit correctly
@@ -344,11 +375,11 @@ class BaseStep(FromConfigBase, ABC):
         
         data_unit = self.step_input_data_units[data_unit_name]
         
-        # Create proper TriggerConfig
-        trigger_config_obj = TriggerConfig(
-            trigger_type="data_updated",  # Required field
-            name=trigger_config.get('trigger_id', 'step_trigger')
-        )
+        # Create proper TriggerConfig using from_config
+        trigger_config_obj = TriggerConfig.from_config({
+            "trigger_type": "data_updated",  # Required field
+            "name": trigger_config.get('trigger_id', 'step_trigger')
+        })
         
         # Create trigger with data unit using pure from_config pattern
         trigger = create_component(trigger_class_path, trigger_config_obj, 
@@ -880,59 +911,37 @@ class TransformStep(BaseStep):
             return result
 
 
-def create_step(step_type: str, config: StepConfig, **kwargs) -> BaseStep:
-    """
-    Direct import path factory - NO BACKWARD COMPATIBILITY
-    
-    Args:
-        step_type: MUST be full class import path (e.g., 'module.submodule.ClassName')
-        config: Step configuration object
-        **kwargs: Framework-provided dependencies
-        
-    Returns:
-        BaseStep instance created via from_config
-        
-    Raises:
-        ValueError: If step_type is not a full import path or class doesn't implement from_config
-        ImportError: If class cannot be imported
-    """
-    logger = get_logger("step.factory")
-    logger.info(f"Creating step via mandatory from_config: {step_type}")
-    
-    # ENFORCE full import path requirement
-    if '.' not in step_type:
-        raise ValueError(
-            f"Step type '{step_type}' must be a full import path. "
-            f"Short class names and built-in types are no longer supported. "
-            f"Use format: 'module.submodule.ClassName'"
-        )
-    
-    try:
-        # Direct import - only supported method
-        module_path, class_name = step_type.rsplit('.', 1)
-        module = importlib.import_module(module_path)
-        step_class = getattr(module, class_name)
-        
-        # MANDATORY: Validate from_config implementation
-        if not hasattr(step_class, 'from_config'):
-            raise ValueError(f"Step class '{step_type}' must implement from_config method")
-        
-        # Create instance via from_config
-        instance = step_class.from_config(config, **kwargs)
-        
-        # Validate returned instance
-        if not isinstance(instance, BaseStep):
-            raise ValueError(
-                f"from_config for '{step_type}' must return BaseStep instance, "
-                f"got {type(instance)}"
-            )
-        
-        logger.info(f"Successfully created {step_type} via from_config")
-        return instance
-        
-    except ImportError as e:
-        raise ImportError(f"Cannot import module '{module_path}': {e}")
-    except AttributeError as e:
-        raise ImportError(f"Class '{class_name}' not found in module '{module_path}': {e}")
-    except Exception as e:
-        raise ValueError(f"Failed to create step '{step_type}': {e}") 
+"""
+FRAMEWORK CHANGE: Pure Configuration-Driven Step Loading
+
+Steps are now loaded EXCLUSIVELY through configuration files using the
+from_config pattern. The create_step factory has been eliminated.
+
+✅ CORRECT USAGE:
+   # In workflow configuration (YAML):
+   steps:
+     - step_id: my_step
+       config_file: "config/MyStep/MyStep.yml"
+   
+   # In workflow code:
+   step_config = manager.load_config(config_path, StepConfig)
+   step_class = import_class(step_config.class)
+   step = step_class.from_config(config_path, executor=executor)
+
+❌ DEPRECATED USAGE:
+   step = create_step('module.StepClass', step_config, executor=executor)
+
+REASON: Enforces pure configuration-driven architecture without
+        programmatic component creation.
+"""
+
+
+# Legacy factory functions removed as per Phase 3: Legacy Component Removal
+# These functions are no longer needed as all step creation is now handled
+# via class-specific from_config methods leveraging ConfigBase._resolve_nested_objects()
+#
+# ✅ FRAMEWORK COMPLIANCE:
+# - All component creation uses class-specific from_config methods
+# - ConfigBase._resolve_nested_objects() handles automatic instantiation
+# - No factory functions or redundant creation logic
+# - Pure configuration-driven component creation 

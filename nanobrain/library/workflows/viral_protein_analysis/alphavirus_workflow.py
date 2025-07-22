@@ -1,13 +1,14 @@
 """
-Event-Driven Alphavirus Workflow - Phase 1 Complete
+Event-Driven Alphavirus Workflow - Enhanced from_config Compliance
 
 Pure event routing workflow with minimal logic.
 All business logic delegated to steps with event-driven execution.
-Transformed according to EVENT_DRIVEN_ARCHITECTURE_COMPLIANCE_PLAN.
+Enhanced for framework compliance with Dict-based configuration format.
 """
 
 import asyncio
 import time
+import importlib
 from typing import Dict, Any, List, Optional
 from pathlib import Path
 import os
@@ -15,7 +16,6 @@ import os
 from nanobrain.core.workflow import Workflow, WorkflowConfig
 from nanobrain.core.logging_system import get_logger
 from nanobrain.core.data_unit import create_data_unit
-from nanobrain.core.config.component_factory import load_config_file, create_component
 
 
 class AlphavirusWorkflow(Workflow):
@@ -25,9 +25,9 @@ class AlphavirusWorkflow(Workflow):
     Pure event routing workflow with minimal logic.
     All execution happens via event-driven data flow.
     
-    PHASE 1: Core event system implementation
-    - No business logic in workflow
-    - Pure event routing
+    Enhanced for framework compliance:
+    - Dict-based steps configuration
+    - Enhanced from_config patterns
     - Configuration-driven component creation
     - Step-level data units and triggers
     """
@@ -58,67 +58,57 @@ class AlphavirusWorkflow(Workflow):
                 class_path = data_unit_config.class_path
                 self.output_data_unit = create_data_unit(class_path, data_unit_config)
         
-        # Load steps from configuration files (NO inline configuration)
-        self.steps = {}
-        if hasattr(config, 'steps') and config.steps:
-            for step_config in config.steps:
-                step_id = step_config['step_id']
-                config_file = step_config.get('config_file')
-                if config_file:
-                    step = self._create_step_from_config_file(config_file)
-                    self.steps[step_id] = step
+        # Enhanced framework handles automatic component instantiation
+        # No programmatic component creation needed
         
-        # Load links from configuration (NO business logic)
+        # Steps are automatically instantiated from Dict-based configuration
+        self.steps = {}
+        if hasattr(config, 'steps') and isinstance(config.steps, dict):
+            for step_id, step_config in config.steps.items():
+                # Enhanced ConfigBase automatically handles class+config instantiation
+                step_instance = self._resolve_step_from_config(step_config)
+                self.steps[step_id] = step_instance
+        
+        # Links and triggers automatically resolved by enhanced framework
+        # No manual creation required
         self.links = {}
-        if hasattr(config, 'links') and config.links:
-            for link_config in config.links:
-                link_id = link_config['link_id']
+        if hasattr(config, 'links') and isinstance(config.links, dict):
+            for link_id, link_config in config.links.items():
                 link = self._create_link_from_config(link_config)
                 self.links[link_id] = link
         
         # NO triggers at workflow level - all are step-level
         # NO tools at workflow level - all are step-level  
         # NO business logic - pure event routing
-    
-    def _create_step_from_config_file(self, config_file: str):
-        """Create step from external configuration file with proper path resolution"""
+
+    def _resolve_step_from_config(self, step_config: Dict[str, Any]):
+        """Resolve step from configuration using enhanced patterns"""
+        step_class = step_config.get('class')
+        config_path = step_config.get('config')
+        
+        if not step_class or not config_path:
+            raise ValueError(f"Step configuration must include 'class' and 'config' fields")
+        
+        # Enhanced from_config handles automatic instantiation
+        module_path, class_name = step_class.rsplit('.', 1)
+        module = importlib.import_module(module_path)
+        step_cls = getattr(module, class_name)
+        
         try:
-            # Resolve config file path relative to workflow directory
-            workflow_dir = getattr(self.config, 'workflow_directory', '')
-            
-            # Build full path
-            if workflow_dir and not os.path.isabs(config_file):
-                full_config_path = os.path.join(workflow_dir, config_file)
-            else:
-                full_config_path = config_file
-            
-            # Verify file exists
-            if not os.path.exists(full_config_path):
-                raise FileNotFoundError(f"Step configuration file not found: {full_config_path}")
-            
-            # Use existing load_config_file function for pure YAML loading
-            step_config_data = load_config_file(full_config_path)
-            step_class = step_config_data.get('class')
-            
-            if not step_class:
-                raise ValueError(f"Step configuration must specify 'class' field: {full_config_path}")
-            
-            # Create StepConfig from loaded data
-            from nanobrain.core.step import StepConfig
-            step_config = StepConfig(**step_config_data)
-            
-            # Use pure from_config pattern with create_component function
-            step = create_component(step_class, step_config)
+            step_instance = step_cls.from_config(
+                config_path, 
+                workflow_directory=getattr(self.config, 'workflow_directory', '')
+            )
             
             if hasattr(self, 'nb_logger') and self.nb_logger:
-                self.nb_logger.info(f"✅ Created step from {full_config_path}")
-            return step
+                self.nb_logger.info(f"✅ Created step: {step_class}")
+            return step_instance
             
         except Exception as e:
             if hasattr(self, 'nb_logger') and self.nb_logger:
-                self.nb_logger.error(f"❌ Failed to create step from {config_file}: {e}")
+                self.nb_logger.error(f"❌ Failed to create step {step_class}: {e}")
             raise
-    
+
     def _create_link_from_config(self, link_config: Dict[str, Any]):
         """Create link from configuration"""
         from nanobrain.core.link import create_link, LinkConfig
@@ -139,35 +129,24 @@ class AlphavirusWorkflow(Workflow):
             if hasattr(self, 'nb_logger') and self.nb_logger:
                 self.nb_logger.error(f"Failed to create link: {e}")
             raise
-    
-    def _resolve_data_unit_reference(self, reference: str):
-        """Resolve data unit reference (step.data_unit or workflow_input/workflow_output)"""
-        if not reference:
-            return None
+
+    def _resolve_data_unit_reference(self, ref: str):
+        """Resolve data unit reference to actual data unit"""
+        # This method resolves step.data_unit_name references
+        if '.' in ref:
+            step_id, data_unit_name = ref.split('.', 1)
+            step = self.steps.get(step_id)
+            if step and hasattr(step, data_unit_name):
+                return getattr(step, data_unit_name)
         
-        # Handle workflow-level data unit references
-        if reference == 'workflow_input':
+        # Try workflow-level data units
+        if ref == 'workflow_input':
             return self.input_data_unit
-        elif reference == 'workflow_output':
+        elif ref == 'workflow_output':
             return self.output_data_unit
-            
-        # Handle step-level data unit references (step.data_unit)
-        if '.' in reference:
-            step_id, data_unit_name = reference.split('.', 1)
-            
-            if step_id in self.steps:
-                step = self.steps[step_id]
-                
-                # Check step input data units
-                if hasattr(step, 'step_input_data_units') and data_unit_name in step.step_input_data_units:
-                    return step.step_input_data_units[data_unit_name]
-                
-                # Check step output data units
-                if hasattr(step, 'step_output_data_units') and data_unit_name in step.step_output_data_units:
-                    return step.step_output_data_units[data_unit_name]
         
-        return None
-    
+        raise ValueError(f"Could not resolve data unit reference: {ref}")
+
     async def initialize(self) -> None:
         """Initialize workflow and all components"""
         await super().initialize()
@@ -189,10 +168,10 @@ class AlphavirusWorkflow(Workflow):
             await link.initialize()
             if hasattr(self, 'nb_logger') and self.nb_logger:
                 self.nb_logger.info(f"Initialized link: {link_id}")
-    
+
     async def process(self, input_data: Dict[str, Any] = None) -> Dict[str, Any]:
         """
-        Process workflow via pure event-driven flow (PHASE 1: Event-Driven Implementation)
+        Process workflow via pure event-driven flow (Enhanced Implementation)
         
         Args:
             input_data: Input data for the workflow
@@ -208,7 +187,7 @@ class AlphavirusWorkflow(Workflow):
             await self.input_data_unit.set(input_data or {})
             
             if hasattr(self, 'nb_logger') and self.nb_logger:
-                self.nb_logger.info(f"🚀 Started event-driven workflow execution")
+                self.nb_logger.info(f"🚀 Started enhanced event-driven workflow execution")
             
             # Wait for workflow completion (output data unit updated via events)
             timeout = 300  # 5 minutes timeout
@@ -220,7 +199,7 @@ class AlphavirusWorkflow(Workflow):
                     output_data = await self.output_data_unit.get()
                     if output_data is not None:
                         if hasattr(self, 'nb_logger') and self.nb_logger:
-                            self.nb_logger.info(f"✅ Event-driven workflow completed successfully")
+                            self.nb_logger.info(f"✅ Enhanced event-driven workflow completed successfully")
                         return output_data
                 
                 await asyncio.sleep(poll_interval)
@@ -231,6 +210,6 @@ class AlphavirusWorkflow(Workflow):
             
         except Exception as e:
             if hasattr(self, 'nb_logger') and self.nb_logger:
-                self.nb_logger.error(f"❌ Event-driven workflow execution failed: {e}")
+                self.nb_logger.error(f"❌ Enhanced event-driven workflow execution failed: {e}")
             raise
     
