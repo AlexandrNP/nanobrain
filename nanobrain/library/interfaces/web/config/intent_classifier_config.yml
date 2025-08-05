@@ -1,0 +1,64 @@
+# IntentClassifier Configuration
+# Intent classification for natural language requests
+#
+# Author: NanoBrain Development Team
+# Date: January 2025
+# Version: 1.0.0
+
+# Classification method
+method: "keyword_based"
+
+# Intent patterns (component expects this field name and structure)
+intent_patterns:
+  question:
+    keywords:
+      - "what"
+      - "how"
+      - "when"
+      - "where"
+      - "why"
+      - "explain"
+      - "describe"
+  
+  analysis_request:
+    keywords:
+      - "analyze"
+      - "examine"
+      - "study"
+      - "investigate"
+      - "process"
+    
+  data_request:
+    keywords:
+      - "show"
+      - "display"
+      - "list"
+      - "find"
+      - "search"
+    
+  workflow_request:
+    keywords:
+      - "run"
+      - "execute"
+      - "start"
+      - "perform"
+
+# Advanced pattern configuration (component expects this field)
+advanced_patterns:
+  use_regex: true
+  case_sensitive: false
+  word_boundaries: true
+  enable_stemming: false
+  enable_synonyms: false
+
+# Confidence thresholds
+confidence_thresholds:
+  high_confidence: 0.8
+  medium_confidence: 0.6
+  low_confidence: 0.4
+
+# Performance settings
+performance_config:
+  enable_caching: true
+  cache_ttl_seconds: 1800
+  case_sensitive: false 

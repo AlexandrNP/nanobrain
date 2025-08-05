@@ -1,0 +1,50 @@
+# Expert Conversation Step Configuration
+# ✅ FRAMEWORK COMPLIANCE: Complete step configuration for conversational processing
+# ✅ REUSED COMPONENT: Uses ConversationalAgent from chatbot_viral_integration
+
+name: "ExpertConversationStep"
+description: "Step for generating expert conversational responses about viral biology"
+version: "1.0.0"
+step_type: "conversational_processing"
+
+# Step input/output data units
+input_data_units:
+  conversation_input:
+    class: "nanobrain.core.data_unit.DataUnitMemory"
+    name: "conversation_input"
+    description: "Input for conversational processing including user query and context"
+    persistent: false
+
+output_data_units:
+  conversation_output:
+    class: "nanobrain.core.data_unit.DataUnitMemory"
+    name: "conversation_output"
+    description: "Output containing expert response and metadata"
+    persistent: false
+
+# Conversational agent configuration
+conversational_agent:
+  class: "nanobrain.library.agents.specialized_agents.conversational_specialized_agent.ConversationalSpecializedAgent"
+  config: "nanobrain/library/workflows/chatbot_viral_integration/config/ConversationalResponseStep/ConversationalAgent.yml"
+
+# Step-level triggers
+triggers:
+  - trigger_id: "conversation_input_received"
+    class: "nanobrain.core.trigger.DataUnitChangeTrigger"
+    config:
+      data_unit: "conversation_input"
+      event_type: "set"
+      description: "Execute conversation when input is received"
+
+# Step execution configuration
+execution_config:
+  timeout: 30.0
+  retry_attempts: 2
+  retry_delay: 1.0
+  enable_monitoring: true
+
+# Performance configuration
+performance:
+  expected_processing_time: 10.0
+  max_processing_time: 30.0
+  enable_caching: false  # Conversational responses should be fresh 

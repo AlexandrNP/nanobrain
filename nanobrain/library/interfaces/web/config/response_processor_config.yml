@@ -1,0 +1,24 @@
+# ResponseProcessor Configuration
+# Universal response processing configuration
+#
+# Author: NanoBrain Development Team
+# Date: January 2025
+# Version: 1.0.0
+
+# Response standardization
+standardization: true
+
+# Streaming support
+streaming_support: false  # Disable streaming for simplicity
+
+# Error handling configuration
+error_handling:
+  detailed_error_messages: true  # Enable for development
+  include_stack_traces: false
+  sanitize_errors: true
+
+# Performance settings
+performance_config:
+  enable_response_caching: true
+  cache_ttl_seconds: 1800
+  compression_enabled: false  # Disable for development 

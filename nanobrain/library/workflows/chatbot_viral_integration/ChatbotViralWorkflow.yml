@@ -78,81 +78,115 @@ steps:
     description: "Format enhanced analysis results for chatbot response"
     estimated_time: 5.0
 
-# UPDATED: Dict-based links format (was list-based)
+# UPDATED: Dict-based links format (was list-based) - Framework compliant class+config pattern
 links:
   workflow_to_query_classification:
-    source: "user_query"
-    target: "query_classification.user_query"
-    description: "Route user input to query classification"
+    class: "nanobrain.core.link.DirectLink"
+    config:
+      name: "workflow_to_query_classification"
+      link_type: "direct"
+      source: "user_query"
+      target: "query_classification.user_query"
+      description: "Route user input to query classification"
+      enable_logging: true
   
   classification_to_enhanced_virus_resolution:
-    source: "query_classification.extraction_result"
-    target: "virus_name_resolution.query_input"
-    condition:
-      field: "routing_decision"
-      operator: "equals"
-      value: "virus_name_resolution"
-    description: "Route classification result to enhanced virus resolution for ultra-precision analysis"
+    class: "nanobrain.core.link.ConditionalLink"
+    config:
+      name: "classification_to_enhanced_virus_resolution"
+      link_type: "conditional"
+      source: "query_classification.extraction_result"
+      target: "virus_name_resolution.extraction_result"
+      condition:
+        field: "routing_decision"
+        operator: "equals"
+        value: "virus_name_resolution"
+      description: "Route classification result to enhanced virus resolution for ultra-precision analysis"
+      enable_logging: true
   
   enhanced_virus_resolution_to_viral_analysis:
-    source: "virus_name_resolution.resolution_result"
-    target: "viral_protein_analysis.virus_input"
-    condition:
-      field: "analysis_type"
-      operator: "in"
-      values: ["pssm", "protein_analysis"]
-    description: "Route ultra-high-confidence synonyms to enhanced viral protein analysis"
+    class: "nanobrain.core.link.ConditionalLink"
+    config:
+      name: "enhanced_virus_resolution_to_viral_analysis"
+      link_type: "conditional"
+      source: "virus_name_resolution.virus_info"
+      target: "viral_protein_analysis.workflow_input"
+      condition:
+        field: "analysis_type"
+        operator: "in"
+        values: ["pssm", "protein_analysis"]
+      description: "Route ultra-high-confidence synonyms to enhanced viral protein analysis"
+      enable_logging: true
   
   enhanced_viral_analysis_to_response_formatting:
-    source: "viral_protein_analysis.analysis_results"
-    target: "response_formatting.analysis_input"
-    description: "Route enhanced viral analysis results to response formatting"
+    class: "nanobrain.core.link.DirectLink"
+    config:
+      name: "enhanced_viral_analysis_to_response_formatting"
+      link_type: "direct"
+      source: "viral_protein_analysis.workflow_output"
+      target: "response_formatting.analysis_input"
+      description: "Route enhanced viral analysis results to response formatting"
+      enable_logging: true
   
   formatted_enhanced_analysis_to_workflow:
-    source: "response_formatting.formatted_response"
-    target: "chatbot_response"
-    description: "Route formatted enhanced analysis response to workflow output"
+    class: "nanobrain.core.link.DirectLink"
+    config:
+      name: "formatted_enhanced_analysis_to_workflow"
+      link_type: "direct"
+      source: "response_formatting.formatted_response"
+      target: "chatbot_response"
+      description: "Route formatted enhanced analysis response to workflow output"
+      enable_logging: true
   
   classification_to_conversational_response:
-    source: "query_classification.extraction_result"
-    target: "conversational_response.query_input"
-    condition:
-      field: "routing_decision"
-      operator: "equals"
-      value: "conversational_response"
-    description: "Route classification result to conversational response"
+    class: "nanobrain.core.link.ConditionalLink"
+    config:
+      name: "classification_to_conversational_response"
+      link_type: "conditional"
+      source: "query_classification.extraction_result"
+      target: "conversational_response.query_input"
+      condition:
+        field: "routing_decision"
+        operator: "equals"
+        value: "conversational_response"
+      description: "Route classification result to conversational response"
+      enable_logging: true
   
   conversational_to_response_formatting:
-    source: "conversational_response.response_data"
-    target: "response_formatting.response_input"
-    description: "Route conversational response to formatting"
+    class: "nanobrain.core.link.DirectLink"
+    config:
+      name: "conversational_to_response_formatting"
+      link_type: "direct"
+      source: "conversational_response.response_data"
+      target: "response_formatting.response_input"
+      description: "Route conversational response to formatting"
+      enable_logging: true
   
   formatted_conversational_to_workflow:
-    source: "response_formatting.formatted_response"
-    target: "chatbot_response"
-    description: "Route formatted conversational response to workflow output"
+    class: "nanobrain.core.link.DirectLink"
+    config:
+      name: "formatted_conversational_to_workflow"
+      link_type: "direct"
+      source: "response_formatting.formatted_response"
+      target: "chatbot_response"
+      description: "Route formatted conversational response to workflow output"
+      enable_logging: true
 
-# UPDATED: Dict-based triggers format (was list-based)
+# ✅ UNIFIED TRIGGER FORMAT: List-based triggers (workflows ARE steps)
+# ✅ SCOPE CORRECTED: Only workflow-level triggers referencing workflow-level data units
 triggers:
-  user_query_received:
+  - trigger_id: "user_query_received"
     class: "nanobrain.core.trigger.DataUnitChangeTrigger"
-    data_unit: "user_query"
-    description: "Trigger when user query received"
-  
-  query_classification_completed:
-    class: "nanobrain.core.trigger.DataUnitChangeTrigger"
-    data_unit: "extracted_query_data"
-    description: "Trigger when query classification completed"
-  
-  enhanced_virus_resolution_completed:
-    class: "nanobrain.core.trigger.DataUnitChangeTrigger"
-    data_unit: "resolution_output"
-    description: "Trigger when enhanced virus name resolution completed"
-  
-  enhanced_viral_analysis_completed:
-    class: "nanobrain.core.trigger.DataUnitChangeTrigger"
-    data_unit: "analysis_results"
-    description: "Trigger when enhanced viral protein analysis completed"
+    config:
+      data_unit: "user_query"  # ✅ VALID: References workflow-level data unit
+      event_type: "set"
+      description: "Trigger when user query received"
+      enable_logging: true
+
+# ✅ SCOPE VIOLATIONS REMOVED: 
+# - query_classification_completed → moved to QueryClassificationStep config
+# - enhanced_virus_resolution_completed → moved to VirusNameResolutionStep config  
+# - enhanced_viral_analysis_completed → moved to viral_protein_analysis step config
 
 # Existing execution configuration (preserved)
 execution:

@@ -29,13 +29,15 @@ output_data_units:
     persistent: true
     file_path: "data/bvbrc_cache/validated_genomes.json"
 
-# Step-level triggers (existing)
+# Step-level triggers (existing) - Framework compliant class+config pattern
 triggers:
   - trigger_id: "input_data_received"
     class: "nanobrain.core.trigger.DataUnitChangeTrigger"
-    data_unit: "synonyms_input"
-    event_type: "set"
-    description: "Execute enhanced validation when ultra-high-confidence synonyms are received"
+    config:
+      data_unit: "synonyms_input"
+      event_type: "set"
+      description: "Execute enhanced validation when ultra-high-confidence synonyms are received"
+      enable_logging: true
 
 # UPDATED: Tool configuration with class+config patterns (was inline)
 tools:
@@ -44,12 +46,12 @@ tools:
     config: "config/DataAcquisitionStep/BVBRCTool.yml"
   
   species_validation_agent:
-    class: "nanobrain.library.agents.specialized.species_validation_agent.SpeciesValidationAgent"
-    config: "config/DataAcquisitionStep/SynonymDetectionAgent.yml"
+    class: "nanobrain.library.agents.specialized.protein_synonym_agent.ProteinSynonymAgent"
+    config: "../AnnotationMappingStep/SynonymDetectionAgent.yml"
   
   taxonomic_verification_agent:
-    class: "nanobrain.library.agents.specialized.taxonomic_verification_agent.TaxonomicVerificationAgent"
-    config: "config/DataAcquisitionStep/TaxonomicVerificationAgent.yml"
+    class: "nanobrain.library.agents.specialized.protein_synonym_agent.ProteinSynonymAgent"
+    config: "../AnnotationMappingStep/SynonymDetectionAgent.yml"
 
 # Step-specific configuration (existing)
 confidence_threshold: 0.9

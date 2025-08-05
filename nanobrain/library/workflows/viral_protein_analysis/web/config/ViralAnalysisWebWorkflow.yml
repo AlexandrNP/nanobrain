@@ -1,0 +1,99 @@
+name: "ViralAnalysisWebWorkflow"
+description: "Web-optimized viral protein analysis workflow with progress tracking and client/server optimization"
+version: "1.0.0"
+execution_strategy: "event_driven"
+error_handling: "continue"
+enable_monitoring: true
+workflow_directory: "nanobrain/library/workflows/viral_protein_analysis/web"
+
+# Web-specific configuration
+web_optimization:
+  enable_progress_tracking: true
+  enable_real_time_updates: true
+  enable_result_formatting: true
+  enable_session_management: true
+  max_concurrent_sessions: 10
+  session_timeout: 3600  # 1 hour
+
+# Core workflow configuration
+core_workflow_config:
+  workflow_class: "nanobrain.library.workflows.viral_protein_analysis.alphavirus_workflow.AlphavirusWorkflow"
+  config_path: "nanobrain/library/workflows/viral_protein_analysis/config/AlphavirusWorkflow.yml"
+
+# Progress tracking configuration
+progress_tracking:
+  enable_step_level_tracking: true
+  enable_substep_tracking: false
+  update_interval_seconds: 1.0
+  persistence_enabled: false
+  
+  # Step weights for overall progress calculation
+  step_weights:
+    data_acquisition: 0.20
+    annotation_mapping: 0.10
+    sequence_curation: 0.15
+    clustering_analysis: 0.20
+    alignment: 0.15
+    pssm_analysis: 0.15
+    data_aggregation: 0.03
+    result_collection: 0.02
+
+# Result formatting configuration
+result_formatting:
+  enable_web_formatting: true
+  enable_visualizations: true
+  enable_downloadable_files: true
+  enable_summary_generation: true
+  
+  # Visualization types to generate
+  visualization_types:
+    - "histogram"
+    - "dendrogram" 
+    - "heatmap"
+    - "scatter_plot"
+  
+  # Download formats to prepare
+  download_formats:
+    - "fasta"
+    - "csv"
+    - "json"
+    - "pdf_report"
+
+# Input/Output data units for web workflow
+input_data_units:
+  web_analysis_request:
+    class: "nanobrain.core.data_unit.DataUnitMemory"
+    name: "web_analysis_request"
+    description: "Web-formatted analysis request with virus species and parameters"
+    persistent: false
+
+output_data_units:
+  web_analysis_response:
+    class: "nanobrain.core.data_unit.DataUnitMemory"
+    name: "web_analysis_response" 
+    description: "Web-formatted analysis response with progress and results"
+    persistent: false
+
+# Performance and resource configuration
+performance:
+  expected_processing_time: 120.0  # 2 minutes
+  max_processing_time: 300.0       # 5 minutes
+  memory_limit_mb: 2048
+  enable_parallel_processing: true
+  max_parallel_steps: 2
+
+# Error handling and recovery
+error_handling:
+  enable_graceful_degradation: true
+  enable_partial_results: true
+  enable_error_recovery: true
+  max_retry_attempts: 2
+  retry_delay_seconds: 5.0
+
+# Logging and monitoring
+logging:
+  log_progress_updates: true
+  log_result_formatting: true
+  log_session_management: true
+  enable_performance_metrics: true
+  enable_detailed_timing: true 

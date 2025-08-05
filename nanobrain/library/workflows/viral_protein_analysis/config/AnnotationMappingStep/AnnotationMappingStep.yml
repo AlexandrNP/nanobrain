@@ -6,11 +6,11 @@ step_type: simple
 debug_mode: true
 enable_logging: true
 
-# STANDARDIZED CONFIG: Agent configuration via local standardized file reference
-agents:
+# ENHANCED: Tool configuration with class+config patterns for ConfigBase resolution
+tools:
   synonym_detection_agent:
-    enabled: true
-    config_file: "config/AnnotationMappingStep/SynonymDetectionAgent.yml"
+    class: "nanobrain.library.agents.specialized.protein_synonym_agent.ProteinSynonymAgent"
+    config: "config/AnnotationMappingStep/SynonymDetectionAgent.yml"
 
 # STEP-LEVEL DATA UNITS: Step owns its data units
 input_data_units:

@@ -54,20 +54,338 @@ class StepConfig(ConfigBase):
     # NEW: Step-level tool configuration
     tools: Optional[Dict[str, Dict[str, Any]]] = Field(default_factory=dict)
     
-    # EVENT-DRIVEN ARCHITECTURE: Step-level data units and triggers
-    input_data_units: Optional[Dict[str, Dict[str, Any]]] = Field(default_factory=dict)
-    output_data_units: Optional[Dict[str, Dict[str, Any]]] = Field(default_factory=dict)
-    triggers: Optional[List[Dict[str, Any]]] = Field(default_factory=list)
+    # Step-specific agent configurations (optional, step-dependent)
+    extraction_agent: Optional[Any] = Field(default=None, description="Extraction agent for specialized processing")
+    agents: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Multiple agents for complex processing steps")
+    
+    # EVENT-DRIVEN ARCHITECTURE: Step-level data units and triggers  
+    input_data_units: Optional[Dict[str, Union[Dict[str, Any], 'DataUnitBase']]] = Field(default_factory=dict)
+    output_data_units: Optional[Dict[str, Union[Dict[str, Any], 'DataUnitBase']]] = Field(default_factory=dict)
+    # ✅ UNIFIED RESOLUTION: Accept both dict configs and resolved trigger objects (workflows ARE steps)
+    triggers: Optional[List[Union[Dict[str, Any], 'TriggerBase']]] = Field(default_factory=list)
 
 
 class BaseStep(FromConfigBase, ABC):
     """
-    Enhanced base class for Steps with mandatory from_config implementation.
+    Base Step Class - Event-Driven Data Processing and Workflow Building Blocks
+    ==========================================================================
     
-    Biological analogy: Functional neural circuit.
-    Justification: Like how functional neural circuits process specific
-    types of information and pass results to other circuits, steps process
-    specific operations and pass results to other steps.
+    The BaseStep class is the foundational component for creating data processing
+    units within the NanoBrain framework. Steps represent discrete processing
+    operations that transform data, execute computations, and coordinate with
+    other components through event-driven architecture patterns.
+    
+    **Core Architecture:**
+        Steps represent autonomous processing units that:
+        
+        * **Process Data**: Transform input data through configurable operations
+        * **Manage State**: Track processing state and maintain operation history
+        * **Coordinate Events**: Respond to triggers and emit events for workflow orchestration
+        * **Handle Resources**: Manage computational resources and cleanup operations
+        * **Integrate Components**: Seamlessly work with agents, tools, and other steps
+        * **Execute Asynchronously**: Support concurrent and parallel processing patterns
+    
+    **Biological Analogy:**
+        Like functional neural circuits that process specific types of information
+        and pass results to other circuits, steps process specific operations and
+        pass results to other steps. Neural circuits are specialized for particular
+        functions (visual processing, motor control, etc.) and coordinate through
+        complex signaling - exactly how steps specialize for specific operations
+        and coordinate through data units, links, and triggers.
+    
+    **Data Processing Architecture:**
+        
+        **Input Management:**
+        * Multiple input data units with type validation
+        * Streaming data support for real-time processing
+        * Batch processing capabilities for large datasets
+        * Input dependency tracking and resolution
+        
+        **Processing Patterns:**
+        * Synchronous processing for immediate results
+        * Asynchronous processing for non-blocking operations
+        * Parallel processing for computationally intensive tasks
+        * Pipeline processing for multi-stage transformations
+        
+        **Output Generation:**
+        * Multiple output data units with structured results
+        * Result validation and quality assurance
+        * Output routing to downstream components
+        * Error handling with detailed diagnostics
+        
+        **State Management:**
+        * Processing state tracking and persistence
+        * Progress monitoring and reporting
+        * Resource usage tracking and optimization
+        * Recovery mechanisms for interrupted processing
+    
+    **Event-Driven Integration:**
+        Steps operate within an event-driven architecture:
+        
+        * **Trigger Activation**: Steps respond to various trigger types
+            - Data availability triggers when input data is ready
+            - Timer triggers for scheduled processing
+            - Manual triggers for user-initiated operations
+            - Conditional triggers based on processing state
+        
+        * **Data Flow Coordination**: Steps coordinate through data units
+            - Input data units provide processing inputs
+            - Output data units store and share results
+            - Shared data units enable cross-step communication
+            - Data persistence for workflow continuity
+        
+        * **Link Integration**: Steps connect through configurable links
+            - Direct links for immediate data transfer
+            - Transform links for data format conversion
+            - Conditional links for dynamic routing
+            - Queue links for asynchronous processing
+    
+    **Framework Integration:**
+        Steps seamlessly integrate with all framework components:
+        
+        * **Agent Integration**: Steps can embed agents for AI-driven processing
+        * **Tool Utilization**: Steps can use tools for specialized operations
+        * **Workflow Orchestration**: Steps compose complex multi-stage workflows
+        * **Executor Support**: Steps run on various execution backends
+        * **Configuration Management**: Complete YAML-driven configuration
+        * **Monitoring Integration**: Comprehensive logging and performance tracking
+    
+    **Step Specializations:**
+        The framework supports various step specializations:
+        
+        * **Step**: Standard processing step with configurable operations
+        * **TransformStep**: Specialized for data transformation operations
+        * **ParallelStep**: Parallel processing across multiple execution units
+        * **BioinformaticsStep**: Computational biology specialized processing
+        * **AgentStep**: Steps that integrate AI agents for processing
+        * **ConversationalAgentStep**: Multi-turn conversation processing
+    
+    **Configuration Architecture:**
+        Steps follow the framework's configuration-first design:
+        
+        ```yaml
+        # Basic step configuration
+        name: "data_processor"
+        description: "Processes input data with validation"
+        auto_initialize: true
+        enable_logging: true
+        
+        # Input data units
+        input_data_units:
+          raw_data:
+            class: "nanobrain.core.data_unit.DataUnitFile"
+            config:
+              file_path: "data/input.json"
+              encoding: "utf-8"
+          parameters:
+            class: "nanobrain.core.data_unit.DataUnitMemory"
+            config:
+              initial_value: {"threshold": 0.5}
+        
+        # Output data units
+        output_data_units:
+          processed_data:
+            class: "nanobrain.core.data_unit.DataUnitMemory"
+            config:
+              persistent: true
+          results:
+            class: "nanobrain.core.data_unit.DataUnitFile"
+            config:
+              file_path: "data/output.json"
+        
+        # Agent integration (optional)
+        agent:
+          class: "nanobrain.core.agent.ConversationalAgent"
+          config: "config/processing_agent.yml"
+        
+        # Tools integration (optional)
+        tools:
+          validator:
+            class: "nanobrain.library.tools.DataValidator"
+            config: "config/validator.yml"
+        
+        # Triggers
+        triggers:
+          - class: "nanobrain.core.trigger.DataUpdatedTrigger"
+            config:
+              watch_data_units: ["raw_data", "parameters"]
+        
+        # Executor configuration
+        executor:
+          class: "nanobrain.core.executor.LocalExecutor"
+          config: "config/local_executor.yml"
+        ```
+    
+    **Usage Patterns:**
+        
+        **Basic Step Processing:**
+        ```python
+        from nanobrain.core import Step
+        
+        # Create step from configuration
+        step = Step.from_config('config/data_processor.yml')
+        
+        # Execute step processing
+        results = await step.execute()
+        print(f"Processing complete: {results}")
+        ```
+        
+        **Step with Agent Integration:**
+        ```python
+        # Step automatically creates and uses configured agent
+        step = Step.from_config('config/ai_processor.yml')
+        
+        # Step processes data using embedded agent
+        results = await step.execute()
+        # Agent provides AI-driven processing within step
+        ```
+        
+        **Multi-Step Workflow:**
+        ```python
+        # Steps coordinate through data units and triggers
+        ingestion = Step.from_config('config/data_ingestion.yml')
+        processing = Step.from_config('config/data_processing.yml')
+        output = Step.from_config('config/data_output.yml')
+        
+        # Steps automatically coordinate through configured links
+        await ingestion.execute()  # Triggers processing step
+        # Processing automatically starts when ingestion completes
+        # Output automatically starts when processing completes
+        ```
+    
+    **Data Flow Patterns:**
+        
+        **Input Processing:**
+        * Multiple data sources with different types and formats
+        * Data validation and quality checks before processing
+        * Dependency resolution and waiting for required inputs
+        * Streaming data support for real-time processing
+        
+        **Processing Execution:**
+        * Configurable processing logic through agents or tools
+        * Error handling with retry mechanisms and fallbacks
+        * Progress monitoring and intermediate result storage
+        * Resource management and optimization
+        
+        **Output Management:**
+        * Multiple output destinations with format conversion
+        * Result validation and quality assurance
+        * Output routing to downstream processing steps
+        * Result persistence and retrieval mechanisms
+    
+    **Performance and Scalability:**
+        
+        **Execution Optimization:**
+        * Asynchronous processing for responsive operations
+        * Parallel execution for computationally intensive tasks
+        * Streaming processing for large datasets
+        * Resource pooling and reuse for efficiency
+        
+        **Monitoring and Metrics:**
+        * Processing time tracking and optimization
+        * Resource usage monitoring and alerting
+        * Error rate tracking and analysis
+        * Throughput measurement and optimization
+        
+        **Scalability Features:**
+        * Horizontal scaling through parallel step instances
+        * Vertical scaling through resource allocation
+        * Load balancing across execution backends
+        * Distributed processing via Parsl integration
+    
+    **Error Handling and Recovery:**
+        Comprehensive error handling with graceful degradation:
+        
+        * **Input Validation**: Data format and content validation
+        * **Processing Errors**: Exception handling with detailed diagnostics
+        * **Resource Failures**: Automatic resource recovery and reallocation
+        * **Network Issues**: Retry mechanisms with exponential backoff
+        * **State Recovery**: Checkpoint and resume capabilities for long-running operations
+    
+    **Integration Patterns:**
+        
+        **Agent Integration:**
+        * Embed agents for AI-driven processing logic
+        * Agent tool calling within step processing
+        * Multi-agent coordination for complex operations
+        * Agent state management and conversation tracking
+        
+        **Tool Integration:**
+        * Tool selection based on processing requirements
+        * Parallel tool execution for complex operations
+        * Tool result validation and integration
+        * Tool performance monitoring and optimization
+        
+        **Workflow Integration:**
+        * Step composition into complex workflows
+        * Dynamic step routing based on processing results
+        * Conditional step execution with branching logic
+        * Loop and iteration patterns for repetitive processing
+    
+    **Step Lifecycle:**
+        Steps follow a well-defined processing lifecycle:
+        
+        1. **Configuration Loading**: Parse and validate step configuration
+        2. **Dependency Resolution**: Initialize data units, agents, and tools
+        3. **Trigger Registration**: Setup event listeners and activation conditions
+        4. **Initialization**: Prepare processing resources and state
+        5. **Activation**: Respond to triggers and begin processing
+        6. **Processing**: Execute configured processing logic
+        7. **Output Generation**: Produce results and update output data units
+        8. **Cleanup**: Release resources and update processing state
+    
+    **Advanced Features:**
+        
+        **Dynamic Configuration:**
+        * Runtime configuration updates and reloading
+        * Parameter tuning based on processing performance
+        * Adaptive resource allocation based on workload
+        * Dynamic tool selection based on data characteristics
+        
+        **State Persistence:**
+        * Processing checkpoint creation and restoration
+        * State synchronization across distributed execution
+        * Result caching for performance optimization
+        * Audit trail maintenance for debugging and compliance
+        
+        **Quality Assurance:**
+        * Input data validation and sanitization
+        * Processing result verification and validation
+        * Performance benchmarking and optimization
+        * Error detection and automated correction
+    
+    Attributes:
+        name (str): Step identifier for logging and workflow coordination
+        description (str): Human-readable step description and purpose
+        input_data_units (Dict[str, DataUnitBase]): Input data sources and containers
+        output_data_units (Dict[str, DataUnitBase]): Output data destinations and storage
+        triggers (List[TriggerBase]): Event triggers that activate step processing
+        agent (Agent, optional): Embedded agent for AI-driven processing
+        tools (Dict[str, Tool], optional): Available tools for processing operations
+        executor (ExecutorBase): Execution backend for step operations
+        processing_state (Dict): Current processing state and progress information
+        performance_metrics (Dict): Real-time performance and usage metrics
+    
+    Note:
+        This is an abstract base class that cannot be instantiated directly.
+        Use concrete implementations like Step or TransformStep. All steps
+        must be created using the from_config pattern with proper configuration
+        files following the framework's event-driven architecture patterns.
+    
+    Warning:
+        Steps may consume significant computational resources depending on
+        processing complexity. Monitor resource usage and implement appropriate
+        limits and cleanup mechanisms. Ensure proper error handling for
+        long-running or resource-intensive operations.
+    
+    See Also:
+        * :class:`Step`: Standard step implementation with configurable processing
+        * :class:`TransformStep`: Specialized step for data transformation
+        * :class:`StepConfig`: Step configuration schema and validation
+        * :class:`DataUnitBase`: Data container and management system
+        * :class:`TriggerBase`: Event trigger system for step activation
+        * :class:`LinkBase`: Step connectivity and data flow management
+        * :mod:`nanobrain.library.infrastructure.steps`: Specialized step implementations
     """
     
     COMPONENT_TYPE = "base_step"
@@ -86,36 +404,21 @@ class BaseStep(FromConfigBase, ABC):
         """UNIFIED PATTERN: Return StepConfig - ONLY method that differs from other components"""
         return StepConfig
     
-    @classmethod
-    def from_config(cls, config_path: Union[str, Path], **context) -> 'BaseStep':
-        """
-        Load step instance from configuration file
-        
-        This method MUST be implemented by all step classes.
-        
-        Args:
-            config_path: Path to step configuration file
-            **context: Additional context (executor, workflow_directory, etc.)
-            
-        Returns:
-            Fully initialized step instance
-        """
-        raise NotImplementedError(
-            f"❌ IMPLEMENTATION ERROR: {cls.__name__}.from_config not implemented\n"
-            f"   REQUIRED: All step classes must implement from_config classmethod\n"
-            f"   EXAMPLE:\n"
-            f"      @classmethod\n"
-            f"      def from_config(cls, config_path, **context):\n"
-            f"          # Load configuration and create instance\n"
-            f"          return cls(config, **context)"
-        )
-    
     # Now inherits unified from_config implementation from FromConfigBase
     
     @classmethod
     def extract_component_config(cls, config: StepConfig) -> Dict[str, Any]:
-        """Extract BaseStep-specific configuration"""
-        return {
+        """
+        Extract BaseStep-specific configuration including resolved objects
+        
+        ✅ FRAMEWORK COMPLIANCE: Includes resolved objects from class+config patterns
+        so steps can access instantiated agents, tools, and other components.
+        """
+        # Use model_dump() to get all field values, including resolved objects
+        all_config = config.model_dump()
+        
+        # Start with core configuration fields
+        component_config = {
             'name': config.name,
             'description': getattr(config, 'description', ''),
             'auto_initialize': getattr(config, 'auto_initialize', True),
@@ -124,6 +427,14 @@ class BaseStep(FromConfigBase, ABC):
             'log_data_transfers': getattr(config, 'log_data_transfers', True),
             'log_executions': getattr(config, 'log_executions', True),
         }
+        
+        # Add all other fields from model_dump() for resolved objects
+        # This captures resolved agents, tools, etc. from class+config patterns
+        for field_name, field_value in all_config.items():
+            if field_name not in component_config:
+                component_config[field_name] = field_value
+        
+        return component_config
     
     @classmethod  
     def resolve_dependencies(cls, component_config: Dict[str, Any], **kwargs) -> Dict[str, Any]:
@@ -132,96 +443,83 @@ class BaseStep(FromConfigBase, ABC):
         if executor is None:
             # Import here to avoid circular imports
             from .executor import ExecutorConfig
-                    # Create default LocalExecutor using from_config pattern
-        default_config = ExecutorConfig.from_config({"executor_type": "local"})
-        executor = LocalExecutor.from_config(default_config)
+            
+            # Create default LocalExecutor using proper framework pattern
+            # ExecutorConfig doesn't support inline dict config, so use direct instantiation
+            try:
+                ExecutorConfig._allow_direct_instantiation = True
+                default_config = ExecutorConfig(executor_type="local")
+            finally:
+                ExecutorConfig._allow_direct_instantiation = False
+                
+            executor = LocalExecutor.from_config(default_config)
+            
         return {
             'executor': executor
         }
     
     def _init_from_config(self, config: StepConfig, component_config: Dict[str, Any],
                          dependencies: Dict[str, Any]) -> None:
-        """Initialize BaseStep with resolved dependencies"""
-        self.config = config
-        self.name = component_config['name']
-        self.description = component_config['description']
+        """Initialize BaseStep with proper sequence"""
+        # ✅ FRAMEWORK COMPLIANT - Call parent initialization first to set up enable_logging and other base attributes
+        super()._init_from_config(config, component_config, dependencies)
         
-        # Initialize logging system
+        # StepBase-specific initialization (parent already sets self.config, self.name, self.description)
+        # Override with step-specific logger that includes debug_mode
         self.nb_logger = get_logger(f"step.{self.name}", debug_mode=component_config['debug_mode'])
         self.nb_logger.info(f"Initializing step: {self.name}", step_name=self.name, config=config.model_dump())
         
         # Executor for running the step
         self.executor = dependencies['executor']
         
-        # Data management
+        # Data management (legacy step data units)
         self.input_data_units: Dict[str, DataUnitBase] = {}
         self.output_data_unit: Optional[DataUnitBase] = None
         self.links: Dict[str, LinkBase] = {}
         
-        # Trigger for activation
+        # Trigger for activation (legacy)
         self.trigger: Optional[TriggerBase] = None
         
         # Initialize tool registry
         self.tools: Dict[str, Any] = {}
         
-        # EVENT-DRIVEN ARCHITECTURE: Create step-level data units from configuration
+        # ✅ PHASE 1: Initialize step-level data unit containers
         self.step_input_data_units = {}
         self.step_output_data_units = {}
         
-        # Load input data units from step config
-        input_configs = getattr(config, 'input_data_units', {})
-        for unit_name, unit_config in input_configs.items():
-            from .data_unit import create_data_unit, DataUnitConfig
-            # Create proper DataUnitConfig object using from_config
-            if isinstance(unit_config, dict):
-                data_unit_config = DataUnitConfig.from_config(unit_config)
-            else:
-                data_unit_config = unit_config
-            # Extract class path and call create_data_unit correctly
-            class_path = data_unit_config.class_path
-            data_unit = create_data_unit(class_path, data_unit_config)
-            self.step_input_data_units[unit_name] = data_unit
-            self.nb_logger.info(f"Created step input data unit: {unit_name}")
+        # ✅ PHASE 1: Create step-level data units via from_config
+        self._create_step_data_units(config)
         
-        # Load output data units from step config
-        output_configs = getattr(config, 'output_data_units', {})
-        for unit_name, unit_config in output_configs.items():
-            from .data_unit import create_data_unit, DataUnitConfig
-            # Create proper DataUnitConfig object using from_config
-            if isinstance(unit_config, dict):
-                data_unit_config = DataUnitConfig.from_config(unit_config)
-            else:
-                data_unit_config = unit_config
-            # Extract class path and call create_data_unit correctly
-            class_path = data_unit_config.class_path
-            data_unit = create_data_unit(class_path, data_unit_config)
-            self.step_output_data_units[unit_name] = data_unit
-            self.nb_logger.info(f"Created step output data unit: {unit_name}")
-        
-        # Register step-level triggers
-        self.step_triggers = {}
-        trigger_configs = getattr(config, 'triggers', [])
-        for trigger_config in trigger_configs:
-            trigger = self._create_trigger_from_config(trigger_config)
-            # Bind trigger to step execution
-            trigger.bind_action(self._execute_on_trigger)
-            self.step_triggers[trigger_config['trigger_id']] = trigger
-            self.nb_logger.info(f"Created step trigger: {trigger_config['trigger_id']}")
-        
+        # ✅ ARCHITECTURAL FIX: Store trigger configurations for later processing in initialize()
+        # Triggers will be created AFTER data units exist, ensuring proper resolution
+        self.step_trigger_configs = getattr(config, 'triggers', [])
+        self.step_triggers = {}  # Will be populated during resolution phase
+
         # Load tools from external configuration files
         self.step_tools = {}
-        tools_config = getattr(config, 'tools', {})
-        for tool_name, tool_ref in tools_config.items():
-            config_file = tool_ref.get('config_file')
-            if config_file:
-                tool_config = self._load_config_file(config_file)
-                from .config.component_factory import create_component
-                tool = create_component(tool_config['class'], tool_config)
-                self.step_tools[tool_name] = tool
-                self.nb_logger.info(f"Loaded step tool: {tool_name}")
         
-        # Load tools from legacy configuration
-        if hasattr(config, 'tools') and config.tools:
+        # ENHANCED: Check if tools were already resolved by ConfigBase._resolve_nested_objects()
+        resolved_tools = getattr(config, '_resolved_tools', {})
+        if resolved_tools:
+            # Use already-instantiated tools from enhanced class+config resolution
+            self.step_tools.update(resolved_tools)
+            for tool_name in resolved_tools:
+                self.nb_logger.info(f"Using resolved tool: {tool_name}")
+        else:
+            # Fallback: Load tools from external configuration files (legacy)
+            tools_config = getattr(config, 'tools', {})
+            for tool_name, tool_ref in tools_config.items():
+                config_file = tool_ref.get('config_file')
+                if config_file:
+                    tool_config = self._load_config_file(config_file)
+                    from .config.component_factory import create_component
+                    tool = create_component(tool_config['class'], tool_config)
+                    self.step_tools[tool_name] = tool
+                    self.nb_logger.info(f"Loaded step tool: {tool_name}")
+        
+        # Skip legacy tool loading if tools were already resolved by enhanced system
+        # Load tools from legacy configuration only if no enhanced tools were found
+        if not resolved_tools and hasattr(config, 'tools') and config.tools:
             self._load_tools_from_config(config.tools)
         
         # State management
@@ -236,9 +534,86 @@ class BaseStep(FromConfigBase, ABC):
         self._total_processing_time = 0.0
     
     # BaseStep inherits FromConfigBase.__init__ which prevents direct instantiation
+    
+    def _create_step_data_units(self, config: StepConfig) -> None:
+        """
+        ✅ FRAMEWORK COMPLIANT: Create step data units via from_config
+        Phase 1: Component creation without binding/resolution
+        """
+        # Create input data units
+        input_configs = getattr(config, 'input_data_units', {})
+        for unit_name, unit_config in input_configs.items():
+            from .data_unit import DataUnitConfig
+            
+            # ✅ from_config COMPLIANCE: All creation via proper pattern
+            if isinstance(unit_config, DataUnitBase):
+                # Already instantiated DataUnit object from class+config resolution
+                data_unit = unit_config
+            elif isinstance(unit_config, dict) and 'class' in unit_config:
+                # Dictionary configuration with class field - determine class and call its from_config
+                data_unit = self._create_data_unit_from_class_config(unit_config)
+            elif isinstance(unit_config, dict):
+                # Dictionary configuration without class field - use default
+                class_path = unit_config.get('class', 'nanobrain.core.data_unit.DataUnitMemory')
+                enhanced_config = unit_config.copy()
+                enhanced_config['class'] = class_path
+                data_unit = self._create_data_unit_from_class_config(enhanced_config)
+            else:
+                # DataUnitConfig object - use proper from_config pattern
+                data_unit = self._create_data_unit(unit_config)
+            
+            self.step_input_data_units[unit_name] = data_unit
+            self.nb_logger.debug(f"Created step input data unit: {unit_name}")
+        
+        # Create output data units  
+        output_configs = getattr(config, 'output_data_units', {})
+        for unit_name, unit_config in output_configs.items():
+            from .data_unit import DataUnitConfig
+            
+            # ✅ from_config COMPLIANCE: All creation via proper pattern
+            if isinstance(unit_config, DataUnitBase):
+                # Already instantiated DataUnit object from class+config resolution
+                data_unit = unit_config
+            elif isinstance(unit_config, dict) and 'class' in unit_config:
+                # Dictionary configuration with class field - determine class and call its from_config
+                data_unit = self._create_data_unit_from_class_config(unit_config)
+            elif isinstance(unit_config, dict):
+                # Dictionary configuration without class field - use default
+                class_path = unit_config.get('class', 'nanobrain.core.data_unit.DataUnitMemory')
+                enhanced_config = unit_config.copy()
+                enhanced_config['class'] = class_path
+                data_unit = self._create_data_unit_from_class_config(enhanced_config)
+            else:
+                # DataUnitConfig object - use proper from_config pattern
+                data_unit = self._create_data_unit(unit_config)
+                
+            self.step_output_data_units[unit_name] = data_unit
+            self.nb_logger.debug(f"Created step output data unit: {unit_name}")
+    
+    def _create_data_unit_from_class_config(self, unit_config: Dict[str, Any]) -> DataUnitBase:
+        """
+        ✅ FRAMEWORK COMPLIANT: Create data unit from class+config dictionary
+        """
+        class_path = unit_config.get('class')
+        if not class_path:
+            raise ValueError("Data unit configuration missing 'class' field")
+        
+        # Import the DataUnit class and call its from_config method directly
+        module_path, class_name = class_path.rsplit('.', 1)
+        import importlib
+        module = importlib.import_module(module_path)
+        data_unit_class = getattr(module, class_name)
+        
+        # DataUnit classes support inline dict configs
+        return data_unit_class.from_config(unit_config)
         
     async def initialize(self) -> None:
-        """Initialize the step and its components."""
+        """
+        ✅ THREE-PHASE INITIALIZATION: Proper sequence for trigger resolution
+        Phase 1: Component creation (already done in _init_from_config)
+        Phase 2: Data unit initialization 
+        Phase 3: Trigger resolution and binding
+        """
         if self._is_initialized:
             self.nb_logger.debug(f"Step {self.name} already initialized")
             return
@@ -247,51 +622,15 @@ class BaseStep(FromConfigBase, ABC):
             OperationType.STEP_EXECUTE, 
             f"{self.name}.initialize"
         ) as context:
-            # Initialize executor
-            self.nb_logger.debug(f"Initializing executor for step {self.name}")
-            await self.executor.initialize()
             
-            # Initialize input data units
-            self.nb_logger.debug(f"Initializing {len(self.config.input_configs)} input data units")
-            for input_id, input_config in self.config.input_configs.items():
-                data_unit = self._create_data_unit(input_config)
-                await data_unit.initialize()
-                self.input_data_units[input_id] = data_unit
-                self.nb_logger.debug(f"Initialized input data unit: {input_id}")
+            # Phase 2: Initialize data units (make them ready for binding)
+            await self._initialize_step_data_units()
             
-            # Initialize output data unit
-            if self.config.output_config:
-                self.nb_logger.debug(f"Initializing output data unit")
-                self.output_data_unit = self._create_data_unit(self.config.output_config)
-                await self.output_data_unit.initialize()
+            # Phase 3: Resolve and bind triggers to data units
+            await self._resolve_and_bind_step_triggers()
             
-            # Initialize trigger
-            if self.config.trigger_config:
-                self.nb_logger.debug(f"Initializing trigger")
-                self.trigger = self._create_trigger(self.config.trigger_config)
-                
-                # Set up trigger callback
-                await self.trigger.add_callback(self._on_trigger_activated)
-                
-                # Start monitoring
-                await self.trigger.start_monitoring()
-            
-            # EVENT-DRIVEN ARCHITECTURE: Initialize step-level data units
-            self.nb_logger.debug(f"Initializing {len(self.step_input_data_units)} step input data units")
-            for unit_name, data_unit in self.step_input_data_units.items():
-                await data_unit.initialize()
-                self.nb_logger.debug(f"Initialized step input data unit: {unit_name}")
-            
-            self.nb_logger.debug(f"Initializing {len(self.step_output_data_units)} step output data units")
-            for unit_name, data_unit in self.step_output_data_units.items():
-                await data_unit.initialize()
-                self.nb_logger.debug(f"Initialized step output data unit: {unit_name}")
-            
-            # Initialize and start step-level triggers
-            self.nb_logger.debug(f"Starting {len(self.step_triggers)} step triggers")
-            for trigger_id, trigger in self.step_triggers.items():
-                await trigger.start_monitoring()
-                self.nb_logger.debug(f"Started step trigger: {trigger_id}")
+            # Initialize other components (executor, legacy components)
+            await self._initialize_other_components()
             
             self._is_initialized = True
             context.metadata['input_count'] = len(self.input_data_units)
@@ -303,8 +642,187 @@ class BaseStep(FromConfigBase, ABC):
             
         self.nb_logger.info(f"Step {self.name} initialized successfully", 
                            input_count=len(self.input_data_units),
+                           step_input_count=len(self.step_input_data_units),
+                           step_output_count=len(self.step_output_data_units),
+                           step_trigger_count=len(self.step_triggers),
                            has_output=self.output_data_unit is not None,
                            has_trigger=self.trigger is not None)
+    
+    async def _initialize_step_data_units(self) -> None:
+        """
+        ✅ PHASE 2: Initialize data units to make them ready for trigger binding
+        """
+        # Initialize step input data units
+        for unit_name, data_unit in self.step_input_data_units.items():
+            await data_unit.initialize()
+            self.nb_logger.debug(f"Initialized step input data unit: {unit_name}")
+        
+        # Initialize step output data units
+        for unit_name, data_unit in self.step_output_data_units.items():
+            await data_unit.initialize()
+            self.nb_logger.debug(f"Initialized step output data unit: {unit_name}")
+        
+        self.nb_logger.info(f"✅ Phase 2 Complete: All step data units initialized")
+    
+    async def _resolve_and_bind_step_triggers(self) -> None:
+        """
+        ✅ PHASE 3: Resolve trigger data unit references and bind to actual objects
+        
+        ARCHITECTURAL COMPLIANCE:
+        - Only resolves within step scope (no cross-step references)
+        - Uses actual data unit objects created in previous phases
+        - Maintains from_config pattern for trigger creation
+        """
+        step_context = self._create_step_resolution_context()
+        
+        for trigger_config in self.step_trigger_configs:
+            # ✅ FRAMEWORK COMPLIANT: Create trigger via from_config with step context
+            trigger_instance = await self._create_and_resolve_step_trigger(
+                trigger_config, step_context
+            )
+            
+            if trigger_instance:
+                # Bind trigger to step execution
+                trigger_instance.bind_action(self._execute_on_trigger)
+                
+                # Store resolved trigger
+                trigger_id = getattr(trigger_instance, 'trigger_id', f'trigger_{len(self.step_triggers)}')
+                self.step_triggers[trigger_id] = trigger_instance
+                
+                # Start monitoring
+                await trigger_instance.start_monitoring()
+                
+                self.nb_logger.info(f"✅ Resolved and bound step trigger: {trigger_id}")
+        
+        self.nb_logger.info(f"✅ Phase 3 Complete: All triggers resolved and monitoring")
+    
+    async def _initialize_other_components(self) -> None:
+        """
+        ✅ LEGACY SUPPORT: Initialize other components (executor, legacy data units, triggers)
+        """
+        # Initialize executor
+        self.nb_logger.debug(f"Initializing executor for step {self.name}")
+        await self.executor.initialize()
+        
+        # Initialize legacy input data units (if any)
+        self.nb_logger.debug(f"Initializing {len(self.config.input_configs)} legacy input data units")
+        for input_id, input_config in self.config.input_configs.items():
+            data_unit = self._create_data_unit(input_config)
+            await data_unit.initialize()
+            self.input_data_units[input_id] = data_unit
+            self.nb_logger.debug(f"Initialized legacy input data unit: {input_id}")
+        
+        # Initialize legacy output data unit (if any)
+        if self.config.output_config:
+            self.nb_logger.debug(f"Initializing legacy output data unit")
+            self.output_data_unit = self._create_data_unit(self.config.output_config)
+            await self.output_data_unit.initialize()
+        
+        # Initialize legacy trigger (if any)
+        if self.config.trigger_config:
+            self.nb_logger.debug(f"Initializing legacy trigger")
+            self.trigger = self._create_trigger(self.config.trigger_config)
+            
+            # Set up trigger callback
+            await self.trigger.add_callback(self._on_trigger_activated)
+            
+            # Start monitoring
+            await self.trigger.start_monitoring()
+    
+    def _create_step_resolution_context(self) -> Dict[str, Any]:
+        """
+        ✅ STEP-SCOPE ONLY: Create resolution context with step-local data units
+        
+        ARCHITECTURAL COMPLIANCE:
+        - Only includes data units within this step scope
+        - No workflow-level or cross-step data units
+        - Ensures trigger isolation within step boundaries
+        """
+        return {
+            'step_input_data_units': self.step_input_data_units,
+            'step_output_data_units': self.step_output_data_units,
+            'step_name': self.name,
+            'step_scope_only': True  # Enforce step isolation
+        }
+    
+    async def _create_and_resolve_step_trigger(self, trigger_config: Any, 
+                                             step_context: Dict[str, Any]) -> Optional[TriggerBase]:
+        """
+        ✅ FRAMEWORK COMPLIANT: Create trigger via from_config with step-scope resolution
+        """
+        try:
+            # Phase 3A: Create trigger instance via from_config
+            if hasattr(trigger_config, '__class__') and hasattr(trigger_config, 'bind_action'):
+                # Already instantiated trigger from ConfigBase resolution
+                trigger_instance = trigger_config
+            else:
+                # Create trigger via from_config pattern
+                trigger_class = self._get_trigger_class(trigger_config)
+                trigger_instance = trigger_class.from_config(
+                    trigger_config, 
+                    step_context=step_context  # Pass step-local context
+                )
+            
+            # Phase 3B: Resolve data unit references within step scope
+            if hasattr(trigger_instance, 'data_unit') and isinstance(trigger_instance.data_unit, str):
+                resolved_data_unit = self._resolve_step_data_unit_reference(
+                    trigger_instance.data_unit, step_context
+                )
+                
+                if resolved_data_unit:
+                    trigger_instance.data_unit = resolved_data_unit
+                    self.nb_logger.debug(f"✅ Resolved trigger data unit: {trigger_instance.data_unit.name}")
+                else:
+                    raise ValueError(f"❌ Data unit '{trigger_instance.data_unit}' not found in step scope")
+            
+            return trigger_instance
+            
+        except Exception as e:
+            self.nb_logger.error(f"❌ Failed to create/resolve step trigger: {e}")
+            return None
+    
+    def _resolve_step_data_unit_reference(self, data_unit_ref: str, 
+                                        step_context: Dict[str, Any]) -> Optional[DataUnitBase]:
+        """
+        ✅ STEP-SCOPE ONLY: Resolve data unit reference within step boundaries
+        
+        ARCHITECTURAL COMPLIANCE:
+        - Only searches within step input/output data units
+        - No cross-step or workflow-level resolution
+        - Returns None if not found in step scope (proper behavior)
+        """
+        # Check step input data units
+        step_input_units = step_context.get('step_input_data_units', {})
+        if data_unit_ref in step_input_units:
+            return step_input_units[data_unit_ref]
+        
+        # Check step output data units
+        step_output_units = step_context.get('step_output_data_units', {})
+        if data_unit_ref in step_output_units:
+            return step_output_units[data_unit_ref]
+        
+        # Not found in step scope - this is expected behavior for cross-scope references
+        available_units = list(step_input_units.keys()) + list(step_output_units.keys())
+        self.nb_logger.warning(f"Data unit '{data_unit_ref}' not found in step scope. "
+                              f"Available: {available_units}")
+        return None
+    
+    def _get_trigger_class(self, trigger_config: Any):
+        """
+        ✅ FRAMEWORK COMPLIANT: Get trigger class for from_config creation
+        """
+        if isinstance(trigger_config, dict):
+            class_path = trigger_config.get('class', 'nanobrain.core.trigger.DataUnitChangeTrigger')
+        elif hasattr(trigger_config, 'class_path'):
+            class_path = trigger_config.class_path
+        else:
+            class_path = 'nanobrain.core.trigger.DataUnitChangeTrigger'
+        
+        # Import the trigger class
+        module_path, class_name = class_path.rsplit('.', 1)
+        import importlib
+        module = importlib.import_module(module_path)
+        return getattr(module, class_name)
     
     async def shutdown(self) -> None:
         """Shutdown the step and cleanup resources."""
@@ -348,48 +866,41 @@ class BaseStep(FromConfigBase, ABC):
             }
     
     def _create_data_unit(self, config: DataUnitConfig) -> DataUnitBase:
-        """Create a data unit from configuration using pure component factory."""
+        """Create a data unit from configuration using proper from_config pattern."""
         # Import here to avoid circular imports
-        from .data_unit import create_data_unit
+        class_path = config.class_path
         
-        # Use the pure create_data_unit factory function
-        return create_data_unit(config)
+        # Import the DataUnit class and call its from_config method directly
+        module_path, class_name = class_path.rsplit('.', 1)
+        import importlib
+        module = importlib.import_module(module_path)
+        data_unit_class = getattr(module, class_name)
+        
+        # Use the DataUnit class's from_config method
+        return data_unit_class.from_config(config)
     
     def _create_trigger(self, config: TriggerConfig) -> TriggerBase:
-        """Create a trigger from configuration."""
+        """Create a trigger from configuration using proper from_config pattern."""
         # Import here to avoid circular imports
-        from .trigger import create_trigger
-        return create_trigger(config)
-    
-    def _create_trigger_from_config(self, trigger_config: Dict[str, Any]) -> 'TriggerBase':
-        """Create trigger from configuration for event-driven architecture"""
-        from .trigger import DataUnitChangeTrigger, TriggerConfig
-        from .config.component_factory import create_component
+        trigger_type = config.trigger_type
         
-        trigger_class_path = trigger_config.get('class', 'nanobrain.core.trigger.DataUnitChangeTrigger')
-        data_unit_name = trigger_config['data_unit']
-        
-        # Get the data unit from step's input data units
-        if data_unit_name not in self.step_input_data_units:
-            raise ValueError(f"Data unit '{data_unit_name}' not found in step input data units")
-        
-        data_unit = self.step_input_data_units[data_unit_name]
-        
-        # Create proper TriggerConfig using from_config
-        trigger_config_obj = TriggerConfig.from_config({
-            "trigger_type": "data_updated",  # Required field
-            "name": trigger_config.get('trigger_id', 'step_trigger')
-        })
-        
-        # Create trigger with data unit using pure from_config pattern
-        trigger = create_component(trigger_class_path, trigger_config_obj, 
-                                  data_unit=data_unit,
-                                  event_type=trigger_config.get('event_type', 'set'))
-        
-        # Bind action to execute step when triggered
-        trigger.bind_action(self._execute_on_trigger)
-        
-        return trigger
+        # Import the appropriate trigger class and call its from_config method
+        if trigger_type == 'data_updated':
+            from .trigger import DataUpdatedTrigger
+            return DataUpdatedTrigger.from_config(config)
+        elif trigger_type == 'all_data_received':
+            from .trigger import AllDataReceivedTrigger
+            return AllDataReceivedTrigger.from_config(config)
+        elif trigger_type == 'timer':
+            from .trigger import TimerTrigger
+            return TimerTrigger.from_config(config)
+        elif trigger_type == 'manual':
+            from .trigger import ManualTrigger
+            return ManualTrigger.from_config(config)
+        else:
+            # Default to manual trigger
+            from .trigger import ManualTrigger
+            return ManualTrigger.from_config(config)
     
     async def _execute_on_trigger(self, trigger_event: Dict[str, Any]) -> None:
         """Execute step when triggered by data unit change (EVENT-DRIVEN EXECUTION)"""

@@ -24,7 +24,7 @@ from nanobrain.library.agents.specialized.parsl_agent import ParslAgent
 
 # Step imports
 from .steps.distributed_processing_step.distributed_processing_step import DistributedProcessingStep
-from nanobrain.core.config import get_config_manager
+from nanobrain.core.config import ConfigBase
 
 # Parsl imports with fallback
 try:

@@ -1,0 +1,199 @@
+# Docker Universal NanoBrain Server Configuration
+# Optimized configuration for containerized deployment
+# 
+# Author: NanoBrain Development Team  
+# Date: January 2025
+# Version: 1.0.0
+
+# Container-optimized server settings
+server_type: "fastapi"
+host: "0.0.0.0"  # Bind to all interfaces in container
+port: 5001
+debug: false
+
+# Production FastAPI configuration
+fastapi_config:
+  title: "Universal NanoBrain Server (Docker)"
+  description: "Containerized universal interface for NanoBrain framework workflows"
+  version: "1.0.0"
+  docs_url: null  # Disabled in production container
+  redoc_url: null
+  openapi_url: null
+
+# Container-friendly CORS (restrict in production)
+cors_config:
+  allow_origins: 
+    - "${FRONTEND_URL:-http://localhost:3000}"
+    - "${ALLOWED_ORIGIN_1:-https://app.nanobrain.ai}"
+  allow_methods: ["GET", "POST", "OPTIONS"]
+  allow_headers: ["*"]
+  allow_credentials: true
+
+# Production components with environment variable support
+components:
+  
+  workflow_registry:
+    class: "nanobrain.library.interfaces.web.routing.workflow_registry.WorkflowRegistry"
+    config:
+      auto_discovery: true
+      discovery_paths:
+        - "nanobrain.library.workflows"
+      validation_enabled: true
+      strict_validation: false
+      auto_registration: true
+      minimum_compliance_score: 0.8
+      
+      # Container-optimized registry maintenance
+      registry_maintenance:
+        enable_health_checks: true
+        health_check_interval: 1800  # 30 minutes
+        cleanup_invalid_entries: true
+        max_registry_size: 500
+
+  request_analyzer:
+    class: "nanobrain.library.interfaces.web.analysis.request_analyzer.UniversalRequestAnalyzer"
+    config:
+      intent_classifier:
+        class: "nanobrain.library.interfaces.web.analysis.intent_classifier.IntentClassifier"
+        config:
+          method: "hybrid"
+          confidence_thresholds:
+            high_confidence: 0.8
+            medium_confidence: 0.6
+            low_confidence: 0.3
+      
+      domain_classifier:
+        class: "nanobrain.library.interfaces.web.analysis.domain_classifier.DomainClassifier"
+        config:
+          method: "semantic_analysis"
+
+  workflow_router:
+    class: "nanobrain.library.interfaces.web.routing.workflow_router.WorkflowRouter"
+    config:
+      routing_strategy: "best_match"
+      fallback_strategy: "general_conversation"
+      
+      routing_thresholds:
+        minimum_confidence: 0.4
+        high_confidence: 0.8
+      
+      execution_config:
+        enable_parallel_execution: true
+        max_execution_time: 180.0  # 3 minutes for container
+        enable_caching: true
+      
+      error_handling:
+        retry_failed_routes: true
+        max_retries: 1  # Reduced for container
+        fallback_on_error: true
+        detailed_error_logging: false  # Reduced logging in production
+
+  response_processor:
+    class: "nanobrain.library.interfaces.web.processing.response_processor.UniversalResponseProcessor"
+    config:
+      standardization: true
+      streaming_support: true
+      format_conversion: true
+      
+      content_processing:
+        max_content_size: 5242880  # 5MB limit for container
+      
+      frontend_optimization:
+        optimize_for_rendering: true
+        compress_large_responses: true
+        max_response_items: 500  # Reduced for container
+      
+      error_handling:
+        detailed_error_messages: false
+        include_stack_traces: false
+        sanitize_error_content: true
+
+# Container endpoints
+endpoints:
+  chat: "/api/universal-chat"
+  capabilities: "/api/workflows/capabilities" 
+  health: "/api/health"
+  metrics: "/api/metrics"  # For container monitoring
+
+# Production middleware
+middleware:
+  cors: true
+  request_validation: true
+  response_standardization: true
+  
+  # Rate limiting for production
+  rate_limiting:
+    enabled: true
+    requests_per_minute: 30  # Conservative for container
+    burst_size: 5
+
+# Container startup configuration
+startup_config:
+  auto_discover_workflows: true
+  validate_components: true
+  preload_workflows: false
+  initial_health_check: true
+  graceful_timeout: 15.0  # Quick container shutdown
+
+# Framework integration for containers
+framework_integration:
+  auto_component_loading: true
+  strict_validation: true
+  error_handling: "production"
+
+# Environment variable configuration
+environment:
+  # Server configuration from environment
+  LOG_LEVEL: "${LOG_LEVEL:-INFO}"
+  MAX_WORKERS: "${MAX_WORKERS:-1}"
+  
+  # Component configuration from environment  
+  ENABLE_STREAMING: "${ENABLE_STREAMING:-true}"
+  CACHE_TTL: "${CACHE_TTL:-1800}"
+  
+  # Security configuration from environment
+  RATE_LIMIT_RPM: "${RATE_LIMIT_RPM:-30}"
+  MAX_CONTENT_SIZE: "${MAX_CONTENT_SIZE:-5242880}"
+
+# Container health check configuration
+health_check:
+  enabled: true
+  endpoint: "/api/health"
+  interval: 30  # seconds
+  timeout: 10   # seconds
+  retries: 3
+  start_period: 60  # seconds
+
+# Logging configuration for containers
+logging:
+  level: "${LOG_LEVEL:-INFO}"
+  format: "json"  # Structured logging for containers
+  include_request_id: true
+  include_timestamp: true
+  
+  # Container-friendly log destinations
+  handlers:
+    console:
+      enabled: true
+      level: "INFO"
+    file:
+      enabled: false  # Use container logs instead
+
+# Resource limits for container deployment
+resources:
+  memory_limit: "512Mi"
+  cpu_limit: "500m"
+  memory_request: "256Mi" 
+  cpu_request: "250m"
+
+# Container security configuration
+security:
+  run_as_non_root: true
+  read_only_root_filesystem: true
+  allow_privilege_escalation: false
+  
+  # Security headers
+  security_headers:
+    x_content_type_options: "nosniff"
+    x_frame_options: "DENY"
+    x_xss_protection: "1; mode=block" 

@@ -1,6 +1,15 @@
 name: "virus_name_resolution"
 description: "Enhanced virus name resolution with synonym detection and taxonomy validation"
-class: "nanobrain.library.workflows.chatbot_viral_integration.steps.virus_name_resolution_step.EnhancedVirusNameResolutionStep"
+
+# Agents configuration with class+config patterns (TOP LEVEL for proper resolution)
+agents:
+  query_analysis_agent:
+    class: "nanobrain.library.agents.specialized.query_analysis_agent.QueryAnalysisAgent"
+    config: "config/VirusNameResolutionStep/QueryAnalysisAgent.yml"
+  
+  synonym_detection_agent:
+    class: "nanobrain.library.agents.specialized.protein_synonym_agent.ProteinSynonymAgent"
+    config: "config/VirusNameResolutionStep/SynonymDetectionAgent.yml"
 
 # Step configuration
 config:
@@ -9,32 +18,44 @@ config:
   debug_mode: false
   enable_logging: true
   log_data_transfers: true
-  
-  # UPDATED: Agents configuration with class+config patterns (was inline)
-  agents:
-    query_analysis_agent:
-      class: "nanobrain.library.agents.specialized.query_analysis_agent.QueryAnalysisAgent"
-      config: "config/VirusNameResolutionStep/QueryAnalysisAgent.yml"
-    
-    synonym_detection_agent:
-      class: "nanobrain.library.agents.specialized.protein_synonym_agent.ProteinSynonymAgent"
-      config: "config/VirusNameResolutionStep/SynonymDetectionAgent.yml"
 
-# Input/Output data unit specifications (existing)
+# Input/Output data unit specifications (UPDATED: dictionary format)
 input_data_units:
-  - "query_input"
+  extraction_result:
+    class: "nanobrain.core.data_unit.DataUnitMemory"
+    config:
+      class: "nanobrain.core.data_unit.DataUnitMemory"
+      name: "extraction_result"
+      description: "Virus extraction result from query classification"
+      persistent: false
 
 output_data_units:
-  - "resolution_result"
+  virus_info:
+    class: "nanobrain.core.data_unit.DataUnitMemory"
+    config:
+      class: "nanobrain.core.data_unit.DataUnitMemory"
+      name: "virus_info"
+      description: "Resolved virus information"
+      persistent: false
 
 # Step timeout and retry settings (existing)
-timeout: 120.0
+timeout: 60.0
 max_retries: 3
 retry_delay: 2.0
 
-# Enhanced resolution configuration (existing)
+# ✅ SCOPE CORRECTED: Step-level trigger referencing step-level data unit
+triggers:
+  - trigger_id: "enhanced_virus_resolution_completed"
+    class: "nanobrain.core.trigger.DataUnitChangeTrigger"
+    config:
+      data_unit: "virus_info"  # ✅ STEP-LEVEL REFERENCE: References step's output data unit
+      event_type: "set"
+      description: "Trigger when enhanced virus name resolution completed"
+      enable_logging: true
+
+# Resolution configuration (existing)
 resolution_config:
-  enable_synonym_detection: true
+  confidence_threshold: 0.8
+  use_synonym_detection: true
   enable_taxonomy_validation: true
-  confidence_threshold: 0.7
-  max_synonyms_per_virus: 10 
+  fallback_to_general_search: true 

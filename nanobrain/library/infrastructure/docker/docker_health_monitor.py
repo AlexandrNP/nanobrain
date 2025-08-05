@@ -67,14 +67,763 @@ class DockerHealthMonitorConfig(DockerComponentConfig):
 
 class DockerHealthMonitor(DockerComponentBase):
     """
-    Comprehensive health monitoring for Docker containers.
-    Enhanced with mandatory from_config pattern implementation.
+    Enterprise Docker Health Monitor - Comprehensive Container Health and Resource Monitoring
+    =====================================================================================
     
-    Provides:
-    - Periodic health checks
-    - Resource usage monitoring
-    - Alert notifications
-    - Health history tracking
+    The DockerHealthMonitor provides comprehensive health monitoring and resource tracking for Docker
+    containers in enterprise environments, offering real-time health checks, resource utilization
+    monitoring, intelligent alerting, and automated recovery mechanisms. This monitoring system ensures
+    container reliability, performance optimization, and proactive issue detection for production
+    Docker deployments across distributed infrastructure.
+    
+    **Core Architecture:**
+        The Docker health monitor provides enterprise-grade container monitoring capabilities:
+        
+        * **Real-Time Health Monitoring**: Continuous container health assessment and validation
+        * **Resource Utilization Tracking**: CPU, memory, network, and disk usage monitoring
+        * **Intelligent Alerting**: Threshold-based alerting with escalation and notification management
+        * **Automated Recovery**: Self-healing capabilities with container restart and replacement
+        * **Performance Analytics**: Historical trend analysis and capacity planning support
+        * **Framework Integration**: Full integration with NanoBrain's infrastructure management architecture
+    
+    **Container Health Monitoring:**
+        
+        **Health Check Capabilities:**
+        * **HTTP Health Endpoints**: Automated HTTP/HTTPS health check validation
+        * **TCP Port Monitoring**: Network service availability and connectivity testing
+        * **Custom Command Execution**: Container-specific health validation scripts
+        * **Application-Level Checks**: Service-specific health validation and business logic
+        * **Dependency Validation**: External service dependency health verification
+        
+        **Health Status Management:**
+        * **HEALTHY**: Container is operating normally with all checks passing
+        * **UNHEALTHY**: Container has failed health checks and requires attention
+        * **STARTING**: Container is initializing and health status is being established
+        * **UNKNOWN**: Health status cannot be determined due to monitoring issues
+        
+        **Health Validation Strategies:**
+        * **Multi-Layer Validation**: Infrastructure, application, and business layer health checks
+        * **Configurable Check Intervals**: Adaptive health check frequency based on container state
+        * **Failure Threshold Management**: Configurable failure counts before marking unhealthy
+        * **Recovery Validation**: Post-recovery health verification and status restoration
+    
+    **Resource Monitoring Capabilities:**
+        
+        **CPU Performance Monitoring:**
+        * Real-time CPU utilization tracking and analysis
+        * Multi-core CPU usage distribution and load balancing
+        * CPU throttling detection and performance impact assessment
+        * Historical CPU usage trends and capacity planning
+        
+        **Memory Management Monitoring:**
+        * Memory usage tracking with limit enforcement
+        * Memory leak detection and trend analysis
+        * OOM (Out of Memory) prevention and alerting
+        * Memory efficiency optimization recommendations
+        
+        **Network Performance Tracking:**
+        * Network I/O throughput monitoring and analysis
+        * Connection tracking and bandwidth utilization
+        * Network latency and packet loss detection
+        * Inter-container communication monitoring
+        
+        **Storage and Disk Monitoring:**
+        * Disk I/O performance tracking and optimization
+        * Storage utilization and capacity management
+        * Volume mount health and accessibility validation
+        * Disk performance bottleneck identification
+    
+    **Enterprise Alerting System:**
+        
+        **Intelligent Alert Management:**
+        * **Threshold-Based Alerting**: Configurable resource and health thresholds
+        * **Trend-Based Alerting**: Predictive alerting based on usage trends
+        * **Correlation Analysis**: Multi-container alert correlation and root cause analysis
+        * **Alert Suppression**: Intelligent alert grouping and noise reduction
+        
+        **Multi-Channel Notification:**
+        * **Email Notifications**: SMTP-based alert delivery with rich formatting
+        * **Webhook Integration**: HTTP webhook delivery for external system integration
+        * **Dashboard Alerts**: Real-time dashboard notifications and visual indicators
+        * **Mobile Push Notifications**: Critical alert delivery to mobile devices
+        
+        **Escalation Management:**
+        * **Severity-Based Escalation**: Automatic escalation based on alert severity
+        * **Time-Based Escalation**: Escalation triggers based on unresolved alert duration
+        * **Team-Based Routing**: Alert routing based on team responsibilities and schedules
+        * **Executive Notifications**: Critical issue escalation to leadership
+    
+    **Configuration Architecture:**
+        Comprehensive configuration supports diverse Docker monitoring scenarios:
+        
+        ```yaml
+        # Docker Health Monitor Configuration
+        monitor_name: "enterprise_docker_health_monitor"
+        monitor_type: "comprehensive"
+        
+        # Monitor card for framework integration
+        monitor_card:
+          name: "enterprise_docker_health_monitor"
+          description: "Enterprise Docker container health and resource monitoring"
+          version: "1.0.0"
+          category: "infrastructure"
+          capabilities:
+            - "container_health_monitoring"
+            - "resource_utilization_tracking"
+            - "intelligent_alerting"
+        
+        # Docker Manager Integration
+        docker_manager:
+          connection_url: "unix:///var/run/docker.sock"
+          timeout: 30
+          api_version: "auto"
+          
+        # Health Check Configuration
+        health_checks:
+          enabled: true
+          default_interval: 30          # seconds
+          timeout: 10                   # seconds
+          retries: 3
+          failure_threshold: 3          # failures before marking unhealthy
+          
+          http_checks:
+            enabled: true
+            default_path: "/health"
+            expected_status: [200, 204]
+            follow_redirects: true
+            verify_ssl: true
+            
+          tcp_checks:
+            enabled: true
+            connection_timeout: 5
+            
+          command_checks:
+            enabled: true
+            shell: "/bin/sh"
+            working_directory: "/"
+            
+        # Resource Monitoring Configuration
+        resource_monitoring:
+          enabled: true
+          collection_interval: 15       # seconds
+          history_retention: 86400      # seconds (24 hours)
+          
+          cpu_monitoring:
+            enabled: true
+            threshold_warning: 75.0     # percentage
+            threshold_critical: 90.0    # percentage
+            
+          memory_monitoring:
+            enabled: true
+            threshold_warning: 80.0     # percentage
+            threshold_critical: 95.0    # percentage
+            oom_detection: true
+            
+          network_monitoring:
+            enabled: true
+            bandwidth_threshold: 104857600  # bytes/sec (100 MB/s)
+            connection_limit: 1000
+            
+          disk_monitoring:
+            enabled: true
+            io_threshold: 52428800      # bytes/sec (50 MB/s)
+            space_threshold: 85.0       # percentage
+            
+        # Alert Configuration
+        alerting:
+          enabled: true
+          alert_interval: 300           # seconds (5 minutes)
+          escalation_enabled: true
+          
+          channels:
+            email:
+              enabled: true
+              smtp_server: "smtp.company.com"
+              smtp_port: 587
+              username: "alerts@company.com"
+              recipients: ["ops@company.com", "dev@company.com"]
+              
+            webhook:
+              enabled: true
+              url: "https://alerting.company.com/webhook"
+              timeout: 10
+              retry_attempts: 3
+              
+            dashboard:
+              enabled: true
+              update_interval: 5
+              
+          thresholds:
+            cpu_usage:
+              warning: 75.0
+              critical: 90.0
+              trend_alert: true
+              
+            memory_usage:
+              warning: 80.0
+              critical: 95.0
+              leak_detection: true
+              
+            health_check_failures:
+              warning: 2
+              critical: 3
+              consecutive_required: true
+              
+        # Recovery Configuration
+        recovery:
+          enabled: true
+          auto_restart: true
+          restart_policy: "unless-stopped"
+          max_restart_attempts: 3
+          restart_delay: 30             # seconds
+          
+          replacement_strategy:
+            enabled: true
+            replacement_timeout: 300    # seconds
+            preserve_data: true
+            
+        # Analytics Configuration
+        analytics:
+          enabled: true
+          trend_analysis: true
+          capacity_planning: true
+          performance_recommendations: true
+          
+        # Integration Configuration
+        integration:
+          prometheus_export: true
+          grafana_dashboards: true
+          elk_stack_logging: true
+          external_apis: true
+        ```
+    
+    **Usage Patterns:**
+        
+        **Basic Docker Health Monitoring Setup:**
+        ```python
+        from nanobrain.library.infrastructure.docker import DockerHealthMonitor, DockerManager
+        
+        # Initialize Docker manager
+        docker_manager = DockerManager.from_config("docker_config.yml")
+        await docker_manager.initialize()
+        
+        # Create health monitor configuration
+        monitor_config = {
+            'component_name': 'production_health_monitor',
+            'docker_manager': docker_manager,
+            'health_check_interval': 30,
+            'resource_monitoring_interval': 15,
+            'alert_thresholds': {
+                'cpu_warning': 75.0,
+                'cpu_critical': 90.0,
+                'memory_warning': 80.0,
+                'memory_critical': 95.0
+            }
+        }
+        
+        # Initialize health monitor
+        health_monitor = DockerHealthMonitor.from_config(monitor_config)
+        await health_monitor.initialize()
+        
+        # Start monitoring
+        await health_monitor.start_monitoring()
+        
+        # Monitor specific containers
+        container_names = ['web_frontend', 'api_backend', 'database', 'cache']
+        for container_name in container_names:
+            await health_monitor.add_container_monitoring(container_name)
+        
+        # Get current health status
+        health_status = await health_monitor.get_overall_health()
+        print(f"Overall Health: {health_status['status']}")
+        print(f"Healthy Containers: {health_status['healthy_count']}")
+        print(f"Unhealthy Containers: {health_status['unhealthy_count']}")
+        ```
+        
+        **Enterprise Multi-Container Monitoring:**
+        ```python
+        # Comprehensive enterprise Docker monitoring setup
+        class EnterpriseDockerMonitoringPlatform:
+            def __init__(self):
+                self.docker_manager = None
+                self.health_monitor = None
+                self.alert_manager = AlertManager()
+                self.recovery_manager = RecoveryManager()
+                self.analytics_engine = ContainerAnalyticsEngine()
+                
+            async def initialize_platform(self):
+                # Initialize Docker manager with enterprise configuration
+                self.docker_manager = DockerManager.from_config({
+                    'connection_url': 'unix:///var/run/docker.sock',
+                    'api_version': 'auto',
+                    'timeout': 60
+                })
+                await self.docker_manager.initialize()
+                
+                # Configure comprehensive health monitoring
+                monitor_config = {
+                    'component_name': 'enterprise_docker_monitor',
+                    'docker_manager': self.docker_manager,
+                    'health_check_interval': 10,  # High-frequency monitoring
+                    'resource_monitoring_interval': 5,
+                    'alert_thresholds': {
+                        'cpu_warning': 70.0,
+                        'cpu_critical': 85.0,
+                        'memory_warning': 75.0,
+                        'memory_critical': 90.0,
+                        'network_warning': 100 * 1024 * 1024,  # 100 MB/s
+                        'disk_warning': 50 * 1024 * 1024       # 50 MB/s
+                    }
+                }
+                
+                self.health_monitor = DockerHealthMonitor.from_config(monitor_config)
+                await self.health_monitor.initialize()
+                
+                # Configure intelligent alerting
+                await self.alert_manager.configure_channels({
+                    'email': {
+                        'enabled': True,
+                        'recipients': ['ops@company.com', 'devops@company.com']
+                    },
+                    'slack': {
+                        'enabled': True,
+                        'webhook_url': 'https://hooks.slack.com/...',
+                        'channel': '#ops-alerts'
+                    },
+                    'pagerduty': {
+                        'enabled': True,
+                        'service_key': 'your-pagerduty-key'
+                    }
+                })
+                
+                # Configure automated recovery
+                await self.recovery_manager.configure_policies({
+                    'auto_restart': True,
+                    'max_restart_attempts': 3,
+                    'escalation_enabled': True,
+                    'replacement_strategy': 'blue_green'
+                })
+                
+            async def monitor_application_stack(self, stack_name: str, containers: List[str]):
+                # Start monitoring for application stack
+                await self.health_monitor.start_monitoring()
+                
+                # Add containers to monitoring
+                for container_name in containers:
+                    await self.health_monitor.add_container_monitoring(
+                        container_name,
+                        health_check_config={
+                            'http_endpoint': f'http://localhost:8080/health',
+                            'check_interval': 15,
+                            'timeout': 5,
+                            'retries': 2
+                        }
+                    )
+                
+                # Start continuous monitoring loop
+                while True:
+                    try:
+                        # Collect health and resource metrics
+                        health_results = await self.health_monitor.check_all_containers()
+                        resource_metrics = await self.health_monitor.collect_resource_metrics()
+                        
+                        # Process health results
+                        for result in health_results:
+                            if result.status == HealthStatus.UNHEALTHY:
+                                await self.handle_unhealthy_container(
+                                    result.container_name, result
+                                )
+                            elif result.status == HealthStatus.STARTING:
+                                await self.monitor_starting_container(
+                                    result.container_name, result
+                                )
+                        
+                        # Analyze resource utilization
+                        resource_analysis = await self.analytics_engine.analyze_resources(
+                            resource_metrics
+                        )
+                        
+                        # Check for resource alerts
+                        for metric in resource_metrics:
+                            await self.check_resource_thresholds(metric)
+                        
+                        # Generate recommendations
+                        recommendations = await self.analytics_engine.generate_recommendations(
+                            resource_analysis
+                        )
+                        
+                        if recommendations:
+                            await self.alert_manager.send_recommendations(
+                                stack_name, recommendations
+                            )
+                        
+                        await asyncio.sleep(30)  # Monitor every 30 seconds
+                        
+                    except Exception as e:
+                        self.health_monitor.logger.error(
+                            f"Monitoring error for stack {stack_name}: {e}"
+                        )
+                        await asyncio.sleep(60)  # Retry after 1 minute
+                        
+            async def handle_unhealthy_container(self, container_name: str, health_result: HealthCheckResult):
+                # Log unhealthy container
+                self.health_monitor.logger.warning(
+                    f"Container {container_name} is unhealthy: {health_result.error_message}"
+                )
+                
+                # Send immediate alert
+                await self.alert_manager.send_critical_alert(
+                    f"Container {container_name} Health Critical",
+                    {
+                        'container': container_name,
+                        'status': health_result.status.value,
+                        'error': health_result.error_message,
+                        'timestamp': health_result.timestamp
+                    }
+                )
+                
+                # Attempt automated recovery
+                recovery_success = await self.recovery_manager.attempt_recovery(
+                    container_name, health_result
+                )
+                
+                if recovery_success:
+                    await self.alert_manager.send_info_alert(
+                        f"Container {container_name} Recovery Successful",
+                        {'container': container_name, 'recovery_time': time.time()}
+                    )
+                else:
+                    await self.alert_manager.send_critical_alert(
+                        f"Container {container_name} Recovery Failed",
+                        {'container': container_name, 'requires_manual_intervention': True}
+                    )
+                    
+            async def check_resource_thresholds(self, metrics: ResourceMetrics):
+                alerts = []
+                
+                # Check CPU thresholds
+                if metrics.cpu_percent > 90.0:
+                    alerts.append({
+                        'type': 'cpu_critical',
+                        'container': metrics.container_name,
+                        'value': metrics.cpu_percent,
+                        'threshold': 90.0
+                    })
+                elif metrics.cpu_percent > 75.0:
+                    alerts.append({
+                        'type': 'cpu_warning',
+                        'container': metrics.container_name,
+                        'value': metrics.cpu_percent,
+                        'threshold': 75.0
+                    })
+                
+                # Check memory thresholds
+                if metrics.memory_percent > 95.0:
+                    alerts.append({
+                        'type': 'memory_critical',
+                        'container': metrics.container_name,
+                        'value': metrics.memory_percent,
+                        'threshold': 95.0
+                    })
+                elif metrics.memory_percent > 80.0:
+                    alerts.append({
+                        'type': 'memory_warning',
+                        'container': metrics.container_name,
+                        'value': metrics.memory_percent,
+                        'threshold': 80.0
+                    })
+                
+                # Send resource alerts
+                for alert in alerts:
+                    if alert['type'].endswith('_critical'):
+                        await self.alert_manager.send_critical_alert(
+                            f"Resource Critical: {alert['type']}",
+                            alert
+                        )
+                    else:
+                        await self.alert_manager.send_warning_alert(
+                            f"Resource Warning: {alert['type']}",
+                            alert
+                        )
+        
+        # Initialize and start enterprise monitoring
+        monitoring_platform = EnterpriseDockerMonitoringPlatform()
+        await monitoring_platform.initialize_platform()
+        
+        # Monitor production application stacks
+        production_stacks = {
+            'web_stack': ['nginx', 'web_app_1', 'web_app_2'],
+            'api_stack': ['api_gateway', 'api_service_1', 'api_service_2'],
+            'data_stack': ['postgres', 'redis', 'elasticsearch']
+        }
+        
+        # Start monitoring all stacks
+        monitoring_tasks = [
+            asyncio.create_task(
+                monitoring_platform.monitor_application_stack(stack_name, containers)
+            )
+            for stack_name, containers in production_stacks.items()
+        ]
+        
+        await asyncio.gather(*monitoring_tasks)
+        ```
+        
+        **Advanced Analytics and Capacity Planning:**
+        ```python
+        # Advanced Docker monitoring with predictive analytics
+        class PredictiveDockerMonitor:
+            def __init__(self, health_monitor: DockerHealthMonitor):
+                self.health_monitor = health_monitor
+                self.ml_analyzer = MachineLearningAnalyzer()
+                self.capacity_planner = CapacityPlanner()
+                self.anomaly_detector = AnomalyDetector()
+                
+            async def setup_predictive_monitoring(self):
+                # Train ML models on historical data
+                historical_data = await self.health_monitor.get_historical_metrics("30d")
+                await self.ml_analyzer.train_models(historical_data)
+                
+                # Initialize anomaly detection
+                await self.anomaly_detector.initialize(historical_data)
+                
+                # Setup capacity planning baselines
+                await self.capacity_planner.establish_baselines(historical_data)
+                
+            async def run_predictive_analysis(self):
+                while True:
+                    # Collect current metrics
+                    current_metrics = await self.health_monitor.collect_all_metrics()
+                    
+                    # Detect anomalies
+                    anomalies = await self.anomaly_detector.detect_anomalies(current_metrics)
+                    
+                    # Generate predictions
+                    predictions = await self.ml_analyzer.predict_future_usage(
+                        current_metrics, horizon='1h'
+                    )
+                    
+                    # Capacity planning analysis
+                    capacity_analysis = await self.capacity_planner.analyze_capacity(
+                        current_metrics, predictions
+                    )
+                    
+                    # Process anomalies
+                    for anomaly in anomalies:
+                        await self.handle_anomaly(anomaly)
+                    
+                    # Process capacity warnings
+                    if capacity_analysis['scaling_recommended']:
+                        await self.handle_scaling_recommendation(capacity_analysis)
+                    
+                    # Generate optimization recommendations
+                    optimizations = await self.ml_analyzer.recommend_optimizations(
+                        current_metrics, predictions
+                    )
+                    
+                    if optimizations:
+                        await self.send_optimization_recommendations(optimizations)
+                    
+                    await asyncio.sleep(300)  # Run every 5 minutes
+                    
+            async def handle_anomaly(self, anomaly: dict):
+                severity = anomaly['severity']
+                if severity > 0.8:  # High severity
+                    await self.health_monitor.alert_manager.send_critical_alert(
+                        "Container Anomaly Detected",
+                        {
+                            'container': anomaly['container'],
+                            'metric': anomaly['metric'],
+                            'current_value': anomaly['current_value'],
+                            'expected_value': anomaly['expected_value'],
+                            'deviation': anomaly['deviation'],
+                            'confidence': anomaly['confidence']
+                        }
+                    )
+                else:  # Medium severity
+                    await self.health_monitor.alert_manager.send_warning_alert(
+                        "Container Performance Anomaly",
+                        anomaly
+                    )
+        
+        # Setup predictive monitoring
+        predictive_monitor = PredictiveDockerMonitor(health_monitor)
+        await predictive_monitor.setup_predictive_monitoring()
+        
+        # Start predictive analysis
+        predictive_task = asyncio.create_task(
+            predictive_monitor.run_predictive_analysis()
+        )
+        ```
+        
+        **Custom Health Check Implementation:**
+        ```python
+        # Custom health checks for specific applications
+        class CustomHealthChecks:
+            def __init__(self, health_monitor: DockerHealthMonitor):
+                self.health_monitor = health_monitor
+                
+            async def register_custom_checks(self):
+                # Database health check
+                await self.health_monitor.register_custom_health_check(
+                    'database',
+                    self.check_database_health,
+                    interval=60,
+                    timeout=10
+                )
+                
+                # API service health check
+                await self.health_monitor.register_custom_health_check(
+                    'api_service',
+                    self.check_api_service_health,
+                    interval=30,
+                    timeout=5
+                )
+                
+                # Queue health check
+                await self.health_monitor.register_custom_health_check(
+                    'message_queue',
+                    self.check_queue_health,
+                    interval=45,
+                    timeout=15
+                )
+                
+            async def check_database_health(self, container_name: str) -> HealthCheckResult:
+                try:
+                    # Custom database connectivity and performance check
+                    start_time = time.time()
+                    
+                    # Check database connection
+                    connection_ok = await self.test_database_connection(container_name)
+                    if not connection_ok:
+                        return HealthCheckResult(
+                            container_name=container_name,
+                            status=HealthStatus.UNHEALTHY,
+                            timestamp=time.time(),
+                            response_time=time.time() - start_time,
+                            error_message="Database connection failed"
+                        )
+                    
+                    # Check database performance
+                    query_time = await self.test_database_performance(container_name)
+                    if query_time > 5.0:  # 5 second threshold
+                        return HealthCheckResult(
+                            container_name=container_name,
+                            status=HealthStatus.UNHEALTHY,
+                            timestamp=time.time(),
+                            response_time=time.time() - start_time,
+                            error_message=f"Database performance degraded: {query_time}s query time"
+                        )
+                    
+                    # Check database storage
+                    storage_usage = await self.check_database_storage(container_name)
+                    if storage_usage > 90.0:  # 90% threshold
+                        return HealthCheckResult(
+                            container_name=container_name,
+                            status=HealthStatus.UNHEALTHY,
+                            timestamp=time.time(),
+                            response_time=time.time() - start_time,
+                            error_message=f"Database storage critical: {storage_usage}% used"
+                        )
+                    
+                    return HealthCheckResult(
+                        container_name=container_name,
+                        status=HealthStatus.HEALTHY,
+                        timestamp=time.time(),
+                        response_time=time.time() - start_time,
+                        details={
+                            'query_time': query_time,
+                            'storage_usage': storage_usage,
+                            'connection_pool_size': await self.get_connection_pool_size(container_name)
+                        }
+                    )
+                    
+                except Exception as e:
+                    return HealthCheckResult(
+                        container_name=container_name,
+                        status=HealthStatus.UNKNOWN,
+                        timestamp=time.time(),
+                        response_time=time.time() - start_time,
+                        error_message=f"Health check error: {str(e)}"
+                    )
+        
+        # Register custom health checks
+        custom_checks = CustomHealthChecks(health_monitor)
+        await custom_checks.register_custom_checks()
+        ```
+    
+    **Advanced Features:**
+        
+        **Machine Learning Integration:**
+        * Predictive failure detection based on historical patterns
+        * Anomaly detection for unusual resource usage patterns
+        * Automated threshold optimization based on container behavior
+        * Capacity forecasting and scaling recommendations
+        
+        **Container Lifecycle Management:**
+        * Automated container restart and replacement strategies
+        * Blue-green deployment health validation
+        * Rolling update health monitoring and rollback triggers
+        * Container dependency health validation and orchestration
+        
+        **Enterprise Integration:**
+        * Integration with container orchestration platforms (Kubernetes, Docker Swarm)
+        * SIEM integration for security monitoring and compliance
+        * APM integration for application performance correlation
+        * Service mesh integration for distributed tracing
+        
+        **Advanced Analytics:**
+        * Cross-container performance correlation analysis
+        * Resource optimization recommendations and cost analysis
+        * Performance trend analysis and capacity planning
+        * Business impact analysis of container health issues
+    
+    **Production Deployment:**
+        
+        **High Availability:**
+        * Multi-host monitoring with distributed health checks
+        * Monitoring system redundancy and failover capabilities
+        * Cross-datacenter container health validation
+        * Disaster recovery monitoring and alerting
+        
+        **Security & Compliance:**
+        * Secure Docker daemon communication with TLS
+        * Container security scanning and vulnerability monitoring
+        * Compliance reporting and audit trail maintenance
+        * Role-based access control for monitoring operations
+        
+        **Scalability:**
+        * Horizontal scaling for large container environments
+        * Efficient batch processing for high-volume metrics collection
+        * Distributed monitoring architecture with load balancing
+        * Cloud-native deployment with auto-scaling capabilities
+    
+    Attributes:
+        config (DockerHealthMonitorConfig): Health monitor configuration and settings
+        docker_manager (DockerManager): Docker API client for container management operations
+        monitored_containers (Dict): Registry of containers under active monitoring
+        health_check_tasks (Dict): Active health check task management
+        resource_metrics_history (Dict): Historical resource usage data storage
+        alert_manager (AlertManager): Alert processing and notification management
+        logger (Logger): Structured logging system for monitoring operations
+    
+    Note:
+        This monitor requires Docker API access and appropriate permissions for container inspection.
+        Health check intervals should be balanced between monitoring accuracy and resource consumption.
+        Resource monitoring frequency affects system performance and storage requirements.
+        Alert thresholds should be calibrated based on application requirements and infrastructure capacity.
+    
+    Warning:
+        Aggressive health check intervals may impact container performance on resource-constrained systems.
+        Failed health checks may trigger unnecessary container restarts if thresholds are too sensitive.
+        Resource monitoring data collection may consume significant storage in large-scale deployments.
+        Monitoring system failures may impact container health visibility and automated recovery capabilities.
+    
+    See Also:
+        * :class:`DockerManager`: Docker container lifecycle management and operations
+        * :class:`HealthCheckResult`: Health check result data structure and status reporting
+        * :class:`ResourceMetrics`: Container resource utilization metrics and tracking
+        * :mod:`nanobrain.library.infrastructure.monitoring`: Comprehensive monitoring infrastructure
+        * :mod:`nanobrain.library.infrastructure.deployment`: Container deployment and orchestration
     """
     
     # Component configuration schema

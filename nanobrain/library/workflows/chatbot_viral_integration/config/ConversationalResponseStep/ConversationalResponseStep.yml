@@ -12,15 +12,31 @@ config:
   
   # UPDATED: Agent configuration with class+config pattern (was inline)
   conversational_agent:
-    class: "nanobrain.library.agents.specialized.conversational_specialized_agent.ConversationalSpecializedAgent"
+    class: "nanobrain.library.agents.specialized.query_analysis_agent.QueryAnalysisAgent"
     config: "config/ConversationalResponseStep/ConversationalAgent.yml"
 
-# Input/Output data unit specifications (existing)
+# Input/Output data unit specifications (updated to dictionary format)
 input_data_units:
-  - "query_input"
+  query_input:
+    class: "nanobrain.core.data_unit.DataUnitMemory"
+    name: "query_input"
+    description: "User query input for conversational response processing"
+    persistent: false
 
 output_data_units:
-  - "response_data"
+  response_data:
+    class: "nanobrain.core.data_unit.DataUnitMemory"
+    name: "response_data"
+    description: "Processed conversational response output data"
+    persistent: false
+
+# Step-level triggers (required)
+triggers:
+  - trigger_id: "input_data_received"
+    class: "nanobrain.core.trigger.DataUnitChangeTrigger"
+    data_unit: "query_input"
+    event_type: "set"
+    description: "Execute conversational response when query input is received"
 
 # Step timeout and retry settings (existing)
 timeout: 30.0

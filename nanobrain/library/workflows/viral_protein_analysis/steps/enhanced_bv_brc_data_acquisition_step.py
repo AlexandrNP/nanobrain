@@ -55,16 +55,699 @@ class CSVMatchCandidate:
 
 class EnhancedBVBRCDataAcquisitionStep(Step):
     """
-    Enhanced BV-BRC Data Acquisition with Multi-Stage Validation Pipeline
+    Enhanced BV-BRC Data Acquisition Step - Advanced Bioinformatics Data Pipeline with Multi-Stage Validation
+    ====================================================================================================
     
-    CRITICAL RESPONSIBILITY: 100% accurate CSV entry selection with zero contamination
+    The EnhancedBVBRCDataAcquisitionStep provides comprehensive bioinformatics data acquisition from the
+    Bacterial and Viral Bioinformatics Resource Center (BV-BRC), implementing advanced multi-stage validation
+    pipelines, intelligent quality assurance, and contamination prevention protocols. This step ensures
+    scientific accuracy, data integrity, and automated quality control for viral protein analysis workflows.
     
-    Process:
-    1. Multi-strategy CSV search (exact, partial, fuzzy, agent-based)
-    2. Individual match validation using Species Validation Agent
-    3. Taxonomic cross-validation using Taxonomic Verification Agent
-    4. Final contamination prevention check
-    5. Generate comprehensive audit trail
+    **Core Architecture:**
+        The enhanced data acquisition step provides enterprise-grade bioinformatics capabilities:
+        
+        * **Multi-Stage Validation Pipeline**: Comprehensive validation using multiple specialized agents
+        * **Intelligent Data Acquisition**: Smart search strategies with configurable validation protocols
+        * **Contamination Prevention**: Zero-tolerance contamination detection and rejection mechanisms
+        * **Quality Assurance**: Automated quality control with scientific validation standards
+        * **Audit Trail Generation**: Complete traceability and reproducibility documentation
+        * **Framework Integration**: Full integration with NanoBrain's scientific workflow architecture
+    
+    **Data Acquisition Capabilities:**
+        
+        **BV-BRC Database Integration:**
+        * **Comprehensive Data Access**: Full access to BV-BRC viral and bacterial genome databases
+        * **Advanced Search Strategies**: Multi-parameter search with taxonomic filtering
+        * **Metadata Enrichment**: Automatic annotation and metadata enhancement
+        * **Real-Time Synchronization**: Live database updates and version control
+        
+        **Intelligent Query Processing:**
+        * **Natural Language Queries**: Scientific query interpretation and parameter extraction
+        * **Taxonomic Intelligence**: Automated taxonomic classification and validation
+        * **Cross-Reference Validation**: Multi-database cross-validation and verification
+        * **Synonym Resolution**: Automatic species and strain synonym identification
+        
+        **Quality Control Systems:**
+        * **Data Integrity Validation**: Comprehensive sequence and metadata validation
+        * **Contamination Detection**: Advanced contamination screening and prevention
+        * **Duplicate Detection**: Intelligent duplicate identification and removal
+        * **Quality Scoring**: Scientific quality assessment and ranking
+    
+    **Multi-Stage Validation Pipeline:**
+        
+        **Stage 1: Initial Match Discovery:**
+        * **Multi-Strategy Search**: Flexible search algorithms with configurable parameters
+        * **Candidate Identification**: Initial match discovery and preliminary scoring
+        * **Search Term Optimization**: Dynamic search term expansion and refinement
+        * **Result Aggregation**: Comprehensive result collection and organization
+        
+        **Stage 2: Species Validation:**
+        * **Species Validation Agent**: Specialized AI agent for species classification validation
+        * **Taxonomic Accuracy**: ICTV-compliant taxonomic classification verification
+        * **Confidence Scoring**: Machine learning-based confidence assessment
+        * **Cross-Database Validation**: Multi-source species verification
+        
+        **Stage 3: Taxonomic Cross-Validation:**
+        * **Taxonomic Verification Agent**: Advanced taxonomic relationship validation
+        * **Phylogenetic Consistency**: Evolutionary relationship verification
+        * **Classification Accuracy**: Hierarchical classification validation
+        * **Scientific Consensus**: Literature-based validation and verification
+        
+        **Stage 4: Final Contamination Prevention:**
+        * **Zero-Tolerance Screening**: Absolute contamination rejection protocols
+        * **Cross-Contamination Detection**: Advanced contamination pattern recognition
+        * **Quality Gate Enforcement**: Strict quality standards and gate controls
+        * **Final Approval Process**: Multi-criteria approval and acceptance validation
+    
+    **Scientific Workflow Integration:**
+        
+        **Workflow Orchestration:**
+        * **Event-Driven Processing**: Asynchronous processing with intelligent scheduling
+        * **Dependency Management**: Automatic dependency resolution and validation
+        * **Pipeline Coordination**: Multi-step workflow coordination and synchronization
+        * **Progress Monitoring**: Real-time progress tracking and status reporting
+        
+        **Data Flow Management:**
+        * **Type-Safe Data Handling**: Strongly-typed data structures and validation
+        * **Schema Validation**: Automatic data schema validation and enforcement
+        * **Version Control**: Data versioning and change tracking
+        * **Backup and Recovery**: Automatic data backup and recovery mechanisms
+        
+        **Error Handling and Recovery:**
+        * **Graceful Degradation**: Intelligent fallback mechanisms and error recovery
+        * **Retry Logic**: Configurable retry policies with exponential backoff
+        * **Error Classification**: Automatic error categorization and handling
+        * **Recovery Strategies**: Multi-level recovery and continuation strategies
+    
+    **Configuration Architecture:**
+        Comprehensive configuration supports diverse bioinformatics acquisition scenarios:
+        
+        ```yaml
+        # Enhanced BV-BRC Data Acquisition Configuration
+        step_name: "enhanced_bvbrc_data_acquisition"
+        step_type: "bioinformatics_data_acquisition"
+        
+        # Step card for framework integration
+        step_card:
+          name: "enhanced_bvbrc_data_acquisition"
+          description: "Advanced bioinformatics data acquisition with multi-stage validation"
+          version: "1.0.0"
+          category: "bioinformatics"
+          capabilities:
+            - "bvbrc_data_acquisition"
+            - "multi_stage_validation"
+            - "contamination_prevention"
+        
+        # BV-BRC Tool Configuration
+        bvbrc_tool:
+          class: "nanobrain.library.tools.bioinformatics.BVBRCTool"
+          config:
+            cache_enabled: true
+            cache_directory: "bvbrc_cache"
+            timeout: 300
+            retry_attempts: 3
+            
+        # Search Strategy Configuration
+        search_strategies:
+          multi_term_search:
+            enabled: true
+            max_terms: 10
+            term_expansion: true
+            synonym_resolution: true
+            
+          taxonomic_search:
+            enabled: true
+            taxonomic_levels: ["species", "genus", "family"]
+            include_synonyms: true
+            
+          metadata_search:
+            enabled: true
+            fields: ["organism_name", "strain", "isolate"]
+            fuzzy_matching: true
+            
+        # Validation Pipeline Configuration
+        validation_pipeline:
+          species_validation:
+            agent_class: "nanobrain.library.agents.specialized.SpeciesValidationAgent"
+            confidence_threshold: 0.8
+            ictv_compliance: true
+            
+          taxonomic_validation:
+            agent_class: "nanobrain.library.agents.specialized.TaxonomicVerificationAgent"
+            phylogenetic_validation: true
+            consensus_threshold: 0.9
+            
+          contamination_screening:
+            zero_tolerance: true
+            screening_algorithms: ["sequence_similarity", "metadata_inconsistency"]
+            rejection_threshold: 0.01
+            
+        # Quality Control Configuration
+        quality_control:
+          minimum_confidence: 0.85
+          required_metadata_fields: ["organism_name", "genome_id", "taxon_id"]
+          sequence_quality_threshold: 0.9
+          completeness_threshold: 0.95
+          
+        # Data Processing Configuration
+        data_processing:
+          batch_size: 100
+          parallel_processing: true
+          max_concurrent_requests: 5
+          result_caching: true
+          
+        # Audit and Logging Configuration
+        audit_logging:
+          enabled: true
+          detailed_tracking: true
+          validation_logs: true
+          decision_audit: true
+          
+        # Output Configuration
+        output:
+          format: "structured_json"
+          include_validation_metadata: true
+          include_audit_trail: true
+          quality_metrics: true
+        ```
+    
+    **Usage Patterns:**
+        
+        **Basic Enhanced Data Acquisition:**
+        ```python
+        from nanobrain.library.workflows.viral_protein_analysis.steps import EnhancedBVBRCDataAcquisitionStep
+        from nanobrain.core.data_unit import DataUnit
+        
+        # Create enhanced data acquisition step
+        acquisition_step = EnhancedBVBRCDataAcquisitionStep.from_config({
+            'step_name': 'viral_data_acquisition',
+            'bvbrc_tool_config': 'bvbrc_tool_config.yml',
+            'validation_agents': {
+                'species_validator': 'species_validation_config.yml',
+                'taxonomic_validator': 'taxonomic_validation_config.yml'
+            },
+            'quality_thresholds': {
+                'minimum_confidence': 0.85,
+                'contamination_tolerance': 0.0
+            }
+        })
+        
+        # Initialize the step
+        await acquisition_step.initialize()
+        
+        # Create input data unit with search parameters
+        input_data = DataUnit({
+            'target_virus': 'SARS-CoV-2',
+            'search_criteria': {
+                'organism_type': 'virus',
+                'genome_completeness': 'complete',
+                'quality_threshold': 'high'
+            },
+            'analysis_scope': ['spike_protein', 'nucleocapsid_protein']
+        })
+        
+        # Execute enhanced data acquisition
+        result = await acquisition_step.process(input_data)
+        
+        # Access validated results
+        validated_data = result.data['validated_entries']
+        audit_trail = result.data['audit_trail']
+        quality_metrics = result.data['quality_metrics']
+        
+        print(f"Validated Entries: {len(validated_data)}")
+        print(f"Validation Success Rate: {quality_metrics['validation_success_rate']:.2%}")
+        print(f"Contamination Rejections: {quality_metrics['contamination_rejections']}")
+        ```
+        
+        **Advanced Multi-Species Analysis Pipeline:**
+        ```python
+        # Configure for comprehensive multi-species viral analysis
+        class ViralGenomeAcquisitionPipeline:
+            def __init__(self):
+                self.acquisition_step = None
+                self.species_validator = None
+                self.taxonomic_validator = None
+                self.quality_controller = None
+                
+            async def initialize_pipeline(self):
+                # Configure enhanced acquisition step
+                acquisition_config = {
+                    'step_name': 'multi_species_viral_acquisition',
+                    'search_strategies': {
+                        'comprehensive_search': True,
+                        'cross_reference_validation': True,
+                        'phylogenetic_filtering': True
+                    },
+                    'validation_pipeline': {
+                        'species_validation': {
+                            'confidence_threshold': 0.9,
+                            'ictv_compliance': True,
+                            'cross_database_validation': True
+                        },
+                        'taxonomic_validation': {
+                            'phylogenetic_consistency': True,
+                            'evolutionary_distance_check': True,
+                            'consensus_threshold': 0.95
+                        },
+                        'contamination_screening': {
+                            'zero_tolerance': True,
+                            'advanced_algorithms': True,
+                            'multi_level_screening': True
+                        }
+                    }
+                }
+                
+                self.acquisition_step = EnhancedBVBRCDataAcquisitionStep.from_config(
+                    acquisition_config
+                )
+                await self.acquisition_step.initialize()
+                
+            async def acquire_viral_families(self, viral_families: List[str]):
+                acquisition_results = {}
+                
+                for family in viral_families:
+                    try:
+                        # Configure family-specific search parameters
+                        search_input = DataUnit({
+                            'target_family': family,
+                            'search_parameters': {
+                                'taxonomic_level': 'family',
+                                'include_all_species': True,
+                                'quality_requirements': {
+                                    'genome_completeness': 'complete',
+                                    'annotation_quality': 'high',
+                                    'sequence_quality': 'validated'
+                                }
+                            },
+                            'validation_requirements': {
+                                'species_validation': True,
+                                'taxonomic_verification': True,
+                                'contamination_screening': True,
+                                'quality_assessment': True
+                            }
+                        })
+                        
+                        # Execute acquisition with enhanced validation
+                        result = await self.acquisition_step.process(search_input)
+                        
+                        # Process and validate results
+                        family_data = await self.process_family_results(family, result)
+                        acquisition_results[family] = family_data
+                        
+                        # Log acquisition summary
+                        summary = family_data['summary']
+                        print(f"Family {family}:")
+                        print(f"  Species Found: {summary['species_count']}")
+                        print(f"  Validated Entries: {summary['validated_entries']}")
+                        print(f"  Quality Score: {summary['average_quality_score']:.3f}")
+                        print(f"  Contamination Rejections: {summary['contamination_rejections']}")
+                        
+                    except Exception as e:
+                        print(f"Error acquiring data for family {family}: {e}")
+                        acquisition_results[family] = {'error': str(e)}
+                
+                return acquisition_results
+                
+            async def process_family_results(self, family: str, result: DataUnit) -> dict:
+                validated_entries = result.data['validated_entries']
+                audit_trail = result.data['audit_trail']
+                quality_metrics = result.data['quality_metrics']
+                
+                # Analyze species distribution
+                species_analysis = await self.analyze_species_distribution(validated_entries)
+                
+                # Generate quality report
+                quality_report = await self.generate_quality_report(
+                    family, validated_entries, quality_metrics
+                )
+                
+                # Create comprehensive family dataset
+                family_dataset = {
+                    'family_name': family,
+                    'acquisition_timestamp': result.data['acquisition_timestamp'],
+                    'validated_entries': validated_entries,
+                    'species_analysis': species_analysis,
+                    'quality_report': quality_report,
+                    'audit_trail': audit_trail,
+                    'summary': {
+                        'species_count': len(species_analysis['unique_species']),
+                        'validated_entries': len(validated_entries),
+                        'average_quality_score': quality_metrics['average_quality_score'],
+                        'contamination_rejections': quality_metrics['contamination_rejections'],
+                        'validation_success_rate': quality_metrics['validation_success_rate']
+                    }
+                }
+                
+                return family_dataset
+        
+        # Initialize and run viral genome acquisition pipeline
+        pipeline = ViralGenomeAcquisitionPipeline()
+        await pipeline.initialize_pipeline()
+        
+        # Acquire data for multiple viral families
+        viral_families = [
+            'Coronaviridae',
+            'Orthomyxoviridae', 
+            'Paramyxoviridae',
+            'Filoviridae',
+            'Flaviviridae'
+        ]
+        
+        family_results = await pipeline.acquire_viral_families(viral_families)
+        
+        # Generate comprehensive acquisition report
+        acquisition_report = await pipeline.generate_acquisition_report(family_results)
+        print(f"\\nComprehensive Acquisition Report:")
+        print(f"Total Families Processed: {acquisition_report['total_families']}")
+        print(f"Total Species Identified: {acquisition_report['total_species']}")
+        print(f"Total Validated Entries: {acquisition_report['total_validated_entries']}")
+        print(f"Overall Quality Score: {acquisition_report['overall_quality_score']:.3f}")
+        ```
+        
+        **Custom Validation Agent Integration:**
+        ```python
+        # Advanced validation with custom scientific validation agents
+        class CustomValidationPipeline:
+            def __init__(self, acquisition_step: EnhancedBVBRCDataAcquisitionStep):
+                self.acquisition_step = acquisition_step
+                self.custom_validators = {}
+                
+            async def register_custom_validators(self):
+                # Protein-specific validation agent
+                protein_validator_config = {
+                    'agent_name': 'protein_structure_validator',
+                    'validation_criteria': {
+                        'structure_prediction_confidence': 0.8,
+                        'functional_domain_completeness': 0.9,
+                        'homology_validation': True
+                    }
+                }
+                
+                self.custom_validators['protein_validator'] = await self.create_validator(
+                    'ProteinStructureValidationAgent',
+                    protein_validator_config
+                )
+                
+                # Phylogenetic validation agent
+                phylo_validator_config = {
+                    'agent_name': 'phylogenetic_validator',
+                    'validation_criteria': {
+                        'evolutionary_distance_threshold': 0.3,
+                        'monophyly_validation': True,
+                        'bootstrap_support_threshold': 0.7
+                    }
+                }
+                
+                self.custom_validators['phylo_validator'] = await self.create_validator(
+                    'PhylogeneticValidationAgent',
+                    phylo_validator_config
+                )
+                
+                # Literature validation agent
+                literature_validator_config = {
+                    'agent_name': 'literature_validator',
+                    'validation_criteria': {
+                        'publication_recency': 5,  # years
+                        'citation_threshold': 10,
+                        'peer_review_requirement': True
+                    }
+                }
+                
+                self.custom_validators['literature_validator'] = await self.create_validator(
+                    'LiteratureValidationAgent',
+                    literature_validator_config
+                )
+                
+            async def run_custom_validation(self, candidates: List[CSVMatchCandidate]) -> List[CSVMatchCandidate]:
+                validated_candidates = []
+                
+                for candidate in candidates:
+                    # Run protein structure validation
+                    protein_validation = await self.custom_validators['protein_validator'].validate(
+                        candidate.entry_data
+                    )
+                    
+                    # Run phylogenetic validation
+                    phylo_validation = await self.custom_validators['phylo_validator'].validate(
+                        candidate.entry_data
+                    )
+                    
+                    # Run literature validation
+                    literature_validation = await self.custom_validators['literature_validator'].validate(
+                        candidate.entry_data
+                    )
+                    
+                    # Combine validation results
+                    combined_score = (
+                        protein_validation.confidence_score * 0.4 +
+                        phylo_validation.confidence_score * 0.4 +
+                        literature_validation.confidence_score * 0.2
+                    )
+                    
+                    # Create enhanced validation result
+                    enhanced_validation = ValidationResult(
+                        is_valid=(
+                            protein_validation.is_valid and
+                            phylo_validation.is_valid and
+                            literature_validation.is_valid
+                        ),
+                        confidence_score=combined_score,
+                        validation_method='custom_multi_agent',
+                        validation_details={
+                            'protein_validation': asdict(protein_validation),
+                            'phylogenetic_validation': asdict(phylo_validation),
+                            'literature_validation': asdict(literature_validation)
+                        },
+                        contamination_risk=max(
+                            protein_validation.contamination_risk,
+                            phylo_validation.contamination_risk,
+                            literature_validation.contamination_risk
+                        )
+                    )
+                    
+                    # Update candidate with enhanced validation
+                    candidate.final_validation = enhanced_validation
+                    candidate.is_accepted = (
+                        enhanced_validation.is_valid and
+                        enhanced_validation.contamination_risk < 0.01 and
+                        combined_score >= 0.85
+                    )
+                    
+                    if candidate.is_accepted:
+                        validated_candidates.append(candidate)
+                
+                return validated_candidates
+        
+        # Integrate custom validation pipeline
+        custom_pipeline = CustomValidationPipeline(acquisition_step)
+        await custom_pipeline.register_custom_validators()
+        
+        # Use custom validation in acquisition process
+        enhanced_candidates = await custom_pipeline.run_custom_validation(match_candidates)
+        ```
+        
+        **Quality Assurance and Audit Trail:**
+        ```python
+        # Comprehensive quality assurance and audit trail management
+        class QualityAssuranceManager:
+            def __init__(self):
+                self.quality_metrics = {}
+                self.audit_records = []
+                self.quality_thresholds = {}
+                
+            async def configure_quality_standards(self):
+                self.quality_thresholds = {
+                    'minimum_confidence_score': 0.85,
+                    'maximum_contamination_risk': 0.01,
+                    'required_validation_stages': ['species', 'taxonomic', 'contamination'],
+                    'minimum_metadata_completeness': 0.9,
+                    'sequence_quality_threshold': 0.95
+                }
+                
+            async def assess_acquisition_quality(self, acquisition_results: dict) -> dict:
+                quality_assessment = {
+                    'overall_score': 0.0,
+                    'validation_success_rate': 0.0,
+                    'contamination_rejection_rate': 0.0,
+                    'metadata_completeness': 0.0,
+                    'quality_distribution': {},
+                    'recommendations': []
+                }
+                
+                validated_entries = acquisition_results['validated_entries']
+                rejected_entries = acquisition_results['rejected_entries']
+                
+                # Calculate validation success rate
+                total_entries = len(validated_entries) + len(rejected_entries)
+                quality_assessment['validation_success_rate'] = len(validated_entries) / total_entries
+                
+                # Calculate contamination rejection rate
+                contamination_rejections = sum(
+                    1 for entry in rejected_entries
+                    if entry.get('rejection_reason') == 'contamination_risk'
+                )
+                quality_assessment['contamination_rejection_rate'] = contamination_rejections / total_entries
+                
+                # Assess metadata completeness
+                completeness_scores = [
+                    self.calculate_metadata_completeness(entry)
+                    for entry in validated_entries
+                ]
+                quality_assessment['metadata_completeness'] = sum(completeness_scores) / len(completeness_scores)
+                
+                # Calculate overall quality score
+                quality_assessment['overall_score'] = (
+                    quality_assessment['validation_success_rate'] * 0.4 +
+                    quality_assessment['metadata_completeness'] * 0.3 +
+                    (1.0 - quality_assessment['contamination_rejection_rate']) * 0.3
+                )
+                
+                # Generate quality recommendations
+                if quality_assessment['overall_score'] < 0.8:
+                    quality_assessment['recommendations'].append(
+                        "Consider adjusting validation thresholds to improve quality"
+                    )
+                
+                if quality_assessment['contamination_rejection_rate'] > 0.1:
+                    quality_assessment['recommendations'].append(
+                        "High contamination rejection rate detected - review search criteria"
+                    )
+                
+                return quality_assessment
+                
+            async def generate_audit_report(self, acquisition_session: dict) -> dict:
+                audit_report = {
+                    'session_id': acquisition_session['session_id'],
+                    'timestamp': acquisition_session['timestamp'],
+                    'configuration_used': acquisition_session['configuration'],
+                    'search_parameters': acquisition_session['search_parameters'],
+                    'validation_pipeline': acquisition_session['validation_pipeline'],
+                    'results_summary': acquisition_session['results_summary'],
+                    'quality_assessment': acquisition_session['quality_assessment'],
+                    'decision_trail': acquisition_session['decision_trail'],
+                    'reproducibility_info': {
+                        'software_version': acquisition_session['software_version'],
+                        'database_version': acquisition_session['database_version'],
+                        'configuration_hash': acquisition_session['configuration_hash']
+                    }
+                }
+                
+                return audit_report
+        
+        # Initialize quality assurance
+        qa_manager = QualityAssuranceManager()
+        await qa_manager.configure_quality_standards()
+        
+        # Assess acquisition quality
+        quality_assessment = await qa_manager.assess_acquisition_quality(acquisition_results)
+        audit_report = await qa_manager.generate_audit_report(acquisition_session)
+        
+        print(f"Quality Assessment:")
+        print(f"  Overall Score: {quality_assessment['overall_score']:.3f}")
+        print(f"  Validation Success: {quality_assessment['validation_success_rate']:.2%}")
+        print(f"  Metadata Completeness: {quality_assessment['metadata_completeness']:.2%}")
+        print(f"  Recommendations: {quality_assessment['recommendations']}")
+        ```
+    
+    **Advanced Features:**
+        
+        **Machine Learning Integration:**
+        * Intelligent search query optimization based on historical success patterns
+        * Predictive quality scoring using machine learning models
+        * Automated threshold optimization based on validation outcomes
+        * Pattern recognition for contamination detection and prevention
+        
+        **Scientific Validation:**
+        * ICTV taxonomic compliance validation and verification
+        * Phylogenetic consistency checking and evolutionary analysis
+        * Literature-based validation and scientific consensus verification
+        * Cross-database validation and reference checking
+        
+        **Performance Optimization:**
+        * Intelligent caching and result optimization for repeated queries
+        * Parallel processing for large-scale data acquisition
+        * Adaptive timeout and retry mechanisms for network resilience
+        * Memory-efficient processing for large datasets
+        
+        **Integration Capabilities:**
+        * Multi-database integration beyond BV-BRC (NCBI, GenBank, etc.)
+        * Workflow orchestration and pipeline coordination
+        * Real-time monitoring and progress tracking
+        * External tool integration and data enrichment
+    
+    **Scientific Applications:**
+        
+        **Viral Genomics Research:**
+        * Comprehensive viral genome collection and validation
+        * Comparative genomics and evolutionary analysis preparation
+        * Pandemic surveillance and outbreak analysis support
+        * Vaccine development and antiviral research data acquisition
+        
+        **Phylogenetic Analysis:**
+        * Taxonomically validated sequence collection for phylogenetic studies
+        * Evolutionary relationship validation and verification
+        * Species classification and nomenclature validation
+        * Cross-species contamination prevention and quality control
+        
+        **Protein Structure Analysis:**
+        * High-quality protein sequence acquisition and validation
+        * Structure-function relationship analysis preparation
+        * Comparative protein analysis and homology studies
+        * Drug target identification and validation support
+        
+        **Epidemiological Studies:**
+        * Pathogen surveillance and tracking data collection
+        * Outbreak investigation and source identification
+        * Transmission pattern analysis and modeling support
+        * Public health surveillance and monitoring
+    
+    **Production Deployment:**
+        
+        **Scalability:**
+        * Horizontal scaling for large-scale genomic data acquisition
+        * Distributed processing and parallel validation pipelines
+        * Cloud-native deployment with auto-scaling capabilities
+        * High-throughput processing optimization
+        
+        **Reliability:**
+        * Robust error handling and recovery mechanisms
+        * Data integrity validation and corruption prevention
+        * Backup and disaster recovery capabilities
+        * Service health monitoring and alerting
+        
+        **Security & Compliance:**
+        * Secure data transmission and storage protocols
+        * Access control and authentication integration
+        * Audit logging and compliance reporting
+        * Data privacy and protection measures
+    
+    Attributes:
+        bvbrc_tool (BVBRCTool): BV-BRC database interface for data acquisition operations
+        species_validation_agent (Agent): Specialized agent for species classification validation
+        taxonomic_validation_agent (Agent): Advanced agent for taxonomic relationship verification
+        validation_pipeline (Dict): Multi-stage validation pipeline configuration and state
+        quality_controller (QualityController): Quality assurance and metrics management system
+        audit_trail (List): Comprehensive audit trail for reproducibility and validation
+        logger (Logger): Structured logging system for scientific workflow tracking
+    
+    Note:
+        This step requires proper BV-BRC API access and authentication for data acquisition.
+        Validation agents must be properly configured with appropriate confidence thresholds.
+        Quality control parameters should be calibrated based on specific research requirements.
+        Audit trail generation requires sufficient storage for comprehensive tracking.
+    
+    Warning:
+        Zero-tolerance contamination screening may reject valid entries with minimal contamination risk.
+        High validation thresholds may significantly reduce the number of accepted entries.
+        Multi-stage validation requires substantial computational resources and processing time.
+        Network connectivity issues may impact data acquisition and validation performance.
+    
+    See Also:
+        * :class:`BVBRCTool`: BV-BRC database interface and data acquisition tool
+        * :class:`ValidationResult`: Validation result data structure and quality metrics
+        * :class:`CSVMatchCandidate`: Match candidate data structure with validation metadata
+        * :mod:`nanobrain.library.agents.specialized`: Specialized validation agents
+        * :mod:`nanobrain.library.workflows.viral_protein_analysis`: Viral protein analysis workflows
     """
     
     def __init__(self, config, **kwargs):
@@ -78,23 +761,35 @@ class EnhancedBVBRCDataAcquisitionStep(Step):
         """Initialize Enhanced BV-BRC Data Acquisition with validation agents"""
         super()._init_from_config(config, component_config, dependencies)
         
-        # Use tools already loaded from step configuration
-        self.bv_brc_tool = self.step_tools.get('bv_brc_tool')
+        # ENHANCED: Prioritize tools already resolved by ConfigBase._resolve_nested_objects()
+        resolved_tools = getattr(config, '_resolved_tools', {})
+        
+        # Use resolved BV-BRC tool if available
+        self.bv_brc_tool = resolved_tools.get('bv_brc_tool') or self.step_tools.get('bv_brc_tool')
         if not self.bv_brc_tool:
-            # Fallback to legacy creation if not found in step tools
+            # Fallback to legacy creation only if no resolved tool available
             self.bv_brc_tool = self._create_bv_brc_tool(component_config)
         
-        # Initialize species validation agent
-        self.species_validation_agent = self.step_tools.get('species_validation_agent')
+        if self.bv_brc_tool and resolved_tools.get('bv_brc_tool') and self.nb_logger:
+            self.nb_logger.info(f"✅ Using resolved BV-BRC tool from enhanced ConfigBase system")
+        
+        # Use resolved species validation agent if available
+        self.species_validation_agent = resolved_tools.get('species_validation_agent') or self.step_tools.get('species_validation_agent')
         if not self.species_validation_agent:
-            # Fallback to legacy creation if not found in step tools
+            # Fallback to legacy creation only if no resolved agent available
             self.species_validation_agent = self._create_species_validation_agent(component_config)
         
-        # Initialize taxonomic verification agent
-        self.taxonomic_verification_agent = self.step_tools.get('taxonomic_verification_agent')
+        if self.species_validation_agent and resolved_tools.get('species_validation_agent') and self.nb_logger:
+            self.nb_logger.info(f"✅ Using resolved species validation agent from enhanced ConfigBase system")
+        
+        # Use resolved taxonomic verification agent if available
+        self.taxonomic_verification_agent = resolved_tools.get('taxonomic_verification_agent') or self.step_tools.get('taxonomic_verification_agent')
         if not self.taxonomic_verification_agent:
-            # Fallback to legacy creation if not found in step tools
+            # Fallback to legacy creation only if no resolved agent available
             self.taxonomic_verification_agent = self._create_taxonomic_verification_agent(component_config)
+        
+        if self.taxonomic_verification_agent and resolved_tools.get('taxonomic_verification_agent') and self.nb_logger:
+            self.nb_logger.info(f"✅ Using resolved taxonomic verification agent from enhanced ConfigBase system")
         
         # Get contamination tolerance (should be 0.0 for zero tolerance)
         self.contamination_tolerance = component_config.get('contamination_tolerance', 0.0)

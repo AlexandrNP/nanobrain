@@ -1,5 +1,5 @@
 """
-NanoBrain Library - Specialized Agents
+Nanobrain Library - Specialized Agents
 
 Task-specific agents for common operations like code generation and file management.
 
@@ -15,48 +15,40 @@ Available agents:
 - ConversationalFileWriterAgent: Conversational file operations agent
 - ParslAgent: Parsl workflow execution agent
 - ProteinSynonymAgent: Protein synonym identification agent with ICTV standards
+- VirusExtractionAgent: Virus species extraction agent for query classification
+- QueryAnalysisAgent: Query analysis agent for biological context extraction
 
 Factory functions:
-- create_specialized_agent: Create specialized agents of different types
+- create_specialized_agent: Factory for creating specialized agents
 """
 
 from .base import (
-    SpecializedAgentBase,
-    SimpleSpecializedAgent,
-    ConversationalSpecializedAgent,
+    SpecializedAgentBase, SimpleSpecializedAgent, ConversationalSpecializedAgent,
     create_specialized_agent
 )
-from .code_writer import (
-    CodeWriterAgentMixin,
-    CodeWriterAgent,
-    ConversationalCodeWriterAgent
-)
-from .file_writer import (
-    FileWriterAgentMixin,
-    FileWriterAgent,
-    ConversationalFileWriterAgent
-)
+from .code_writer import CodeWriterAgent, ConversationalCodeWriterAgent
+from .file_writer import FileWriterAgent, ConversationalFileWriterAgent
 from .parsl_agent import ParslAgent
 from .protein_synonym_agent import ProteinSynonymAgent
+from .virus_extraction_agent import VirusExtractionAgent
+from .query_analysis_agent import QueryAnalysisAgent
 
 __all__ = [
     # Base classes
     'SpecializedAgentBase',
-    'SimpleSpecializedAgent',
+    'SimpleSpecializedAgent', 
     'ConversationalSpecializedAgent',
-    'create_specialized_agent',
     
-    # Code writer agents
-    'CodeWriterAgentMixin',
+    # Concrete agents
     'CodeWriterAgent',
     'ConversationalCodeWriterAgent',
-    
-    # File writer agents
-    'FileWriterAgentMixin',
     'FileWriterAgent',
-    'ConversationalFileWriterAgent',
-    
-    # Specialized agents
+    'ConversationalFileWriterAgent', 
     'ParslAgent',
     'ProteinSynonymAgent',
+    'VirusExtractionAgent',
+    'QueryAnalysisAgent',
+    
+    # Factory functions
+    'create_specialized_agent'
 ] 

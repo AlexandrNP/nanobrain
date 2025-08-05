@@ -1,0 +1,230 @@
+# Query Analysis Agent Configuration
+# ✅ FRAMEWORK COMPLIANCE: Standalone agent configuration for comprehensive query analysis
+# ✅ NO DEPRECATED DEPENDENCIES: Clean configuration without chatbot_viral_integration references
+# ✅ STANDARDIZED PATHS: Centralized agent configuration location
+
+# Agent identification and metadata
+agent_id: "query_analysis_agent"
+agent_name: "Query Analysis Agent"
+agent_description: "Specialized LLM agent for comprehensive natural language query analysis and intent classification"
+agent_version: "1.2.0"
+
+# Core agent configuration
+agent_type: "specialized_analysis"
+base_class: "nanobrain.library.agents.specialized.query_analysis_agent.QueryAnalysisAgent"
+
+# LLM and processing configuration
+llm_config:
+  model_name: "gpt-3.5-turbo"
+  temperature: 0.2
+  max_tokens: 600
+  response_format: "json"
+
+# Agent-specific behavior configuration
+specialization_config:
+  analysis_domain: "general_query_analysis"
+  analysis_focus: "intent_classification_and_routing"
+  confidence_reporting: true
+  
+  # Query analysis parameters
+  query_analysis:
+    enable_intent_detection: true
+    enable_domain_classification: true
+    enable_complexity_assessment: true
+    enable_context_extraction: true
+    confidence_threshold: 0.3
+    
+  # Output format specification
+  output_format:
+    format_type: "structured_json"
+    required_fields: ["intent", "domain", "complexity", "confidence", "routing_recommendation", "reasoning"]
+    include_metadata: true
+
+# Specialized prompts and instructions
+prompt_templates:
+  system_prompt: |
+    You are a specialized query analysis agent. Your role is to analyze user queries 
+    to determine intent, domain, complexity, and provide routing recommendations.
+    
+    Key responsibilities:
+    1. Classify the intent (analysis, information, conversation, action)
+    2. Determine the domain (scientific, general, technical, conversational)
+    3. Assess query complexity (simple, moderate, complex)
+    4. Recommend routing strategy
+    5. Provide confidence assessment and reasoning
+    
+    Always respond in valid JSON format with the required fields.
+    
+  analysis_prompt: |
+    Analyze the following user query comprehensively:
+    
+    Query: {user_query}
+    
+    Provide analysis for:
+    1. Intent classification (analysis/information/conversation/action)
+    2. Domain identification (scientific/general/technical/conversational)
+    3. Complexity assessment (simple/moderate/complex)
+    4. Routing recommendation (specialized_analysis/conversational/hybrid)
+    5. Confidence level (0.0 to 1.0)
+    6. Detailed reasoning
+    
+    Respond in JSON format:
+    {{
+        "intent": "detected intent",
+        "domain": "detected domain", 
+        "complexity": "assessed complexity",
+        "routing_recommendation": "recommended routing",
+        "confidence": 0.0,
+        "reasoning": "detailed analysis explanation",
+        "additional_context": {{
+            "keywords": ["key", "terms"],
+            "requires_specialized_knowledge": true/false,
+            "expected_response_type": "description"
+        }}
+    }}
+
+# Agent capabilities and tools
+capabilities:
+  - "intent_classification"
+  - "domain_identification"
+  - "complexity_assessment"
+  - "routing_recommendation"
+  - "context_extraction"
+  - "confidence_assessment"
+  - "keyword_identification"
+
+# Performance and optimization settings
+performance_config:
+  enable_caching: true
+  cache_ttl_seconds: 1800
+  enable_parallel_processing: false
+  timeout_seconds: 20
+  retry_attempts: 2
+
+# Validation and quality control
+validation_config:
+  enable_response_validation: true
+  require_json_format: true
+  validate_confidence_range: true
+  validate_required_fields: true
+  minimum_reasoning_length: 15
+  
+# Error handling and fallback behavior
+error_handling:
+  enable_graceful_degradation: true
+  fallback_intent: "conversation"
+  fallback_domain: "general"
+  fallback_complexity: "moderate"
+  fallback_routing: "conversational"
+  fallback_confidence: 0.1
+  log_parsing_errors: true
+  
+# Classification taxonomies
+classification_taxonomies:
+  intent_types:
+    - "analysis"          # User wants data analysis or computation
+    - "information"       # User seeks information or explanation
+    - "conversation"      # User wants conversational interaction
+    - "action"           # User wants something done
+    - "clarification"    # User needs clarification
+    
+  domain_types:
+    - "scientific"       # Scientific/technical domain
+    - "bioinformatics"   # Bioinformatics specific
+    - "virology"         # Virus-related topics
+    - "general"          # General knowledge
+    - "technical"        # Technical but not scientific
+    - "conversational"   # General conversation
+    
+  complexity_levels:
+    - "simple"           # Straightforward query
+    - "moderate"         # Standard complexity
+    - "complex"          # Multi-step or specialized
+    - "expert"           # Requires expert knowledge
+    
+  routing_strategies:
+    - "specialized_analysis"  # Route to analysis workflow
+    - "conversational"       # Route to conversation workflow
+    - "hybrid"              # May need both
+    - "fallback"            # Use fallback handling
+
+# Domain-specific keywords and patterns
+domain_patterns:
+  scientific_keywords:
+    - "analysis"
+    - "protein"
+    - "sequence"
+    - "structure"
+    - "data"
+    - "research"
+    - "study"
+    
+  bioinformatics_keywords:
+    - "pssm"
+    - "alignment"
+    - "genome"
+    - "phylogeny"
+    - "annotation"
+    - "blast"
+    
+  conversational_keywords:
+    - "what"
+    - "how"
+    - "why"
+    - "explain"
+    - "tell me"
+    - "describe"
+    
+  action_keywords:
+    - "create"
+    - "generate"
+    - "make"
+    - "build"
+    - "analyze"
+    - "process"
+
+# Integration and compatibility
+framework_integration:
+  component_type: "specialized_agent"
+  required_interfaces: ["query_analysis", "json_output", "intent_classification"]
+  optional_interfaces: ["caching", "monitoring", "domain_classification"]
+  
+# Logging and debugging
+logging_config:
+  log_level: "INFO"
+  log_requests: true
+  log_responses: false  # Set to true for debugging
+  log_performance_metrics: true
+  log_classification_results: true
+  enable_detailed_tracing: false
+
+# Quality assurance and testing
+testing_config:
+  enable_self_testing: false
+  test_queries:
+    - "What is the protein structure of Chikungunya virus?"
+    - "How do viruses cause disease?"
+    - "Create a PSSM matrix for Eastern Equine Encephalitis virus"
+    - "Tell me about alphavirus evolution"
+    - "Analyze the phylogeny of togaviruses"
+    
+  expected_classifications:
+    scientific_query_accuracy: 0.9
+    intent_classification_accuracy: 0.85
+    domain_classification_accuracy: 0.9
+    json_format_compliance: 1.0
+
+# Advanced analysis features
+advanced_features:
+  enable_sentiment_analysis: false
+  enable_urgency_detection: false
+  enable_user_expertise_estimation: false
+  enable_query_expansion_suggestions: true
+  enable_related_topic_identification: true
+  
+# Context understanding
+context_config:
+  consider_conversation_history: false
+  extract_named_entities: true
+  identify_relationships: true
+  assess_information_density: true 

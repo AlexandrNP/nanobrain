@@ -1,0 +1,74 @@
+# Comprehensive Sphinx configuration for full NanoBrain framework documentation
+project: "NanoBrain Framework"
+version: "2.0.0"
+author: "NanoBrain Team"
+copyright: "2024, NanoBrain Team"
+
+# Extensions for full documentation (excluding MyST for now)
+extensions:
+  - "sphinx.ext.autodoc"
+  - "sphinx.ext.autosummary" 
+  - "sphinx.ext.viewcode"
+  - "sphinx.ext.napoleon"
+  - "sphinx.ext.intersphinx"
+  - "sphinx.ext.todo"
+  - "sphinx.ext.coverage"
+  - "sphinx.ext.inheritance_diagram"
+
+# Enhanced autodoc settings for comprehensive coverage
+autodoc:
+  default_options:
+    members: true
+    undoc-members: true
+    show-inheritance: true
+    special-members: "__init__"
+    private-members: false
+    exclude-members: "__weakref__"
+  
+  typehints: "description"
+  member_order: "bysource"
+  mock_imports: []
+
+# Autosummary settings for comprehensive module discovery
+autosummary:
+  generate: true
+  recursive: true
+  imported_members: true
+
+# Theme settings
+html_theme: "sphinx_rtd_theme"
+html_theme_options:
+  display_version: true
+  collapse_navigation: false
+  sticky_navigation: true
+  navigation_depth: 5
+  includehidden: true
+  titles_only: false
+
+# Enhanced paths and patterns
+source_dir: "source"
+build_dir: "build"
+exclude_patterns: 
+  - "_build"
+  - "Thumbs.db" 
+  - ".DS_Store"
+  - "**/__pycache__"
+  - "**/.*"
+  - "build"
+
+# Comprehensive intersphinx mapping
+intersphinx_mapping:
+  python: ["https://docs.python.org/3", null]
+  pydantic: ["https://docs.pydantic.dev/", null]
+  sphinx: ["https://www.sphinx-doc.org/en/master/", null]
+  numpy: ["https://numpy.org/doc/stable/", null]
+
+# Additional settings for comprehensive documentation
+add_module_names: true
+show_authors: true
+todo_include_todos: true
+coverage_show_missing_items: true
+
+# High-level documentation integration (simplified to RST summaries)
+high_level_docs:
+  - "architecture_overview" 

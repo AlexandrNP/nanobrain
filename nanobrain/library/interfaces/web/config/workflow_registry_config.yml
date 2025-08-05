@@ -1,0 +1,35 @@
+# WorkflowRegistry Configuration
+# Universal workflow discovery and registration configuration
+#
+# Author: NanoBrain Development Team
+# Date: January 2025
+# Version: 1.0.0
+
+# Discovery configuration
+auto_discovery: true
+discovery_paths:
+  - "nanobrain.library.workflows"
+
+# Validation configuration  
+validation_enabled: false  # Disabled for testing/development
+strict_validation: false
+validation_timeout: 30.0
+
+# Registration configuration
+auto_registration: true
+require_natural_language_input: true
+minimum_compliance_score: 0.7
+
+# Capability detection configuration
+capability_detection:
+  analyze_input_data_units: true
+  analyze_output_data_units: true
+  detect_interaction_patterns: true
+  extract_domain_keywords: true
+
+# Registry maintenance configuration
+registry_maintenance:
+  enable_health_checks: true
+  health_check_interval: 3600  # 1 hour
+  cleanup_invalid_entries: true
+  max_registry_size: 1000 

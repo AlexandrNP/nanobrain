@@ -9,6 +9,7 @@ Enhanced from_config pattern system providing:
 """
 
 from .config_base import ConfigBase
+from .yaml_config import YAMLConfig, YAMLWorkflowConfig as WorkflowConfig
 # Recursive resolution integrated into ConfigBase.from_config()
 # Schema management integrated into ConfigBase
 
@@ -25,6 +26,8 @@ from .config_base import ConfigBase
 # Export unified interface
 __all__ = [
     'ConfigBase',
+    'YAMLConfig',
+    'WorkflowConfig',
     # Recursive resolution integrated into ConfigBase
     # Schema management integrated into ConfigBase
 ]

@@ -43,7 +43,19 @@ class AnnotationMappingStep(Step):
                          dependencies: Dict[str, Any]) -> None:
         """Initialize AnnotationMappingStep with LLM agent and cache"""
         super()._init_from_config(config, component_config, dependencies)
-        self._create_synonym_agent()
+        
+        # ENHANCED: Check if agents were already resolved by ConfigBase._resolve_nested_objects()
+        resolved_tools = getattr(config, '_resolved_tools', {})
+        
+        # Use resolved synonym agent if available
+        self.synonym_agent = resolved_tools.get('synonym_detection_agent') or self.step_tools.get('synonym_detection_agent')
+        if self.synonym_agent and resolved_tools.get('synonym_detection_agent') and hasattr(self, 'nb_logger') and self.nb_logger:
+            self.nb_logger.info(f"✅ Using resolved synonym detection agent from enhanced ConfigBase system")
+        
+        # Only create agent using legacy method if no resolved agent available
+        if not self.synonym_agent:
+            self._create_synonym_agent()
+        
         self._create_cache_manager()
     
     def _create_synonym_agent(self) -> None:
@@ -139,13 +151,46 @@ Always prioritize ICTV standard nomenclature when available.'''),
     def _create_cache_manager(self) -> None:
         """Create cache manager for synonym resolution data"""
         try:
-            from nanobrain.library.workflows.chatbot_viral_integration.steps.virus_name_resolution_step import CacheManager
+            # Use simple file-based cache implementation instead of importing from other workflows
+            import os
+            import json
+            from datetime import datetime, timedelta
             
             cache_config_dict = getattr(self.config, 'cache_config', {})
-            self.cache_manager = CacheManager.from_config(cache_config_dict)
+            cache_directory = cache_config_dict.get('cache_directory', 'data/virus_annotation_cache')
+            
+            # Create simple cache manager
+            class SimpleCacheManager:
+                def __init__(self, cache_directory: str):
+                    self.cache_directory = Path(cache_directory)
+                    self.cache_directory.mkdir(parents=True, exist_ok=True)
+                    
+                async def get(self, key: str) -> dict:
+                    """Get cached value by key"""
+                    cache_file = self.cache_directory / f"{key}.json"
+                    if cache_file.exists():
+                        with open(cache_file, 'r') as f:
+                            data = json.load(f)
+                            # Check if cache is still valid (24 hours)
+                            cached_time = datetime.fromisoformat(data.get('timestamp', '2020-01-01'))
+                            if datetime.now() - cached_time < timedelta(hours=24):
+                                return data.get('value', {})
+                    return {}
+                    
+                async def set(self, key: str, value: dict) -> None:
+                    """Set cached value by key"""
+                    cache_file = self.cache_directory / f"{key}.json"
+                    data = {
+                        'value': value,
+                        'timestamp': datetime.now().isoformat()
+                    }
+                    with open(cache_file, 'w') as f:
+                        json.dump(data, f, indent=2)
+            
+            self.cache_manager = SimpleCacheManager(cache_directory)
             
             if hasattr(self, 'nb_logger') and self.nb_logger:
-                self.nb_logger.info(f"✅ Created cache manager: {self.cache_manager.cache_directory}")
+                self.nb_logger.info(f"✅ Created simple cache manager: {cache_directory}")
             
         except Exception as e:
             if hasattr(self, 'nb_logger') and self.nb_logger:

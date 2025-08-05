@@ -5,7 +5,7 @@ Specialized agent for identifying protein product synonyms with dynamic ICTV sta
 Uses the core PromptTemplateManager for all prompt handling.
 """
 
-from typing import Dict, List, Tuple, Any, Optional, Set
+from typing import Dict, List, Tuple, Any, Optional, Set, Union
 from pathlib import Path
 import json
 import hashlib
@@ -20,10 +20,447 @@ logger = logging.getLogger(__name__)
 
 class ProteinSynonymAgent(SimpleSpecializedAgent):
     """
-    Specialized agent for identifying protein product synonyms using LLM.
+    Protein Synonym Identification Agent - Intelligent Protein Nomenclature Analysis with ICTV Standards Integration
+    ================================================================================================================
     
-    This agent analyzes protein product names and identifies synonyms
-    with confidence scoring, using dynamically inferred ICTV nomenclature.
+    The ProteinSynonymAgent provides specialized capabilities for identifying and analyzing protein product synonyms
+    in viral and biological systems, utilizing dynamic ICTV (International Committee on Taxonomy of Viruses) standards
+    and advanced natural language processing. This agent intelligently groups related protein names, resolves naming
+    inconsistencies, and provides confidence-scored synonym relationships for bioinformatics workflows.
+    
+    **Core Architecture:**
+        The protein synonym agent provides enterprise-grade protein nomenclature analysis:
+        
+        * **Synonym Identification**: Advanced protein name similarity analysis and grouping
+        * **ICTV Standards Integration**: Dynamic integration with official viral protein nomenclature
+        * **Confidence Scoring**: Statistical confidence assessment for synonym relationships
+        * **Caching System**: Intelligent caching of ICTV standards and analysis results
+        * **Batch Processing**: Efficient processing of large protein dataset collections
+        * **Framework Integration**: Full integration with NanoBrain's specialized agent architecture
+    
+    **Protein Nomenclature Capabilities:**
+        
+        **Synonym Detection and Analysis:**
+        * Advanced string similarity algorithms for protein name matching
+        * Semantic analysis of protein function and domain descriptions
+        * Cross-reference analysis with established protein databases
+        * Contextual analysis considering viral species and protein families
+        
+        **ICTV Standards Integration:**
+        * Dynamic retrieval and caching of current ICTV nomenclature standards
+        * Official viral protein naming convention compliance
+        * Automated updates of nomenclature standards with cache management
+        * Historical naming convention tracking and evolution analysis
+        
+        **Confidence Assessment:**
+        * Statistical confidence scoring for each synonym relationship
+        * Multi-factor analysis including sequence similarity and functional annotation
+        * Threshold-based filtering for high-confidence synonym groups
+        * Uncertainty quantification and reliability metrics
+        
+        **Database Integration:**
+        * Cross-referencing with UniProt, NCBI, and viral protein databases
+        * Integration with structural databases (PDB) for domain-based analysis
+        * Functional annotation databases for context-aware synonym detection
+        * Literature-based synonym validation through PubMed integration
+    
+    **Bioinformatics Applications:**
+        
+        **Viral Protein Analysis:**
+        * Comprehensive viral proteome synonym identification and standardization
+        * Protein family classification and nomenclature harmonization
+        * Cross-species viral protein comparison and ortholog identification
+        * Evolutionary analysis through protein naming pattern recognition
+        
+        **Database Curation:**
+        * Automated protein database cleanup and standardization
+        * Duplicate entry identification and consolidation
+        * Quality control for protein annotation pipelines
+        * Cross-database synonym mapping and harmonization
+        
+        **Research Support:**
+        * Literature mining support for protein nomenclature standardization
+        * Research publication preparation with standardized protein names
+        * Grant proposal support with consistent protein terminology
+        * Collaborative research coordination through naming standardization
+        
+        **Functional Analysis:**
+        * Protein function prediction through synonym pattern analysis
+        * Domain architecture inference from naming conventions
+        * Pathway analysis with standardized protein nomenclature
+        * Interaction network construction with consistent naming
+    
+    **ICTV Standards Integration:**
+        
+        **Dynamic Standards Retrieval:**
+        * Automated retrieval of current ICTV taxonomy and nomenclature standards
+        * Real-time updates to viral protein naming conventions
+        * Version control and change tracking for nomenclature updates
+        * Compliance verification with latest taxonomic classifications
+        
+        **Caching and Performance:**
+        * Intelligent caching of ICTV standards with configurable TTL
+        * Offline analysis capabilities with cached standards
+        * Incremental updates and differential standard synchronization
+        * Performance optimization for large-scale analysis workflows
+        
+        **Standards Compliance:**
+        * Validation of protein names against official ICTV nomenclature
+        * Automatic correction suggestions for non-compliant names
+        * Historical naming convention tracking and migration support
+        * Cross-reference with taxonomic hierarchy and viral classification
+    
+    **Configuration Architecture:**
+        Comprehensive configuration supports diverse protein analysis workflows:
+        
+        ```yaml
+        # Protein Synonym Agent Configuration
+        agent_name: "protein_synonym_agent"
+        agent_type: "specialized"
+        
+        # Agent card for framework integration
+        agent_card:
+          name: "protein_synonym_agent"
+          description: "Protein synonym identification with ICTV standards"
+          version: "1.0.0"
+          category: "bioinformatics"
+          capabilities:
+            - "protein_nomenclature"
+            - "synonym_detection"
+            - "ictv_compliance"
+        
+        # LLM Configuration
+        llm_config:
+          model: "gpt-4"
+          temperature: 0.1        # Low temperature for consistent analysis
+          max_tokens: 2000
+          
+        # Synonym Analysis Configuration
+        min_confidence_threshold: 0.8    # Minimum confidence for synonym relationships
+        max_products_per_request: 200    # Maximum proteins per batch
+        use_ictv_standards: true         # Enable ICTV standards integration
+        
+        # ICTV Standards Configuration
+        cache_dir: "data/ictv_cache"     # ICTV standards cache directory
+        ictv_cache_ttl_days: 30          # Cache time-to-live in days
+        auto_update_standards: true      # Automatic standards updates
+        
+        # Analysis Parameters
+        similarity_algorithms:
+          - "levenshtein"          # Edit distance similarity
+          - "jaro_winkler"         # String similarity metric
+          - "semantic"             # Semantic similarity via embeddings
+          
+        confidence_weights:
+          string_similarity: 0.4    # Weight for string-based similarity
+          semantic_similarity: 0.3  # Weight for semantic similarity
+          database_validation: 0.3  # Weight for database cross-reference
+        
+        # Processing Configuration
+        batch_size: 50              # Batch size for large datasets
+        parallel_processing: true   # Enable parallel analysis
+        result_caching: true        # Cache analysis results
+        ```
+    
+    **Usage Patterns:**
+        
+        **Basic Protein Synonym Identification:**
+        ```python
+        from nanobrain.library.agents.specialized import ProteinSynonymAgent
+        
+        # Create protein synonym agent with configuration
+        agent_config = AgentConfig.from_config('config/protein_synonym_config.yml')
+        synonym_agent = ProteinSynonymAgent(agent_config)
+        
+        # Define protein products for analysis
+        protein_products = [
+            "spike protein",
+            "S protein", 
+            "surface glycoprotein",
+            "spike glycoprotein",
+            "envelope protein",
+            "E protein",
+            "small envelope protein"
+        ]
+        
+        # Virus context information
+        virus_info = {
+            'species': 'SARS-CoV-2',
+            'family': 'Coronaviridae',
+            'genus': 'Betacoronavirus'
+        }
+        
+        # Identify synonym groups
+        synonym_groups = await synonym_agent.identify_synonyms(
+            protein_products, 
+            virus_info
+        )
+        
+        # Analyze results
+        for group in synonym_groups:
+            print(f"Synonym Group (confidence: {group['confidence']:.3f}):")
+            for protein in group['proteins']:
+                print(f"  - {protein}")
+            print()
+        ```
+        
+        **ICTV Standards Compliance Analysis:**
+        ```python
+        # Configure agent for ICTV standards compliance
+        ictv_config = {
+            'use_ictv_standards': True,
+            'min_confidence_threshold': 0.9,  # Higher threshold for standards
+            'auto_update_standards': True,
+            'cache_dir': 'data/ictv_cache'
+        }
+        
+        agent_config = AgentConfig.from_config(ictv_config)
+        synonym_agent = ProteinSynonymAgent(agent_config)
+        
+        # Analyze protein names for ICTV compliance
+        viral_proteins = [
+            "nucleocapsid protein",
+            "N protein",
+            "nucleoprotein", 
+            "nuclear protein",
+            "nucleocapsid phosphoprotein"
+        ]
+        
+        virus_context = {
+            'species': 'Zika virus',
+            'family': 'Flaviviridae',
+            'genus': 'Flavivirus'
+        }
+        
+        # Get ICTV-compliant synonym groups
+        compliant_groups = await synonym_agent.identify_synonyms(
+            viral_proteins,
+            virus_context
+        )
+        
+        # Check ICTV compliance
+        for group in compliant_groups:
+            ictv_compliant = group.get('ictv_compliant', False)
+            official_name = group.get('ictv_official_name', 'Unknown')
+            
+            print(f"ICTV Compliant: {ictv_compliant}")
+            print(f"Official Name: {official_name}")
+            print(f"Synonyms: {', '.join(group['proteins'])}")
+            print(f"Confidence: {group['confidence']:.3f}")
+            print("---")
+        ```
+        
+        **Large-Scale Protein Database Analysis:**
+        ```python
+        # Configure for large-scale analysis
+        batch_config = {
+            'max_products_per_request': 500,
+            'batch_size': 100,
+            'parallel_processing': True,
+            'result_caching': True,
+            'min_confidence_threshold': 0.7
+        }
+        
+        agent_config = AgentConfig.from_config(batch_config)
+        synonym_agent = ProteinSynonymAgent(agent_config)
+        
+        # Load large protein dataset
+        protein_database = load_viral_protein_database()  # Hypothetical function
+        
+        # Process in batches
+        all_synonym_groups = []
+        
+        for virus_family, proteins in protein_database.items():
+            family_info = {
+                'family': virus_family,
+                'analysis_scope': 'family_wide'
+            }
+            
+            # Batch process proteins within family
+            family_groups = await synonym_agent.batch_identify_synonyms(
+                proteins,
+                family_info
+            )
+            
+            all_synonym_groups.extend(family_groups)
+            
+            print(f"Processed {len(proteins)} proteins for {virus_family}")
+            print(f"Found {len(family_groups)} synonym groups")
+        
+        # Generate comprehensive report
+        analysis_report = {
+            'total_proteins_analyzed': sum(len(proteins) for proteins in protein_database.values()),
+            'total_synonym_groups': len(all_synonym_groups),
+            'high_confidence_groups': len([g for g in all_synonym_groups if g['confidence'] > 0.9]),
+            'families_analyzed': list(protein_database.keys())
+        }
+        
+        print(f"Analysis Summary: {analysis_report}")
+        ```
+        
+        **Research Pipeline Integration:**
+        ```python
+        # Integrate with research analysis pipeline
+        research_config = {
+            'include_literature_validation': True,
+            'cross_reference_databases': ['UniProt', 'NCBI', 'PDB'],
+            'generate_standardization_report': True,
+            'export_formats': ['json', 'csv', 'excel']
+        }
+        
+        agent_config = AgentConfig.from_config(research_config)
+        synonym_agent = ProteinSynonymAgent(agent_config)
+        
+        # Research-focused analysis
+        research_proteins = extract_proteins_from_literature()  # Hypothetical
+        research_context = {
+            'research_focus': 'vaccine_development',
+            'target_viruses': ['SARS-CoV-2', 'Influenza A', 'HIV-1'],
+            'analysis_date': '2024-01-01'
+        }
+        
+        # Comprehensive research analysis
+        research_results = await synonym_agent.research_analysis(
+            research_proteins,
+            research_context
+        )
+        
+        # Generate research report
+        standardization_report = {
+            'protein_standardization': research_results['standardized_names'],
+            'confidence_statistics': research_results['confidence_stats'],
+            'database_cross_references': research_results['database_refs'],
+            'literature_validation': research_results['literature_support'],
+            'recommendations': research_results['standardization_recommendations']
+        }
+        
+        # Export for publication
+        await synonym_agent.export_research_report(
+            standardization_report,
+            format='publication_ready'
+        )
+        ```
+        
+        **Quality Control and Validation:**
+        ```python
+        # Configure for quality control analysis
+        qc_config = {
+            'validation_mode': 'strict',
+            'require_database_validation': True,
+            'min_confidence_threshold': 0.95,
+            'enable_manual_review_flagging': True
+        }
+        
+        agent_config = AgentConfig.from_config(qc_config)
+        synonym_agent = ProteinSynonymAgent(agent_config)
+        
+        # Quality control analysis
+        protein_dataset = load_curated_protein_dataset()
+        
+        # Validate existing synonym relationships
+        validation_results = await synonym_agent.validate_existing_synonyms(
+            protein_dataset
+        )
+        
+        # Identify quality issues
+        quality_issues = {
+            'low_confidence_groups': validation_results['low_confidence'],
+            'conflicting_assignments': validation_results['conflicts'],
+            'missing_standards_compliance': validation_results['non_compliant'],
+            'manual_review_required': validation_results['flagged']
+        }
+        
+        # Generate quality control report
+        qc_report = {
+            'validation_summary': validation_results['summary'],
+            'quality_metrics': validation_results['metrics'],
+            'improvement_recommendations': validation_results['recommendations'],
+            'flagged_entries': quality_issues
+        }
+        
+        print(f"Quality Control Summary:")
+        print(f"  - Total proteins validated: {qc_report['validation_summary']['total']}")
+        print(f"  - High quality groups: {qc_report['validation_summary']['high_quality']}")
+        print(f"  - Manual review needed: {len(qc_report['flagged_entries']['manual_review_required'])}")
+        ```
+    
+    **Advanced Features:**
+        
+        **Machine Learning Integration:**
+        * Neural network-based protein name similarity assessment
+        * Embedding-based semantic similarity for complex nomenclature
+        * Active learning for improving synonym detection accuracy
+        * Transfer learning from established protein classification systems
+        
+        **Cross-Database Integration:**
+        * Multi-database cross-referencing for validation
+        * Automated database synchronization and updates
+        * Conflict resolution between different naming standards
+        * Comprehensive protein identifier mapping and translation
+        
+        **Collaborative Features:**
+        * Multi-user synonym group review and validation
+        * Research team coordination for nomenclature standardization
+        * Version control for evolving synonym relationships
+        * Integration with collaborative research platforms
+        
+        **Performance Optimization:**
+        * Parallel processing for large-scale protein datasets
+        * Intelligent caching and memoization for repeated analyses
+        * Batch processing optimization for computational efficiency
+        * Streaming analysis for real-time protein name standardization
+    
+    **Research Applications:**
+        
+        **Viral Proteomics:**
+        * Comprehensive viral proteome analysis and standardization
+        * Cross-species viral protein comparison and evolution studies
+        * Protein family classification and functional annotation
+        * Pandemic preparedness through rapid protein identification
+        
+        **Database Curation:**
+        * Large-scale protein database cleanup and standardization
+        * Quality control for public and private protein repositories
+        * Cross-database integration and harmonization projects
+        * Automated annotation pipeline development and validation
+        
+        **Literature Analysis:**
+        * Scientific literature protein name standardization
+        * Publication preparation with consistent terminology
+        * Systematic review support with harmonized protein names
+        * Research trend analysis through protein nomenclature patterns
+        
+        **Drug Discovery:**
+        * Target protein identification and validation
+        * Drug-protein interaction database standardization
+        * Pharmacovigilance with consistent protein terminology
+        * Clinical trial data harmonization and analysis
+    
+    Attributes:
+        min_confidence_threshold (float): Minimum confidence score for synonym relationships
+        max_products_per_request (int): Maximum proteins to process in a single request
+        use_ictv_standards (bool): Whether to integrate ICTV nomenclature standards
+        ictv_cache_dir (Path): Directory for caching ICTV standards data
+        ictv_cache_ttl_days (int): Time-to-live for ICTV cache entries in days
+        prompt_manager (PromptTemplateManager): Template manager for LLM interactions
+    
+    Note:
+        This agent requires access to ICTV standards and protein databases for optimal
+        performance. Internet connectivity is needed for dynamic standards updates and
+        database cross-referencing. The caching system improves performance for repeated
+        analyses and enables offline operation with cached data.
+    
+    Warning:
+        Protein synonym identification involves computational complexity that scales with
+        dataset size. Large protein collections may require significant processing time
+        and memory. Confidence thresholds should be carefully calibrated based on specific
+        use case requirements and tolerance for false positives/negatives.
+    
+    See Also:
+        * :class:`SimpleSpecializedAgent`: Base specialized agent implementation
+        * :class:`AgentConfig`: Agent configuration schema
+        * :mod:`nanobrain.library.agents.specialized`: Specialized agent implementations
+        * :mod:`nanobrain.core.agent`: Core agent framework
     """
     
     def __init__(self, config: AgentConfig, **kwargs):
@@ -43,35 +480,6 @@ class ProteinSynonymAgent(SimpleSpecializedAgent):
         # Verify prompt manager is available
         if not self.prompt_manager:
             logger.warning("No prompt templates configured for ProteinSynonymAgent")
-    
-    @classmethod
-    def from_config(cls, config: AgentConfig, **kwargs) -> 'ProteinSynonymAgent':
-        """Create agent from configuration following mandatory from_config pattern."""
-        logger.info(f"Creating {cls.__name__} from configuration")
-        
-        # Convert dictionary to AgentConfig if needed
-        if isinstance(config, dict):
-            logger.debug(f"Converting dictionary config to AgentConfig for {cls.__name__}")
-            from nanobrain.core.agent import AgentConfig
-            config = AgentConfig(**config)
-        
-        # Step 1: Validate configuration schema
-        cls.validate_config_schema(config)
-        
-        # Step 2: Extract component-specific configuration  
-        component_config = cls.extract_component_config(config)
-        
-        # Step 3: Resolve dependencies
-        dependencies = cls.resolve_dependencies(component_config, **kwargs)
-        
-        # Step 4: Create instance
-        instance = cls.create_instance(config, component_config, dependencies)
-        
-        # Step 5: Post-creation initialization
-        instance._post_config_initialization()
-        
-        logger.info(f"Successfully created {cls.__name__}")
-        return instance
     
     async def _process_specialized_request(self, input_text: str, **kwargs) -> Optional[str]:
         """

@@ -15,7 +15,6 @@ import os
 
 from nanobrain.core.workflow import Workflow, WorkflowConfig
 from nanobrain.core.logging_system import get_logger
-from nanobrain.core.data_unit import create_data_unit
 
 
 class AlphavirusWorkflow(Workflow):
@@ -41,22 +40,42 @@ class AlphavirusWorkflow(Workflow):
         self.input_data_unit = None
         self.output_data_unit = None
         
-        # Initialize workflow input/output data units
+        # Initialize workflow input/output data units using proper from_config pattern
         if hasattr(config, 'input_data_units') and config.input_data_units:
             input_configs = config.input_data_units
             if 'workflow_input' in input_configs:
-                from nanobrain.core.data_unit import DataUnitConfig, create_data_unit
-                data_unit_config = DataUnitConfig(**input_configs['workflow_input'])
-                class_path = data_unit_config.class_path
-                self.input_data_unit = create_data_unit(class_path, data_unit_config)
+                unit_config = input_configs['workflow_input']
+                # Use proper from_config pattern - import class and call its from_config method
+                class_path = unit_config.get('class', 'nanobrain.core.data_unit.DataUnitMemory')
+                module_path, class_name = class_path.rsplit('.', 1)
+                import importlib
+                module = importlib.import_module(module_path)
+                data_unit_class = getattr(module, class_name)
+                
+                # Ensure config has class field for proper data unit creation
+                enhanced_config = unit_config.copy()
+                if 'class' not in enhanced_config:
+                    enhanced_config['class'] = class_path
+                
+                self.input_data_unit = data_unit_class.from_config(enhanced_config)
         
         if hasattr(config, 'output_data_units') and config.output_data_units:
             output_configs = config.output_data_units
             if 'workflow_output' in output_configs:
-                from nanobrain.core.data_unit import DataUnitConfig, create_data_unit
-                data_unit_config = DataUnitConfig(**output_configs['workflow_output'])
-                class_path = data_unit_config.class_path
-                self.output_data_unit = create_data_unit(class_path, data_unit_config)
+                unit_config = output_configs['workflow_output']
+                # Use proper from_config pattern - import class and call its from_config method
+                class_path = unit_config.get('class', 'nanobrain.core.data_unit.DataUnitFile')
+                module_path, class_name = class_path.rsplit('.', 1)
+                import importlib
+                module = importlib.import_module(module_path)
+                data_unit_class = getattr(module, class_name)
+                
+                # Ensure config has class field for proper data unit creation
+                enhanced_config = unit_config.copy()
+                if 'class' not in enhanced_config:
+                    enhanced_config['class'] = class_path
+                
+                self.output_data_unit = data_unit_class.from_config(enhanced_config)
         
         # Enhanced framework handles automatic component instantiation
         # No programmatic component creation needed
@@ -70,82 +89,53 @@ class AlphavirusWorkflow(Workflow):
                 self.steps[step_id] = step_instance
         
         # Links and triggers automatically resolved by enhanced framework
-        # No manual creation required
-        self.links = {}
-        if hasattr(config, 'links') and isinstance(config.links, dict):
-            for link_id, link_config in config.links.items():
-                link = self._create_link_from_config(link_config)
-                self.links[link_id] = link
+        # No manual creation required - framework handles via class+config pattern
         
         # NO triggers at workflow level - all are step-level
         # NO tools at workflow level - all are step-level  
         # NO business logic - pure event routing
 
-    def _resolve_step_from_config(self, step_config: Dict[str, Any]):
+    def _resolve_step_from_config(self, step_config):
         """Resolve step from configuration using enhanced patterns"""
-        step_class = step_config.get('class')
-        config_path = step_config.get('config')
-        
-        if not step_class or not config_path:
-            raise ValueError(f"Step configuration must include 'class' and 'config' fields")
-        
-        # Enhanced from_config handles automatic instantiation
-        module_path, class_name = step_class.rsplit('.', 1)
-        module = importlib.import_module(module_path)
-        step_cls = getattr(module, class_name)
-        
-        try:
-            step_instance = step_cls.from_config(
-                config_path, 
-                workflow_directory=getattr(self.config, 'workflow_directory', '')
-            )
-            
+        # Handle case where enhanced framework has already resolved steps to instances
+        if hasattr(step_config, '__class__') and hasattr(step_config, 'process'):
+            # step_config is already a step instance - return it directly
             if hasattr(self, 'nb_logger') and self.nb_logger:
-                self.nb_logger.info(f"✅ Created step: {step_class}")
-            return step_instance
+                self.nb_logger.info(f"✅ Using pre-resolved step: {step_config.__class__.__name__}")
+            return step_config
+        
+        # Handle case where step_config is still a dictionary configuration
+        if isinstance(step_config, dict):
+            step_class = step_config.get('class')
+            config_path = step_config.get('config')
             
-        except Exception as e:
-            if hasattr(self, 'nb_logger') and self.nb_logger:
-                self.nb_logger.error(f"❌ Failed to create step {step_class}: {e}")
-            raise
+            if not step_class or not config_path:
+                raise ValueError(f"Step configuration must include 'class' and 'config' fields")
+            
+            # Enhanced from_config handles automatic instantiation
+            module_path, class_name = step_class.rsplit('.', 1)
+            module = importlib.import_module(module_path)
+            step_cls = getattr(module, class_name)
+            
+            try:
+                step_instance = step_cls.from_config(
+                    config_path, 
+                    workflow_directory=getattr(self.config, 'workflow_directory', '')
+                )
+                
+                if hasattr(self, 'nb_logger') and self.nb_logger:
+                    self.nb_logger.info(f"✅ Created step: {step_class}")
+                return step_instance
+                
+            except Exception as e:
+                if hasattr(self, 'nb_logger') and self.nb_logger:
+                    self.nb_logger.error(f"❌ Failed to create step {step_class}: {e}")
+                raise
+        
+        # Invalid step_config type
+        raise ValueError(f"Invalid step configuration type: {type(step_config)}. Expected dict or step instance.")
 
-    def _create_link_from_config(self, link_config: Dict[str, Any]):
-        """Create link from configuration"""
-        from nanobrain.core.link import create_link, LinkConfig
-        
-        try:
-            # Create LinkConfig object  
-            config = LinkConfig(**link_config)
-            
-            # Resolve source and target data units
-            source_ref = link_config.get('source')
-            target_ref = link_config.get('target')
-            
-            source_data_unit = self._resolve_data_unit_reference(source_ref)
-            target_data_unit = self._resolve_data_unit_reference(target_ref)
-            
-            return create_link(config, source=source_data_unit, target=target_data_unit)
-        except Exception as e:
-            if hasattr(self, 'nb_logger') and self.nb_logger:
-                self.nb_logger.error(f"Failed to create link: {e}")
-            raise
 
-    def _resolve_data_unit_reference(self, ref: str):
-        """Resolve data unit reference to actual data unit"""
-        # This method resolves step.data_unit_name references
-        if '.' in ref:
-            step_id, data_unit_name = ref.split('.', 1)
-            step = self.steps.get(step_id)
-            if step and hasattr(step, data_unit_name):
-                return getattr(step, data_unit_name)
-        
-        # Try workflow-level data units
-        if ref == 'workflow_input':
-            return self.input_data_unit
-        elif ref == 'workflow_output':
-            return self.output_data_unit
-        
-        raise ValueError(f"Could not resolve data unit reference: {ref}")
 
     async def initialize(self) -> None:
         """Initialize workflow and all components"""

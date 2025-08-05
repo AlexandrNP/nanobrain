@@ -109,11 +109,9 @@ class EnhancedVirusNameResolutionStep(Step):
         """Initialize EnhancedVirusNameResolutionStep with multiple specialized agents"""
         super()._init_from_config(config, component_config, dependencies)
         
-        # Initialize enhanced query analysis agent
-        self.query_analysis_agent = self._create_query_analysis_agent(component_config)
-        
-        # Initialize virus synonym detection agent
-        self.synonym_detection_agent = self._create_synonym_detection_agent(component_config)
+        # Get resolved agents from component_config (they are already instantiated by class+config resolution)
+        self.query_analysis_agent = self._get_resolved_agent(component_config, 'query_analysis_agent')
+        self.synonym_detection_agent = self._get_resolved_agent(component_config, 'synonym_detection_agent')
         
         # Initialize ultra-high-confidence cache manager
         self.cache_manager = self._create_ultra_cache_manager(component_config)
@@ -124,117 +122,50 @@ class EnhancedVirusNameResolutionStep(Step):
         if self.nb_logger:
             self.nb_logger.info(f"🔬 Enhanced Virus Name Resolution Step initialized with ultra-high-confidence threshold: {self.confidence_threshold}")
     
-    def _create_query_analysis_agent(self, component_config: Dict[str, Any]) -> SimpleAgent:
+    def _get_resolved_agent(self, component_config: Dict[str, Any], agent_key: str):
         """
-        Load enhanced query analysis agent from standardized config file.
+        Get resolved agent from component_config.
         
-        ✅ FRAMEWORK COMPLIANCE: Uses agents config structure, no programmatic creation.
+        ✅ FRAMEWORK COMPLIANCE: Uses resolved agent objects from class+config pattern.
+        The agents should already be instantiated during configuration loading.
+        
+        Args:
+            component_config: Component configuration with resolved agents
+            agent_key: Key for the specific agent to retrieve
+            
+        Returns:
+            Resolved agent instance
         """
-        # Get agents configuration list
-        agents_config = component_config.get('agents', [])
+        # Get the agents dictionary from component_config
+        agents = component_config.get('agents', {})
         
-        if not agents_config:
+        if agent_key not in agents:
             raise ValueError(
-                "❌ FRAMEWORK VIOLATION: No agents configuration found in step configuration.\n"
-                "   REQUIRED: Specify agents list with config_file references in step config YAML.\n"
-                "   EXAMPLE: agents:\n"
-                "             - config_file: 'config/VirusNameResolutionStep/QueryAnalysisAgent.yml'"
+                f"❌ FRAMEWORK VIOLATION: Agent '{agent_key}' not found in component configuration.\n"
+                f"   REQUIRED: Specify {agent_key} with class+config pattern in step config YAML.\n"
+                f"   AVAILABLE_AGENTS: {list(agents.keys())}\n"
+                f"   EXAMPLE:\n"
+                f"      agents:\n"
+                f"        {agent_key}:\n"
+                f"          class: 'nanobrain.library.agents.specialized.agent_class.AgentClass'\n"
+                f"          config: 'config/path/to/agent.yml'"
             )
         
-        # Find the QueryAnalysisAgent config file
-        query_agent_config_file = None
-        for agent_config in agents_config:
-            config_file = agent_config.get('config_file', '')
-            if 'QueryAnalysisAgent' in config_file:
-                query_agent_config_file = config_file
-                break
+        agent = agents[agent_key]
         
-        if not query_agent_config_file:
+        # Ensure it's an instantiated agent object, not a configuration
+        if not hasattr(agent, 'process'):  # Basic check that it's an agent instance
             raise ValueError(
-                "❌ FRAMEWORK VIOLATION: No QueryAnalysisAgent config_file found in agents list.\n"
-                "   REQUIRED: Include config_file for QueryAnalysisAgent in agents list.\n"
-                "   EXAMPLE: - config_file: 'config/VirusNameResolutionStep/QueryAnalysisAgent.yml'"
+                f"❌ FRAMEWORK VIOLATION: {agent_key} is not a properly resolved agent instance.\n"
+                f"   EXPECTED: Agent object with 'process' method\n"
+                f"   ACTUAL: {type(agent)}\n"
+                f"   SOLUTION: Ensure class+config pattern is used correctly in configuration"
             )
         
-        # ✅ FRAMEWORK COMPLIANCE: Load agent from config file using from_config pattern
-        from nanobrain.library.agents.specialized_agents.conversational_specialized_agent import ConversationalSpecializedAgent
+        if self.nb_logger:
+            self.nb_logger.info(f"✅ Resolved {agent_key}: {agent.__class__.__name__}")
         
-        try:
-            # Resolve agent config file path relative to workflow directory
-            if hasattr(self, 'workflow_directory') and self.workflow_directory:
-                from pathlib import Path
-                agent_config_path = Path(self.workflow_directory) / query_agent_config_file
-            else:
-                # Fallback: resolve relative to current step's config location
-                from pathlib import Path
-                step_dir = Path(__file__).parent.parent
-                agent_config_path = step_dir / query_agent_config_file
-            
-            # Load agent using framework's from_config pattern
-            return ConversationalSpecializedAgent.from_config(str(agent_config_path))
-            
-        except Exception as e:
-            raise ValueError(
-                f"❌ FRAMEWORK ERROR: Failed to load QueryAnalysisAgent from {query_agent_config_file}: {e}\n"
-                f"   SOLUTION: Ensure agent config file exists and is properly formatted.\n"
-                f"   PATH: {query_agent_config_file}"
-            ) from e
-    
-    def _create_synonym_detection_agent(self, component_config: Dict[str, Any]) -> SimpleAgent:
-        """
-        Load virus synonym detection agent from standardized config file.
-        
-        ✅ FRAMEWORK COMPLIANCE: Uses agents config structure, no programmatic creation.
-        """
-        # Get agents configuration list
-        agents_config = component_config.get('agents', [])
-        
-        if not agents_config:
-            raise ValueError(
-                "❌ FRAMEWORK VIOLATION: No agents configuration found in step configuration.\n"
-                "   REQUIRED: Specify agents list with config_file references in step config YAML.\n"
-                "   EXAMPLE: agents:\n"
-                "             - config_file: 'config/VirusNameResolutionStep/SynonymDetectionAgent.yml'"
-            )
-        
-        # Find the SynonymDetectionAgent config file
-        synonym_agent_config_file = None
-        for agent_config in agents_config:
-            config_file = agent_config.get('config_file', '')
-            if 'SynonymDetectionAgent' in config_file:
-                synonym_agent_config_file = config_file
-                break
-        
-        if not synonym_agent_config_file:
-            raise ValueError(
-                "❌ FRAMEWORK VIOLATION: No SynonymDetectionAgent config_file found in agents list.\n"
-                "   REQUIRED: Include config_file for SynonymDetectionAgent in agents list.\n"
-                "   EXAMPLE: - config_file: 'config/VirusNameResolutionStep/SynonymDetectionAgent.yml'"
-            )
-        
-        # ✅ FRAMEWORK COMPLIANCE: Load agent from config file using from_config pattern
-        from nanobrain.library.agents.specialized_agents.conversational_specialized_agent import ConversationalSpecializedAgent
-        
-        try:
-            # Resolve agent config file path relative to workflow directory
-            if hasattr(self, 'workflow_directory') and self.workflow_directory:
-                from pathlib import Path
-                agent_config_path = Path(self.workflow_directory) / synonym_agent_config_file
-            else:
-                # Fallback: resolve relative to current step's config location
-                from pathlib import Path
-                step_dir = Path(__file__).parent.parent
-                agent_config_path = step_dir / synonym_agent_config_file
-            
-            # Load agent using framework's from_config pattern
-            return ConversationalSpecializedAgent.from_config(str(agent_config_path))
-            
-        except Exception as e:
-            raise ValueError(
-                f"❌ FRAMEWORK ERROR: Failed to load SynonymDetectionAgent from {synonym_agent_config_file}: {e}\n"
-                f"   SOLUTION: Ensure agent config file exists and is properly formatted.\n"
-                f"   PATH: {synonym_agent_config_file}"
-            ) from e
+        return agent
     
     def _create_ultra_cache_manager(self, component_config: Dict[str, Any]) -> UltraHighConfidenceCacheManager:
         """Create ultra-high-confidence cache manager from configuration"""

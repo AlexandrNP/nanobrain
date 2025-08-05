@@ -48,10 +48,368 @@ class AgentToolSchema(BaseModel):
 
 class AgentConfig(ConfigBase):
     """
-    Configuration for agents - INHERITS constructor prohibition.
+    Agent Configuration Schema - Comprehensive AI Agent Setup and Management
+    ======================================================================
     
-    ❌ FORBIDDEN: AgentConfig(name="test", model="...")
-    ✅ REQUIRED: AgentConfig.from_config('path/to/config.yml')
+    The AgentConfig class defines the complete configuration schema for AI agents
+    within the NanoBrain framework. This configuration class provides comprehensive
+    control over agent behavior, capabilities, integrations, and performance
+    characteristics through a declarative YAML-based approach.
+    
+    **Configuration Philosophy:**
+        AgentConfig follows the framework's configuration-first design principles:
+        
+        * **Declarative Configuration**: All agent behavior defined through YAML
+        * **Type Safety**: Comprehensive Pydantic validation with helpful error messages
+        * **Schema Completeness**: Every aspect of agent operation is configurable
+        * **Environment Flexibility**: Support for development, staging, and production configs
+        * **Security First**: Secure defaults with comprehensive validation
+        * **Performance Optimization**: Built-in performance and resource management
+    
+    **Core Configuration Categories:**
+        
+        **Identity and Behavior:**
+        * Agent identification, description, and behavioral characteristics
+        * System prompts and behavioral guidelines
+        * Conversation management and context handling
+        
+        **LLM Integration:**
+        * Model selection and configuration (GPT-4, Claude, Llama, etc.)
+        * Generation parameters (temperature, tokens, sampling)
+        * API authentication and rate limiting
+        
+        **Tool Integration:**
+        * Tool discovery, registration, and configuration
+        * Tool capability matching and selection
+        * Tool performance monitoring and optimization
+        
+        **Framework Integration:**
+        * Executor configuration for local/distributed execution
+        * Logging and monitoring configuration
+        * A2A protocol configuration for agent collaboration
+        
+        **Performance and Monitoring:**
+        * Resource allocation and optimization
+        * Performance metrics and monitoring
+        * Error handling and recovery strategies
+    
+    **Configuration Examples:**
+        
+        **Basic Conversational Agent:**
+        ```yaml
+        # config/conversational_agent.yml
+        name: "helpful_assistant"
+        description: "A helpful AI assistant for general tasks"
+        model: "gpt-4"
+        temperature: 0.7
+        max_tokens: 2000
+        system_prompt: |
+          You are a helpful AI assistant. Be concise, accurate, and friendly.
+          Always provide practical and actionable advice when possible.
+        
+        # Enable comprehensive logging
+        enable_logging: true
+        log_conversations: true
+        log_tool_calls: true
+        ```
+        
+        **Research Agent with Tools:**
+        ```yaml
+        # config/research_agent.yml
+        name: "research_specialist"
+        description: "AI agent specialized in research and analysis"
+        model: "gpt-4"
+        temperature: 0.3
+        max_tokens: 4000
+        system_prompt: |
+          You are a research specialist AI. Use available tools to gather
+          information, analyze data, and provide comprehensive insights.
+        
+        # Tool integration
+        tools:
+          - class: "nanobrain.library.tools.WebSearchTool"
+            config: "config/tools/web_search.yml"
+          - class: "nanobrain.library.tools.DocumentAnalyzer"
+            config: "config/tools/document_analyzer.yml"
+          - class: "nanobrain.library.tools.DataVisualizer"
+            config: "config/tools/data_visualizer.yml"
+        
+        # External tool configuration file
+        tools_config_path: "config/research_tools.yml"
+        
+        # Performance optimization
+        executor_config:
+          executor_type: "thread"
+          max_workers: 4
+          timeout: 300
+        ```
+        
+        **Collaborative Agent with A2A Protocol:**
+        ```yaml
+        # config/collaborative_agent.yml
+        name: "collaboration_coordinator"
+        description: "Agent for multi-agent collaboration scenarios"
+        model: "gpt-4"
+        temperature: 0.5
+        
+        # A2A protocol configuration
+        agent_card:
+          capabilities:
+            - "task_coordination"
+            - "resource_allocation"
+            - "progress_monitoring"
+          specializations:
+            - "project_management"
+            - "team_coordination"
+          collaboration_patterns:
+            - "delegation"
+            - "consensus_building"
+            - "conflict_resolution"
+          max_delegation_depth: 3
+          timeout_seconds: 300
+        
+        # Advanced prompt management
+        prompt_template_file: "config/collaboration_prompts.yml"
+        ```
+        
+        **Bioinformatics Specialist Agent:**
+        ```yaml
+        # config/bioinformatics_agent.yml
+        name: "bio_analyst"
+        description: "Specialized agent for bioinformatics analysis"
+        model: "gpt-4"
+        temperature: 0.2
+        system_prompt: |
+          You are a bioinformatics specialist AI. Use computational biology
+          tools to analyze genomic data, protein sequences, and biological pathways.
+        
+        # Specialized bioinformatics tools
+        tools:
+          - class: "nanobrain.library.tools.bioinformatics.BVBRCTool"
+            config: "config/tools/bvbrc.yml"
+          - class: "nanobrain.library.tools.bioinformatics.MMseqs2Tool"
+            config: "config/tools/mmseqs2.yml"
+          - class: "nanobrain.library.tools.bioinformatics.PubMedClient"
+            config: "config/tools/pubmed.yml"
+        
+        # High-performance execution for computational tasks
+        executor_config:
+          executor_type: "parsl"
+          config: "config/hpc_executor.yml"
+        ```
+    
+    **Field Documentation:**
+        
+        **Core Identity Fields:**
+        
+        * **name** (str, required): Unique agent identifier
+          - Used for logging, monitoring, and inter-agent communication
+          - Should be descriptive and follow naming conventions
+          - Examples: "research_assistant", "data_analyst", "collaboration_coordinator"
+        
+        * **description** (str, optional): Human-readable agent description
+          - Explains agent purpose and capabilities
+          - Used in documentation and agent discovery
+          - Should be concise but comprehensive
+        
+        **LLM Configuration:**
+        
+        * **model** (str, default="gpt-3.5-turbo"): LLM model identifier
+          - Supported models: "gpt-4", "gpt-3.5-turbo", "claude-3", "llama-2", etc.
+          - Model selection affects capabilities, cost, and performance
+          - Consider model-specific features and limitations
+        
+        * **temperature** (float, 0.0-2.0, default=0.7): Response randomness control
+          - Lower values (0.0-0.3): More deterministic, factual responses
+          - Medium values (0.4-0.8): Balanced creativity and consistency
+          - Higher values (0.9-2.0): More creative and varied responses
+        
+        * **max_tokens** (int, optional): Maximum tokens per response
+          - Controls response length and API costs
+          - Model-specific limits apply (e.g., GPT-4: 8192 tokens)
+          - Consider conversation context and token consumption
+        
+        * **system_prompt** (str, optional): System-level behavioral instructions
+          - Defines agent personality, expertise, and behavioral guidelines
+          - Influences all agent responses and decision-making
+          - Should be specific, clear, and aligned with agent purpose
+        
+        **Tool Integration:**
+        
+        * **tools** (List[Dict], optional): Inline tool configurations
+          - Each tool defined with class and config parameters
+          - Supports nested tool configurations and dependencies
+          - Tools automatically registered and available to agent
+        
+        * **tools_config_path** (str, optional): External tool configuration file
+          - Path to YAML file containing tool configurations
+          - Enables shared tool configurations across agents
+          - Supports environment-specific tool configurations
+        
+        **Prompt Management:**
+        
+        * **prompt_templates** (Dict, optional): Inline prompt templates
+          - Named prompt templates for different scenarios
+          - Supports Jinja2 templating with variable substitution
+          - Used for consistent prompt generation across conversations
+        
+        * **prompt_template_file** (str, optional): External prompt template file
+          - Path to YAML file containing prompt templates
+          - Enables shared prompt templates and A/B testing
+          - Supports dynamic prompt loading and updates
+        
+        **Framework Integration:**
+        
+        * **executor_config** (ExecutorConfig, optional): Execution backend configuration
+          - Controls how agent operations are executed
+          - Supports local, threaded, process, and distributed execution
+          - Affects performance, scalability, and resource usage
+        
+        * **agent_card** (Dict, optional): A2A protocol metadata
+          - Defines agent capabilities for inter-agent collaboration
+          - Includes specializations, collaboration patterns, and limits
+          - Required for agents participating in multi-agent workflows
+        
+        **Monitoring and Performance:**
+        
+        * **auto_initialize** (bool, default=True): Automatic agent initialization
+          - Controls whether agent initializes automatically on creation
+          - Manual initialization provides more control but requires explicit setup
+        
+        * **debug_mode** (bool, default=False): Enhanced debugging and logging
+          - Enables detailed logging, tracing, and diagnostic information
+          - Useful for development and troubleshooting
+          - May impact performance in production environments
+        
+        * **enable_logging** (bool, default=True): Comprehensive logging system
+          - Controls whether agent operations are logged
+          - Includes performance metrics, error tracking, and audit trails
+          - Essential for production monitoring and debugging
+        
+        * **log_conversations** (bool, default=True): Conversation history logging
+          - Controls whether conversation history is logged and stored
+          - Important for debugging, analysis, and compliance
+          - Consider privacy and storage implications
+        
+        * **log_tool_calls** (bool, default=True): Tool usage logging
+          - Controls whether tool calls and results are logged
+          - Useful for performance analysis and debugging
+          - Helps optimize tool selection and usage patterns
+    
+    **Validation and Security:**
+        
+        **Input Validation:**
+        * Comprehensive Pydantic validation for all fields
+        * Type checking and constraint enforcement
+        * Custom validation rules for complex fields
+        * Helpful error messages with correction suggestions
+        
+        **Security Considerations:**
+        * API key protection and secure storage
+        * Input sanitization and prompt injection protection
+        * Access control and permission management
+        * Audit logging for compliance and security monitoring
+        
+        **Configuration Security:**
+        * Environment variable support for sensitive values
+        * Configuration encryption for production deployments
+        * Secure defaults with minimal privilege principles
+        * Regular security validation and updates
+    
+    **Best Practices:**
+        
+        **Development:**
+        * Use descriptive names and comprehensive descriptions
+        * Start with conservative settings and tune based on performance
+        * Enable comprehensive logging during development
+        * Test with different models and temperature settings
+        
+        **Production:**
+        * Use environment-specific configurations
+        * Monitor token usage and API costs
+        * Implement rate limiting and error handling
+        * Regular configuration validation and updates
+        
+        **Performance:**
+        * Choose appropriate models for specific tasks
+        * Optimize token usage with efficient prompts
+        * Use caching for repeated operations
+        * Monitor and tune based on usage patterns
+        
+        **Collaboration:**
+        * Define clear agent capabilities and specializations
+        * Use consistent naming and configuration patterns
+        * Document agent purposes and integration points
+        * Test multi-agent scenarios thoroughly
+    
+    **Advanced Configuration Patterns:**
+        
+        **Environment-Specific Configurations:**
+        ```yaml
+        # Base configuration
+        name: "research_agent"
+        model: "${MODEL_NAME:-gpt-3.5-turbo}"
+        temperature: ${TEMPERATURE:-0.7}
+        debug_mode: ${DEBUG_MODE:-false}
+        
+        # Environment-specific tool configurations
+        tools_config_path: "config/tools_${ENVIRONMENT}.yml"
+        ```
+        
+        **Conditional Tool Loading:**
+        ```yaml
+        # Tools loaded based on environment
+        tools:
+          - class: "nanobrain.library.tools.WebSearchTool"
+            config: "config/web_search_${ENVIRONMENT}.yml"
+            enabled: ${WEB_SEARCH_ENABLED:-true}
+        ```
+        
+        **Dynamic Prompt Management:**
+        ```yaml
+        # A/B testing prompt templates
+        prompt_template_file: "config/prompts_${PROMPT_VERSION:-v1}.yml"
+        ```
+    
+    Note:
+        This configuration class inherits from ConfigBase and follows the framework's
+        mandatory from_config pattern. Direct instantiation is prohibited - all
+        configurations must be loaded from YAML files using the from_config method.
+        This ensures consistency, validation, and proper integration with the framework.
+    
+    Warning:
+        Agent configurations may contain sensitive information including API keys,
+        system prompts, and behavioral guidelines. Ensure proper security measures
+        including secure storage, access controls, and regular security audits.
+        Monitor resource usage and costs associated with LLM API calls.
+    
+    Examples:
+        **Loading Configuration:**
+        ```python
+        # Load agent configuration from file
+        config = AgentConfig.from_config('config/my_agent.yml')
+        
+        # Create agent with configuration
+        agent = ConversationalAgent.from_config(config)
+        ```
+        
+        **Configuration Validation:**
+        ```python
+        # Validate configuration without creating agent
+        try:
+            config = AgentConfig.from_config('config/test_agent.yml')
+            print("Configuration is valid")
+        except ValidationError as e:
+            print(f"Configuration error: {e}")
+        ```
+    
+    See Also:
+        * :class:`Agent`: Base agent class using this configuration
+        * :class:`ConversationalAgent`: Conversational agent implementation
+        * :class:`ConfigBase`: Base configuration class with validation
+        * :class:`ExecutorConfig`: Executor configuration for performance tuning
+        * :mod:`nanobrain.library.tools`: Available tools for agent integration
+        * :mod:`nanobrain.library.agents`: Specialized agent implementations
     """
     
     name: str
@@ -109,15 +467,283 @@ class AgentConfig(ConfigBase):
 
 class Agent(FromConfigBase, ABC):
     """
-    Base class for Agents that use tool calling for AI processing.
-    FIXED: Now properly extends FromConfigBase with UNIFIED from_config pattern.
+    AI Agent Base Class - Intelligent LLM-Based Processing with Tool Integration
+    ===========================================================================
     
-    Biological analogy: Prefrontal cortex orchestrating specialized brain regions.
-    Justification: Like how the prefrontal cortex coordinates different brain
-    regions for complex tasks, agents coordinate different tools for complex
-    AI processing tasks.
+    The Agent class is the foundational component for building intelligent AI systems within
+    the NanoBrain framework. Agents combine Large Language Model (LLM) capabilities with
+    tool calling functionality to create sophisticated AI entities capable of complex
+    reasoning, decision making, and task execution.
     
-    This class is also compatible with LangChain tools when LangChain is available.
+    **Core Architecture:**
+        Agents represent autonomous AI entities that:
+        
+        * **Process Natural Language**: Understand and generate human-like responses
+        * **Execute Tools**: Call external tools and APIs to extend capabilities
+        * **Maintain Context**: Track conversation history and state across interactions
+        * **Make Decisions**: Reason about complex problems and choose appropriate actions
+        * **Collaborate**: Work with other agents through the A2A (Agent-to-Agent) protocol
+        * **Learn and Adapt**: Improve performance through experience and feedback
+    
+    **Biological Analogy:**
+        Like the prefrontal cortex orchestrating specialized brain regions, agents coordinate
+        different tools and capabilities for complex AI processing tasks. The prefrontal cortex
+        integrates information from various brain areas, makes executive decisions, and
+        coordinates responses - exactly how agents integrate tools, make decisions, and
+        coordinate AI processing workflows.
+    
+    **AI Processing Capabilities:**
+        
+        **Language Understanding:**
+        * Natural language processing and comprehension
+        * Context-aware interpretation of user requests
+        * Multi-turn conversation management with history
+        * Intent recognition and response generation
+        
+        **Tool Integration:**
+        * Dynamic tool discovery and registration
+        * Intelligent tool selection based on task requirements
+        * Parallel tool execution for complex operations
+        * Tool result interpretation and integration
+        * LangChain tool compatibility for ecosystem integration
+        
+        **Decision Making:**
+        * Multi-step reasoning and planning
+        * Goal decomposition and task prioritization
+        * Context-aware decision making
+        * Error recovery and alternative strategy selection
+        
+        **State Management:**
+        * Conversation history tracking and retrieval
+        * Context preservation across sessions
+        * Performance metrics and optimization
+        * Memory management for long-running conversations
+    
+    **Framework Integration:**
+        Agents seamlessly integrate with all NanoBrain framework components:
+        
+        * **Steps Integration**: Agents can be embedded in workflow steps for processing
+        * **Workflow Orchestration**: Multi-agent workflows with delegation and coordination
+        * **Tool Ecosystem**: Access to bioinformatics tools, web interfaces, and custom tools
+        * **Executor Support**: Local, threaded, and distributed execution via Parsl
+        * **Configuration Management**: Complete YAML-driven configuration and lifecycle
+        * **Logging and Monitoring**: Comprehensive performance tracking and debugging
+    
+    **Agent Types and Specializations:**
+        The framework supports various agent specializations:
+        
+        * **ConversationalAgent**: Context-aware conversational interactions
+        * **SimpleAgent**: Stateless processing for single requests
+        * **EnhancedCollaborativeAgent**: Multi-protocol agents with A2A and MCP support
+        * **SpecializedAgents**: Domain-specific agents (code writers, analyzers, etc.)
+        * **BioinformaticsAgents**: Computational biology specialized agents
+    
+    **Configuration Architecture:**
+        Agents follow the framework's configuration-first design:
+        
+        ```yaml
+        # Basic agent configuration
+        name: "intelligent_assistant"
+        description: "AI assistant with tool capabilities"
+        model: "gpt-4"
+        temperature: 0.7
+        max_tokens: 2000
+        system_prompt: "You are a helpful AI assistant with access to tools."
+        
+        # Tool integration
+        tools:
+          - class: "nanobrain.library.tools.WebSearchTool"
+            config: "config/web_search.yml"
+          - class: "nanobrain.library.tools.DocumentAnalyzer"
+            config: "config/doc_analyzer.yml"
+        
+        # Executor configuration
+        executor:
+          class: "nanobrain.core.executor.LocalExecutor"
+          config: "config/local_executor.yml"
+        
+        # Logging and monitoring
+        enable_logging: true
+        log_conversations: true
+        log_tool_calls: true
+        debug_mode: false
+        ```
+    
+    **Usage Patterns:**
+        
+        **Basic Agent Creation:**
+        ```python
+        from nanobrain.core import ConversationalAgent
+        
+        # Create agent from configuration
+        agent = ConversationalAgent.from_config('config/assistant.yml')
+        
+        # Process single request
+        response = await agent.aprocess("What is machine learning?")
+        print(response.content)
+        ```
+        
+        **Agent with Custom Tools:**
+        ```python
+        # Agent automatically loads and registers configured tools
+        agent = ConversationalAgent.from_config('config/research_agent.yml')
+        
+        # Agent intelligently selects and uses appropriate tools
+        response = await agent.aprocess(
+            "Research the latest developments in quantum computing"
+        )
+        ```
+        
+        **Multi-Agent Collaboration:**
+        ```python
+        # Agents can delegate tasks to other specialized agents
+        coordinator = EnhancedCollaborativeAgent.from_config('config/coordinator.yml')
+        
+        response = await coordinator.aprocess(
+            "Analyze this dataset and create a visualization"
+        )
+        # Coordinator automatically delegates to data analysis and visualization agents
+        ```
+    
+    **Tool Integration Patterns:**
+        
+        **Automatic Tool Registration:**
+        * Tools are automatically discovered and registered from configuration
+        * Dynamic tool loading based on task requirements
+        * Tool capability matching for optimal selection
+        
+        **LangChain Compatibility:**
+        * Seamless integration with existing LangChain tools
+        * Automatic adaptation of tool interfaces
+        * Preservation of tool metadata and documentation
+        
+        **Custom Tool Development:**
+        * Framework-native tool development patterns
+        * Tool validation and error handling
+        * Performance monitoring and optimization
+    
+    **Performance and Scalability:**
+        
+        **Execution Optimization:**
+        * Asynchronous processing for responsive interactions
+        * Parallel tool execution for complex operations
+        * Intelligent caching of LLM responses and tool results
+        * Resource management and cleanup
+        
+        **Monitoring and Metrics:**
+        * Token usage tracking and optimization
+        * Response time monitoring and analysis
+        * Error rate tracking and alerting
+        * Conversation quality metrics
+        
+        **Scalability Features:**
+        * Stateless operation support for horizontal scaling
+        * Session management for multi-user environments
+        * Load balancing and resource allocation
+        * Distributed execution support via Parsl integration
+    
+    **Error Handling and Recovery:**
+        Comprehensive error handling with graceful degradation:
+        
+        * **LLM Failures**: Automatic retry with exponential backoff
+        * **Tool Failures**: Fallback strategies and alternative tools
+        * **Configuration Errors**: Detailed validation and helpful error messages
+        * **Resource Limits**: Graceful handling of rate limits and quotas
+        * **Network Issues**: Robust error recovery and user notification
+    
+    **Security and Privacy:**
+        
+        **Input Validation:**
+        * Comprehensive input sanitization and validation
+        * Protection against prompt injection attacks
+        * Content filtering and safety checks
+        
+        **Data Protection:**
+        * Conversation history encryption and secure storage
+        * API key protection and rotation
+        * Audit logging for compliance and debugging
+        
+        **Access Control:**
+        * Tool access permissions and restrictions
+        * User authentication and authorization
+        * Resource usage limits and monitoring
+    
+    **Development and Testing:**
+        
+        **Testing Support:**
+        * Mock LLM clients for deterministic testing
+        * Tool mocking and simulation capabilities
+        * Conversation replay and analysis tools
+        
+        **Debugging Features:**
+        * Comprehensive logging with structured output
+        * Step-by-step execution tracing
+        * Tool call inspection and analysis
+        * Performance profiling and optimization hints
+    
+    **Agent Lifecycle:**
+        The agent follows a well-defined lifecycle:
+        
+        1. **Configuration Loading**: Parse and validate agent configuration
+        2. **LLM Client Initialization**: Setup LLM client with authentication
+        3. **Tool Registration**: Discover and register available tools
+        4. **Prompt Manager Setup**: Initialize template management system
+        5. **State Initialization**: Setup conversation history and metrics
+        6. **Ready State**: Agent ready to process requests
+        7. **Processing**: Handle requests with tool calling and reasoning
+        8. **Cleanup**: Resource cleanup and state persistence
+    
+    **Advanced Features:**
+        
+        **Prompt Engineering:**
+        * Template-based prompt management
+        * Dynamic prompt generation based on context
+        * A/B testing of prompt variations
+        * Prompt optimization and fine-tuning
+        
+        **Conversation Management:**
+        * Multi-turn conversation tracking
+        * Context window management and optimization
+        * Conversation summarization for long interactions
+        * Session persistence and recovery
+        
+        **Multi-Modal Capabilities:**
+        * Text, image, and document processing
+        * File upload and analysis support
+        * Rich media response generation
+        * Cross-modal reasoning and understanding
+    
+    Attributes:
+        name (str): Agent identifier for logging and debugging
+        description (str): Human-readable agent description
+        model (str): LLM model identifier (e.g., "gpt-4", "claude-3")
+        temperature (float): LLM temperature for response randomness (0.0-1.0)
+        max_tokens (int): Maximum tokens per LLM response
+        system_prompt (str): System prompt for agent behavior definition
+        tools (List[Tool]): Registered tools available to the agent
+        executor (ExecutorBase): Execution backend for agent operations
+        tool_registry (ToolRegistry): Tool management and discovery system
+        conversation_history (List[Dict]): Conversation history and context
+        performance_metrics (Dict): Real-time performance and usage metrics
+    
+    Note:
+        This is an abstract base class that cannot be instantiated directly.
+        Use concrete implementations like ConversationalAgent or SimpleAgent.
+        All agents must be created using the from_config pattern with proper
+        configuration files following the framework's architectural patterns.
+    
+    Warning:
+        Agents may consume significant LLM API resources. Monitor token usage
+        and implement appropriate rate limiting and cost controls. Ensure
+        proper API key security and never commit credentials to version control.
+    
+    See Also:
+        * :class:`ConversationalAgent`: Context-aware conversational agent
+        * :class:`SimpleAgent`: Stateless agent for single requests
+        * :class:`AgentConfig`: Agent configuration schema and validation
+        * :class:`ToolRegistry`: Tool management and discovery system
+        * :mod:`nanobrain.library.agents`: Specialized agent implementations
+        * :mod:`nanobrain.library.tools`: Available tools and integrations
     """
     
     COMPONENT_TYPE = "agent"
@@ -167,8 +793,8 @@ class Agent(FromConfigBase, ABC):
             self.executor = executor
         else:
             # Create executor using from_config pattern
-                    executor_config = getattr(config, 'executor_config', None) or ExecutorConfig.from_config({})
-        self.executor = LocalExecutor.from_config(executor_config)
+            executor_config = getattr(config, 'executor_config', None) or ExecutorConfig.from_config({})
+            self.executor = LocalExecutor.from_config(executor_config)
         
         # Tool registry for managing tools
         self.tool_registry = ToolRegistry()

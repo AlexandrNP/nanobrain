@@ -132,15 +132,337 @@ class MMseqs2InstallationError(ToolInstallationError):
 
 class MMseqs2Tool(ProgressiveScalingMixin, ExternalTool):
     """
-    MMseqs2 (Many-against-Many sequence searching) tool wrapper.
-    Enhanced with mandatory from_config pattern implementation.
+    MMseqs2 Protein Clustering Tool - High-Performance Sequence Clustering with Auto-Installation and Progressive Scaling
+    ======================================================================================================================
     
-    Provides protein sequence clustering with:
-    - Auto-detection and installation via conda/bioconda
-    - Progressive scaling for different data volumes
-    - Comprehensive clustering analysis and reporting
-    - Automatic retry with exponential backoff
-    - Real-time performance monitoring
+    The MMseqs2Tool provides a comprehensive wrapper for the MMseqs2 (Many-against-Many sequence searching) 
+    bioinformatics software, offering advanced protein sequence clustering with intelligent auto-installation,
+    progressive scaling capabilities, and optimized performance for varying dataset sizes. This tool seamlessly
+    integrates MMseqs2's powerful clustering algorithms with NanoBrain's framework architecture.
+    
+    **Core Architecture:**
+        The MMseqs2 tool provides enterprise-grade protein clustering capabilities:
+        
+        * **Auto-Installation**: Intelligent detection and installation via conda/bioconda channels
+        * **Progressive Scaling**: Adaptive performance scaling based on dataset size and complexity
+        * **Clustering Analysis**: Advanced protein sequence clustering with customizable parameters
+        * **Performance Optimization**: Automatic retry mechanisms and resource optimization
+        * **Cache Management**: Intelligent caching of databases and results for improved performance
+        * **Framework Integration**: Full integration with NanoBrain's component architecture
+    
+    **Bioinformatics Capabilities:**
+        
+        **Protein Sequence Clustering:**
+        * Advanced protein sequence similarity detection and clustering
+        * Customizable sequence identity and coverage thresholds
+        * Multiple clustering modes for different biological applications
+        * Sensitivity parameter tuning for optimal clustering quality
+        
+        **Database Creation and Management:**
+        * Automatic MMseqs2 database creation from FASTA input
+        * Database caching and reuse for improved performance
+        * Sequence validation and preprocessing with quality filtering
+        * Support for large-scale protein datasets with memory optimization
+        
+        **Clustering Analysis:**
+        * Comprehensive cluster analysis with detailed reporting
+        * Cluster size distribution and statistical analysis
+        * Representative sequence identification and extraction
+        * Singleton detection and handling for outlier analysis
+        
+        **Results Processing:**
+        * Multiple output formats including TSV and FASTA
+        * Detailed clustering reports with biological interpretations
+        * Cluster visualization data preparation
+        * Export capabilities for downstream analysis tools
+    
+    **Auto-Installation Features:**
+        
+        **Intelligent Detection:**
+        * Automatic detection of existing MMseqs2 installations
+        * Support for conda environments, system PATH, and local installations
+        * Version validation and compatibility checking
+        * Fallback installation strategies for maximum compatibility
+        
+        **Conda Integration:**
+        * Automated conda environment creation with isolated dependencies
+        * Bioconda channel integration for optimized bioinformatics software
+        * Environment naming and management for multiple tool versions
+        * Dependency resolution and conflict prevention
+        
+        **Installation Validation:**
+        * Comprehensive installation testing and validation
+        * Performance benchmarking for installation optimization
+        * Error diagnostic reporting for troubleshooting
+        * Installation path discovery and configuration
+    
+    **Progressive Scaling System:**
+        
+        **Adaptive Performance:**
+        * Automatic scaling based on dataset size and system resources
+        * Progressive sensitivity adjustment for optimal performance
+        * Memory usage optimization for large datasets
+        * Thread allocation based on available system resources
+        
+        **Scaling Levels:**
+        * **Level 1**: Fast testing with 50 sequences, sensitivity 4.0
+        * **Level 2**: Basic validation with 100 sequences, sensitivity 5.5
+        * **Level 3**: Medium scale with 500 sequences, sensitivity 7.0
+        * **Level 4**: Full scale with 2000+ sequences, sensitivity 7.5
+        
+        **Performance Monitoring:**
+        * Real-time performance metrics collection and analysis
+        * Memory usage tracking and optimization recommendations
+        * Execution time monitoring and bottleneck identification
+        * Automatic performance tuning based on historical data
+    
+    **Configuration Architecture:**
+        Comprehensive configuration supports diverse bioinformatics workflows:
+        
+        ```yaml
+        # MMseqs2 Tool Configuration
+        tool_name: "mmseqs2"
+        
+        # Tool card for framework integration
+        tool_card:
+          name: "mmseqs2"
+          description: "MMseqs2 protein sequence clustering and analysis"
+          version: "1.0.0"
+          category: "bioinformatics"
+          capabilities:
+            - "protein_clustering"
+            - "sequence_analysis" 
+            - "similarity_search"
+        
+        # Installation Configuration
+        conda_package: "mmseqs2"
+        conda_channel: "bioconda"
+        git_repository: "https://github.com/soedinglab/MMseqs2.git"
+        environment_name: "nanobrain-viral_protein-mmseqs2"
+        create_isolated_environment: true
+        
+        # Clustering Parameters
+        min_seq_id: 0.3      # Minimum sequence identity threshold
+        coverage: 0.8        # Coverage threshold for clustering
+        cluster_mode: 0      # Clustering mode (0=Set-Cover, 1=Connected-Component, 2=Greedy)
+        sensitivity: 7.5     # Sensitivity parameter for similarity search
+        
+        # Progressive Scaling Configuration
+        progressive_scaling:
+          1:
+            max_sequences: 50
+            sensitivity: 4.0
+            description: "Fast test clustering"
+          2:
+            max_sequences: 100
+            sensitivity: 5.5
+            description: "Basic validation clustering"
+          3:
+            max_sequences: 500
+            sensitivity: 7.0
+            description: "Medium scale clustering"
+          4:
+            max_sequences: 2000
+            sensitivity: 7.5
+            description: "Full scale clustering"
+        
+        # Performance Settings
+        threads: 4
+        memory_limit: "8G"
+        tmp_dir: null        # Uses system temporary directory
+        cache_dir: null      # Uses default cache location
+        
+        # Installation Detection Paths
+        local_installation_paths:
+          - "/usr/local/bin"
+          - "/opt/homebrew/bin"
+          - "~/bin"
+        ```
+    
+    **Usage Patterns:**
+        
+        **Basic Protein Clustering:**
+        ```python
+        from nanobrain.library.tools.bioinformatics import MMseqs2Tool
+        
+        # Create MMseqs2 tool with configuration
+        mmseqs2_tool = MMseqs2Tool.from_config('config/mmseqs2_config.yml')
+        
+        # Perform protein clustering on FASTA sequences
+        fasta_content = \"""
+        >protein1
+        MKWVTFISLLFLFSSAYSRGVFRRDAHKSEVAHRFKDLGEENFKALVLIAFAQYLQQCPFEDHVKLVNEVTEFAKTCVADESAENCDKSLHTLFGDKLCTVATLRETYGEMADCCAKQEPERNECFLQHKDDNPNLPRLVRPEVDVMCTAFHDNEETFLKKYLYEIARRHPYFYAPELLFFAKRYKAAFTECCQAADKAACLLPKLDELRDEGKASSAKQRLKCASLQKFGERAFKAWAVARLSQRFPKAEFAEVSKLVTDLTKVHTECCHGDLLECADDRADLAKYICENQDSISSKLKECCEKPLLEKSHCIAEVENDEMPADLPSLAADFVESKDVCKNYAEAKDVFLGMFLYEYARRHPDYSVVLLLRLAKTYETTLEKCCAAADPHECYAKVFDEFKPLVEEPQNLIKQNCELFEQLGEYKFQNALLVRYTKKVPQVSTPTLVEVSRNLGKVGSKCCKHPEAKRMPCAEDYLSVVLNQLCVLHEKTPVSDRVTKCCTESLVNRRPCFSALEVDETYVPKEFNAETFTFHADICTLSEKERQIKKQTALVELVKHKPKATKEQLKAVMDDFAAFVEKCCKADDKETCFAEEGKKLVAASQAALGL
+        >protein2  
+        MKWVTFISLLFLFSSAYSRGVFRRDAHKSEVAHRFKDLGEENFKALVLIAFAQYLQQCPFEDHVKLVNEVTEFAKTCVADESAENCDKSLHTLFGDKLCTVATLRETYGEMADCCAKQEPERNECFLQHKDDNPNLPRLVRPEVDVMCTAFHDNEETFLKKYLYEIARRHPYFYAPELLFFAKRYKAAFTECCQAADKAACLLPKLDELRDEGKASSAKQRLKCASLQKFGERAFKAWAVARLSQRFPKAEFAEVSKLVTDLTKVHTECCHGDLLECADDRADLAKYICENQDSISSKLKECCEKPLLEKSHCIAEVENDEMPADLPSLAADFVESKDVCKNYAEAKDVFLGMFLYEYARRHPDYSVVLLLRLAKTYETTLEKCCAAADPHECYAKVFDEFKPLVEEPQNLIKQNCELFEQLGEYKFQNALLVRYTKKVPQVSTPTLVEVSRNLGKVGSKCCKHPEAKRMPCAEDYLSVVLNQLCVLHEKTPVSDRVTKCCTESLVNRRPCFSALEVDETYVPKEFNAETFTFHADICTLSEKERQIKKQTALVELVKHKPKATKEQLKAVMDDFAAFVEKCCKADDKETCFAEEGKKLVAASQAALGL
+        \"""
+        
+        # Execute clustering with automatic scaling
+        result = await mmseqs2_tool.cluster_sequences(fasta_content)
+        
+        # Access clustering results
+        print(f"Clustering completed: {result.success}")
+        print(f"Total clusters: {result.data['total_clusters']}")
+        print(f"Largest cluster size: {result.data['largest_cluster_size']}")
+        ```
+        
+        **Advanced Clustering with Custom Parameters:**
+        ```python
+        # Create tool with custom clustering parameters
+        mmseqs2_config = {
+            'tool_name': 'mmseqs2',
+            'min_seq_id': 0.5,      # Higher identity threshold
+            'coverage': 0.9,        # Higher coverage requirement
+            'sensitivity': 8.0,     # Higher sensitivity for remote homologs
+            'cluster_mode': 1,      # Connected-component clustering
+            'threads': 8,           # More threads for performance
+            'memory_limit': '16G'   # Higher memory limit
+        }
+        
+        mmseqs2_tool = MMseqs2Tool.from_config(mmseqs2_config)
+        
+        # Cluster with progress monitoring
+        result = await mmseqs2_tool.cluster_sequences(
+            fasta_content=large_protein_dataset,
+            output_prefix="viral_proteins_strict"
+        )
+        
+        # Access detailed cluster analysis
+        clusters = result.data['clusters']
+        for cluster in clusters:
+            print(f"Cluster {cluster.cluster_id}:")
+            print(f"  Representative: {cluster.representative_seq[:50]}...")
+            print(f"  Members: {cluster.cluster_size}")
+            print(f"  Singleton: {cluster.is_singleton}")
+        ```
+        
+        **Progressive Scaling and Performance Optimization:**
+        ```python
+        # Configure progressive scaling for large datasets
+        scaling_config = {
+            'progressive_scaling': {
+                1: {'max_sequences': 100, 'sensitivity': 4.0},
+                2: {'max_sequences': 500, 'sensitivity': 6.0},
+                3: {'max_sequences': 2000, 'sensitivity': 7.0},
+                4: {'max_sequences': 10000, 'sensitivity': 7.5}
+            }
+        }
+        
+        mmseqs2_tool = MMseqs2Tool.from_config(scaling_config)
+        
+        # Tool automatically scales based on input size
+        small_result = await mmseqs2_tool.cluster_sequences(small_dataset)  # Uses level 1
+        large_result = await mmseqs2_tool.cluster_sequences(large_dataset)  # Uses level 4
+        
+        # Monitor performance metrics
+        performance = result.data.get('performance_metrics', {})
+        print(f"Execution time: {performance.get('execution_time')}s")
+        print(f"Memory usage: {performance.get('memory_usage')}MB")
+        print(f"Scaling level: {performance.get('scaling_level')}")
+        ```
+        
+        **Installation Management:**
+        ```python
+        # Check installation status and auto-install if needed
+        mmseqs2_tool = MMseqs2Tool.from_config('config/mmseqs2_config.yml')
+        
+        # Verify or install MMseqs2
+        installation_status = await mmseqs2_tool.initialize_tool()
+        
+        print(f"MMseqs2 found: {installation_status.found}")
+        print(f"Functional: {installation_status.is_functional}")
+        print(f"Installation path: {installation_status.installation_path}")
+        print(f"Version: {installation_status.version}")
+        
+        # Get diagnostic information if installation fails
+        if not installation_status.is_functional:
+            diagnostic = await mmseqs2_tool.get_diagnostic_report()
+            print(f"Diagnostic report: {diagnostic.summary}")
+            for issue in diagnostic.issues:
+                print(f"  Issue: {issue}")
+        ```
+    
+    **Advanced Features:**
+        
+        **Biological Analysis Integration:**
+        * Integration with protein function annotation databases
+        * Phylogenetic analysis support with cluster-based tree construction
+        * Functional domain analysis within protein clusters
+        * Evolutionary relationship inference from clustering patterns
+        
+        **Performance Optimization:**
+        * Automatic memory management and optimization
+        * Disk space monitoring and cleanup automation
+        * Parallel processing optimization for multi-core systems
+        * Database indexing and caching for repeated analyses
+        
+        **Quality Control:**
+        * Sequence quality validation and filtering
+        * Clustering quality assessment and metrics
+        * Statistical analysis of cluster distributions
+        * Outlier detection and analysis reporting
+        
+        **Integration Capabilities:**
+        * Seamless integration with other bioinformatics tools
+        * Export to multiple analysis formats (BLAST, HMMer, etc.)
+        * Integration with protein structure analysis pipelines
+        * Compatibility with phylogenetic analysis workflows
+    
+    **Scientific Applications:**
+        
+        **Protein Family Analysis:**
+        * Protein family identification and classification
+        * Evolutionary relationship analysis within protein families
+        * Functional annotation transfer between homologous proteins
+        * Comparative genomics and proteomics analysis
+        
+        **Drug Discovery:**
+        * Target protein identification and clustering
+        * Drug target similarity analysis and classification
+        * Pharmacophore identification from protein clusters
+        * Virtual screening database preparation and optimization
+        
+        **Structural Biology:**
+        * Protein structure similarity analysis and clustering
+        * Structural motif identification and classification
+        * Fold family analysis and classification
+        * Structure-function relationship analysis
+        
+        **Metagenomics:**
+        * Metagenomic protein clustering and annotation
+        * Functional gene family identification in environmental samples
+        * Microbial community protein analysis
+        * Horizontal gene transfer detection and analysis
+    
+    Attributes:
+        mmseqs_config (MMseqs2Config): MMseqs2 tool configuration
+        mmseqs_executable (str): Path to MMseqs2 executable
+        min_seq_id (float): Minimum sequence identity threshold for clustering
+        coverage (float): Coverage threshold for clustering
+        cluster_mode (int): Clustering algorithm mode selection
+        sensitivity (float): Sensitivity parameter for similarity search
+        threads (int): Number of threads for parallel processing
+        memory_limit (str): Memory limit for MMseqs2 operations
+        tmp_dir (str): Temporary directory for intermediate files
+        cache_directory (Path): Cache directory for databases and results
+    
+    Note:
+        This tool requires MMseqs2 to be available either through conda, system PATH,
+        or local installation. The tool provides comprehensive auto-installation
+        capabilities using conda/bioconda channels. Progressive scaling automatically
+        optimizes performance based on dataset size and available system resources.
+    
+    Warning:
+        MMseqs2 operations can be computationally intensive and memory-consuming for
+        large protein datasets. Monitor system resources and configure appropriate
+        memory limits and thread counts. Clustering parameters significantly affect
+        both performance and biological interpretation of results.
+    
+    See Also:
+        * :class:`ExternalTool`: Base external tool implementation
+        * :class:`ProgressiveScalingMixin`: Progressive scaling capabilities
+        * :class:`MMseqs2Config`: MMseqs2 tool configuration schema
+        * :mod:`nanobrain.library.tools.bioinformatics`: Bioinformatics tool implementations
+        * :mod:`nanobrain.core.external_tool`: External tool framework
     """
     
     @classmethod

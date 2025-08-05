@@ -1,0 +1,136 @@
+# Port Management Configuration for NanoBrain Framework
+# ✅ FRAMEWORK COMPLIANCE: Complete configuration-driven port management system
+# ✅ NO HARDCODING: All ports, processes, and behavior via configuration
+# ✅ PRODUCTION READY: Robust process detection, cleanup, and verification
+
+# Primary application ports
+application_ports:
+  backend_port: 5003  # ✅ UPDATED: Changed from 5001 to 5003
+  frontend_port: 3000
+  development_port: 3001
+  health_check_port: 5004  # ✅ UPDATED: Adjusted to avoid conflicts with new backend port
+
+# Port conflict resolution strategy
+conflict_resolution:
+  strategy: "aggressive_with_verification"
+  max_retry_attempts: 5
+  retry_delay_seconds: 2
+  verification_timeout_seconds: 15
+  enable_force_cleanup: true
+  enable_graceful_shutdown: true
+  graceful_shutdown_timeout: 10
+
+# Process management configuration
+process_management:
+  # Process patterns to detect and manage
+  target_process_patterns:
+    - "intelligent_chatbot"
+    - "nanobrain.*server"
+    - "react-scripts"
+    - "uvicorn.*5003"  # ✅ UPDATED: Changed from 5001 to 5003
+    - "node.*3000"
+    - "python.*chatbot"
+    
+  # Process detection methods in order of preference
+  detection_methods:
+    - "psutil_based"      # Primary: Cross-platform Python library
+    - "netstat_fallback"  # Secondary: System command fallback
+    - "lsof_fallback"     # Tertiary: Unix-specific fallback
+    
+  # Cleanup strategies for different process types
+  cleanup_strategies:
+    python_processes:
+      method: "graceful_then_force"
+      graceful_signals: ["SIGTERM", "SIGINT"]
+      force_signal: "SIGKILL"
+      cleanup_timeout: 15
+      
+    node_processes:
+      method: "graceful_then_force"
+      graceful_signals: ["SIGTERM", "SIGINT"] 
+      force_signal: "SIGKILL"
+      cleanup_timeout: 10
+      
+    web_servers:
+      method: "graceful_then_force"
+      graceful_signals: ["SIGTERM"]
+      force_signal: "SIGKILL"
+      cleanup_timeout: 20
+
+# Port verification and monitoring
+port_verification:
+  verification_methods:
+    - "socket_binding_test"
+    - "process_port_check"
+    - "network_connectivity_test"
+    
+  monitoring_config:
+    enable_continuous_monitoring: false
+    monitoring_interval_seconds: 30
+    alert_on_conflicts: true
+    log_port_usage: true
+
+# Environment-specific configurations
+environment_settings:
+  development:
+    aggressive_cleanup: true
+    allow_force_kill: true
+    detailed_logging: true
+    
+  production:
+    aggressive_cleanup: false
+    allow_force_kill: false
+    detailed_logging: false
+    
+  testing:
+    aggressive_cleanup: true
+    allow_force_kill: true
+    detailed_logging: true
+
+# Cross-platform compatibility settings
+platform_compatibility:
+  enable_cross_platform: true
+  windows_specific:
+    use_taskkill: true
+    enable_wmi_detection: false
+    
+  unix_specific:
+    use_signals: true
+    enable_proc_filesystem: true
+    
+  macos_specific:
+    use_activity_monitor_integration: false
+    enable_launchd_integration: false
+
+# Logging and error handling
+logging_config:
+  log_level: "INFO"
+  log_process_discovery: true
+  log_cleanup_attempts: true
+  log_verification_results: true
+  enable_performance_metrics: true
+  
+error_handling:
+  continue_on_partial_failure: true
+  retry_failed_cleanups: true
+  escalate_to_system_admin: false
+  create_detailed_error_reports: true
+
+# Performance and resource management
+performance_settings:
+  max_concurrent_operations: 5
+  operation_timeout_seconds: 30
+  enable_async_operations: true
+  enable_operation_caching: false
+  
+resource_limits:
+  max_memory_usage_mb: 100
+  max_cpu_usage_percent: 10
+  max_file_descriptors: 50
+
+# Integration with NanoBrain framework
+framework_integration:
+  enable_component_lifecycle_hooks: true
+  integrate_with_logging_system: true
+  support_configuration_hot_reload: false
+  enable_metrics_collection: true 

@@ -1,0 +1,326 @@
+# Universal NanoBrain Server Configuration
+# Complete configuration example for universal interface supporting any workflow
+# 
+# Author: NanoBrain Development Team
+# Date: January 2025
+# Version: 1.0.0
+
+# =============================================================================
+# SERVER CONFIGURATION
+# =============================================================================
+
+# Basic server settings
+server_type: "fastapi"
+host: "0.0.0.0"
+port: 5001
+debug: false
+
+# FastAPI specific configuration
+fastapi_config:
+  title: "Universal NanoBrain Server"
+  description: "Universal interface for NanoBrain framework workflows with natural language input"
+  version: "1.0.0"
+  docs_url: "/docs"
+  redoc_url: "/redoc"
+  openapi_url: "/openapi.json"
+
+# CORS configuration for frontend integration
+cors_config:
+  allow_origins: ["*"]  # Restrict in production
+  allow_methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+  allow_headers: ["*"]
+  allow_credentials: true
+
+# =============================================================================
+# UNIVERSAL INTERFACE COMPONENTS
+# =============================================================================
+
+# Core universal components that enable any-workflow support
+components:
+  
+  # Workflow Registry - Auto-discovery and management of available workflows
+  workflow_registry:
+    class: "nanobrain.library.interfaces.web.routing.workflow_registry.WorkflowRegistry"
+    config:
+      # Discovery configuration
+      auto_discovery: true
+      discovery_paths:
+        - "nanobrain.library.workflows"
+        - "nanobrain.library.workflows.chatbot_viral_integration"
+        - "nanobrain.library.workflows.viral_protein_analysis"
+      
+      # Validation configuration
+      validation_enabled: true
+      strict_validation: false
+      validation_timeout: 30.0
+      
+      # Registration configuration
+      auto_registration: true
+      require_natural_language_input: true
+      minimum_compliance_score: 0.7
+      
+      # Capability detection
+      capability_detection:
+        analyze_input_data_units: true
+        analyze_output_data_units: true
+        detect_interaction_patterns: true
+        extract_domain_keywords: true
+      
+      # Registry maintenance
+      registry_maintenance:
+        enable_health_checks: true
+        health_check_interval: 3600  # 1 hour
+        cleanup_invalid_entries: true
+        max_registry_size: 1000
+
+  # Request Analyzer - Natural language understanding and classification
+  request_analyzer:
+    class: "nanobrain.library.interfaces.web.analysis.request_analyzer.UniversalRequestAnalyzer"
+    config:
+      # Analysis components
+      intent_classifier:
+        class: "nanobrain.library.interfaces.web.analysis.intent_classifier.IntentClassifier"
+        config:
+          method: "hybrid"  # keyword_based, rule_based, hybrid
+          confidence_thresholds:
+            high_confidence: 0.8
+            medium_confidence: 0.6
+            low_confidence: 0.3
+          
+          # Intent pattern configuration
+          intent_patterns:
+            information_request:
+              keywords: ["what is", "tell me", "describe", "explain", "information about"]
+              weight: 1.0
+            analysis_request:
+              keywords: ["analyze", "analysis", "examine", "study", "evaluate", "assess"]
+              weight: 1.2
+            comparison_request:
+              keywords: ["compare", "comparison", "versus", "vs", "difference", "similar"]
+              weight: 1.1
+            explanation_request:
+              keywords: ["how does", "why does", "explain how", "mechanism", "process"]
+              weight: 1.0
+            procedure_request:
+              keywords: ["how to", "procedure", "method", "steps", "instructions", "protocol"]
+              weight: 1.0
+      
+      domain_classifier:
+        class: "nanobrain.library.interfaces.web.analysis.domain_classifier.DomainClassifier"
+        config:
+          method: "semantic_analysis"
+          confidence_thresholds:
+            high_confidence: 0.8
+            medium_confidence: 0.6
+            low_confidence: 0.3
+
+  # Workflow Router - Intelligent routing to appropriate workflows
+  workflow_router:
+    class: "nanobrain.library.interfaces.web.routing.workflow_router.WorkflowRouter"
+    config:
+      # Primary routing configuration
+      routing_strategy: "best_match"  # best_match, multi_workflow, fallback_chain, confidence_threshold
+      fallback_strategy: "general_conversation"
+      multi_workflow_support: true
+      
+      # Routing thresholds
+      routing_thresholds:
+        minimum_confidence: 0.3
+        high_confidence: 0.8
+        multi_workflow_threshold: 0.7
+        fallback_threshold: 0.2
+      
+      # Execution configuration
+      execution_config:
+        enable_parallel_execution: true
+        max_execution_time: 300.0  # 5 minutes
+        enable_streaming: true
+        enable_caching: true
+      
+      # Error handling
+      error_handling:
+        retry_failed_routes: true
+        max_retries: 2
+        retry_delay: 1.0
+        fallback_on_error: true
+        detailed_error_logging: true
+      
+      # Performance optimization
+      performance_config:
+        route_caching: true
+        cache_ttl: 3600  # 1 hour
+        preload_workflows: false
+        batch_routing: false
+
+  # Response Processor - Universal response formatting and standardization
+  response_processor:
+    class: "nanobrain.library.interfaces.web.processing.response_processor.UniversalResponseProcessor"
+    config:
+      # Response standardization
+      standardization: true
+      streaming_support: true
+      format_conversion: true
+      
+      # Response formatting
+      formatting_config:
+        include_metadata: true
+        include_performance_metrics: true
+        include_debugging_info: false
+        sanitize_sensitive_data: true
+      
+      # Content processing
+      content_processing:
+        auto_detect_format: true
+        preserve_original_structure: true
+        enable_content_validation: true
+        max_content_size: 10485760  # 10MB
+      
+      # Frontend optimization
+      frontend_optimization:
+        optimize_for_rendering: true
+        include_display_hints: true
+        compress_large_responses: true
+        paginate_large_datasets: true
+        max_response_items: 1000
+      
+      # Error handling
+      error_handling:
+        detailed_error_messages: false  # Set to true for development
+        include_stack_traces: false
+        sanitize_error_content: true
+        fallback_message: "I apologize, but I encountered an issue processing your request."
+
+# =============================================================================
+# API ENDPOINTS CONFIGURATION
+# =============================================================================
+
+# Universal endpoints for any-workflow support
+endpoints:
+  # Main universal chat endpoint - routes to any available workflow
+  chat: "/api/universal-chat"
+  
+  # Workflow capabilities discovery
+  capabilities: "/api/workflows/capabilities"
+  
+  # Server health and status
+  health: "/api/health"
+  
+  # Request analysis for debugging/transparency
+  analysis: "/api/workflows/route-analysis"
+  
+  # Streaming endpoints
+  streaming: "/api/streaming"
+  
+  # Workflow-specific endpoints (optional)
+  workflow_specific: "/api/workflows/{workflow_id}/chat"
+
+# =============================================================================
+# MIDDLEWARE CONFIGURATION
+# =============================================================================
+
+middleware:
+  # Request/response validation
+  cors: true
+  request_validation: true
+  response_standardization: true
+  
+  # Security middleware
+  rate_limiting:
+    enabled: true
+    requests_per_minute: 60
+    burst_size: 10
+  
+  # Logging middleware
+  request_logging:
+    enabled: true
+    log_level: "INFO"
+    include_request_body: false  # Set to true for debugging
+    include_response_body: false
+
+# =============================================================================
+# FRAMEWORK INTEGRATION
+# =============================================================================
+
+framework_integration:
+  # Component loading strategy
+  auto_component_loading: true
+  strict_validation: true
+  error_handling: "comprehensive"
+  
+  # NanoBrain framework compliance
+  enforce_from_config: true
+  validate_framework_patterns: true
+  require_config_base_inheritance: true
+
+# =============================================================================
+# STARTUP CONFIGURATION
+# =============================================================================
+
+startup_config:
+  # Workflow discovery on startup
+  auto_discover_workflows: true
+  validate_components: true
+  preload_workflows: false
+  
+  # Health checks
+  initial_health_check: true
+  component_validation: true
+  
+  # Graceful startup/shutdown
+  graceful_timeout: 30.0
+  cleanup_on_shutdown: true
+
+# =============================================================================
+# PRODUCTION OVERRIDES
+# =============================================================================
+
+# Environment-specific overrides (use environment variables)
+production:
+  debug: false
+  
+  fastapi_config:
+    docs_url: null  # Disable docs in production
+    redoc_url: null
+    openapi_url: null
+  
+  cors_config:
+    allow_origins: ["https://yourdomain.com"]  # Restrict origins
+    allow_credentials: false
+  
+  middleware:
+    request_logging:
+      include_request_body: false
+      include_response_body: false
+  
+  components:
+    response_processor:
+      config:
+        error_handling:
+          detailed_error_messages: false
+          include_stack_traces: false
+
+# =============================================================================
+# DEVELOPMENT OVERRIDES
+# =============================================================================
+
+development:
+  debug: true
+  
+  fastapi_config:
+    docs_url: "/docs"
+    redoc_url: "/redoc"
+  
+  cors_config:
+    allow_origins: ["*"]
+  
+  middleware:
+    request_logging:
+      include_request_body: true
+      include_response_body: true
+  
+  components:
+    response_processor:
+      config:
+        error_handling:
+          detailed_error_messages: true
+          include_debugging_info: true 

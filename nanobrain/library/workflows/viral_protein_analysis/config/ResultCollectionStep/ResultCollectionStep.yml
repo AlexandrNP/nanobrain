@@ -6,6 +6,31 @@ step_type: simple
 debug_mode: false
 enable_logging: true
 
+# Input data units (proper plural format)
+input_data_units:
+  analysis_data:
+    class: nanobrain.core.data_unit.DataUnitMemory
+    name: analysis_data
+    description: "Aggregated analysis data from data aggregation step"
+    persistent: false
+
+# Output data units (proper plural format)
+output_data_units:
+  final_results:
+    class: nanobrain.core.data_unit.DataUnitFile
+    name: final_results
+    description: "Final workflow results with complete analysis report"
+    persistent: true
+    file_path: "results/viral_protein_analysis_results.json"
+
+# Step-level triggers
+triggers:
+  - trigger_id: input_data_received
+    class: nanobrain.core.trigger.DataUnitChangeTrigger
+    data_unit: analysis_data
+    event_type: "set"
+    description: "Execute result collection when analysis data is received"
+
 # Collection configuration
 collection_config:
   include_raw_data: false
@@ -13,10 +38,8 @@ collection_config:
   include_analysis_results: true
   include_metadata: true
   create_summary: true
-
-# Output configuration
-output_config:
-  format: "structured"
+  # Moved output format options here
+  output_format: "structured"
   create_report: true
   include_visualizations: true
   include_statistics: true
@@ -28,16 +51,6 @@ validation_config:
   validate_completeness: true
   validate_consistency: true
   check_data_quality: true
-
-# Input data unit
-input_data_unit:
-  name: final_analysis_input
-  class: nanobrain.core.data_unit.DataUnit
-
-# Output data unit
-output_data_unit:
-  name: workflow_results_output
-  class: nanobrain.core.data_unit.DataUnit
 
 # Metadata
 logical_steps_covered: [14]

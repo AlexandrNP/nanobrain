@@ -45,14 +45,13 @@ from nanobrain.core.logging_system import get_logger
 # New enhanced components will be imported on-demand to avoid circular imports
 
 
-@dataclass
 class BVBRCConfig(ExternalToolConfig):
     """Configuration for BV-BRC tool"""
     # Tool identification
     tool_name: str = "bv_brc"
     
     # Default tool card
-    tool_card: Dict[str, Any] = field(default_factory=lambda: {
+    tool_card: Dict[str, Any] = Field(default_factory=lambda: {
         "name": "bv_brc",
         "description": "BV-BRC tool for bacterial and viral genome analysis",
         "version": "1.0.0",
@@ -65,7 +64,7 @@ class BVBRCConfig(ExternalToolConfig):
     use_http_api: bool = True  # NEW: Enable HTTP API fallback
     
     # BV-BRC specific installation paths
-    local_installation_paths: List[str] = field(default_factory=lambda: [
+    local_installation_paths: List[str] = Field(default_factory=lambda: [
         "/Applications/BV-BRC.app/deployment/bin",
         "/Applications/BV-BRC.app/Contents/Resources/deployment/bin"
     ])
@@ -77,7 +76,7 @@ class BVBRCConfig(ExternalToolConfig):
     max_genome_length: int = 15000
     
     # BV-BRC specific progressive scaling
-    progressive_scaling: Dict[int, Dict[str, Any]] = field(default_factory=lambda: {
+    progressive_scaling: Dict[int, Dict[str, Any]] = Field(default_factory=lambda: {
         1: {"limit": 5, "batch_size": 5, "description": "Small test"},
         2: {"limit": 10, "batch_size": 10, "description": "Basic validation"},
         3: {"limit": 20, "batch_size": 15, "description": "Medium test"},
@@ -139,16 +138,391 @@ class BVBRCInstallationError(ToolInstallationError):
 
 class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
     """
-    Enhanced BV-BRC tool with exact command sequence implementation.
-    Enhanced with mandatory from_config pattern implementation.
+    BV-BRC Tool - Bacterial and Viral Bioinformatics Resource Center Integration
+    ===========================================================================
     
-    Features:
-    - Virus name resolution with fuzzy matching (~1000 taxa)
-    - Exact BV-BRC CLI command pipeline execution
-    - Intelligent caching with configurable expiration
-    - Fail-fast error handling
-    - Temporary working directories per taxon
-    - Preserved intermediate files for debugging
+    The BVBRCTool provides comprehensive integration with the Bacterial and Viral
+    Bioinformatics Resource Center (BV-BRC), enabling automated genomic and proteomic
+    analysis workflows. This tool implements the complete BV-BRC CLI pipeline for
+    genome retrieval, feature extraction, and sequence analysis with intelligent
+    optimization and caching capabilities.
+    
+    **Core Architecture:**
+        The BV-BRC tool provides sophisticated bioinformatics capabilities:
+        
+        * **Genome Data Retrieval**: Automated retrieval of bacterial and viral genomes from BV-BRC
+        * **Feature Extraction**: Protein and gene feature extraction with metadata enrichment
+        * **Sequence Processing**: Batch processing of genomic sequences with optimization
+        * **Intelligent Caching**: Advanced caching system with configurable expiration and validation
+        * **Progressive Scaling**: Adaptive processing for datasets from small tests to full-scale analysis
+        * **Quality Control**: Comprehensive validation and quality assurance for biological data
+    
+    **Bioinformatics Workflow:**
+        The tool implements the complete BV-BRC analysis pipeline:
+        
+        **Genome Discovery:**
+        * Taxonomic ID-based genome retrieval with filtering criteria
+        * Virus name resolution with fuzzy matching across ~1000 taxa
+        * Genome quality assessment and size-based filtering
+        * Duplicate detection and consolidation
+        
+        **Feature Extraction:**
+        * Automated protein and gene feature extraction
+        * Metadata enrichment with functional annotations
+        * Cross-reference resolution with external databases
+        * Feature validation and quality control
+        
+        **Sequence Processing:**
+        * Batch sequence retrieval with optimization
+        * MD5-based deduplication and integrity validation
+        * Parallel processing for large dataset analysis
+        * Memory-efficient streaming for large sequences
+        
+        **Data Quality Management:**
+        * Sequence validation against biological standards
+        * Length-based filtering for quality control
+        * Contamination detection and removal
+        * Statistical analysis and reporting
+    
+    **Scientific Methodology:**
+        The tool follows established bioinformatics best practices:
+        
+        **Exact CLI Command Pipeline:**
+        ```bash
+        # 1. Retrieve all genomes for taxonomic group
+        p3-all-genomes --eq taxon_id,<taxon_id> > <taxon_id>.tsv
+        
+        # 2. Extract genome features with annotations
+        cut -f1 <taxon_id>.tsv | p3-get-genome-features --attr patric_id --attr product > <taxon_id>.id_md5
+        
+        # 3. Filter unique protein sequences
+        grep "CDS\\|mat" <taxon_id>.id_md5 | cut -f2 | sort -u | perl -e 'while (<>){chomp; if ($_ =~ /\\w/){print "$_\\n";}}' > <taxon_id>.unique.md5
+        
+        # 4. Retrieve sequence data
+        p3-get-feature-sequence --input <taxon_id>.unique.md5 --col 0 > <taxon_id>.unique.seq
+        ```
+        
+        **Data Processing Standards:**
+        * FASTA format compliance and validation
+        * Standard bioinformatics file format support
+        * Metadata preservation and enrichment
+        * Reproducible analysis with versioning
+    
+    **Configuration Architecture:**
+        Comprehensive configuration for bioinformatics workflows:
+        
+        ```yaml
+        # BV-BRC Tool Configuration
+        tool_name: "bv_brc"
+        
+        # Tool card for framework integration
+        tool_card:
+          name: "bv_brc"
+          description: "BV-BRC genomics and proteomics analysis tool"
+          version: "1.0.0"
+          category: "bioinformatics"
+          capabilities:
+            - "genome_analysis"
+            - "protein_extraction"
+            - "viral_data"
+            - "bacterial_data"
+        
+        # BV-BRC API Configuration
+        api_base_url: "https://www.bv-brc.org/api"
+        use_http_api: true
+        
+        # Local Installation Paths
+        local_installation_paths:
+          - "/Applications/BV-BRC.app/deployment/bin"
+          - "/Applications/BV-BRC.app/Contents/Resources/deployment/bin"
+        
+        # Data Processing Parameters
+        genome_batch_size: 50
+        md5_batch_size: 25
+        min_genome_length: 8000
+        max_genome_length: 15000
+        
+        # Progressive Scaling Configuration
+        progressive_scaling:
+          1:
+            limit: 5
+            batch_size: 5
+            description: "Small test - initial validation"
+          2:
+            limit: 10
+            batch_size: 10
+            description: "Basic validation - moderate dataset"
+          3:
+            limit: 20
+            batch_size: 15
+            description: "Medium test - larger sample"
+          4:
+            limit: 50
+            batch_size: 25
+            description: "Full scale - complete analysis"
+        
+        # Performance Configuration
+        timeout_seconds: 600
+        retry_attempts: 2
+        use_cache: true
+        verify_on_init: false
+        
+        # Quality Control Settings
+        quality_control:
+          sequence_validation: true
+          length_filtering: true
+          contamination_detection: true
+          statistical_analysis: true
+        ```
+    
+    **Usage Patterns:**
+        
+        **Basic Viral Genome Analysis:**
+        ```python
+        from nanobrain.library.tools.bioinformatics import BVBRCTool
+        
+        # Create tool from configuration
+        bvbrc = BVBRCTool.from_config('config/bvbrc_config.yml')
+        
+        # Analyze viral proteins
+        result = await bvbrc.get_viral_proteins(
+            virus_name="chikungunya virus",
+            analysis_level="comprehensive"
+        )
+        
+        print(f"Retrieved {len(result.proteins)} proteins")
+        print(f"Analysis quality: {result.quality_score}")
+        ```
+        
+        **Large-Scale Genomic Analysis:**
+        ```python
+        # Configure for large-scale analysis
+        bvbrc = BVBRCTool.from_config('config/large_scale_bvbrc.yml')
+        
+        # Enable progressive scaling
+        await bvbrc.initialize()
+        
+        # Analyze multiple viral families
+        viral_families = ["Alphaviridae", "Flaviviridae", "Coronaviridae"]
+        
+        results = {}
+        for family in viral_families:
+            result = await bvbrc.analyze_viral_family(
+                family_name=family,
+                include_variants=True,
+                quality_threshold=0.9
+            )
+            results[family] = result
+        
+        # Generate comparative analysis
+        comparative_report = bvbrc.generate_comparative_analysis(results)
+        ```
+        
+        **Protein Functional Analysis:**
+        ```python
+        # Specialized protein analysis
+        bvbrc = BVBRCTool.from_config('config/protein_analysis.yml')
+        
+        # Analyze specific protein functions
+        protein_analysis = await bvbrc.analyze_protein_functions(
+            taxon_id="12637",  # Chikungunya virus
+            protein_types=["structural", "non-structural"],
+            functional_categories=["replication", "virulence"]
+        )
+        
+        # Access detailed results
+        for protein in protein_analysis.proteins:
+            print(f"Protein: {protein.name}")
+            print(f"Function: {protein.functional_annotation}")
+            print(f"Conservation: {protein.conservation_score}")
+        ```
+        
+        **Batch Processing with Caching:**
+        ```python
+        # Configure with intelligent caching
+        bvbrc = BVBRCTool.from_config('config/cached_bvbrc.yml')
+        
+        # Process multiple queries with caching
+        virus_queries = [
+            {"name": "SARS-CoV-2", "variants": True},
+            {"name": "Influenza A", "subtypes": ["H1N1", "H3N2"]},
+            {"name": "Dengue virus", "serotypes": [1, 2, 3, 4]}
+        ]
+        
+        results = []
+        for query in virus_queries:
+            # Automatic cache usage for repeated queries
+            result = await bvbrc.process_virus_query(query)
+            results.append(result)
+        
+        # Cache statistics and performance
+        cache_stats = bvbrc.get_cache_statistics()
+        print(f"Cache hit rate: {cache_stats.hit_rate:.2%}")
+        ```
+    
+    **Advanced Features:**
+        
+        **Intelligent Virus Resolution:**
+        * Fuzzy name matching with confidence scoring
+        * Taxonomic hierarchy traversal and validation
+        * Synonym detection and cross-referencing
+        * Multi-language name support and normalization
+        
+        **Progressive Scaling Capabilities:**
+        * Automatic dataset size detection and optimization
+        * Adaptive batch sizing based on system resources
+        * Memory usage optimization for large datasets
+        * Parallel processing coordination and load balancing
+        
+        **Quality Control and Validation:**
+        * Sequence integrity validation with checksums
+        * Biological plausibility assessment
+        * Contamination detection and flagging
+        * Statistical quality metrics and reporting
+        
+        **Performance Optimization:**
+        * Multi-level caching with intelligent expiration
+        * Parallel processing for independent operations
+        * Memory-efficient streaming for large datasets
+        * Network optimization for API interactions
+    
+    **Scientific Applications:**
+        
+        **Comparative Genomics:**
+        * Cross-species genome comparison and analysis
+        * Evolutionary relationship reconstruction
+        * Phylogenetic analysis support and data preparation
+        * Functional annotation comparison across species
+        
+        **Viral Epidemiology:**
+        * Outbreak strain analysis and characterization
+        * Viral evolution tracking and monitoring
+        * Antigenic variation analysis and prediction
+        * Public health surveillance data integration
+        
+        **Drug Discovery:**
+        * Target protein identification and validation
+        * Conserved region analysis for therapeutic targeting
+        * Resistance mechanism analysis and prediction
+        * Drug interaction prediction and validation
+        
+        **Vaccine Development:**
+        * Antigen identification and characterization
+        * Immunogenic region prediction and analysis
+        * Cross-protective antigen identification
+        * Vaccine efficacy prediction and optimization
+    
+    **Integration Patterns:**
+        
+        **Workflow Integration:**
+        * Seamless integration with bioinformatics workflows
+        * Pipeline component for automated analysis
+        * Result passing to downstream analysis tools
+        * Quality control checkpoints and validation
+        
+        **Database Integration:**
+        * Connection to major biological databases
+        * Cross-reference resolution and validation
+        * Metadata enrichment from multiple sources
+        * Data provenance tracking and management
+        
+        **Analysis Tool Integration:**
+        * Integration with sequence alignment tools
+        * Phylogenetic analysis tool coordination
+        * Structure prediction tool compatibility
+        * Functional annotation tool integration
+    
+    **Performance and Scalability:**
+        
+        **Processing Optimization:**
+        * Adaptive batch sizing for optimal throughput
+        * Memory management for large-scale analysis
+        * Network optimization for API efficiency
+        * Parallel processing coordination
+        
+        **Scalability Features:**
+        * Horizontal scaling across multiple compute nodes
+        * Cloud deployment and auto-scaling support
+        * Resource usage monitoring and optimization
+        * Load balancing for high-throughput analysis
+        
+        **Monitoring and Analytics:**
+        * Real-time performance monitoring and alerting
+        * Resource utilization tracking and optimization
+        * Quality metrics dashboard and reporting
+        * Usage pattern analysis and optimization recommendations
+    
+    **Error Handling and Reliability:**
+        
+        **Robust Error Management:**
+        * Comprehensive error classification and handling
+        * Automatic retry with exponential backoff
+        * Graceful degradation for partial failures
+        * Detailed error logging and diagnostic information
+        
+        **Data Quality Assurance:**
+        * Input validation with biological constraints
+        * Output verification and quality assessment
+        * Data integrity checking with checksums
+        * Reproducibility validation and reporting
+        
+        **Reliability Features:**
+        * Fault tolerance with automatic recovery
+        * Transaction-like operations with rollback
+        * Health monitoring and alerting
+        * Backup and recovery mechanisms
+    
+    **Development and Testing:**
+        
+        **Testing Support:**
+        * Comprehensive test suite with biological datasets
+        * Performance benchmarking against reference standards
+        * Quality validation with known datasets
+        * Integration testing with real BV-BRC services
+        
+        **Debugging Features:**
+        * Detailed logging with execution tracing
+        * Intermediate file preservation for analysis
+        * Performance profiling and bottleneck identification
+        * Visual analysis workflow monitoring
+        
+        **Development Tools:**
+        * Configuration validation and optimization tools
+        * Performance monitoring and analysis utilities
+        * Data quality assessment and reporting tools
+        * Workflow visualization and debugging interfaces
+    
+    Attributes:
+        bio_config (BVBRCConfig): Tool configuration with bioinformatics parameters
+        genome_batch_size (int): Batch size for genome processing optimization
+        md5_batch_size (int): Batch size for sequence deduplication processing
+        min_genome_length (int): Minimum genome length for quality filtering
+        max_genome_length (int): Maximum genome length for quality filtering
+        use_cache (bool): Whether intelligent caching is enabled
+        virus_resolver: Virus name resolution and validation component
+        command_pipeline: BV-BRC CLI command execution pipeline
+        genome_cache (Dict): Cache for genome data with expiration management
+        protein_cache (Dict): Cache for protein data with quality validation
+    
+    Note:
+        The BV-BRC tool requires either local BV-BRC CLI installation or network
+        access to BV-BRC APIs. Progressive scaling is automatically applied based
+        on dataset size and system resources. All tools must be created using the
+        from_config pattern with proper biological parameter validation.
+    
+    Warning:
+        Bioinformatics operations may consume significant computational resources
+        and network bandwidth. Monitor resource usage and implement appropriate
+        timeouts for large-scale analyses. Be aware of BV-BRC usage policies and
+        rate limits when accessing public databases.
+    
+    See Also:
+        * :class:`ExternalTool`: Base external tool implementation
+        * :class:`ProgressiveScalingMixin`: Progressive scaling capabilities
+        * :class:`BVBRCConfig`: BV-BRC tool configuration schema
+        * :mod:`nanobrain.library.tools.bioinformatics`: Bioinformatics tool suite
+        * :mod:`nanobrain.library.agents.specialized`: Bioinformatics agents
+        * :mod:`nanobrain.core.external_tool`: External tool framework
     """
     
     @classmethod

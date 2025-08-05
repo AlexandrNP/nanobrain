@@ -10,29 +10,36 @@ config:
   enable_logging: true
   log_data_transfers: true
 
-# UPDATED: Input configuration to handle workflow output
-input_configs:
+# UPDATED: Input data units configuration (fixed from deprecated input_configs)
+input_data_units:
   analysis_input:
-    class: nanobrain.core.data_unit.DataUnitFile
-    name: analysis_input
+    class: "nanobrain.core.data_unit.DataUnitFile"
+    name: "analysis_input"
     description: "Viral protein analysis workflow results"
     persistent: true
     file_path: "results/viral_protein_analysis.json"
-    # Expects AlphavirusWorkflow output format
   
   response_input:
-    class: nanobrain.core.data_unit.DataUnitMemory
-    name: response_input
+    class: "nanobrain.core.data_unit.DataUnitMemory"
+    name: "response_input"
     description: "Conversational response input"
     persistent: false
-    # For alternative conversational responses
 
-# UPDATED: Output configuration
-output_config:
-  class: nanobrain.core.data_unit.DataUnitMemory
-  name: formatted_response
-  description: "Formatted chatbot response"
-  persistent: false
+# UPDATED: Output data units configuration (fixed from deprecated output_config)
+output_data_units:
+  formatted_response:
+    class: "nanobrain.core.data_unit.DataUnitMemory"
+    name: "formatted_response"
+    description: "Formatted chatbot response"
+    persistent: false
+
+# Step-level triggers (required)
+triggers:
+  - trigger_id: "input_data_received"
+    class: "nanobrain.core.trigger.DataUnitChangeTrigger"
+    data_unit: "analysis_input"
+    event_type: "set"
+    description: "Execute response formatting when analysis input is received"
 
 # Formatting configuration
 formatting_config:

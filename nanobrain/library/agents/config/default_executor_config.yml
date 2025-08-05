@@ -1,0 +1,24 @@
+# Default Executor Configuration for Library Agents
+# Framework-compliant executor configuration
+
+# ✅ FRAMEWORK COMPLIANCE: Configuration-driven executor specification
+executor_type: "local"
+max_workers: 2
+timeout: 300
+queue_size: 50
+
+# Error handling configuration
+error_handling:
+  retry_count: 2
+  retry_delay: 0.5
+  propagate_errors: true
+  
+# Resource management
+resource_limits:
+  max_memory_mb: 1024
+  max_cpu_percent: 70
+  
+# Logging configuration
+logging:
+  level: "INFO"
+  enable_performance_logging: false 

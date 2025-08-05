@@ -12,6 +12,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional, List, Callable, Set, Union
 from enum import Enum
 from pydantic import BaseModel, Field, ConfigDict
+from pathlib import Path
 
 from .component_base import FromConfigBase, ComponentConfigurationError, ComponentDependencyError
 # Import logging system
@@ -49,12 +50,363 @@ class TriggerConfig(ConfigBase):
 
 class TriggerBase(FromConfigBase, ABC):
     """
-    Base class for triggers that control when Steps execute.
-    Enhanced with mandatory from_config pattern implementation.
+    Base Trigger Class - Event-Driven Activation and Workflow Orchestration
+    =======================================================================
     
-    Biological analogy: Action potential threshold mechanisms.
-    Justification: Like how neurons fire when threshold conditions are met,
-    triggers activate steps when specific conditions are satisfied.
+    The TriggerBase class is the foundational component for event-driven processing
+    within the NanoBrain framework. Triggers monitor conditions, data changes, and
+    external events to automatically activate steps, workflows, and agents, enabling
+    reactive and responsive processing architectures.
+    
+    **Core Architecture:**
+        Triggers represent intelligent event detection systems that:
+        
+        * **Monitor Conditions**: Continuously watch for specific events or state changes
+        * **Activate Components**: Automatically trigger step and workflow execution
+        * **Manage Timing**: Control execution frequency with debouncing and rate limiting
+        * **Enable Reactivity**: Support real-time response to data and system events
+        * **Coordinate Workflows**: Orchestrate complex multi-step processing pipelines
+        * **Ensure Reliability**: Provide robust event detection with error handling
+    
+    **Biological Analogy:**
+        Like action potential threshold mechanisms that fire when specific conditions
+        are met, triggers activate steps when particular events or conditions are
+        satisfied. Neurons accumulate electrical potential and fire when threshold
+        is reached, propagating signals through neural networks - exactly how triggers
+        monitor conditions and activate processing components when criteria are met,
+        propagating execution through workflow networks.
+    
+    **Event-Driven Processing Architecture:**
+        
+        **Condition Monitoring:**
+        * Continuous monitoring of data units and system state
+        * Real-time change detection with configurable sensitivity
+        * Multi-condition evaluation with logical operators
+        * Custom condition scripting and evaluation
+        
+        **Activation Patterns:**
+        * Immediate activation upon condition detection
+        * Debounced activation to prevent excessive triggering
+        * Rate-limited activation for performance optimization
+        * Scheduled activation with timer-based triggers
+        
+        **Event Types:**
+        * **Data Updated**: Triggered when data units receive new data
+        * **All Data Received**: Triggered when all required inputs are available
+        * **Timer**: Triggered on scheduled intervals or specific times
+        * **Manual**: Triggered by explicit user or system commands
+        * **Condition**: Triggered when custom conditions evaluate to true
+        
+        **Response Coordination:**
+        * Multi-target activation for parallel processing
+        * Sequential activation with dependency management
+        * Conditional activation based on runtime state
+        * Priority-based activation ordering
+    
+    **Framework Integration:**
+        Triggers seamlessly integrate with all framework components:
+        
+        * **Step Activation**: Automatically trigger step execution when conditions are met
+        * **Workflow Orchestration**: Coordinate complex multi-step processing workflows
+        * **Agent Integration**: Trigger agent processing based on data availability
+        * **Data Unit Monitoring**: Monitor data unit changes and trigger processing
+        * **Executor Support**: Triggers work with all execution backends
+        * **Monitoring Integration**: Comprehensive logging and performance tracking
+    
+    **Trigger Type Implementations:**
+        The framework supports various trigger specializations:
+        
+        * **DataUpdatedTrigger**: Monitors data unit changes and modifications
+        * **AllDataReceivedTrigger**: Waits for all required inputs before activation
+        * **TimerTrigger**: Provides scheduled and interval-based activation
+        * **ManualTrigger**: Enables user-controlled activation and testing
+        * **ConditionalTrigger**: Supports custom condition evaluation and scripting
+        * **CompoundTrigger**: Combines multiple triggers with logical operators
+    
+    **Configuration Architecture:**
+        Triggers follow the framework's configuration-first design:
+        
+        ```yaml
+        # Data update trigger
+        name: "data_change_trigger"
+        trigger_type: "data_updated"
+        debounce_ms: 500
+        max_frequency_hz: 5.0
+        
+        # Watch specific data units
+        watch_data_units:
+          - "input_data"
+          - "parameters"
+        
+        # Target steps to activate
+        target_steps:
+          - "data_processing"
+          - "validation"
+        
+        # Timer trigger
+        name: "scheduled_processing"
+        trigger_type: "timer"
+        timer_interval_ms: 60000  # Every minute
+        
+        # Schedule configuration
+        schedule:
+          type: "interval"
+          interval: "1m"
+          start_time: "09:00"
+          end_time: "17:00"
+          timezone: "UTC"
+        
+        # Conditional trigger
+        name: "threshold_trigger"
+        trigger_type: "condition"
+        condition: "data.temperature > 25 and data.humidity < 60"
+        
+        # Condition evaluation
+        evaluation:
+          language: "python"
+          context_variables:
+            - "data"
+            - "metadata"
+            - "system_state"
+          timeout_ms: 1000
+        
+        # All data received trigger
+        name: "batch_ready_trigger"
+        trigger_type: "all_data_received"
+        required_data_units:
+          - "raw_data"
+          - "configuration"
+          - "metadata"
+        
+        # Activation settings
+        activation:
+          mode: "once_per_batch"
+          reset_on_completion: true
+          timeout_ms: 30000
+        ```
+    
+    **Usage Patterns:**
+        
+        **Basic Data Monitoring:**
+        ```python
+        from nanobrain.core import DataUpdatedTrigger
+        
+        # Create trigger from configuration
+        trigger = DataUpdatedTrigger.from_config('config/data_trigger.yml')
+        
+        # Register callback for activation
+        async def on_data_updated(data_unit, old_value, new_value):
+            print(f"Data changed: {old_value} -> {new_value}")
+            # Trigger step execution
+            await step.execute()
+        
+        trigger.register_callback(on_data_updated)
+        
+        # Start monitoring
+        await trigger.start()
+        ```
+        
+        **Timer-Based Processing:**
+        ```python
+        # Scheduled processing trigger
+        timer_trigger = TimerTrigger.from_config('config/timer_trigger.yml')
+        
+        # Register processing callback
+        async def scheduled_process():
+            # Execute periodic processing
+            results = await workflow.execute_batch()
+            return results
+        
+        timer_trigger.register_callback(scheduled_process)
+        
+        # Start scheduled execution
+        await timer_trigger.start()
+        ```
+        
+        **Complex Condition Monitoring:**
+        ```python
+        # Custom condition trigger
+        condition_trigger = ConditionalTrigger.from_config('config/condition_trigger.yml')
+        
+        # Advanced condition evaluation
+        condition_expression = "data.temperature > threshold and data.trend == 'increasing'"
+        condition_trigger.set_condition(condition_expression)
+        
+        # Context variables for evaluation
+        condition_trigger.set_context({
+            'threshold': 30.0,
+            'system_state': system_monitor.get_state()
+        })
+        
+        await condition_trigger.start()
+        ```
+        
+        **Multi-Target Activation:**
+        ```python
+        # Trigger multiple steps simultaneously
+        multi_trigger = DataUpdatedTrigger.from_config('config/multi_trigger.yml')
+        
+        # Register multiple targets
+        multi_trigger.add_target(preprocessing_step)
+        multi_trigger.add_target(validation_step)
+        multi_trigger.add_target(logging_step)
+        
+        # All targets activated when trigger fires
+        await multi_trigger.start()
+        ```
+    
+    **Advanced Features:**
+        
+        **Debouncing and Rate Limiting:**
+        * Configurable debounce periods to prevent excessive triggering
+        * Rate limiting to control maximum activation frequency
+        * Burst detection and handling for high-frequency events
+        * Adaptive rate limiting based on processing capacity
+        
+        **Condition Evaluation:**
+        * Python expression evaluation for custom conditions
+        * Multi-variable context with data and system state
+        * Safe evaluation with timeout and resource limits
+        * Precompiled expressions for performance optimization
+        
+        **Event Aggregation:**
+        * Batch event processing for improved efficiency
+        * Event correlation and pattern detection
+        * Time-window based aggregation
+        * Statistical analysis of event patterns
+        
+        **Error Handling and Recovery:**
+        * Robust error handling with detailed diagnostics
+        * Automatic recovery from temporary failures
+        * Circuit breaker patterns for unstable conditions
+        * Fallback activation mechanisms
+    
+    **Performance and Scalability:**
+        
+        **Efficient Monitoring:**
+        * Low-overhead condition checking with optimized algorithms
+        * Event-driven architecture minimizing resource usage
+        * Selective monitoring with configurable granularity
+        * Batch processing for improved throughput
+        
+        **Scalability Features:**
+        * Distributed trigger monitoring across multiple nodes
+        * Load balancing for high-frequency event processing
+        * Horizontal scaling with trigger distribution
+        * Resource pooling and optimization
+        
+        **Monitoring and Metrics:**
+        * Trigger activation frequency and timing analysis
+        * Condition evaluation performance monitoring
+        * Error rate tracking and optimization recommendations
+        * Resource usage analysis and capacity planning
+    
+    **Integration Patterns:**
+        
+        **Workflow Orchestration:**
+        * Event-driven workflow activation and coordination
+        * Multi-stage pipeline triggering with dependencies
+        * Conditional workflow branching based on trigger conditions
+        * Dynamic workflow modification based on events
+        
+        **Real-Time Processing:**
+        * Stream processing with continuous data monitoring
+        * Low-latency response to critical events
+        * Real-time analytics and alerting systems
+        * Adaptive processing based on data characteristics
+        
+        **Batch Processing:**
+        * Scheduled batch processing with timer triggers
+        * Data availability-based batch activation
+        * Resource-aware batch scheduling and optimization
+        * Large dataset processing with progress monitoring
+    
+    **Event Lifecycle:**
+        Triggers follow a well-defined event processing lifecycle:
+        
+        1. **Configuration Loading**: Parse and validate trigger configuration
+        2. **Condition Setup**: Initialize monitoring conditions and parameters
+        3. **Target Registration**: Register callback functions and target components
+        4. **Monitoring Initialization**: Setup event listeners and data watchers
+        5. **Active Monitoring**: Continuously monitor conditions and events
+        6. **Condition Evaluation**: Evaluate trigger conditions when events occur
+        7. **Activation Decision**: Determine whether to activate based on conditions
+        8. **Target Activation**: Execute registered callbacks and activate targets
+        9. **Rate Limiting**: Apply debouncing and frequency controls
+        10. **Cleanup**: Handle cleanup and resource management
+    
+    **Security and Reliability:**
+        
+        **Secure Condition Evaluation:**
+        * Safe expression evaluation with sandboxing
+        * Input validation and sanitization
+        * Resource limits and timeout protection
+        * Access control for sensitive data and operations
+        
+        **Reliability Features:**
+        * Fault tolerance with automatic recovery
+        * Event persistence and replay capabilities
+        * Redundancy and failover mechanisms
+        * Health monitoring and alerting
+        
+        **Audit and Compliance:**
+        * Comprehensive logging of trigger activations
+        * Event history and audit trails
+        * Performance metrics and compliance reporting
+        * Security event tracking and analysis
+    
+    **Development and Testing:**
+        
+        **Testing Support:**
+        * Mock trigger implementations for testing
+        * Event simulation and validation frameworks
+        * Trigger performance benchmarking
+        * Integration testing with steps and workflows
+        
+        **Debugging Features:**
+        * Comprehensive logging with event tracing
+        * Condition evaluation debugging and analysis
+        * Performance profiling and optimization hints
+        * Visual event timeline and inspection tools
+        
+        **Development Tools:**
+        * Trigger configuration validation and linting
+        * Condition expression testing and validation
+        * Performance monitoring and optimization tools
+        * Event pattern analysis and optimization
+    
+    Attributes:
+        name (str): Trigger identifier for logging and component coordination
+        trigger_type (TriggerType): Type of trigger and activation pattern
+        debounce_ms (int): Debounce period in milliseconds to prevent excessive activation
+        max_frequency_hz (float): Maximum activation frequency in Hz for rate limiting
+        condition (str, optional): Custom condition expression for conditional triggers
+        callbacks (List[Callable]): Registered callback functions for activation
+        is_active (bool): Whether trigger is currently monitoring conditions
+        last_trigger_time (float): Timestamp of last activation for rate limiting
+        trigger_count (int): Total number of activations since creation
+        performance_metrics (Dict): Real-time performance and usage metrics
+    
+    Note:
+        This is an abstract base class that cannot be instantiated directly.
+        Use concrete implementations like DataUpdatedTrigger, TimerTrigger, or
+        ConditionalTrigger. All triggers must be created using the from_config
+        pattern with proper configuration files following framework patterns.
+    
+    Warning:
+        Triggers can significantly impact system performance if configured with
+        high frequencies or complex conditions. Monitor trigger performance and
+        implement appropriate rate limiting and debouncing. Be cautious with
+        condition expressions that access external resources or perform expensive operations.
+    
+    See Also:
+        * :class:`TriggerConfig`: Trigger configuration schema and validation
+        * :class:`TriggerType`: Available trigger types and activation patterns
+        * :class:`DataUpdatedTrigger`: Data change monitoring and activation
+        * :class:`TimerTrigger`: Scheduled and interval-based activation
+        * :class:`ConditionalTrigger`: Custom condition evaluation and activation
+        * :class:`BaseStep`: Steps that can be activated by triggers
+        * :class:`Workflow`: Workflows that coordinate trigger-driven processing
     """
     
     COMPONENT_TYPE = "trigger"
@@ -308,37 +660,164 @@ class DataUnitChangeTrigger(TriggerBase):
     """
     
     @classmethod
-    def from_config(cls, config: TriggerConfig, **kwargs) -> 'DataUnitChangeTrigger':
-        """Mandatory from_config implementation for DataUnitChangeTrigger"""
+    def from_config(cls, config: Union[str, Path, TriggerConfig, Dict[str, Any]], **kwargs) -> 'DataUnitChangeTrigger':
+        """
+        Enhanced from_config implementation following standard NanoBrain pattern
+        
+        Supports both file paths and inline dictionary configurations as per
+        NanoBrain framework standards for DataUnit, Link, and Trigger classes.
+        
+        Args:
+            config: Configuration file path, TriggerConfig object, or dictionary
+            **kwargs: Additional context and dependencies
+            
+        Returns:
+            Fully initialized DataUnitChangeTrigger instance
+            
+        ✅ FRAMEWORK COMPLIANCE:
+        - Follows standard Union[str, Path, ConfigClass, Dict] pattern
+        - Supports inline dict config as per Trigger rules
+        - No hardcoding or simplified solutions
+        - Pure configuration-driven instantiation
+        """
         logger = get_logger(f"{cls.__name__}.from_config")
         logger.info(f"Creating {cls.__name__} from configuration")
         
-        # Step 1: Validate configuration schema
-        cls.validate_config_schema(config)
+        # Step 1: Normalize input to TriggerConfig object
+        if isinstance(config, (str, Path)):
+            # File path input - use standard config loading
+            config_object = TriggerConfig.from_config(config, **kwargs)
+        elif isinstance(config, dict):
+            # Dictionary input - create TriggerConfig from dict (inline config support)
+            # This is specifically allowed for DataUnit, Link, Trigger classes
+            try:
+                # Enable direct instantiation for config creation
+                TriggerConfig._allow_direct_instantiation = True
+                config_object = TriggerConfig(**config)
+            finally:
+                TriggerConfig._allow_direct_instantiation = False
+        elif isinstance(config, TriggerConfig):
+            # Already a TriggerConfig object
+            config_object = config
+        else:
+            # Handle other BaseModel types
+            if hasattr(config, 'model_dump'):
+                config_dict = config.model_dump()
+            elif hasattr(config, 'dict'):
+                config_dict = config.dict()
+            else:
+                raise ValueError(f"Unsupported config type: {type(config)}")
+            
+            try:
+                TriggerConfig._allow_direct_instantiation = True
+                config_object = TriggerConfig(**config_dict)
+            finally:
+                TriggerConfig._allow_direct_instantiation = False
         
-        # Step 2: Extract component-specific configuration  
-        component_config = cls.extract_component_config(config)
+        # Step 2: Validate configuration schema
+        cls.validate_config_schema(config_object)
         
-        # Step 3: Resolve dependencies
+        # Step 3: Extract component-specific configuration  
+        component_config = cls.extract_component_config(config_object)
+        
+        # Step 4: Resolve dependencies
         dependencies = cls.resolve_dependencies(component_config, **kwargs)
         
-        # Step 4: Create instance
-        instance = cls.create_instance(config, component_config, dependencies)
+        # Step 5: Create instance
+        instance = cls.create_instance(config_object, component_config, dependencies)
         
-        # Step 5: Post-creation initialization
+        # Step 6: Post-creation initialization
         instance._post_config_initialization()
         
         logger.info(f"Successfully created {cls.__name__}")
         return instance
         
     @classmethod
+    def extract_component_config(cls, config: TriggerConfig) -> Dict[str, Any]:
+        """Extract DataUnitChangeTrigger configuration including data_unit field"""
+        base_config = super().extract_component_config(config)
+        return {
+            **base_config,
+            'data_unit': getattr(config, 'data_unit', None),
+            'event_type': getattr(config, 'event_type', 'set')
+        }
+    
+    @classmethod  
     def resolve_dependencies(cls, component_config: Dict[str, Any], **kwargs) -> Dict[str, Any]:
-        """Resolve DataUnitChangeTrigger dependencies"""
+        """
+        Resolve DataUnitChangeTrigger dependencies with step-scope data unit resolution
+        
+        ✅ ARCHITECTURAL COMPLIANCE: Only resolve data_unit string references 
+        to actual DataUnit objects from step context (step-scope isolation).
+        """
         base_deps = super().resolve_dependencies(component_config, **kwargs)
+        
+        # Get data unit reference (may be string or object)
+        data_unit_ref = component_config.get('data_unit')
+        
+        # ✅ STEP-SCOPE DATA UNIT RESOLUTION
+        if isinstance(data_unit_ref, str) and 'step_context' in kwargs:
+            step_context = kwargs['step_context']
+            
+            # ✅ ARCHITECTURAL COMPLIANCE: Only search within step scope
+            resolved_data_unit = None
+            
+            # Check step input data units
+            step_input_units = step_context.get('step_input_data_units', {})
+            if data_unit_ref in step_input_units:
+                resolved_data_unit = step_input_units[data_unit_ref]
+            
+            # Check step output data units
+            if not resolved_data_unit:
+                step_output_units = step_context.get('step_output_data_units', {})
+                if data_unit_ref in step_output_units:
+                    resolved_data_unit = step_output_units[data_unit_ref]
+            
+            if resolved_data_unit:
+                # ✅ Successfully resolved string reference to DataUnit object within step scope
+                data_unit_ref = resolved_data_unit
+                logger = get_logger(f"{cls.__name__}.resolve_dependencies") 
+                logger.info(f"✅ Resolved data_unit reference: '{component_config.get('data_unit')}' -> {resolved_data_unit.name}")
+            else:
+                # ✅ STEP-SCOPE ISOLATION: Only show step-local data units
+                available_units = (
+                    list(step_input_units.keys()) + 
+                    list(step_output_units.keys())
+                )
+                step_name = step_context.get('step_name', 'unknown')
+                raise ValueError(
+                    f"❌ Data unit reference '{data_unit_ref}' not found in step '{step_name}' scope. "
+                    f"Available step data units: {available_units}"
+                )
+        elif isinstance(data_unit_ref, str) and 'workflow_context' in kwargs:
+            # ✅ LEGACY SUPPORT: Handle old workflow_context parameter for backward compatibility
+            # But prioritize step-scope resolution for proper architecture
+            workflow_context = kwargs['workflow_context']
+            
+            # Attempt to resolve string reference to actual DataUnit object
+            resolved_data_unit = (
+                workflow_context.get('step_input_data_units', {}).get(data_unit_ref) or
+                workflow_context.get('step_output_data_units', {}).get(data_unit_ref)
+            )
+            
+            if resolved_data_unit:
+                data_unit_ref = resolved_data_unit
+                logger = get_logger(f"{cls.__name__}.resolve_dependencies") 
+                logger.info(f"✅ Resolved data_unit reference (legacy): '{component_config.get('data_unit')}' -> {resolved_data_unit.name}")
+            else:
+                available_units = (
+                    list(workflow_context.get('step_input_data_units', {}).keys()) +
+                    list(workflow_context.get('step_output_data_units', {}).keys())
+                )
+                raise ValueError(
+                    f"❌ Data unit reference '{data_unit_ref}' not found in context. "
+                    f"Available data units: {available_units}"
+                )
+        
         return {
             **base_deps,
-            'data_unit': kwargs.get('data_unit'),
-            'event_type': kwargs.get('event_type', 'data_unit_updated')
+            'data_unit': data_unit_ref,
+            'event_type': component_config.get('event_type', 'data_unit_updated')
         }
     
     def _init_from_config(self, config: TriggerConfig, component_config: Dict[str, Any],
@@ -679,24 +1158,73 @@ class TimerTrigger(TriggerBase):
     """
     
     @classmethod
-    def from_config(cls, config: TriggerConfig, **kwargs) -> 'TimerTrigger':
-        """Mandatory from_config implementation for TimerTrigger"""
+    def from_config(cls, config: Union[str, Path, TriggerConfig, Dict[str, Any]], **kwargs) -> 'TimerTrigger':
+        """
+        Enhanced from_config implementation following standard NanoBrain pattern
+        
+        Supports both file paths and inline dictionary configurations as per
+        NanoBrain framework standards for DataUnit, Link, and Trigger classes.
+        
+        Args:
+            config: Configuration file path, TriggerConfig object, or dictionary
+            **kwargs: Additional context and dependencies
+            
+        Returns:
+            Fully initialized TimerTrigger instance
+            
+        ✅ FRAMEWORK COMPLIANCE:
+        - Follows standard Union[str, Path, ConfigClass, Dict] pattern
+        - Supports inline dict config as per Trigger rules
+        - No hardcoding or simplified solutions
+        - Pure configuration-driven instantiation
+        """
         logger = get_logger(f"{cls.__name__}.from_config")
         logger.info(f"Creating {cls.__name__} from configuration")
         
-        # Step 1: Validate configuration schema
-        cls.validate_config_schema(config)
+        # Step 1: Normalize input to TriggerConfig object
+        if isinstance(config, (str, Path)):
+            # File path input - use standard config loading
+            config_object = TriggerConfig.from_config(config, **kwargs)
+        elif isinstance(config, dict):
+            # Dictionary input - create TriggerConfig from dict (inline config support)
+            # This is specifically allowed for DataUnit, Link, Trigger classes
+            try:
+                # Enable direct instantiation for config creation
+                TriggerConfig._allow_direct_instantiation = True
+                config_object = TriggerConfig(**config)
+            finally:
+                TriggerConfig._allow_direct_instantiation = False
+        elif isinstance(config, TriggerConfig):
+            # Already a TriggerConfig object
+            config_object = config
+        else:
+            # Handle other BaseModel types
+            if hasattr(config, 'model_dump'):
+                config_dict = config.model_dump()
+            elif hasattr(config, 'dict'):
+                config_dict = config.dict()
+            else:
+                raise ValueError(f"Unsupported config type: {type(config)}")
+            
+            try:
+                TriggerConfig._allow_direct_instantiation = True
+                config_object = TriggerConfig(**config_dict)
+            finally:
+                TriggerConfig._allow_direct_instantiation = False
         
-        # Step 2: Extract component-specific configuration  
-        component_config = cls.extract_component_config(config)
+        # Step 2: Validate configuration schema
+        cls.validate_config_schema(config_object)
         
-        # Step 3: Resolve dependencies
+        # Step 3: Extract component-specific configuration  
+        component_config = cls.extract_component_config(config_object)
+        
+        # Step 4: Resolve dependencies
         dependencies = cls.resolve_dependencies(component_config, **kwargs)
         
-        # Step 4: Create instance
-        instance = cls.create_instance(config, component_config, dependencies)
+        # Step 5: Create instance
+        instance = cls.create_instance(config_object, component_config, dependencies)
         
-        # Step 5: Post-creation initialization
+        # Step 6: Post-creation initialization
         instance._post_config_initialization()
         
         logger.info(f"Successfully created {cls.__name__}")
@@ -760,24 +1288,73 @@ class ManualTrigger(TriggerBase):
     """
     
     @classmethod
-    def from_config(cls, config: TriggerConfig, **kwargs) -> 'ManualTrigger':
-        """Mandatory from_config implementation for ManualTrigger"""
+    def from_config(cls, config: Union[str, Path, TriggerConfig, Dict[str, Any]], **kwargs) -> 'ManualTrigger':
+        """
+        Enhanced from_config implementation following standard NanoBrain pattern
+        
+        Supports both file paths and inline dictionary configurations as per
+        NanoBrain framework standards for DataUnit, Link, and Trigger classes.
+        
+        Args:
+            config: Configuration file path, TriggerConfig object, or dictionary
+            **kwargs: Additional context and dependencies
+            
+        Returns:
+            Fully initialized ManualTrigger instance
+            
+        ✅ FRAMEWORK COMPLIANCE:
+        - Follows standard Union[str, Path, ConfigClass, Dict] pattern
+        - Supports inline dict config as per Trigger rules
+        - No hardcoding or simplified solutions
+        - Pure configuration-driven instantiation
+        """
         logger = get_logger(f"{cls.__name__}.from_config")
         logger.info(f"Creating {cls.__name__} from configuration")
         
-        # Step 1: Validate configuration schema
-        cls.validate_config_schema(config)
+        # Step 1: Normalize input to TriggerConfig object
+        if isinstance(config, (str, Path)):
+            # File path input - use standard config loading
+            config_object = TriggerConfig.from_config(config, **kwargs)
+        elif isinstance(config, dict):
+            # Dictionary input - create TriggerConfig from dict (inline config support)
+            # This is specifically allowed for DataUnit, Link, Trigger classes
+            try:
+                # Enable direct instantiation for config creation
+                TriggerConfig._allow_direct_instantiation = True
+                config_object = TriggerConfig(**config)
+            finally:
+                TriggerConfig._allow_direct_instantiation = False
+        elif isinstance(config, TriggerConfig):
+            # Already a TriggerConfig object
+            config_object = config
+        else:
+            # Handle other BaseModel types
+            if hasattr(config, 'model_dump'):
+                config_dict = config.model_dump()
+            elif hasattr(config, 'dict'):
+                config_dict = config.dict()
+            else:
+                raise ValueError(f"Unsupported config type: {type(config)}")
+            
+            try:
+                TriggerConfig._allow_direct_instantiation = True
+                config_object = TriggerConfig(**config_dict)
+            finally:
+                TriggerConfig._allow_direct_instantiation = False
         
-        # Step 2: Extract component-specific configuration  
-        component_config = cls.extract_component_config(config)
+        # Step 2: Validate configuration schema
+        cls.validate_config_schema(config_object)
         
-        # Step 3: Resolve dependencies
+        # Step 3: Extract component-specific configuration  
+        component_config = cls.extract_component_config(config_object)
+        
+        # Step 4: Resolve dependencies
         dependencies = cls.resolve_dependencies(component_config, **kwargs)
         
-        # Step 4: Create instance
-        instance = cls.create_instance(config, component_config, dependencies)
+        # Step 5: Create instance
+        instance = cls.create_instance(config_object, component_config, dependencies)
         
-        # Step 5: Post-creation initialization
+        # Step 6: Post-creation initialization
         instance._post_config_initialization()
         
         logger.info(f"Successfully created {cls.__name__}")
@@ -806,49 +1383,4 @@ class ManualTrigger(TriggerBase):
             logger.warning(f"ManualTrigger {self.name} not active")
 
 
-def create_trigger(config: Union[Dict[str, Any], TriggerConfig], **kwargs) -> TriggerBase:
-    """
-    MANDATORY from_config factory for all trigger types
-    
-    Args:
-        config: Trigger configuration (dict or TriggerConfig)
-        **kwargs: Framework-provided dependencies
-        
-    Returns:
-        TriggerBase instance created via from_config
-        
-    Raises:
-        ValueError: If trigger type is unknown
-        ComponentConfigurationError: If configuration is invalid
-    """
-    logger = get_logger("trigger.factory")
-    logger.info(f"Creating trigger via mandatory from_config")
-    
-    if isinstance(config, dict):
-        config = TriggerConfig.from_config(config)
-    
-    # Handle both enum and string values (due to use_enum_values=True)
-    trigger_type = config.trigger_type
-    if isinstance(trigger_type, str):
-        trigger_type = TriggerType(trigger_type)
-    
-    try:
-        if trigger_type == TriggerType.DATA_UPDATED:
-            trigger_class = DataUpdatedTrigger
-        elif trigger_type == TriggerType.ALL_DATA_RECEIVED:
-            trigger_class = AllDataReceivedTrigger
-        elif trigger_type == TriggerType.TIMER:
-            trigger_class = TimerTrigger
-        elif trigger_type == TriggerType.MANUAL:
-            trigger_class = ManualTrigger
-        else:
-            raise ValueError(f"Unknown trigger type: {trigger_type}")
-        
-        # Create instance via from_config
-        instance = trigger_class.from_config(config, **kwargs)
-        
-        logger.info(f"Successfully created {trigger_class.__name__} via from_config")
-        return instance
-        
-    except Exception as e:
-        raise ValueError(f"Failed to create trigger '{trigger_type}' via from_config: {e}") 
+ 

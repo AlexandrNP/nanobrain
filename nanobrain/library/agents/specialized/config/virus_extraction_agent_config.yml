@@ -1,0 +1,223 @@
+# Virus Extraction Agent Configuration
+# =====================================
+# 
+# Framework-compliant specialized agent configuration for virus extraction and analysis
+# Follows NanoBrain patterns for agent configuration and specialization
+# 
+# Author: NanoBrain Development Team
+# Date: January 2025
+# Version: 1.0.0
+
+# ✅ FRAMEWORK COMPLIANCE: Agent identification and metadata
+agent_type: "specialized_agent"
+name: "virus_extraction_agent"
+description: "Specialized agent for extracting and analyzing virus-related information from natural language queries"
+version: "1.0.0"
+specialization_domain: "virology"
+
+# ✅ FRAMEWORK COMPLIANCE: LLM Configuration
+llm_config:
+  provider: "openai"
+  model: "gpt-4"
+  temperature: 0.7
+  max_tokens: 1000
+  top_p: 0.9
+  frequency_penalty: 0.0
+  presence_penalty: 0.0
+  
+  # Framework-compliant API configuration
+  api_config:
+    timeout: 30
+    max_retries: 3
+    retry_delay: 1.0
+
+# ✅ FRAMEWORK COMPLIANCE: Specialization Configuration
+specialization:
+  domain: "virology"
+  expertise_areas:
+    - "alphavirus"
+    - "viral_proteins"
+    - "virus_classification"
+    - "viral_pathogenesis"
+    - "viral_evolution"
+    - "viral_structure"
+  
+  analysis_patterns:
+    - "virus_detection"
+    - "protein_extraction"
+    - "viral_family_classification"
+    - "pathogen_identification"
+    - "species_recognition"
+  
+  # Virus-specific knowledge domains
+  virus_families:
+    - "Togaviridae"
+    - "Flaviviridae"
+    - "Coronaviridae"
+    - "Orthomyxoviridae"
+    - "Paramyxoviridae"
+    - "Picornaviridae"
+  
+  target_viruses:
+    - "Eastern Equine Encephalitis Virus"
+    - "Chikungunya Virus"
+    - "Zika Virus"
+    - "Dengue Virus"
+    - "SARS-CoV-2"
+    - "Influenza A"
+    - "Alphaviruses"
+
+# ✅ FRAMEWORK COMPLIANCE: Agent Capabilities
+capabilities:
+  virus_identification:
+    enabled: true
+    confidence_threshold: 0.8
+    fuzzy_matching: true
+    synonym_resolution: true
+  
+  protein_extraction:
+    enabled: true
+    target_proteins:
+      - "envelope proteins"
+      - "capsid proteins"
+      - "non-structural proteins"
+      - "spike proteins"
+      - "polymerase proteins"
+  
+  species_classification:
+    enabled: true
+    taxonomic_levels:
+      - "family"
+      - "genus"
+      - "species"
+      - "strain"
+  
+  pathogenesis_analysis:
+    enabled: true
+    focus_areas:
+      - "transmission mechanisms"
+      - "host cell entry"
+      - "replication cycle"
+      - "immune evasion"
+
+# ✅ FRAMEWORK COMPLIANCE: Query Processing Configuration
+query_processing:
+  virus_detection_patterns:
+    # Common virus names and abbreviations
+    primary_patterns:
+      - "(?i)\\b(eastern equine encephalitis|eeev)\\b"
+      - "(?i)\\b(chikungunya|chikv)\\b"
+      - "(?i)\\b(zika|zikv)\\b"
+      - "(?i)\\b(dengue|denv)\\b"
+      - "(?i)\\b(alphavirus|togavirus)\\b"
+      - "(?i)\\b(sars-cov-2|covid-19|coronavirus)\\b"
+    
+    # Scientific nomenclature patterns
+    scientific_patterns:
+      - "(?i)\\b[A-Z][a-z]+ virus\\b"
+      - "(?i)\\b[A-Z]{2,5}V\\b"
+      - "(?i)\\btogaviridae\\b"
+      - "(?i)\\bflaviviridae\\b"
+    
+    # Context clues
+    context_patterns:
+      - "(?i)\\b(viral|virus|pathogen|infection)\\b"
+      - "(?i)\\b(encephalitis|fever|disease)\\b"
+      - "(?i)\\b(epidemic|pandemic|outbreak)\\b"
+  
+  extraction_rules:
+    min_confidence: 0.6
+    max_candidates: 5
+    enable_fuzzy_matching: true
+    context_window: 50
+
+# ✅ FRAMEWORK COMPLIANCE: System Prompt Configuration
+system_prompt: |
+  You are a specialized virus extraction agent with expertise in virology and viral pathogen analysis.
+  
+  Your primary responsibilities:
+  1. Identify and extract virus names, species, and strains from natural language queries
+  2. Classify viruses by family, genus, and species when possible
+  3. Recognize viral proteins and structural components
+  4. Understand viral pathogenesis and transmission mechanisms
+  
+  Specialization areas:
+  - Alphaviruses (Eastern Equine Encephalitis, Chikungunya)
+  - Flaviviruses (Zika, Dengue)
+  - Coronaviruses (SARS-CoV-2)
+  - Viral protein structure and function
+  
+  Always provide:
+  - Confidence scores for virus identification
+  - Alternative virus candidates when uncertain
+  - Relevant taxonomic information
+  - Contextual information about viral characteristics
+  
+  Respond with structured data suitable for downstream processing.
+
+# ✅ FRAMEWORK COMPLIANCE: Output Configuration
+output_format:
+  response_structure:
+    identified_viruses:
+      type: "list"
+      fields:
+        - "virus_name"
+        - "scientific_name"
+        - "family"
+        - "genus"
+        - "confidence_score"
+        - "synonyms"
+    
+    extracted_proteins:
+      type: "list"
+      fields:
+        - "protein_name"
+        - "protein_type"
+        - "function"
+        - "confidence_score"
+    
+    metadata:
+      type: "object"
+      fields:
+        - "query_type"
+        - "processing_time"
+        - "confidence_threshold"
+        - "total_candidates"
+
+# ✅ FRAMEWORK COMPLIANCE: Performance Configuration
+performance:
+  enable_caching: true
+  cache_ttl: 1800
+  max_concurrent_requests: 10
+  request_timeout: 15
+  
+  optimization:
+    enable_parallel_processing: false
+    batch_processing: false
+    memory_optimization: true
+
+# ✅ FRAMEWORK COMPLIANCE: Error Handling
+error_handling:
+  graceful_degradation: true
+  fallback_strategies:
+    - "basic_pattern_matching"
+    - "keyword_extraction"
+    - "context_analysis"
+  
+  retry_policy:
+    max_attempts: 3
+    backoff_factor: 2.0
+    timeout_multiplier: 1.5
+
+# ✅ FRAMEWORK COMPLIANCE: Monitoring and Logging
+monitoring:
+  enable_performance_tracking: true
+  track_extraction_accuracy: true
+  track_response_times: true
+  track_confidence_scores: true
+  
+  logging:
+    level: "INFO"
+    include_queries: false  # Privacy protection
+    include_responses: true
+    include_performance_metrics: true 

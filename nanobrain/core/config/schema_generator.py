@@ -15,7 +15,634 @@ logger = logging.getLogger(__name__)
 
 class SchemaGenerator:
     """
-    Generator for JSON schemas from Pydantic models.
+    Enterprise Schema Generator - Automated JSON Schema Generation and Validation Framework
+    ====================================================================================
+    
+    The SchemaGenerator provides comprehensive automated JSON schema generation from Pydantic models,
+    enabling enterprise-grade configuration validation, API documentation, and type safety enforcement.
+    This generator supports complex schema composition, inheritance patterns, custom validation rules,
+    and seamless integration with configuration management systems for enterprise applications
+    and distributed AI frameworks.
+    
+    **Core Architecture:**
+        The schema generator provides enterprise-grade schema generation capabilities:
+        
+        * **Automated Schema Generation**: Intelligent JSON schema generation from Pydantic models and configurations
+        * **Workflow Schema Management**: Comprehensive schema generation for complex workflow configurations
+        * **Schema Composition**: Advanced schema composition with inheritance and reference management
+        * **Validation Integration**: Complete integration with configuration validation and type checking
+        * **Enterprise Features**: Version management, documentation generation, and compliance validation
+        * **Framework Integration**: Full integration with ConfigBase and component validation systems
+    
+    **Schema Generation Capabilities:**
+        
+        **JSON Schema Automation:**
+        * **Pydantic Model Schemas**: Automatic JSON schema generation from Pydantic model definitions
+        * **Complex Type Support**: Support for complex types, unions, enums, and nested model structures
+        * **Custom Field Validation**: Integration of custom field validators and constraint definitions
+        * **Reference Resolution**: Intelligent reference resolution for complex schema dependencies
+        
+        **Workflow Schema Management:**
+        * **Comprehensive Workflow Schemas**: Complete schema generation for workflow configurations
+        * **Component Schema Integration**: Integration of agent, tool, step, and executor schemas
+        * **Dependency Management**: Automatic schema dependency resolution and composition
+        * **Version Compatibility**: Schema versioning and backward compatibility management
+        
+        **Enterprise Schema Features:**
+        * **Schema Documentation**: Automatic documentation generation from schema definitions
+        * **Compliance Validation**: Schema compliance validation against enterprise standards
+        * **Schema Registry**: Centralized schema registry with version management
+        * **Performance Optimization**: Optimized schema generation and caching for large-scale applications
+    
+    **Schema Generation Formats:**
+        
+        **Standard JSON Schema Structure:**
+        ```json
+        {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "title": "Enterprise Service Configuration",
+          "description": "Comprehensive configuration schema for enterprise AI services",
+          "type": "object",
+          "nanobrain_version": "2.0.0",
+          "nanobrain_metadata": {
+            "component_type": "service_config",
+            "framework_version": "2.0.0",
+            "schema_generator": "automated",
+            "validation_level": "enterprise"
+          },
+          "properties": {
+            "service_name": {
+              "type": "string",
+              "description": "Unique identifier for the AI service",
+              "pattern": "^[a-zA-Z0-9_-]+$",
+              "minLength": 3,
+              "maxLength": 50,
+              "examples": ["ai_service", "data_processor", "ml_pipeline"]
+            },
+            "service_config": {
+              "$ref": "#/definitions/ServiceConfig",
+              "description": "Complete service configuration object"
+            },
+            "agents": {
+              "type": "array",
+              "description": "Collection of AI agents for the service",
+              "items": {
+                "$ref": "#/definitions/AgentConfig"
+              },
+              "minItems": 1,
+              "maxItems": 20
+            },
+            "workflows": {
+              "type": "object",
+              "description": "Workflow configurations and orchestration",
+              "additionalProperties": {
+                "$ref": "#/definitions/WorkflowConfig"
+              }
+            }
+          },
+          "required": ["service_name", "service_config"],
+          "additionalProperties": false,
+          "definitions": {
+            "ServiceConfig": {
+              "type": "object",
+              "description": "Service-specific configuration parameters",
+              "properties": {
+                "port": {
+                  "type": "integer",
+                  "description": "Service port number",
+                  "minimum": 1024,
+                  "maximum": 65535,
+                  "default": 8080
+                },
+                "environment": {
+                  "type": "string",
+                  "description": "Deployment environment",
+                  "enum": ["development", "staging", "production"],
+                  "default": "development"
+                },
+                "features": {
+                  "type": "array",
+                  "description": "Enabled service features",
+                  "items": {
+                    "type": "string",
+                    "enum": ["monitoring", "analytics", "debugging", "profiling"]
+                  },
+                  "uniqueItems": true
+                }
+              },
+              "required": ["port", "environment"]
+            }
+          }
+        }
+        ```
+        
+        **Comprehensive Workflow Schema:**
+        ```json
+        {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "title": "NanoBrain Workflow Configuration Schema",
+          "description": "Complete schema for NanoBrain workflow configurations",
+          "type": "object",
+          "nanobrain_version": "2.0.0",
+          "properties": {
+            "workflow": {
+              "type": "object",
+              "description": "Workflow definition and configuration",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "description": "Workflow identifier",
+                  "pattern": "^[a-zA-Z0-9_-]+$"
+                },
+                "execution_strategy": {
+                  "type": "string",
+                  "enum": ["SEQUENTIAL", "PARALLEL", "GRAPH_BASED", "EVENT_DRIVEN"],
+                  "description": "Workflow execution strategy"
+                },
+                "steps": {
+                  "type": "array",
+                  "description": "Workflow processing steps",
+                  "items": {
+                    "$ref": "#/definitions/StepConfig"
+                  }
+                },
+                "links": {
+                  "type": "array",
+                  "description": "Data flow connections between steps",
+                  "items": {
+                    "$ref": "#/definitions/LinkConfig"
+                  }
+                },
+                "triggers": {
+                  "type": "array",
+                  "description": "Workflow execution triggers",
+                  "items": {
+                    "$ref": "#/definitions/TriggerConfig"
+                  }
+                }
+              },
+              "required": ["name", "execution_strategy", "steps"]
+            }
+          },
+          "definitions": {
+            "StepConfig": {
+              "type": "object",
+              "description": "Individual workflow step configuration",
+              "properties": {
+                "name": {"type": "string"},
+                "class": {"type": "string"},
+                "config": {"type": "object"},
+                "input_data_units": {"type": "array"},
+                "output_data_units": {"type": "array"}
+              },
+              "required": ["name", "class"]
+            },
+            "LinkConfig": {
+              "type": "object",
+              "description": "Data flow link configuration",
+              "properties": {
+                "source": {"type": "string"},
+                "target": {"type": "string"},
+                "link_type": {
+                  "type": "string",
+                  "enum": ["DIRECT", "FILE", "QUEUE", "TRANSFORM", "CONDITIONAL"]
+                }
+              },
+              "required": ["source", "target", "link_type"]
+            }
+          }
+        }
+        ```
+    
+    **Usage Patterns:**
+        
+        **Basic Schema Generation:**
+        ```python
+        from nanobrain.core.config.schema_generator import SchemaGenerator
+        from pydantic import BaseModel, Field
+        
+        # Define configuration model
+        class ServiceConfig(BaseModel):
+            service_name: str = Field(..., description="Service identifier")
+            port: int = Field(8080, ge=1024, le=65535, description="Service port")
+            environment: str = Field("development", description="Deployment environment")
+            features: List[str] = Field(default_factory=list, description="Enabled features")
+        
+        # Create schema generator
+        generator = SchemaGenerator()
+        
+        # Generate JSON schema
+        schema = generator.generate_schema(ServiceConfig, "ServiceConfiguration")
+        
+        print(f"Generated schema: {json.dumps(schema, indent=2)}")
+        
+        # Save schema to file
+        generator.save_schema("ServiceConfiguration", "schemas/service_config.json")
+        
+        # Generate multiple schemas
+        schemas = generator.generate_multiple_schemas([
+            (ServiceConfig, "ServiceConfig"),
+            (AgentConfig, "AgentConfig"),
+            (WorkflowConfig, "WorkflowConfig")
+        ])
+        
+        print(f"Generated {len(schemas)} schemas")
+        ```
+        
+        **Enterprise Schema Management:**
+        ```python
+        # Enterprise schema management system
+        class EnterpriseSchemaManager:
+            def __init__(self):
+                self.generator = SchemaGenerator()
+                self.schema_registry = {}
+                self.version_history = {}
+                
+            def generate_enterprise_schema_suite(self, config_models: Dict[str, Type[BaseModel]]) -> Dict[str, Any]:
+                \"\"\"Generate complete enterprise schema suite\"\"\"
+                
+                schema_suite = {
+                    'suite_metadata': {
+                        'generation_timestamp': datetime.now().isoformat(),
+                        'framework_version': '2.0.0',
+                        'schema_count': len(config_models),
+                        'compliance_level': 'enterprise'
+                    },
+                    'schemas': {},
+                    'cross_references': {},
+                    'validation_rules': {}
+                }
+                
+                # Generate individual schemas
+                for schema_name, model_class in config_models.items():
+                    schema = self.generator.generate_schema(model_class, schema_name)
+                    
+                    # Add enterprise metadata
+                    schema['enterprise_metadata'] = {
+                        'compliance_validated': True,
+                        'security_reviewed': True,
+                        'documentation_complete': True,
+                        'version_controlled': True
+                    }
+                    
+                    schema_suite['schemas'][schema_name] = schema
+                    self.schema_registry[schema_name] = schema
+                
+                # Generate cross-references
+                cross_references = self.analyze_schema_cross_references(schema_suite['schemas'])
+                schema_suite['cross_references'] = cross_references
+                
+                # Generate validation rules
+                validation_rules = self.generate_enterprise_validation_rules(schema_suite['schemas'])
+                schema_suite['validation_rules'] = validation_rules
+                
+                return schema_suite
+                
+            def analyze_schema_cross_references(self, schemas: Dict[str, Any]) -> Dict[str, Any]:
+                \"\"\"Analyze cross-references between schemas\"\"\"
+                
+                cross_references = {
+                    'schema_dependencies': {},
+                    'circular_references': [],
+                    'reference_map': {}
+                }
+                
+                for schema_name, schema in schemas.items():
+                    dependencies = self.extract_schema_dependencies(schema)
+                    cross_references['schema_dependencies'][schema_name] = dependencies
+                    
+                    # Build reference map
+                    for dep in dependencies:
+                        if dep not in cross_references['reference_map']:
+                            cross_references['reference_map'][dep] = []
+                        cross_references['reference_map'][dep].append(schema_name)
+                
+                # Detect circular references
+                circular_refs = self.detect_circular_references(cross_references['schema_dependencies'])
+                cross_references['circular_references'] = circular_refs
+                
+                return cross_references
+                
+            def generate_schema_documentation(self, schema_suite: Dict[str, Any], output_directory: str):
+                \"\"\"Generate comprehensive schema documentation\"\"\"
+                
+                output_path = Path(output_directory)
+                output_path.mkdir(parents=True, exist_ok=True)
+                
+                # Generate main documentation
+                doc_content = self.create_schema_documentation_content(schema_suite)
+                with open(output_path / 'SCHEMA_DOCUMENTATION.md', 'w') as f:
+                    f.write(doc_content)
+                
+                # Generate individual schema files
+                schemas_dir = output_path / 'schemas'
+                schemas_dir.mkdir(exist_ok=True)
+                
+                for schema_name, schema in schema_suite['schemas'].items():
+                    schema_file = schemas_dir / f"{schema_name}.json"
+                    with open(schema_file, 'w') as f:
+                        json.dump(schema, f, indent=2)
+                
+                # Generate validation examples
+                examples_dir = output_path / 'examples'
+                examples_dir.mkdir(exist_ok=True)
+                
+                for schema_name, schema in schema_suite['schemas'].items():
+                    example_config = self.generate_example_configuration(schema)
+                    example_file = examples_dir / f"{schema_name}_example.yml"
+                    with open(example_file, 'w') as f:
+                        yaml.dump(example_config, f, default_flow_style=False, indent=2)
+                
+                return {
+                    'documentation_file': output_path / 'SCHEMA_DOCUMENTATION.md',
+                    'schema_files': list(schemas_dir.glob('*.json')),
+                    'example_files': list(examples_dir.glob('*.yml'))
+                }
+                
+            def validate_schema_compliance(self, schema_suite: Dict[str, Any]) -> Dict[str, Any]:
+                \"\"\"Validate schema suite compliance with enterprise standards\"\"\"
+                
+                compliance_report = {
+                    'overall_compliance': True,
+                    'compliance_score': 0.0,
+                    'schema_compliance': {},
+                    'compliance_issues': [],
+                    'recommendations': []
+                }
+                
+                total_schemas = len(schema_suite['schemas'])
+                compliant_schemas = 0
+                
+                for schema_name, schema in schema_suite['schemas'].items():
+                    schema_compliance = self.validate_individual_schema_compliance(schema)
+                    compliance_report['schema_compliance'][schema_name] = schema_compliance
+                    
+                    if schema_compliance['compliant']:
+                        compliant_schemas += 1
+                    else:
+                        compliance_report['compliance_issues'].extend(
+                            schema_compliance['issues']
+                        )
+                
+                # Calculate compliance score
+                compliance_report['compliance_score'] = (compliant_schemas / total_schemas) * 100
+                compliance_report['overall_compliance'] = compliance_report['compliance_score'] >= 95.0
+                
+                # Generate recommendations
+                if not compliance_report['overall_compliance']:
+                    compliance_report['recommendations'] = self.generate_compliance_recommendations(
+                        compliance_report['compliance_issues']
+                    )
+                
+                return compliance_report
+        
+        # Enterprise schema management
+        schema_manager = EnterpriseSchemaManager()
+        
+        # Define enterprise configuration models
+        enterprise_models = {
+            'ServiceConfig': ServiceConfig,
+            'AgentConfig': AgentConfig,
+            'WorkflowConfig': WorkflowConfig,
+            'DatabaseConfig': DatabaseConfig,
+            'SecurityConfig': SecurityConfig
+        }
+        
+        # Generate enterprise schema suite
+        schema_suite = schema_manager.generate_enterprise_schema_suite(enterprise_models)
+        
+        # Validate compliance
+        compliance_report = schema_manager.validate_schema_compliance(schema_suite)
+        print(f"Schema compliance: {compliance_report['compliance_score']:.1f}%")
+        
+        # Generate documentation
+        documentation_files = schema_manager.generate_schema_documentation(
+            schema_suite, 'docs/schemas/'
+        )
+        
+        print(f"Generated documentation:")
+        print(f"  Main doc: {documentation_files['documentation_file']}")
+        print(f"  Schema files: {len(documentation_files['schema_files'])}")
+        print(f"  Example files: {len(documentation_files['example_files'])}")
+        ```
+        
+        **Advanced Schema Composition:**
+        ```python
+        # Advanced schema composition and inheritance
+        class AdvancedSchemaComposer:
+            def __init__(self, generator: SchemaGenerator):
+                self.generator = generator
+                self.base_schemas = {}
+                self.composed_schemas = {}
+                
+            def create_base_schema_library(self):
+                \"\"\"Create library of reusable base schemas\"\"\"
+                
+                # Base service schema
+                base_service_schema = {
+                    "type": "object",
+                    "description": "Base schema for all services",
+                    "properties": {
+                        "name": {
+                            "type": "string",
+                            "description": "Service name",
+                            "pattern": "^[a-zA-Z0-9_-]+$"
+                        },
+                        "version": {
+                            "type": "string",
+                            "description": "Service version",
+                            "pattern": "^\\\\d+\\\\.\\\\d+\\\\.\\\\d+$"
+                        },
+                        "description": {
+                            "type": "string",
+                            "description": "Service description"
+                        }
+                    },
+                    "required": ["name", "version"]
+                }
+                
+                # Base configuration schema
+                base_config_schema = {
+                    "type": "object",
+                    "description": "Base configuration schema",
+                    "properties": {
+                        "environment": {
+                            "type": "string",
+                            "enum": ["development", "staging", "production"],
+                            "description": "Deployment environment"
+                        },
+                        "debug": {
+                            "type": "boolean",
+                            "default": False,
+                            "description": "Enable debug mode"
+                        },
+                        "logging": {
+                            "$ref": "#/definitions/LoggingConfig"
+                        }
+                    },
+                    "required": ["environment"]
+                }
+                
+                self.base_schemas = {
+                    'BaseService': base_service_schema,
+                    'BaseConfig': base_config_schema
+                }
+                
+            def compose_schema(self, base_schema_name: str, extensions: Dict[str, Any], 
+                             schema_name: str) -> Dict[str, Any]:
+                \"\"\"Compose schema from base schema and extensions\"\"\"
+                
+                if base_schema_name not in self.base_schemas:
+                    raise ValueError(f"Base schema not found: {base_schema_name}")
+                
+                base_schema = self.base_schemas[base_schema_name].copy()
+                
+                # Merge properties
+                if 'properties' in extensions:
+                    if 'properties' not in base_schema:
+                        base_schema['properties'] = {}
+                    base_schema['properties'].update(extensions['properties'])
+                
+                # Merge required fields
+                if 'required' in extensions:
+                    if 'required' not in base_schema:
+                        base_schema['required'] = []
+                    base_schema['required'].extend(extensions['required'])
+                    base_schema['required'] = list(set(base_schema['required']))  # Remove duplicates
+                
+                # Add metadata
+                base_schema['title'] = schema_name
+                base_schema['$schema'] = "http://json-schema.org/draft-07/schema#"
+                base_schema['nanobrain_composition'] = {
+                    'base_schema': base_schema_name,
+                    'extensions_applied': True,
+                    'composed_at': datetime.now().isoformat()
+                }
+                
+                self.composed_schemas[schema_name] = base_schema
+                return base_schema
+                
+            def create_inheritance_hierarchy(self, inheritance_tree: Dict[str, Any]) -> Dict[str, Any]:
+                \"\"\"Create schema inheritance hierarchy\"\"\"
+                
+                hierarchy_schemas = {}
+                
+                for schema_name, schema_def in inheritance_tree.items():
+                    if 'inherits' in schema_def:
+                        parent_schema = schema_def['inherits']
+                        if parent_schema in self.base_schemas:
+                            # Compose schema from parent
+                            composed_schema = self.compose_schema(
+                                parent_schema,
+                                schema_def.get('extensions', {}),
+                                schema_name
+                            )
+                            hierarchy_schemas[schema_name] = composed_schema
+                        else:
+                            raise ValueError(f"Parent schema not found: {parent_schema}")
+                    else:
+                        # Root schema
+                        hierarchy_schemas[schema_name] = schema_def
+                
+                return hierarchy_schemas
+        
+        # Advanced schema composition
+        composer = AdvancedSchemaComposer(generator)
+        composer.create_base_schema_library()
+        
+        # Define inheritance hierarchy
+        service_hierarchy = {
+            'WebService': {
+                'inherits': 'BaseService',
+                'extensions': {
+                    'properties': {
+                        'port': {'type': 'integer', 'minimum': 1024},
+                        'ssl_enabled': {'type': 'boolean', 'default': True}
+                    },
+                    'required': ['port']
+                }
+            },
+            'APIService': {
+                'inherits': 'WebService',
+                'extensions': {
+                    'properties': {
+                        'api_version': {'type': 'string'},
+                        'rate_limit': {'type': 'integer', 'minimum': 100}
+                    },
+                    'required': ['api_version']
+                }
+            }
+        }
+        
+        # Create inheritance hierarchy
+        service_schemas = composer.create_inheritance_hierarchy(service_hierarchy)
+        
+        print(f"Created {len(service_schemas)} inherited schemas")
+        for schema_name, schema in service_schemas.items():
+            print(f"  {schema_name}: {len(schema.get('properties', {}))} properties")
+        ```
+    
+    **Advanced Features:**
+        
+        **Schema Validation Integration:**
+        * **Real-Time Validation**: Real-time schema validation during configuration editing
+        * **IDE Integration**: Integration with development environments for schema-aware editing
+        * **CI/CD Validation**: Automated schema validation in deployment pipelines
+        * **Configuration Testing**: Automated testing of configurations against schemas
+        
+        **Schema Documentation:**
+        * **Automatic Documentation**: Automatic generation of human-readable schema documentation
+        * **Interactive Examples**: Interactive configuration examples and validation
+        * **Schema Visualization**: Visual representation of schema structures and relationships
+        * **API Documentation**: Integration with API documentation generation tools
+        
+        **Performance Optimization:**
+        * **Schema Caching**: Intelligent caching of generated schemas for performance
+        * **Lazy Generation**: Lazy schema generation for large configuration systems
+        * **Parallel Processing**: Parallel schema generation for multiple models
+        * **Memory Optimization**: Memory-efficient schema generation and storage
+    
+    **Enterprise Integration:**
+        
+        **Compliance and Security:**
+        * **Enterprise Standards**: Compliance with enterprise schema standards and conventions
+        * **Security Validation**: Schema validation for security policies and access controls
+        * **Audit Trails**: Complete audit trails for schema generation and modification
+        * **Change Management**: Schema change management and approval workflows
+        
+        **Deployment and Operations:**
+        * **Multi-Environment Support**: Schema generation for multiple deployment environments
+        * **Version Management**: Schema versioning and backward compatibility management
+        * **Monitoring Integration**: Integration with monitoring and alerting systems
+        * **Disaster Recovery**: Schema backup and recovery capabilities
+    
+    Attributes:
+        _schemas (Dict[str, Dict[str, Any]]): Internal registry of generated schemas
+        
+    Methods:
+        generate_schema: Generate JSON schema from Pydantic model
+        generate_workflow_schema: Generate comprehensive workflow configuration schema
+        save_schema: Save generated schema to file
+        get_schema: Retrieve previously generated schema
+        
+    Note:
+        This generator automatically handles complex Pydantic model structures and relationships.
+        Generated schemas include NanoBrain-specific metadata for framework integration.
+        Schema caching improves performance for repeated generation operations.
+        Workflow schemas include comprehensive validation for all component types.
+        
+    Warning:
+        Complex model hierarchies may generate large schema structures.
+        Schema generation may consume significant memory for large model sets.
+        Generated schemas should be validated before use in production environments.
+        Schema references may need manual adjustment for complex cross-references.
+        
+    See Also:
+        * :class:`SchemaValidator`: Schema validation and constraint checking
+        * :class:`ConfigBase`: Base configuration classes with schema integration
+        * :mod:`nanobrain.core.config.yaml_config`: YAML configuration with schema support
+        * :mod:`nanobrain.core.config.enhanced_config_manager`: Configuration management with schema validation
+        * :mod:`nanobrain.core.config.component_factory`: Component creation with schema validation
     """
     
     def __init__(self):

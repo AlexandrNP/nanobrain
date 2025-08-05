@@ -1,0 +1,69 @@
+# Intelligent Workflow Router Configuration
+# ✅ FRAMEWORK COMPLIANCE: Complete LLM-based query classification configuration
+# ✅ NO HARDCODING: All routing decisions configurable via agents and thresholds
+
+routing_strategy: "intelligent_classification"
+routing_strategy_config:
+  class: "nanobrain.library.interfaces.web.routing.routing_strategies.IntelligentClassificationStrategy"
+  config: {}
+
+# LLM Agent configurations for query classification - using concrete implementations
+virus_extraction_agent:
+  class: "nanobrain.library.agents.specialized.query_analysis_agent.QueryAnalysisAgent"
+  config: "nanobrain/library/workflows/chatbot_viral_integration/config/QueryClassificationStep/VirusExtractionAgent.yml"
+
+query_analysis_agent:
+  class: "nanobrain.library.agents.specialized.query_analysis_agent.QueryAnalysisAgent"
+  config: "nanobrain/library/workflows/chatbot_viral_integration/config/VirusNameResolutionStep/QueryAnalysisAgent.yml"
+
+# Workflow mapping configuration
+workflow_mappings:
+  viral_protein_analysis:
+    workflow_class: "nanobrain.library.workflows.viral_protein_analysis.alphavirus_workflow.AlphavirusWorkflow"
+    config_path: "nanobrain/library/workflows/viral_protein_analysis/config/AlphavirusWorkflow.yml"
+    triggers: ["virus_detected", "analysis_requested"]
+    analysis_types: ["protein", "sequence", "pssm", "structure"]
+    confidence_threshold: 0.7
+    
+  conversational_viral_expert:
+    workflow_class: "nanobrain.library.workflows.conversational.viral_expert_workflow.ViralExpertWorkflow"
+    config_path: "nanobrain/library/workflows/conversational/config/ViralExpertWorkflow.yml"
+    triggers: ["conversational_intent", "virus_context"]
+    analysis_types: ["conversational", "information"]
+    confidence_threshold: 0.5
+
+# Classification thresholds for decision making
+classification_thresholds:
+  virus_detection_threshold: 0.6
+  analysis_intent_threshold: 0.7
+  conversational_threshold: 0.5
+  fallback_threshold: 0.3
+
+# Routing thresholds (inherited from base WorkflowRouterConfig)
+routing_thresholds:
+  minimum_confidence: 0.3
+  high_confidence: 0.8
+  medium_confidence: 0.6
+  low_confidence: 0.4
+
+# Advanced routing configuration
+advanced_routing:
+  enable_context_awareness: true
+  enable_session_history: true
+  enable_confidence_boosting: true
+  context_window_size: 5
+  confidence_boost_factor: 0.1
+
+# Performance and caching
+performance:
+  enable_route_caching: true
+  cache_ttl_seconds: 300
+  max_cache_size: 1000
+  enable_parallel_classification: false
+
+# Logging and monitoring
+logging:
+  log_classification_results: true
+  log_routing_decisions: true
+  log_agent_responses: false  # Set to true for debugging
+  enable_performance_metrics: true 

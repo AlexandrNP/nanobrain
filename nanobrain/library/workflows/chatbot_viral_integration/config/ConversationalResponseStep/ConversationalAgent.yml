@@ -1,6 +1,6 @@
 name: alphavirus_expert
 description: "Expert conversational agent for alphavirus information and scientific discussions"
-class: nanobrain.library.agents.specialized_agents.conversational_specialized_agent.ConversationalSpecializedAgent
+class: nanobrain.library.agents.specialized.query_analysis_agent.QueryAnalysisAgent
 
 # Agent configuration
 config:

@@ -1,0 +1,37 @@
+# RequestAnalyzer Configuration
+# Universal request analysis configuration
+#
+# Author: NanoBrain Development Team
+# Date: January 2025
+# Version: 1.0.0
+
+# Analysis method configuration
+analysis_method: "comprehensive"
+
+# Component configurations (using file paths for framework compliance)
+intent_classifier:
+  class: "nanobrain.library.interfaces.web.analysis.intent_classifier.IntentClassifier"
+  config: "nanobrain/library/interfaces/web/config/intent_classifier_config.yml"
+
+domain_classifier:
+  class: "nanobrain.library.interfaces.web.analysis.domain_classifier.DomainClassifier"
+  config: "nanobrain/library/interfaces/web/config/domain_classifier_config.yml"
+
+# Analysis thresholds
+confidence_thresholds:
+  intent_minimum: 0.3
+  domain_minimum: 0.3
+  analysis_minimum: 0.5
+
+# Entity extraction configuration
+entity_extraction:
+  enabled: true
+  extract_virus_names: true
+  extract_protein_sequences: true
+  extract_analysis_types: true
+
+# Performance settings
+performance_config:
+  enable_caching: true
+  cache_ttl_seconds: 3600
+  parallel_analysis: true 

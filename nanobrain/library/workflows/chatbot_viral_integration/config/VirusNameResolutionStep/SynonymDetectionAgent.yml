@@ -1,9 +1,11 @@
 name: synonym_detection_agent
 description: "Agent specialized in detecting and resolving virus name synonyms using data-driven approach"
-class: nanobrain.library.agents.specialized_agents.conversational_specialized_agent.ConversationalSpecializedAgent
+class: nanobrain.library.agents.specialized.protein_synonym_agent.ProteinSynonymAgent
 
 # Agent configuration
 config:
+  name: synonym_detection_agent  
+  description: "Agent specialized in detecting and resolving virus name synonyms using data-driven approach"
   model: "gpt-4"
   temperature: 0.0  # Very low temperature for consistent synonym detection
   max_tokens: 1000
@@ -71,15 +73,15 @@ config:
       }
     }
 
-# Timeout and performance settings
-timeout: 60.0
-max_retries: 3
-enable_logging: true
-log_conversations: true
+  # Timeout and performance settings
+  timeout: 60.0
+  max_retries: 3
+  enable_logging: true
+  log_conversations: true
 
-# Synonym detection specific settings
-synonym_config:
-  min_confidence_threshold: 0.7
-  max_synonyms_per_virus: 15
-  enable_fuzzy_matching: true
-  include_strain_variants: true 
+  # Synonym detection specific settings
+  synonym_config:
+    min_confidence_threshold: 0.7
+    max_synonyms_per_virus: 15
+    enable_fuzzy_matching: true
+    include_strain_variants: true 

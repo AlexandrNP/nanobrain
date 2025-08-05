@@ -1,0 +1,53 @@
+# DomainClassifier Configuration
+# Domain classification for natural language requests
+#
+# Author: NanoBrain Development Team
+# Date: January 2025
+# Version: 1.0.0
+
+# Classification method
+method: "keyword_based"
+
+# Confidence thresholds
+confidence_thresholds:
+  high_confidence: 0.8
+  medium_confidence: 0.6
+  low_confidence: 0.4
+
+# Domain-specific patterns (component expects this field name)
+domain_patterns:
+  bioinformatics:
+    - "protein"
+    - "sequence"
+    - "genome"
+    - "virus"
+    - "viral"
+    - "biological"
+    - "molecular"
+    - "genetic"
+    
+  analysis:
+    - "analyze"
+    - "analysis"
+    - "statistical"
+    - "computation"
+    - "calculate"
+    
+  data_processing:
+    - "process"
+    - "transform"
+    - "convert"
+    - "format"
+    - "parse"
+
+# Performance settings  
+performance_config:
+  enable_caching: true
+  cache_ttl_seconds: 1800
+  case_sensitive: false
+  
+# Classification behavior
+classification_config:
+  allow_multiple_domains: true
+  minimum_keyword_matches: 1
+  boost_primary_domain: true 

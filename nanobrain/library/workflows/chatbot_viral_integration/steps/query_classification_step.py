@@ -29,53 +29,45 @@ class QueryClassificationStep(Step):
         """Initialize QueryClassificationStep with resolved dependencies"""
         super()._init_from_config(config, component_config, dependencies)
         
-        # Initialize extraction agent from configuration
-        self.extraction_agent = self._create_extraction_agent(component_config)
+        # Get resolved extraction agent from configuration
+        self.extraction_agent = self._get_resolved_extraction_agent(component_config)
         
         if self.nb_logger:
             self.nb_logger.info("🔍 Query Classification Step initialized with LLM-based virus species extraction")
     
-    def _create_extraction_agent(self, component_config: Dict[str, Any]) -> SimpleAgent:
+    def _get_resolved_extraction_agent(self, component_config: Dict[str, Any]) -> 'VirusExtractionAgent':
         """
-        Load LLM agent for virus species extraction from standardized config file.
+        Get the resolved extraction agent from configuration.
         
-        ✅ FRAMEWORK COMPLIANCE: Uses agent_config_file reference, no programmatic creation.
+        ✅ FRAMEWORK COMPLIANCE: Uses resolved agent object from class+config pattern.
+        The extraction_agent should already be instantiated during configuration loading.
         """
-        # Get agent config file path from step configuration
-        agent_config_file = component_config.get('agent_config_file')
+        # Get resolved extraction agent from configuration
+        extraction_agent = component_config.get('extraction_agent')
         
-        if not agent_config_file:
+        if extraction_agent is None:
             raise ValueError(
-                "❌ FRAMEWORK VIOLATION: No agent_config_file specified in step configuration.\n"
-                "   REQUIRED: Specify agent_config_file in step config YAML.\n"
-                "   EXAMPLE: agent_config_file: 'config/QueryClassificationStep/VirusExtractionAgent.yml'"
+                "❌ FRAMEWORK VIOLATION: No extraction_agent found in step configuration.\n"
+                "   REQUIRED: Specify extraction_agent with class+config pattern in step config YAML.\n"
+                "   EXAMPLE:\n"
+                "     extraction_agent:\n"
+                "       class: 'nanobrain.library.agents.specialized.virus_extraction_agent.VirusExtractionAgent'\n"
+                "       config: 'config/QueryClassificationStep/VirusExtractionAgent.yml'"
             )
         
-        # ✅ FRAMEWORK COMPLIANCE: Load agent from config file using from_config pattern
-        from nanobrain.library.agents.specialized_agents.conversational_specialized_agent import ConversationalSpecializedAgent
+        # Validate that it's the correct agent type
+        from nanobrain.library.agents.specialized.virus_extraction_agent import VirusExtractionAgent
         
-        try:
-            # Resolve agent config file path relative to workflow directory
-            if hasattr(self, 'workflow_directory') and self.workflow_directory:
-                import os
-                from pathlib import Path
-                agent_config_path = Path(self.workflow_directory) / agent_config_file
-            else:
-                # Fallback: resolve relative to current step's config location
-                import os
-                from pathlib import Path
-                step_dir = Path(__file__).parent.parent
-                agent_config_path = step_dir / agent_config_file
-            
-            # Load agent using framework's from_config pattern
-            return ConversationalSpecializedAgent.from_config(str(agent_config_path))
-            
-        except Exception as e:
+        if not isinstance(extraction_agent, VirusExtractionAgent):
             raise ValueError(
-                f"❌ FRAMEWORK ERROR: Failed to load agent from {agent_config_file}: {e}\n"
-                f"   SOLUTION: Ensure agent config file exists and is properly formatted.\n"
-                f"   PATH: {agent_config_file}"
-            ) from e
+                f"❌ FRAMEWORK ERROR: extraction_agent must be VirusExtractionAgent instance.\n"
+                f"   FOUND: {type(extraction_agent)}\n"
+                f"   EXPECTED: VirusExtractionAgent\n"
+                f"   SOLUTION: Check class+config pattern in step configuration"
+            )
+        
+        self.nb_logger.info(f"✅ Resolved extraction agent: {type(extraction_agent).__name__}")
+        return extraction_agent
     
     async def process(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -135,104 +127,111 @@ class QueryClassificationStep(Step):
     
     async def _extract_virus_species_llm(self, user_query: str) -> Dict[str, Any]:
         """
-        Extract virus species using LLM agent with configurable prompts
+        Extract virus species using specialized VirusExtractionAgent
         
         Args:
             user_query: The user's query text
             
         Returns:
-            Dict with virus species, confidence, and reasoning
+            Dict with virus species, confidence, and routing information
         """
         try:
-            # Get prompt template from configuration
-            prompt_template = self.step_config.get('virus_extraction_prompt', '')
+            # Use the VirusExtractionAgent's specialized processing capability
+            extraction_result = await self.extraction_agent._process_specialized_request(
+                user_query,
+                expected_format='json',
+                analysis_type='classification'
+            )
             
-            if not prompt_template:
-                raise ValueError("No virus extraction prompt configured")
-            
-            # Format prompt with user query
-            formatted_prompt = prompt_template.format(user_query=user_query)
-            
-            # Call LLM agent with formatted prompt
-            response = await self.extraction_agent.process({
-                'prompt': formatted_prompt,
-                'expected_format': 'json'
-            })
-            
-            # Parse the response
-            return self._parse_extraction_response(response)
-            
+            # Parse the JSON response from the specialized agent
+            if extraction_result:
+                import json
+                try:
+                    parsed_result = json.loads(extraction_result)
+                    return parsed_result
+                except json.JSONDecodeError:
+                    self.nb_logger.warning(f"⚠️ Non-JSON response from extraction agent: {extraction_result}")
+                    return {
+                        'virus_species': None,
+                        'confidence': 0.0,
+                        'reasoning': 'Agent returned non-JSON response',
+                        'analysis_type': 'conversational',
+                        'routing_decision': 'conversational_response'
+                    }
+            else:
+                # Agent returned None - fallback to general processing
+                fallback_result = await self.extraction_agent.process({
+                    'user_query': user_query,
+                    'task': 'virus_species_extraction',
+                    'format': 'json'
+                })
+                
+                # Parse fallback result
+                return self._parse_fallback_response(fallback_result, user_query)
+                
         except Exception as e:
-            self.nb_logger.error(f"❌ Error in LLM virus species extraction: {e}")
+            self.nb_logger.error(f"❌ Error in virus species extraction: {e}")
             return {
                 'virus_species': None,
                 'confidence': 0.0,
-                'reasoning': f'Error in LLM extraction: {str(e)}'
+                'reasoning': f'Extraction error: {str(e)}',
+                'analysis_type': 'conversational',
+                'routing_decision': 'conversational_response'
             }
     
-    def _parse_extraction_response(self, response: Dict[str, Any]) -> Dict[str, Any]:
+    def _parse_fallback_response(self, response: Dict[str, Any], user_query: str) -> Dict[str, Any]:
         """
-        Parse LLM response to extract virus species information
+        Parse fallback response from general agent processing
         
         Args:
-            response: Raw response from LLM agent
+            response: Response from agent's general process method
+            user_query: Original user query for context
             
         Returns:
-            Dict with extracted virus species data
+            Dict with extracted information in standard format
         """
         try:
-            # Handle different response formats
+            # Extract content from response
+            content = ""
             if isinstance(response, dict):
-                if 'content' in response:
-                    content = response['content']
-                elif 'text' in response:
-                    content = response['text']
-                else:
-                    content = str(response)
+                content = response.get('content', response.get('text', str(response)))
             else:
                 content = str(response)
             
-            # Try to parse as JSON
-            try:
-                parsed_data = json.loads(content)
-                
-                return {
-                    'virus_species': parsed_data.get('virus_species'),
-                    'confidence': parsed_data.get('confidence', 0.0),
-                    'reasoning': parsed_data.get('reasoning', '')
-                }
+            # Basic virus detection in content
+            content_lower = content.lower()
+            user_query_lower = user_query.lower()
             
-            except json.JSONDecodeError:
-                # If not JSON, try to extract virus species from text
-                self.nb_logger.warning("⚠️ LLM response not in JSON format, attempting text parsing")
-                
-                # Basic text parsing fallback
-                content_lower = content.lower()
-                common_viruses = [
-                    'chikungunya virus', 'eastern equine encephalitis virus',
-                    'western equine encephalitis virus', 'venezuelan equine encephalitis virus',
-                    'sindbis virus', 'semliki forest virus', 'ross river virus',
-                    'zika virus', 'dengue virus', 'yellow fever virus'
-                ]
-                
-                for virus in common_viruses:
-                    if virus in content_lower:
-                        return {
-                            'virus_species': virus,
-                            'confidence': 0.7,
-                            'reasoning': f'Extracted from text: {virus}'
-                        }
-                
-                return {
-                    'virus_species': None,
-                    'confidence': 0.0,
-                    'reasoning': 'No virus species detected in response'
-                }
-        
+            # Check for virus indicators
+            virus_indicators = [
+                'chikungunya', 'chikv', 'eastern equine encephalitis', 'eeev',
+                'alphavirus', 'togavirus', 'viral', 'virus'
+            ]
+            
+            detected_virus = None
+            for indicator in virus_indicators:
+                if indicator in user_query_lower or indicator in content_lower:
+                    detected_virus = indicator
+                    break
+            
+            # Determine analysis type from query
+            analysis_indicators = ['pssm', 'matrix', 'analysis', 'protein', 'sequence']
+            analysis_requested = any(indicator in user_query_lower for indicator in analysis_indicators)
+            
+            return {
+                'virus_species': detected_virus,
+                'confidence': 0.6 if detected_virus else 0.0,
+                'reasoning': f'Fallback detection from agent response and query analysis',
+                'analysis_type': 'pssm' if analysis_requested else 'conversational',
+                'routing_decision': 'virus_name_resolution' if detected_virus else 'conversational_response'
+            }
+            
         except Exception as e:
-            self.nb_logger.error(f"❌ Error parsing extraction response: {e}")
+            self.nb_logger.error(f"❌ Error parsing fallback response: {e}")
             return {
                 'virus_species': None,
                 'confidence': 0.0,
-                'reasoning': f'Error parsing response: {str(e)}'
+                'reasoning': f'Fallback parse error: {str(e)}',
+                'analysis_type': 'conversational',
+                'routing_decision': 'conversational_response'
             } 

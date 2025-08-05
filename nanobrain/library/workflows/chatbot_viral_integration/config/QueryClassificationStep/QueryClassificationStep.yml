@@ -1,6 +1,10 @@
 name: "query_classification"
 description: "Classify user queries and extract virus species using LLM agent"
-class: "nanobrain.library.workflows.chatbot_viral_integration.steps.query_classification_step.QueryClassificationStep"
+
+# Agent configuration with class+config pattern (TOP LEVEL for proper resolution)
+extraction_agent:
+  class: "nanobrain.library.agents.specialized.virus_extraction_agent.VirusExtractionAgent"
+  config: "config/QueryClassificationStep/VirusExtractionAgent.yml"
 
 # Step configuration
 config:
@@ -9,23 +13,40 @@ config:
   debug_mode: false
   enable_logging: true
   log_data_transfers: true
-  
-  # UPDATED: Agent configuration with class+config pattern (was inline)
-  extraction_agent:
-    class: "nanobrain.library.agents.specialized.conversational_specialized_agent.ConversationalSpecializedAgent"
-    config: "config/QueryClassificationStep/VirusExtractionAgent.yml"
 
-# Input/Output data unit specifications (existing)
+# Input/Output data unit specifications (UPDATED: dictionary format)
 input_data_units:
-  - "user_query"
+  user_query:
+    class: "nanobrain.core.data_unit.DataUnitMemory"
+    config:
+      class: "nanobrain.core.data_unit.DataUnitMemory"
+      name: "user_query"
+      description: "User query input"
+      persistent: false
 
 output_data_units:
-  - "extraction_result"
+  extraction_result:
+    class: "nanobrain.core.data_unit.DataUnitMemory" 
+    config:
+      class: "nanobrain.core.data_unit.DataUnitMemory"
+      name: "extraction_result"
+      description: "Virus extraction result"
+      persistent: false
 
 # Step timeout and retry settings (existing)
 timeout: 30.0
 max_retries: 3
 retry_delay: 1.0
+
+# ✅ SCOPE CORRECTED: Step-level trigger referencing step-level data unit
+triggers:
+  - trigger_id: "query_classification_completed"
+    class: "nanobrain.core.trigger.DataUnitChangeTrigger"
+    config:
+      data_unit: "extraction_result"  # ✅ STEP-LEVEL REFERENCE: References step's output data unit
+      event_type: "set"
+      description: "Trigger when query classification completed"
+      enable_logging: true
 
 # Classification configuration (existing)
 classification_config:

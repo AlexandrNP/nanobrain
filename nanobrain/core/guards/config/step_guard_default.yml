@@ -1,0 +1,13 @@
+name: "step_guard_default"
+description: "Default step-level trigger guard configuration"
+
+# ✅ FRAMEWORK COMPLIANCE: ConfigBase-compliant configuration
+enabled: true
+scope: "step"
+protected_methods:
+  - "process"
+auto_apply: true
+enforcement_level: "strict"
+debug_mode: false
+log_guard_events: true
+error_message_template: "{method} may only be invoked via {scope}-level trigger" 

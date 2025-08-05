@@ -13,6 +13,30 @@ max_gap_percentage: 50.0
 validate_alignment_quality: true
 conservation_threshold: 0.7
 
+# Input data units
+input_data_units:
+  alignment_input_sequences:
+    class: nanobrain.core.data_unit.DataUnitMemory
+    name: alignment_input_sequences
+    description: "Curated sequences from sequence curation step"
+    persistent: false
+
+# Output data units
+output_data_units:
+  alignment_output_sequences:
+    class: nanobrain.core.data_unit.DataUnitMemory
+    name: alignment_output_sequences
+    description: "Multiple sequence alignments from MUSCLE"
+    persistent: false
+
+# Trigger configuration
+triggers:
+  - trigger_id: "input_data_received"
+    class: "nanobrain.core.trigger.DataUnitChangeTrigger"
+    data_unit: "alignment_input_sequences"
+    event_type: "set"
+    description: "Execute alignment when alignment input sequences are received"
+
 # Tool reference (not embedded config) - Phase 3 enhancement
 tool_dependencies:
   muscle_tool: config/tools/muscle_tool.yml

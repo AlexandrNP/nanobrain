@@ -60,6 +60,52 @@ class FrontendChatResponse(BaseModel):
     metadata: Optional[Dict[str, Any]] = Field(default=None, description="Additional metadata")
 
 
+class FrontendErrorResponse(BaseModel):
+    """Simplified error response model optimized for frontend."""
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "error": "Validation failed",
+                "message": "The provided input is invalid",
+                "status": "error",
+                "timestamp": 1640995200.123,
+                "request_id": "req_123"
+            }
+        }
+    )
+    
+    error: str = Field(..., description="Error type or code")
+    message: str = Field(..., description="Human-readable error message")
+    status: str = Field(default="error", description="Response status")
+    timestamp: float = Field(..., description="Error timestamp")
+    request_id: Optional[str] = Field(default=None, description="Request ID if available")
+
+
+class FrontendHealthResponse(BaseModel):
+    """Simplified health response model optimized for frontend."""
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "status": "healthy",
+                "version": "1.0.0",
+                "timestamp": 1640995200.123,
+                "uptime_seconds": 86400.0,
+                "components": {
+                    "database": "healthy",
+                    "api": "healthy",
+                    "workflows": "healthy"
+                }
+            }
+        }
+    )
+    
+    status: str = Field(..., description="Overall health status")
+    version: str = Field(..., description="API version")
+    timestamp: float = Field(..., description="Health check timestamp")
+    uptime_seconds: float = Field(..., description="Server uptime in seconds")
+    components: Optional[Dict[str, str]] = Field(default=None, description="Component health status")
+
+
 class ConversationSummary(BaseModel):
     """Conversation summary for frontend display."""
     model_config = ConfigDict(

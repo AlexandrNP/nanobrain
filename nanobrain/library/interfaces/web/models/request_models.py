@@ -4,7 +4,7 @@ Request Models
 Pydantic models for validating incoming API requests.
 """
 
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 import uuid
 
@@ -48,26 +48,19 @@ class ChatOptions(BaseModel):
     )
     
     # RAG and retrieval options
-    use_rag: Optional[bool] = Field(
+    use_rag: bool = Field(
         default=False,
-        description="Whether to use Retrieval-Augmented Generation"
-    )
-    
-    rag_sources: Optional[int] = Field(
-        default=5,
-        gt=0,
-        le=20,
-        description="Number of RAG sources to retrieve"
+        description="Whether to use retrieval-augmented generation"
     )
     
     # Conversation management
     conversation_id: Optional[str] = Field(
         default=None,
-        description="Existing conversation ID to continue"
+        description="Conversation ID for maintaining context"
     )
     
     # Streaming options
-    enable_streaming: Optional[bool] = Field(
+    enable_streaming: bool = Field(
         default=False,
         description="Whether to enable streaming responses"
     )
@@ -75,14 +68,13 @@ class ChatOptions(BaseModel):
     # Model selection
     model: Optional[str] = Field(
         default=None,
-        description="Specific model to use for this request"
+        description="Specific model to use for the request"
     )
     
-    # Custom system prompt
+    # System configuration
     system_prompt: Optional[str] = Field(
         default=None,
-        max_length=2000,
-        description="Custom system prompt for this conversation"
+        description="Custom system prompt for the conversation"
     )
     
     # Additional metadata
@@ -96,6 +88,7 @@ class ChatOptions(BaseModel):
     def validate_conversation_id(cls, v):
         """Validate conversation ID format."""
         if v is not None:
+            # Accept UUID format or reasonable string
             try:
                 # Try to parse as UUID
                 uuid.UUID(v)
@@ -174,4 +167,177 @@ class ChatRequest(BaseModel):
     @classmethod
     def set_request_id(cls, v):
         """Set request ID if not provided."""
-        return v or str(uuid.uuid4()) 
+        return v or str(uuid.uuid4())
+
+
+class StreamingChatRequest(BaseModel):
+    """
+    Streaming chat request model for real-time conversation.
+    
+    This model extends the standard chat request with streaming-specific
+    configuration and session management capabilities.
+    """
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "query": "Analyze this protein sequence with streaming updates",
+                "options": {
+                    "temperature": 0.7,
+                    "max_tokens": 2000,
+                    "enable_streaming": True,
+                    "conversation_id": "conv_123"
+                },
+                "streaming_config": {
+                    "stream_type": "realtime",
+                    "chunk_size": 512,
+                    "enable_progress": True,
+                    "buffer_size": 1024,
+                    "timeout": 300
+                },
+                "session_id": "session_456",
+                "user_id": "user_789"
+            }
+        }
+    )
+    
+    query: str = Field(
+        ...,
+        min_length=1,
+        max_length=10000,
+        description="The user's question or message for streaming processing"
+    )
+    
+    options: ChatOptions = Field(
+        default_factory=lambda: ChatOptions(enable_streaming=True),
+        description="Chat options with streaming enabled by default"
+    )
+    
+    # Streaming-specific configuration
+    streaming_config: Optional[Dict[str, Any]] = Field(
+        default_factory=lambda: {
+            "stream_type": "realtime",
+            "chunk_size": 512,
+            "enable_progress": True,
+            "buffer_size": 1024,
+            "timeout": 300
+        },
+        description="Configuration for streaming behavior"
+    )
+    
+    # Session management for streaming
+    session_id: Optional[str] = Field(
+        default=None,
+        description="Streaming session ID for connection management"
+    )
+    
+    # Request metadata
+    request_id: Optional[str] = Field(
+        default=None,
+        description="Request ID for tracking streaming operations"
+    )
+    
+    user_id: Optional[str] = Field(
+        default=None,
+        description="User ID for session management and authentication"
+    )
+    
+    # Connection preferences
+    preferred_format: Optional[str] = Field(
+        default="json",
+        description="Preferred format for streaming chunks (json, text, binary)"
+    )
+    
+    client_capabilities: Optional[List[str]] = Field(
+        default_factory=lambda: ["websocket", "sse", "polling"],
+        description="Client-supported streaming capabilities"
+    )
+    
+    @field_validator('query')
+    @classmethod
+    def validate_query(cls, v):
+        """Validate and clean the streaming query."""
+        cleaned = v.strip()
+        if not cleaned:
+            raise ValueError("Streaming query cannot be empty")
+        return cleaned
+    
+    @field_validator('options')
+    @classmethod
+    def ensure_streaming_enabled(cls, v):
+        """Ensure streaming is enabled in options."""
+        if not v.enable_streaming:
+            v.enable_streaming = True
+        return v
+    
+    @field_validator('streaming_config')
+    @classmethod
+    def validate_streaming_config(cls, v):
+        """Validate streaming configuration parameters."""
+        if v is None:
+            return {
+                "stream_type": "realtime",
+                "chunk_size": 512,
+                "enable_progress": True,
+                "buffer_size": 1024,
+                "timeout": 300
+            }
+        
+        # Validate chunk_size
+        if "chunk_size" in v and (v["chunk_size"] < 64 or v["chunk_size"] > 8192):
+            raise ValueError("chunk_size must be between 64 and 8192 bytes")
+        
+        # Validate buffer_size
+        if "buffer_size" in v and (v["buffer_size"] < 256 or v["buffer_size"] > 16384):
+            raise ValueError("buffer_size must be between 256 and 16384 bytes")
+        
+        # Validate timeout
+        if "timeout" in v and (v["timeout"] < 10 or v["timeout"] > 3600):
+            raise ValueError("timeout must be between 10 and 3600 seconds")
+        
+        # Validate stream_type
+        valid_stream_types = ["realtime", "batch", "progressive", "buffered"]
+        if "stream_type" in v and v["stream_type"] not in valid_stream_types:
+            raise ValueError(f"stream_type must be one of: {valid_stream_types}")
+        
+        return v
+    
+    @field_validator('session_id', mode='before')
+    @classmethod
+    def set_session_id(cls, v):
+        """Set session ID if not provided."""
+        return v or f"stream_{uuid.uuid4()}"
+    
+    @field_validator('request_id', mode='before')
+    @classmethod
+    def set_request_id(cls, v):
+        """Set request ID if not provided."""
+        return v or str(uuid.uuid4())
+    
+    @field_validator('preferred_format')
+    @classmethod
+    def validate_preferred_format(cls, v):
+        """Validate preferred streaming format."""
+        valid_formats = ["json", "text", "binary", "xml", "csv"]
+        if v not in valid_formats:
+            raise ValueError(f"preferred_format must be one of: {valid_formats}")
+        return v
+    
+    @field_validator('client_capabilities')
+    @classmethod
+    def validate_client_capabilities(cls, v):
+        """Validate client streaming capabilities."""
+        valid_capabilities = ["websocket", "sse", "polling", "http2", "grpc"]
+        
+        if v is None:
+            return ["websocket", "sse", "polling"]
+        
+        for capability in v:
+            if capability not in valid_capabilities:
+                raise ValueError(f"Invalid client capability: {capability}. Valid options: {valid_capabilities}")
+        
+        # Ensure at least one capability is specified
+        if not v:
+            return ["websocket", "sse", "polling"]
+        
+        return v 

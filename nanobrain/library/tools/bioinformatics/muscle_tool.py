@@ -163,11 +163,389 @@ class AlignmentResult:
 
 class MUSCLETool(ProgressiveScalingMixin, ExternalTool):
     """
-    MUSCLE multiple sequence alignment tool wrapper.
-    Enhanced with mandatory from_config pattern implementation.
+    MUSCLE Multiple Sequence Alignment Tool - High-Performance MSA with Conservation Analysis and Quality Scoring
+    ============================================================================================================
     
-    Provides high-quality multiple sequence alignments for PSSM generation
-    in the Alphavirus protein analysis workflow.
+    The MUSCLETool provides a comprehensive wrapper for MUSCLE (Multiple Sequence Comparison by Log-Expectation),
+    a widely-used multiple sequence alignment software optimized for protein and nucleotide sequences. This tool
+    integrates MUSCLE's advanced alignment algorithms with NanoBrain's framework architecture, providing automated
+    installation, progressive scaling, conservation analysis, and quality scoring for bioinformatics workflows.
+    
+    **Core Architecture:**
+        The MUSCLE tool provides enterprise-grade multiple sequence alignment capabilities:
+        
+        * **Multiple Sequence Alignment**: Advanced protein and nucleotide sequence alignment
+        * **Conservation Analysis**: Detailed conservation scoring and position analysis
+        * **Quality Assessment**: Comprehensive alignment quality metrics and scoring
+        * **Progressive Scaling**: Adaptive performance optimization for varying sequence sets
+        * **Auto-Installation**: Intelligent detection and installation via conda/bioconda
+        * **Framework Integration**: Full integration with NanoBrain's component architecture
+    
+    **Multiple Sequence Alignment Capabilities:**
+        
+        **Advanced Alignment Algorithms:**
+        * Log-expectation scoring for optimal sequence alignment accuracy
+        * Progressive alignment strategy with iterative refinement
+        * Diagonal optimization for improved alignment speed and quality
+        * Gap penalty optimization for biologically meaningful alignments
+        
+        **Sequence Processing:**
+        * Support for protein and nucleotide sequence alignment
+        * Automatic sequence validation and preprocessing
+        * Handling of large sequence sets with memory optimization
+        * Multiple output format support (FASTA, Clustal, MSF, Phylip)
+        
+        **Conservation Analysis:**
+        * Position-specific conservation scoring and analysis
+        * Highly conserved region identification and annotation
+        * Conservation profile generation for downstream analysis
+        * Statistical significance testing for conservation patterns
+        
+        **Quality Assessment:**
+        * Comprehensive alignment quality scoring and metrics
+        * Gap distribution analysis and optimization
+        * Sequence coverage and identity assessment
+        * Quality thresholds for alignment validation
+    
+    **Bioinformatics Applications:**
+        
+        **Protein Analysis:**
+        * Protein family alignment and evolutionary analysis
+        * Structural motif identification through sequence conservation
+        * Functional domain mapping and annotation
+        * Phylogenetic analysis preparation and optimization
+        
+        **Genomic Studies:**
+        * Comparative genomics and sequence evolution analysis
+        * Gene family alignment and ortholog identification
+        * Regulatory element conservation analysis
+        * Mutation impact assessment through conservation scores
+        
+        **Structural Biology:**
+        * Structure-based sequence alignment and validation
+        * Secondary structure prediction support through alignment
+        * Structural conservation analysis and mapping
+        * Protein fold family characterization
+        
+        **Evolutionary Biology:**
+        * Phylogenetic tree construction support
+        * Evolutionary rate analysis through conservation scoring
+        * Species comparison and divergence analysis
+        * Molecular evolution pattern identification
+    
+    **Conservation Analysis Features:**
+        
+        **Position-Specific Scoring:**
+        * Detailed conservation scores for each alignment position
+        * Statistical significance assessment for conservation patterns
+        * Identification of highly conserved functional regions
+        * Conservation gradient analysis across sequence length
+        
+        **Conservation Profiles:**
+        * Generation of conservation profiles for visualization
+        * Export of conservation data for downstream analysis
+        * Integration with structural analysis workflows
+        * Conservation-based functional annotation support
+        
+        **Quality Metrics:**
+        * Alignment quality scoring with customizable weights
+        * Gap penalty assessment and optimization
+        * Sequence identity and similarity measurements
+        * Coverage analysis and completeness assessment
+    
+    **Configuration Architecture:**
+        Comprehensive configuration supports diverse bioinformatics workflows:
+        
+        ```yaml
+        # MUSCLE Tool Configuration
+        tool_name: "muscle"
+        
+        # Tool card for framework integration
+        tool_card:
+          name: "muscle"
+          description: "MUSCLE multiple sequence alignment tool"
+          version: "1.0.0"
+          category: "bioinformatics"
+          capabilities:
+            - "sequence_alignment"
+            - "msa_generation"
+            - "conservation_analysis"
+        
+        # Installation Configuration
+        conda_package: "muscle"
+        conda_channel: "bioconda"
+        environment_name: "nanobrain-viral_protein-muscle"
+        create_isolated_environment: true
+        
+        # Alignment Parameters
+        max_iterations: 16              # Maximum refinement iterations
+        diagonal_optimization: true     # Enable diagonal optimization
+        gap_open_penalty: -12.0        # Gap opening penalty
+        gap_extend_penalty: -1.0       # Gap extension penalty
+        
+        # Quality Parameters
+        min_sequences: 3               # Minimum sequences for alignment
+        max_sequences: 1000           # Maximum sequences to process
+        output_format: "fasta"        # Output format (fasta, clustal, msf, phylip)
+        
+        # Conservation Analysis
+        calculate_profile: true        # Generate conservation profiles
+        highly_conserved_threshold: 0.8  # Conservation threshold
+        position_scoring: true         # Enable position-specific scoring
+        
+        # Quality Scoring Configuration
+        quality_scoring:
+          enabled: true
+          weights:
+            conservation_score: 0.5    # Conservation weight in quality score
+            gap_penalty: 0.3          # Gap penalty weight
+            size_bonus: 0.2           # Size bonus weight
+          thresholds:
+            high_quality_threshold: 0.7      # High quality threshold
+            acceptable_quality_threshold: 0.5 # Acceptable quality threshold
+        ```
+    
+    **Usage Patterns:**
+        
+        **Basic Multiple Sequence Alignment:**
+        ```python
+        from nanobrain.library.tools.bioinformatics import MUSCLETool
+        
+        # Create MUSCLE tool with configuration
+        muscle_tool = MUSCLETool.from_config('config/muscle_config.yml')
+        
+        # Perform multiple sequence alignment
+        sequences = [
+            ">sequence1\\nMKWVTFISLLFLFSSAYSRGVFRRDAHKSEVAHRFKDLGE",
+            ">sequence2\\nMKWVTFISLLFLFSSAYSRGVFRRDAHKSEVAHRFKDLGE", 
+            ">sequence3\\nMKWVTFISLLFLFSSAYSRGVFRRDAHKSEVAHRFKDLGE"
+        ]
+        
+        fasta_content = "\\n".join(sequences)
+        
+        # Execute alignment with quality assessment
+        result = await muscle_tool.align_sequences(fasta_content)
+        
+        # Access alignment results
+        print(f"Alignment completed: {result.success}")
+        print(f"Aligned sequences: {len(result.data['aligned_sequences'])}")
+        print(f"Conservation score: {result.data['conservation_score']}")
+        print(f"Quality score: {result.data['quality_score']}")
+        ```
+        
+        **Conservation Analysis:**
+        ```python
+        # Configure MUSCLE for detailed conservation analysis
+        conservation_config = {
+            'tool_name': 'muscle',
+            'calculate_profile': True,
+            'position_scoring': True,
+            'highly_conserved_threshold': 0.8,
+            'quality_scoring': {
+                'enabled': True,
+                'weights': {
+                    'conservation_score': 0.6,
+                    'gap_penalty': 0.2,
+                    'size_bonus': 0.2
+                }
+            }
+        }
+        
+        muscle_tool = MUSCLETool.from_config(conservation_config)
+        
+        # Align protein family sequences with conservation analysis
+        family_sequences = load_protein_family_sequences()
+        result = await muscle_tool.align_sequences(family_sequences)
+        
+        # Access conservation analysis results
+        conservation_profile = result.data['conservation_profile']
+        highly_conserved_positions = result.data['highly_conserved_positions']
+        
+        for position, score in conservation_profile.items():
+            if score > 0.8:
+                print(f"Position {position}: Conservation score {score:.3f}")
+        
+        # Export alignment for visualization
+        alignment_file = result.data['alignment_file']
+        conservation_file = result.data['conservation_file']
+        ```
+        
+        **Quality Assessment and Validation:**
+        ```python
+        # Configure quality-focused alignment
+        quality_config = {
+            'max_iterations': 32,        # More iterations for higher quality
+            'diagonal_optimization': True,
+            'gap_open_penalty': -15.0,   # Stricter gap penalties
+            'gap_extend_penalty': -2.0,
+            'quality_scoring': {
+                'enabled': True,
+                'thresholds': {
+                    'high_quality_threshold': 0.8,
+                    'acceptable_quality_threshold': 0.6
+                }
+            }
+        }
+        
+        muscle_tool = MUSCLETool.from_config(quality_config)
+        
+        # Perform high-quality alignment with validation
+        result = await muscle_tool.align_sequences(sequences)
+        
+        # Validate alignment quality
+        quality_metrics = result.data['quality_metrics']
+        print(f"Overall quality: {quality_metrics['overall_score']:.3f}")
+        print(f"Gap penalty: {quality_metrics['gap_penalty']:.3f}")
+        print(f"Conservation bonus: {quality_metrics['conservation_bonus']:.3f}")
+        
+        # Check quality thresholds
+        if quality_metrics['overall_score'] > 0.8:
+            print("High-quality alignment achieved")
+        elif quality_metrics['overall_score'] > 0.6:
+            print("Acceptable quality alignment")
+        else:
+            print("Low quality alignment - consider parameter adjustment")
+        ```
+        
+        **Large-Scale Alignment with Progressive Scaling:**
+        ```python
+        # Configure for large sequence sets
+        scaling_config = {
+            'max_sequences': 2000,
+            'progressive_scaling': True,
+            'memory_optimization': True,
+            'batch_processing': True
+        }
+        
+        muscle_tool = MUSCLETool.from_config(scaling_config)
+        
+        # Process large protein family
+        large_sequence_set = load_large_protein_family()
+        
+        # Tool automatically handles scaling and optimization
+        result = await muscle_tool.align_sequences(large_sequence_set)
+        
+        # Monitor performance metrics
+        performance = result.data.get('performance_metrics', {})
+        print(f"Processing time: {performance.get('execution_time')}s")
+        print(f"Memory usage: {performance.get('memory_usage')}MB")
+        print(f"Sequences processed: {performance.get('sequences_processed')}")
+        ```
+        
+        **Integration with Phylogenetic Analysis:**
+        ```python
+        # Prepare alignment for phylogenetic analysis
+        phylo_config = {
+            'output_format': 'phylip',   # Phylip format for tree software
+            'calculate_profile': True,
+            'position_scoring': True,
+            'gap_open_penalty': -10.0,   # Optimized for phylogenetics
+            'max_iterations': 20
+        }
+        
+        muscle_tool = MUSCLETool.from_config(phylo_config)
+        
+        # Align sequences for phylogenetic tree construction
+        species_sequences = load_orthologous_sequences()
+        result = await muscle_tool.align_sequences(species_sequences)
+        
+        # Prepare output for phylogenetic software
+        phylip_alignment = result.data['phylip_alignment']
+        conservation_weights = result.data['conservation_weights']
+        
+        # Export for external phylogenetic analysis
+        with open('alignment.phy', 'w') as f:
+            f.write(phylip_alignment)
+        
+        # Conservation-weighted analysis
+        weighted_positions = []
+        for pos, weight in conservation_weights.items():
+            if weight > 0.5:  # Use highly conserved positions
+                weighted_positions.append(pos)
+        ```
+    
+    **Advanced Features:**
+        
+        **Algorithm Optimization:**
+        * Iterative refinement with convergence detection
+        * Diagonal optimization for computational efficiency
+        * Memory-efficient processing for large sequence sets
+        * Parallel processing support for multi-core systems
+        
+        **Quality Control:**
+        * Comprehensive alignment validation and quality metrics
+        * Statistical significance testing for alignment reliability
+        * Gap distribution analysis and optimization recommendations
+        * Sequence outlier detection and handling
+        
+        **Integration Capabilities:**
+        * Seamless integration with structure prediction workflows
+        * Export to multiple phylogenetic analysis formats
+        * Integration with protein function prediction pipelines
+        * Compatibility with evolutionary analysis tools
+        
+        **Performance Features:**
+        * Progressive scaling for datasets of varying sizes
+        * Memory optimization for resource-constrained environments
+        * Batch processing support for high-throughput analysis
+        * Intelligent parameter optimization based on sequence characteristics
+    
+    **Scientific Applications:**
+        
+        **Protein Function Analysis:**
+        * Functional domain identification through conservation patterns
+        * Active site prediction and characterization
+        * Protein family classification and annotation
+        * Evolutionary conservation analysis for function prediction
+        
+        **Comparative Genomics:**
+        * Cross-species sequence comparison and analysis
+        * Ortholog and paralog identification and characterization
+        * Regulatory element conservation analysis
+        * Genome evolution pattern identification
+        
+        **Drug Discovery:**
+        * Target protein family analysis for drug design
+        * Binding site conservation analysis across species
+        * Pharmacophore identification through alignment patterns
+        * Drug resistance mutation analysis through conservation
+        
+        **Structural Biology:**
+        * Structure-function relationship analysis through alignment
+        * Secondary structure prediction support
+        * Structural motif identification and characterization
+        * Protein fold evolution analysis
+    
+    Attributes:
+        muscle_config (MUSCLEConfig): MUSCLE tool configuration
+        muscle_executable (str): Path to MUSCLE executable
+        max_iterations (int): Maximum number of refinement iterations
+        diagonal_optimization (bool): Whether diagonal optimization is enabled
+        gap_open_penalty (float): Penalty for opening gaps in alignment
+        gap_extend_penalty (float): Penalty for extending gaps in alignment
+        min_sequences (int): Minimum number of sequences required for alignment
+        max_sequences (int): Maximum number of sequences to process
+        output_format (str): Output format for aligned sequences
+        quality_scoring (dict): Quality scoring configuration and thresholds
+    
+    Note:
+        This tool requires MUSCLE to be available either through conda, system PATH,
+        or local installation. The tool provides comprehensive auto-installation
+        capabilities using conda/bioconda channels. Quality scoring and conservation
+        analysis add computational overhead but provide valuable biological insights.
+    
+    Warning:
+        Multiple sequence alignment can be computationally intensive for large sequence
+        sets. Monitor system resources and configure appropriate limits for production
+        deployments. Gap penalty parameters significantly affect alignment quality and
+        biological interpretation of results.
+    
+    See Also:
+        * :class:`ExternalTool`: Base external tool implementation
+        * :class:`ProgressiveScalingMixin`: Progressive scaling capabilities
+        * :class:`MUSCLEConfig`: MUSCLE tool configuration schema
+        * :mod:`nanobrain.library.tools.bioinformatics`: Bioinformatics tool implementations
+        * :mod:`nanobrain.core.external_tool`: External tool framework
     """
     
     @classmethod

@@ -1,0 +1,13 @@
+name: "agent_guard_default"
+description: "Default agent-level trigger guard configuration"
+
+# ✅ FRAMEWORK COMPLIANCE: ConfigBase-compliant configuration
+enabled: true
+scope: "agent"
+protected_methods:
+  - "_process_specialized_request"
+auto_apply: true
+enforcement_level: "strict"
+debug_mode: false
+log_guard_events: true
+error_message_template: "{method} may only be invoked via {scope}-level trigger" 

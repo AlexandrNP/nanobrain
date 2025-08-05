@@ -28,22 +28,354 @@ from nanobrain.core.logging_system import get_logger
 
 class EnhancedCollaborativeAgent(A2ASupportMixin, MCPSupportMixin, ConversationalAgent):
     """
-    Enhanced conversational agent with A2A and MCP protocol support.
-    Enhanced with mandatory from_config pattern implementation.
+    Enhanced Collaborative Agent - Multi-Protocol AI Agent with A2A and MCP Integration
+    ================================================================================
     
-    This agent can:
-    - Use MCP tools for structured operations
-    - Collaborate with A2A agents for specialized tasks
-    - Maintain conversation context and history
-    - Provide performance metrics and monitoring
-    - Apply delegation rules for intelligent task routing
+    The Enhanced Collaborative Agent is a sophisticated conversational AI agent that extends
+    the base conversational capabilities with advanced collaboration protocols, tool
+    integration, and intelligent task delegation. This agent serves as a central coordination
+    point for complex multi-agent workflows and tool-intensive operations.
     
-    Features:
-    - Multi-protocol support (A2A, MCP)
-    - Intelligent delegation based on configurable rules
-    - Performance tracking and metrics collection
-    - Enhanced error handling and fallback mechanisms
-    - Extensible tool detection and usage patterns
+    **Core Architecture:**
+        The Enhanced Collaborative Agent combines multiple capabilities:
+        
+        * **Conversational AI**: Advanced LLM-based conversation management and context handling
+        * **A2A Protocol**: Agent-to-Agent collaboration for distributed processing and specialization
+        * **MCP Protocol**: Model Context Protocol for structured tool integration and execution
+        * **Intelligent Delegation**: Rule-based task routing to specialized agents and tools
+        * **Performance Monitoring**: Comprehensive metrics collection and optimization tracking
+        * **Context Management**: Advanced conversation history and state management
+    
+    **Multi-Protocol Integration:**
+        
+        **Agent-to-Agent (A2A) Collaboration:**
+        * Seamless communication with other NanoBrain agents
+        * Task delegation based on capability matching and workload
+        * Context sharing and result aggregation across agent networks
+        * Dynamic agent discovery and capability negotiation
+        
+        **Model Context Protocol (MCP) Support:**
+        * Structured tool integration with standardized interfaces
+        * Tool capability discovery and automatic selection
+        * Context preservation across tool invocations
+        * Resource management and lifecycle control
+        
+        **Unified Protocol Management:**
+        * Automatic protocol selection based on task requirements
+        * Fallback mechanisms for protocol failures
+        * Cross-protocol context translation and preservation
+        * Performance optimization across protocol boundaries
+    
+    **Intelligent Delegation System:**
+        The agent features sophisticated task delegation capabilities:
+        
+        **Rule-Based Routing:**
+        * Configurable delegation rules based on task content and context
+        * Keyword-based specialization detection and routing
+        * Priority-based agent selection and load balancing
+        * Dynamic rule evaluation and adaptation
+        
+        **Capability Matching:**
+        * Automatic agent capability discovery and assessment
+        * Task-to-capability mapping with confidence scoring
+        * Multi-agent collaboration for complex task decomposition
+        * Resource availability and performance-based selection
+        
+        **Delegation Strategies:**
+        * **Direct Delegation**: Route specific tasks to specialized agents
+        * **Collaborative Processing**: Coordinate multiple agents for complex tasks
+        * **Tool Chain Execution**: Orchestrate tool sequences across protocols
+        * **Fallback Handling**: Graceful degradation when preferred agents unavailable
+    
+    **Configuration Architecture:**
+        Enhanced agents support comprehensive configuration management:
+        
+        ```yaml
+        # Enhanced Collaborative Agent Configuration
+        name: "enhanced_coordinator"
+        description: "Multi-protocol collaborative agent with delegation"
+        
+        # Base conversational agent settings
+        model: "gpt-4"
+        temperature: 0.7
+        max_tokens: 4000
+        system_prompt: |
+          You are an enhanced collaborative agent capable of coordinating
+          multiple agents and tools to solve complex problems.
+        
+        # A2A Protocol Configuration
+        a2a_config:
+          enable_discovery: true
+          collaboration_mode: "intelligent"
+          max_concurrent_delegations: 5
+          delegation_timeout: 300
+          capability_assessment: true
+        
+        # MCP Protocol Configuration
+        mcp_config:
+          tool_discovery: "automatic"
+          context_preservation: true
+          resource_management: "optimized"
+          tool_selection_strategy: "capability_match"
+        
+        # Delegation Rules Configuration
+        delegation_rules:
+          - trigger_keywords: ["analyze", "data", "statistics"]
+            target_agent_type: "data_analysis_agent"
+            confidence_threshold: 0.8
+            
+          - trigger_keywords: ["write", "code", "program"]
+            target_agent_type: "code_generation_agent"
+            min_complexity: "moderate"
+            
+          - trigger_keywords: ["search", "find", "lookup"]
+            target_protocol: "mcp"
+            preferred_tools: ["search_tool", "database_tool"]
+        
+        # Performance and Monitoring
+        enable_metrics: true
+        performance_tracking:
+          delegation_success_rate: true
+          response_time_analysis: true
+          protocol_performance_comparison: true
+          resource_utilization_tracking: true
+        
+        # Tool Integration
+        tool_keywords:
+          data_analysis: ["pandas", "numpy", "statistics"]
+          web_search: ["search", "find", "lookup"]
+          file_operations: ["read", "write", "save", "load"]
+          computation: ["calculate", "compute", "analyze"]
+        ```
+    
+    **Usage Patterns:**
+        
+        **Basic Enhanced Agent:**
+        ```python
+        from nanobrain.library.agents.conversational import EnhancedCollaborativeAgent
+        
+        # Create from configuration
+        agent = EnhancedCollaborativeAgent.from_config('config/enhanced_agent.yml')
+        
+        # Process with automatic delegation
+        response = await agent.aprocess(
+            "Analyze the sales data and generate a comprehensive report"
+        )
+        
+        # Agent automatically determines optimal delegation strategy
+        print(f"Response: {response}")
+        print(f"Delegation used: {agent.get_last_delegation_info()}")
+        ```
+        
+        **Multi-Agent Collaboration:**
+        ```python
+        # Enhanced agent coordinating specialized agents
+        coordinator = EnhancedCollaborativeAgent.from_config('config/coordinator.yml')
+        
+        # Complex task requiring multiple specializations
+        task = "Research market trends, analyze competitor data, and create presentation"
+        
+        response = await coordinator.aprocess(task)
+        
+        # Coordinator automatically:
+        # 1. Identifies subtasks (research, analysis, presentation)
+        # 2. Delegates to appropriate specialized agents
+        # 3. Coordinates results and creates unified response
+        ```
+        
+        **MCP Tool Integration:**
+        ```python
+        # Enhanced agent with MCP tool integration
+        agent = EnhancedCollaborativeAgent.from_config('config/mcp_enabled_agent.yml')
+        
+        # Task requiring tool usage
+        response = await agent.aprocess(
+            "Search for recent AI research papers and summarize key findings"
+        )
+        
+        # Agent automatically:
+        # 1. Detects need for search functionality
+        # 2. Discovers and selects appropriate MCP tools
+        # 3. Executes search with proper context management
+        # 4. Synthesizes results into comprehensive response
+        ```
+        
+        **Custom Delegation Rules:**
+        ```python
+        # Configure custom delegation patterns
+        agent_config = {
+            "name": "custom_coordinator",
+            "delegation_rules": [
+                {
+                    "trigger_pattern": r"analyze.*data.*(\d+).*rows",
+                    "target_agent": "large_data_specialist",
+                    "condition": "lambda match: int(match.group(1)) > 10000"
+                },
+                {
+                    "trigger_keywords": ["bioinformatics", "protein", "genome"],
+                    "target_agent": "bioinformatics_specialist",
+                    "priority": "high"
+                }
+            ]
+        }
+        
+        agent = EnhancedCollaborativeAgent.from_config(agent_config)
+        
+        # Delegation rules automatically applied during processing
+        ```
+    
+    **Advanced Features:**
+        
+        **Dynamic Protocol Selection:**
+        * Automatic protocol selection based on task analysis and agent availability
+        * Performance-based protocol preference learning and optimization
+        * Cross-protocol fallback mechanisms for reliability
+        * Protocol performance comparison and optimization recommendations
+        
+        **Context-Aware Delegation:**
+        * Conversation history analysis for delegation decision making
+        * Multi-turn context preservation across agent handoffs
+        * Result correlation and synthesis from multiple delegation sources
+        * Context-based delegation rule evaluation and adaptation
+        
+        **Performance Optimization:**
+        * Delegation success rate tracking and optimization
+        * Response time analysis and performance tuning
+        * Resource utilization monitoring and load balancing
+        * Caching of delegation decisions for similar tasks
+        
+        **Error Handling and Recovery:**
+        * Graceful handling of agent unavailability and failures
+        * Automatic fallback to alternative agents or protocols
+        * Error context preservation and delegation retry mechanisms
+        * Comprehensive error logging and diagnostic information
+    
+    **Collaboration Patterns:**
+        
+        **Hierarchical Delegation:**
+        * Top-level coordinator delegates to specialized sub-agents
+        * Sub-agents may further delegate to highly specialized tools
+        * Result aggregation and synthesis at coordination level
+        * Error propagation and recovery across delegation hierarchy
+        
+        **Peer-to-Peer Collaboration:**
+        * Direct agent-to-agent communication and coordination
+        * Shared context and state management across peer agents
+        * Collaborative problem solving with result sharing
+        * Dynamic role assignment based on agent capabilities
+        
+        **Tool Orchestration:**
+        * Coordination of multiple tools for complex task execution
+        * Tool chain planning and optimization for efficiency
+        * Result passing and transformation between tool stages
+        * Tool failure handling and alternative execution paths
+    
+    **Integration Patterns:**
+        
+        **Workflow Integration:**
+        * Enhanced agents as intelligent workflow coordinators
+        * Dynamic workflow adaptation based on delegation outcomes
+        * Multi-agent workflow orchestration and synchronization
+        * Workflow performance optimization through intelligent delegation
+        
+        **System Integration:**
+        * Integration with external systems through protocol adapters
+        * Enterprise system connectivity via A2A and MCP protocols
+        * API gateway functionality for agent network access
+        * Service mesh integration for distributed agent deployments
+        
+        **Data Flow Management:**
+        * Context-aware data routing between agents and tools
+        * Data transformation and format adaptation across protocols
+        * Data privacy and security enforcement during delegation
+        * Data lineage tracking across multi-agent processing chains
+    
+    **Performance and Scalability:**
+        
+        **Execution Optimization:**
+        * Parallel delegation execution for independent subtasks
+        * Intelligent batching of similar delegation requests
+        * Caching of delegation results for repeated patterns
+        * Resource pooling and reuse across delegation instances
+        
+        **Scalability Features:**
+        * Horizontal scaling through agent network distribution
+        * Load balancing across multiple agent instances
+        * Dynamic scaling based on delegation demand patterns
+        * Cloud-native deployment and auto-scaling support
+        
+        **Monitoring and Analytics:**
+        * Real-time delegation performance tracking and analysis
+        * Protocol efficiency comparison and optimization recommendations
+        * Agent network health monitoring and alerting
+        * Usage pattern analysis and optimization suggestions
+    
+    **Security and Reliability:**
+        
+        **Secure Collaboration:**
+        * Authentication and authorization for agent-to-agent communication
+        * Encrypted context sharing and result transmission
+        * Role-based access control for delegation permissions
+        * Audit logging for compliance and security monitoring
+        
+        **Reliability Features:**
+        * Fault tolerance with automatic failover and recovery
+        * Transaction-like delegation with rollback capabilities
+        * Health monitoring and circuit breaker patterns
+        * Graceful degradation for partial system failures
+    
+    **Development and Testing:**
+        
+        **Testing Support:**
+        * Mock agent implementations for delegation testing
+        * Protocol simulation and validation frameworks
+        * Performance benchmarking and profiling tools
+        * Integration testing with real agent networks
+        
+        **Debugging Features:**
+        * Comprehensive logging with delegation trace information
+        * Protocol interaction visualization and analysis
+        * Performance profiling and bottleneck identification
+        * Interactive debugging with delegation step-through
+        
+        **Development Tools:**
+        * Delegation rule validation and testing utilities
+        * Protocol compliance verification and certification
+        * Agent capability profiling and optimization tools
+        * Network topology visualization and management
+    
+    Attributes:
+        name (str): Agent identifier for logging and network registration
+        delegation_rules (List[Dict]): Configurable rules for intelligent task delegation
+        tool_keywords (Dict[str, List[str]]): Keyword mappings for tool selection
+        enable_metrics (bool): Whether comprehensive performance tracking is enabled
+        a2a_config_path (str, optional): Path to A2A protocol configuration
+        mcp_config_path (str, optional): Path to MCP protocol configuration
+        delegation_count (int): Total number of delegations performed
+        successful_delegations (int): Number of successful delegation operations
+        protocol_performance (Dict): Performance metrics by protocol type
+        collaboration_history (List): History of agent collaboration sessions
+    
+    Note:
+        Enhanced Collaborative Agents require proper A2A and MCP protocol configuration
+        for full functionality. Delegation rules should be carefully designed to prevent
+        infinite delegation loops. All agents must be created using the from_config
+        pattern with proper configuration files following framework patterns.
+    
+    Warning:
+        Enhanced agents may consume significant resources when managing multiple
+        concurrent delegations. Monitor delegation patterns and implement appropriate
+        limits and timeouts. Be cautious with delegation rules that might create
+        circular delegation patterns or excessive resource consumption.
+    
+    See Also:
+        * :class:`ConversationalAgent`: Base conversational agent implementation
+        * :class:`A2ASupportMixin`: Agent-to-Agent protocol support
+        * :class:`MCPSupportMixin`: Model Context Protocol support
+        * :class:`AgentConfig`: Agent configuration schema and validation
+        * :mod:`nanobrain.library.agents.specialized`: Specialized agent implementations
+        * :mod:`nanobrain.core.a2a_support`: A2A protocol implementation
+        * :mod:`nanobrain.core.mcp_support`: MCP protocol implementation
     """
     
     COMPONENT_TYPE = "enhanced_collaborative_agent"
@@ -77,9 +409,36 @@ class EnhancedCollaborativeAgent(A2ASupportMixin, MCPSupportMixin, Conversationa
         """Resolve EnhancedCollaborativeAgent dependencies"""
         # Create executor via from_config to avoid direct instantiation
         from nanobrain.core.executor import LocalExecutor, ExecutorConfig
+        import os
+        from pathlib import Path
         
-        executor_config = kwargs.get('executor_config') or ExecutorConfig()
-        executor = LocalExecutor.from_config(executor_config)
+        # ✅ FRAMEWORK COMPLIANCE: Use from_config pattern for ExecutorConfig
+        provided_executor_config = kwargs.get('executor_config')
+        if provided_executor_config is None:
+            # Use default executor config file
+            # Get the actual path to the Chatbot directory
+            import sys
+            for path_item in sys.path:
+                if 'nanobrain-upd-Jun/nanobrain' in path_item:
+                    project_root = Path(path_item)
+                    break
+            else:
+                project_root = Path(__file__).parent.parent.parent.parent
+                
+            default_config_path = project_root / "Chatbot" / "config" / "components" / "default_agent_executor_config.yml"
+            if default_config_path.exists():
+                executor_config_path = str(default_config_path)
+            else:
+                # Fallback to library default
+                lib_default_path = Path(__file__).parent.parent / "config" / "default_executor_config.yml"
+                executor_config_path = str(lib_default_path)
+            
+            # Load the ExecutorConfig first, then pass it to LocalExecutor
+            executor_config_obj = ExecutorConfig.from_config(executor_config_path)
+            executor = LocalExecutor.from_config(executor_config_obj)
+        else:
+            # If executor_config is provided, it should already be a valid ExecutorConfig object
+            executor = LocalExecutor.from_config(provided_executor_config)
         
         return {
             'executor': executor,
@@ -120,8 +479,8 @@ class EnhancedCollaborativeAgent(A2ASupportMixin, MCPSupportMixin, Conversationa
         # Extract executor from dependencies to pass to parent
         executor = dependencies.pop('executor', None)
         
-        # Initialize parent classes first
-        ConversationalAgent.__init__(self, config, executor=executor, **dependencies)
+        # Initialize parent classes using super() for proper MRO
+        super()._init_from_config(config, component_config, {'executor': executor, **dependencies})
         
         # Enhanced logger
         self.enhanced_logger = get_logger(f"enhanced.{self.name}")

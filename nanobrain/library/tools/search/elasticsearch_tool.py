@@ -102,15 +102,403 @@ class ElasticsearchSearchError(Exception):
 
 class ElasticsearchTool(ExternalTool):
     """
-    Elasticsearch search tool with comprehensive auto-installation capabilities.
+    Elasticsearch Search Tool - Enterprise Search Engine with Comprehensive Auto-Installation and Infrastructure Management
+    ======================================================================================================================
     
-    Features:
-    - Full Docker container lifecycle management
-    - Automatic index creation and configuration
-    - Fuzzy search with virus-specific analyzers
-    - Health monitoring and alerting
-    - Data persistence and backup
-    - Kubernetes-ready configuration
+    The ElasticsearchTool provides a complete Elasticsearch search engine integration for the NanoBrain framework,
+    featuring comprehensive auto-installation via Docker, full infrastructure lifecycle management, and
+    specialized search capabilities optimized for bioinformatics and scientific applications. This tool
+    automatically handles container deployment, network configuration, data persistence, and health monitoring.
+    
+    **Core Architecture:**
+        The Elasticsearch tool provides enterprise-grade search capabilities:
+        
+        * **Auto-Installation**: Complete Docker-based Elasticsearch deployment and management
+        * **Infrastructure Management**: Full container lifecycle, networking, and volume management
+        * **Search Engine**: Full-text search, fuzzy matching, and autocomplete capabilities
+        * **Health Monitoring**: Real-time health checking and alerting for production reliability
+        * **Data Persistence**: Automatic volume management with backup and retention policies
+        * **Security Integration**: Authentication, authorization, and secure communication support
+    
+    **Auto-Installation Features:**
+        
+        **Docker Container Management:**
+        * Automatic Elasticsearch container deployment with optimized configuration
+        * Resource limit management for memory and CPU allocation
+        * Health check configuration with custom monitoring intervals
+        * Container lifecycle management including start, stop, restart, and cleanup
+        
+        **Network Infrastructure:**
+        * Automatic Docker network creation and management for NanoBrain ecosystem
+        * Port mapping and service discovery configuration
+        * Network isolation and security policy enforcement
+        * Multi-container communication and service mesh integration
+        
+        **Data Persistence and Backup:**
+        * Automatic volume creation and mounting for Elasticsearch data
+        * Backup policies with configurable retention and scheduling
+        * Data integrity verification and corruption detection
+        * Disaster recovery and data migration capabilities
+        
+        **Configuration Management:**
+        * Environment-specific configuration injection and management
+        * Security settings including authentication and encryption
+        * Performance tuning based on available system resources
+        * Index template and mapping configuration for scientific data
+    
+    **Search Capabilities:**
+        
+        **Full-Text Search:**
+        * Advanced text analysis with domain-specific analyzers
+        * Multi-field search across scientific documents and metadata
+        * Relevance scoring optimized for scientific literature and data
+        * Custom scoring algorithms for domain-specific ranking
+        
+        **Fuzzy Matching and Autocomplete:**
+        * Intelligent fuzzy matching for virus names and scientific terminology
+        * Autocomplete functionality for scientific terms and annotations
+        * Synonym detection and expansion for biological nomenclature
+        * Spell correction and suggestion for scientific queries
+        
+        **Specialized Indexing:**
+        * Virus genome name resolution with taxonomic hierarchy support
+        * Scientific document indexing with metadata extraction
+        * Biological sequence indexing and search capabilities
+        * Custom analyzers for bioinformatics data types
+        
+        **Advanced Query Features:**
+        * Boolean queries with complex logical operations
+        * Range queries for numerical scientific data
+        * Geospatial queries for location-based biological data
+        * Aggregation queries for statistical analysis and reporting
+    
+    **Infrastructure Management:**
+        
+        **Container Lifecycle:**
+        * Automated container deployment with health validation
+        * Rolling updates and blue-green deployment support
+        * Container resource monitoring and automatic scaling
+        * Graceful shutdown and restart procedures
+        
+        **Health Monitoring:**
+        * Real-time container health monitoring with custom metrics
+        * Elasticsearch cluster health monitoring and alerting
+        * Performance metrics collection and analysis
+        * Automatic recovery and failover mechanisms
+        
+        **Volume Management:**
+        * Persistent volume creation and mounting for data durability
+        * Backup scheduling with configurable retention policies
+        * Volume snapshot creation and restoration capabilities
+        * Data migration and upgrade procedures
+        
+        **Network Management:**
+        * Secure network configuration with isolation policies
+        * Service discovery and load balancing integration
+        * SSL/TLS termination and certificate management
+        * Network performance monitoring and optimization
+    
+    **Configuration Architecture:**
+        Comprehensive configuration supports enterprise deployment:
+        
+        ```yaml
+        # Elasticsearch Tool Configuration
+        tool_name: "elasticsearch"
+        
+        # Tool card for framework integration
+        tool_card:
+          name: "elasticsearch"
+          description: "Enterprise search engine with auto-installation"
+          version: "8.14.0"
+          category: "search"
+          vendor: "Elastic N.V."
+          capabilities:
+            - "document_indexing"
+            - "full_text_search"
+            - "fuzzy_matching"
+            - "autocomplete"
+            - "aggregations"
+            - "real_time_search"
+        
+        # Connection Configuration
+        host: "localhost"
+        port: 9200
+        scheme: "http"
+        username: null  # Optional authentication
+        password: null  # Optional authentication
+        
+        # Index Configuration
+        default_index: "nanobrain-search"
+        virus_genome_index: "virus-genomes"
+        
+        # Search Configuration
+        fuzzy_fuzziness: "AUTO"
+        max_search_results: 100
+        highlight_enabled: true
+        
+        # Auto-Installation Configuration
+        auto_install_enabled: true
+        container_name: "nanobrain-elasticsearch"
+        image_name: "elasticsearch"
+        image_tag: "8.14.0"
+        
+        # Resource Management
+        memory_limit: "2Gi"
+        cpu_limit: "1.0"
+        
+        # Data Persistence
+        data_volume_name: "nanobrain-elasticsearch-data"
+        backup_enabled: true
+        
+        # Network Configuration
+        network_name: "nanobrain-network"
+        
+        # Health Monitoring
+        health_check_enabled: true
+        health_check_interval: 30
+        ```
+    
+    **Usage Patterns:**
+        
+        **Basic Search Operations:**
+        ```python
+        from nanobrain.library.tools.search import ElasticsearchTool
+        
+        # Create and initialize Elasticsearch tool with auto-installation
+        es_tool = ElasticsearchTool.from_config('config/elasticsearch_config.yml')
+        await es_tool.initialize_tool()
+        
+        # Perform full-text search
+        search_result = await es_tool.search({
+            'query': 'chikungunya virus structural proteins',
+            'index': 'virus-genomes',
+            'size': 10
+        })
+        
+        print(f"Found {search_result.data['total']} results")
+        for hit in search_result.data['hits']:
+            print(f"- {hit['_source']['title']}: {hit['_score']}")
+        ```
+        
+        **Fuzzy Matching for Scientific Terms:**
+        ```python
+        # Search with fuzzy matching for virus names
+        fuzzy_result = await es_tool.search({
+            'query': 'chikungunia',  # Misspelled virus name
+            'fuzzy': True,
+            'fuzziness': 'AUTO',
+            'index': 'virus-genomes'
+        })
+        
+        # Tool automatically suggests correct matches
+        suggestions = fuzzy_result.data.get('suggest', {})
+        for suggestion in suggestions.get('text', []):
+            print(f"Did you mean: {suggestion['text']}")
+        ```
+        
+        **Document Indexing:**
+        ```python
+        # Index scientific documents and metadata
+        documents = [
+            {
+                'title': 'Chikungunya Virus Structural Analysis',
+                'authors': ['Smith, J.', 'Doe, A.'],
+                'abstract': 'Comprehensive analysis of CHIKV structural proteins...',
+                'virus_species': 'Chikungunya virus',
+                'publication_date': '2024-01-15',
+                'keywords': ['alphavirus', 'structural proteins', 'vaccine']
+            },
+            # Additional documents...
+        ]
+        
+        # Bulk index documents
+        index_result = await es_tool.index_documents(
+            documents=documents,
+            index='scientific-literature'
+        )
+        
+        print(f"Indexed {index_result.data['indexed']} documents")
+        ```
+        
+        **Advanced Queries and Aggregations:**
+        ```python
+        # Complex query with aggregations
+        advanced_query = {
+            'query': {
+                'bool': {
+                    'must': [
+                        {'match': {'abstract': 'structural proteins'}},
+                        {'range': {'publication_date': {'gte': '2020-01-01'}}}
+                    ],
+                    'filter': [
+                        {'term': {'virus_family': 'alphavirus'}}
+                    ]
+                }
+            },
+            'aggs': {
+                'by_year': {
+                    'date_histogram': {
+                        'field': 'publication_date',
+                        'calendar_interval': 'year'
+                    }
+                },
+                'top_keywords': {
+                    'terms': {'field': 'keywords.keyword', 'size': 10}
+                }
+            }
+        }
+        
+        agg_result = await es_tool.advanced_search(advanced_query)
+        
+        # Access aggregation results
+        yearly_counts = agg_result.data['aggregations']['by_year']['buckets']
+        top_keywords = agg_result.data['aggregations']['top_keywords']['buckets']
+        ```
+        
+        **Auto-Installation and Health Monitoring:**
+        ```python
+        # Initialize with comprehensive monitoring
+        es_tool = ElasticsearchTool.from_config({
+            'auto_install_enabled': True,
+            'health_check_enabled': True,
+            'health_check_interval': 30,
+            'memory_limit': '4Gi',
+            'backup_enabled': True
+        })
+        
+        # Tool automatically handles installation and monitoring
+        status = await es_tool.initialize_tool()
+        print(f"Installation status: {status.is_functional}")
+        
+        # Monitor health in real-time
+        health_status = await es_tool.get_health_status()
+        print(f"Cluster health: {health_status['status']}")
+        print(f"Active nodes: {health_status['number_of_nodes']}")
+        ```
+    
+    **Advanced Features:**
+        
+        **Enterprise Security:**
+        * Authentication and authorization integration with enterprise systems
+        * SSL/TLS encryption for secure communication
+        * Role-based access control for index and operation permissions
+        * Audit logging for compliance and security monitoring
+        
+        **Performance Optimization:**
+        * Automatic index optimization and compaction
+        * Query performance analysis and optimization recommendations
+        * Resource usage monitoring and scaling recommendations
+        * Caching strategies for frequently accessed data
+        
+        **Scalability Features:**
+        * Horizontal scaling with multiple Elasticsearch nodes
+        * Load balancing and distribution across cluster nodes
+        * Automatic shard allocation and replication management
+        * Cloud deployment and auto-scaling integration
+        
+        **Data Management:**
+        * Index lifecycle management with automated policies
+        * Data retention and archival strategies
+        * Backup and disaster recovery procedures
+        * Data migration and upgrade capabilities
+    
+    **Infrastructure Integration:**
+        
+        **Docker Ecosystem:**
+        * Seamless integration with Docker container orchestration
+        * Docker Compose compatibility for multi-service deployments
+        * Container registry integration for image management
+        * Docker network and volume lifecycle management
+        
+        **Kubernetes Integration:**
+        * Kubernetes manifest generation for cloud deployment
+        * Helm chart compatibility for package management
+        * Service mesh integration for microservices architecture
+        * Persistent volume claim management for data durability
+        
+        **Monitoring and Observability:**
+        * Integration with monitoring systems (Prometheus, Grafana)
+        * Structured logging with correlation IDs for tracing
+        * Metrics collection and dashboards for operational insights
+        * Alerting integration for proactive issue resolution
+        
+        **Development and Testing:**
+        * Development environment setup with minimal configuration
+        * Test data seeding and cleanup utilities
+        * Performance testing and benchmarking tools
+        * Integration testing with mock and real data scenarios
+    
+    **Production Deployment:**
+        
+        **High Availability:**
+        * Multi-node cluster configuration for fault tolerance
+        * Automatic failover and recovery mechanisms
+        * Load balancing and traffic distribution
+        * Geographic distribution for disaster recovery
+        
+        **Security Hardening:**
+        * Security best practices implementation
+        * Network isolation and firewall configuration
+        * Certificate management and rotation
+        * Intrusion detection and prevention integration
+        
+        **Operational Excellence:**
+        * Automated deployment and configuration management
+        * Zero-downtime updates and maintenance procedures
+        * Capacity planning and resource optimization
+        * Performance monitoring and troubleshooting guides
+    
+    **Scientific Applications:**
+        
+        **Bioinformatics Search:**
+        * Biological sequence search and annotation
+        * Protein and gene database indexing and querying
+        * Taxonomy and nomenclature resolution
+        * Scientific literature and citation management
+        
+        **Research Data Management:**
+        * Experimental data indexing and retrieval
+        * Metadata search and discovery
+        * Research collaboration and data sharing
+        * Publication and dataset linkage
+        
+        **Knowledge Discovery:**
+        * Scientific concept extraction and indexing
+        * Relationship mining and graph analysis
+        * Trend analysis and research impact assessment
+        * Citation network analysis and visualization
+    
+    Attributes:
+        es_config (ElasticsearchConfig): Elasticsearch tool configuration
+        docker_manager (DockerManager): Docker container lifecycle management
+        health_monitor (DockerHealthMonitor): Container health monitoring component
+        network_manager (DockerNetworkManager): Docker network management component
+        volume_manager (DockerVolumeManager): Docker volume management component
+        es_client (AsyncElasticsearch): Elasticsearch client for search operations
+        container_running (bool): Current container running status
+        indices_created (bool): Whether required indices have been created
+        search_count (int): Total number of search operations performed
+        index_count (int): Total number of indexing operations performed
+    
+    Note:
+        This tool requires Docker to be available for auto-installation functionality.
+        The tool can also work with existing Elasticsearch installations by disabling
+        auto-installation. Health monitoring and backup features require appropriate
+        system permissions and storage configuration.
+    
+    Warning:
+        Elasticsearch requires significant system resources for optimal performance.
+        Monitor memory and disk usage carefully in production deployments. Auto-installation
+        creates persistent volumes and networks that require manual cleanup if needed.
+        Be cautious with index management operations as they can affect data availability.
+    
+    See Also:
+        * :class:`ExternalTool`: Base external tool implementation
+        * :class:`ElasticsearchConfig`: Elasticsearch tool configuration schema
+        * :class:`DockerManager`: Docker container management
+        * :mod:`nanobrain.library.infrastructure.docker`: Docker infrastructure components
+        * :mod:`nanobrain.library.tools.search`: Search tool implementations
+        * :mod:`nanobrain.core.external_tool`: External tool framework
     """
     
     @classmethod

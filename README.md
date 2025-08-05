@@ -1,324 +1,294 @@
-# NanoBrain Framework v2.0
+# NanoBrain Framework
 
-A modern, async-first framework for orchestrating AI agents, data processing steps, and HPC workflows with unified YAML configuration.
+**An Enterprise-Grade AI Workflow Orchestration Framework**
 
-## 🧠 Overview
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Framework Status](https://img.shields.io/badge/status-production--ready-green.svg)](https://github.com/nanobrain/nanobrain)
 
-NanoBrain v2.0 is a complete refactor of the original framework, designed with clean separation of concerns and industrial best practices. The framework provides:
+---
 
-- **Decoupled Architecture**: Clear separation between Agents (tool-calling AI) and Steps (data processing)
-- **Agent-to-Agent Interaction**: Agents can use other agents as tools
-- **Event-Driven Processing**: Steps use triggers and data units for reactive processing
-- **Configurable Execution**: Support for local, threaded, and HPC (Parsl) execution
-- **YAML Configuration**: Complete workflow configuration with schema validation
-- **Async-First Design**: Built for modern async/await patterns
+## **🧠 What is NanoBrain?**
 
-## 🏗️ Architecture
+NanoBrain is a **configuration-driven, event-driven AI workflow orchestration framework** designed for enterprise-scale AI applications. Inspired by biological neural networks, it provides a robust foundation for building sophisticated AI systems through simple, composable components.
 
-### Core Components
+### **🎯 Core Philosophy**
 
-```
-nanobrain/
-├── src/
-│   ├── core/                    # Core framework components
-│   │   ├── agent.py            # Agent system (tool-calling AI)
-│   │   ├── step.py             # Step system (data processing)
-│   │   ├── executor.py         # Execution backends
-│   │   ├── data_unit.py        # Data interfaces
-│   │   ├── trigger.py          # Event triggers
-│   │   ├── link.py             # Dataflow abstractions
-│   │   └── tool.py             # Tool system
-│   ├── agents/                  # Specialized agents
-│   │   ├── code_writer.py      # Code generation agent
-│   │   └── file_writer.py      # File operations agent
-│   └── config/                  # Configuration system
-│       ├── yaml_config.py      # YAML configuration
-│       └── schema_generator.py # Schema generation
-├── demo/                        # Demo scripts
-│   └── code_writer_advanced.py # Advanced demo
-└── requirements.txt             # Dependencies
-```
+- **🔧 Configuration-Driven**: All behavior controlled via YAML configurations with zero hardcoding
+- **⚡ Event-Driven**: Reactive, asynchronous processing with real-time responsiveness  
+- **🚀 Production-Ready**: Enterprise-grade reliability, monitoring, and security built-in
+- **🔗 from_config Pattern**: Unified component creation with mandatory framework compliance
 
-### Key Concepts
+### **🌟 Key Features**
 
-#### Agents vs Steps
+- **Universal Web Interface**: Deploy any workflow as a REST API instantly
+- **Intelligent Agent Orchestration**: Multi-agent collaboration with A2A protocol
+- **Pluggable Execution**: Scale from local development to distributed HPC clusters
+- **Enterprise Security**: Built-in authentication, authorization, and audit logging
+- **Comprehensive Monitoring**: Real-time metrics, performance tracking, and alerting
+- **LangChain Integration**: Seamless tool ecosystem compatibility
 
-- **Agents**: AI-powered components that use LLMs and can call tools (including other agents)
-- **Steps**: Data processing components that use triggers and data units for reactive processing
+---
 
-#### Data Flow
+## **🚀 Quick Start**
 
-- **Agents**: Direct tool calling between agents
-- **Steps**: Data flows through Links between Steps, triggered by events
-
-#### Configuration
-
-- **YAML-based**: Complete workflow configuration in YAML
-- **Schema validation**: JSON schemas for configuration validation
-- **Modular**: Separate configuration for agents, steps, executors, etc.
-
-## 🚀 Quick Start
-
-### Installation
+### **Installation**
 
 ```bash
 # Clone the repository
-git clone <repository-url>
+git clone https://github.com/nanobrain/nanobrain.git
 cd nanobrain
 
-# Install dependencies
-pip install -r requirements.txt
+# Install in development mode
+pip install -e .
+
+# Verify installation
+python -c "import nanobrain; print('NanoBrain installed successfully!')"
 ```
 
-### Basic Usage
-
-```python
-import asyncio
-from nanobrain.library.agents.specialized.code_writer import CodeWriterAgent
-from nanobrain.library.agents.specialized.file_writer import FileWriterAgent
-
-async def main():
-    # Create agents
-    file_writer = FileWriterAgent()
-    code_writer = CodeWriterAgent()
-    
-    # Initialize agents
-    await file_writer.initialize()
-    await code_writer.initialize()
-    
-    # Register file writer as tool for code writer
-    code_writer.register_file_writer_tool(file_writer)
-    
-    # Generate and save code
-    response = await code_writer.process(
-        "Create a Python function to calculate fibonacci numbers and save it to fibonacci.py"
-    )
-    
-    print(response)
-    
-    # Cleanup
-    await code_writer.shutdown()
-    await file_writer.shutdown()
-
-# Run the example
-asyncio.run(main())
-```
-
-### Running the Demo
-
-```bash
-cd nanobrain
-python demo/code_writer_advanced.py
-```
-
-The demo showcases:
-1. Agent-to-agent interaction
-2. Step-based data processing
-3. YAML configuration system
-4. Mixed agent-step workflows
-
-## 📋 Features
-
-### Agent System
-
-- **Tool Calling**: Agents can use other agents as tools
-- **LLM Integration**: Support for OpenAI, Anthropic, and other LLM providers
-- **Async Processing**: Full async/await support
-- **Specialized Agents**: Pre-built agents for common tasks
-
-### Step System
-
-- **Data Units**: Typed data interfaces (memory, file, stream, database)
-- **Triggers**: Event-driven execution (data updates, timers, conditions)
-- **Links**: Dataflow abstractions between steps
-- **Configurable Executors**: Local, threaded, or HPC execution
-
-### Configuration System
-
-- **YAML Configuration**: Human-readable workflow definitions
-- **Schema Generation**: Automatic JSON schema generation
-- **Validation**: Configuration validation with detailed error messages
-- **Modular**: Separate configuration for different components
-
-### Execution Backends
-
-- **Local Executor**: Single-threaded execution
-- **Thread Executor**: Multi-threaded execution
-- **Process Executor**: Multi-process execution
-- **Parsl Executor**: HPC and distributed execution
-
-## 🔧 Configuration
-
-### YAML Configuration Example
+### **Hello World Example**
 
 ```yaml
-name: "example_workflow"
-description: "Example NanoBrain workflow"
-version: "1.0.0"
+# hello_workflow.yml
+name: "hello_world"
+execution_strategy: "event_driven"
 
-# Define executors
-executors:
-  local:
-    executor_type: "local"
-    max_workers: 4
-  hpc:
-    executor_type: "parsl"
-    max_workers: 16
-    parsl_config:
-      provider: "slurm"
-      nodes_per_block: 1
-
-# Define agents
-agents:
-  code_writer:
-    name: "code_writer"
-    description: "Code generation agent"
-    model: "gpt-4"
-    tools:
-      - name: "file_writer"
-        type: "agent"
-  
-  file_writer:
-    name: "file_writer"
-    description: "File operations agent"
-    model: "gpt-3.5-turbo"
-
-# Define steps
 steps:
-  data_processor:
-    name: "data_processor"
-    description: "Process input data"
-    executor: "local"
-    input_data_units:
-      - data_type: "memory"
-    output_data_units:
-      - data_type: "memory"
-    trigger_config:
-      trigger_type: "data_updated"
-
-# Define links
-links:
-  - link_type: "direct"
-    source: "data_processor"
-    target: "code_generator"
+  greeting_step:
+    class: "nanobrain.library.steps.simple_step.SimpleStep"
+    config:
+      name: "greeting_step"
+      agent:
+        class: "nanobrain.library.agents.simple_agent.SimpleAgent"
+        config:
+          model: "gpt-3.5-turbo"
+          system_prompt: "You are a friendly AI assistant."
 ```
-
-### Schema Generation
 
 ```python
-from nanobrain.src.config.schema_generator import generate_all_schemas
+# hello_world.py
+from nanobrain.library.workflows.workflow import Workflow
 
-# Generate all schemas
-generate_all_schemas("schemas/")
+# Create workflow from configuration
+workflow = Workflow.from_config("hello_workflow.yml")
+
+# Execute with input
+result = await workflow.execute({"query": "Hello, NanoBrain!"})
+print(result)
 ```
 
-## 🧪 Testing
+---
 
-### Running Tests
+## **📚 Documentation Architecture**
 
+NanoBrain's documentation is organized into comprehensive guides that build upon each other:
+
+### **🏗️ [01. Framework Core Architecture](docs/01_FRAMEWORK_CORE_ARCHITECTURE.md)**
+- **Foundational Principles**: Configuration-driven, event-driven, production-ready design
+- **Component Hierarchy**: Complete class structure and relationships
+- **Lifecycle Management**: Standard component creation and initialization patterns  
+- **Tool Integration**: LangChain compatibility and A2A protocol
+- **Security & Compliance**: Multi-layer security architecture
+
+### **🔀 [02. Workflow Orchestration](docs/02_WORKFLOW_ORCHESTRATION.md)**
+- **Execution Strategies**: Event-driven, imperative, and hybrid patterns
+- **Component Coordination**: Steps, DataUnits, Links, and Triggers
+- **Data Flow Management**: Event propagation and transformation pipelines
+- **Error Handling**: Comprehensive recovery and resilience patterns
+- **Performance Optimization**: Scaling and resource management
+
+### **🌐 [03. Web Architecture](docs/03_WEB_ARCHITECTURE.md)**
+- **Universal Web Interface**: Deploy any workflow as REST API
+- **Request Processing**: Analysis, routing, and response generation
+- **Middleware Stack**: CORS, authentication, logging, and rate limiting
+- **WebSocket Support**: Real-time communication and streaming
+- **API Documentation**: OpenAPI/Swagger integration
+
+### **🤖 [04. LLM Code Generation](docs/04_LLM_CODE_GENERATION.md)**
+- **Intelligent Code Generation**: AI-driven component creation
+- **Configuration Synthesis**: Automatic YAML generation from descriptions
+- **Best Practices**: Code quality and framework compliance patterns
+- **Template System**: Reusable component templates and scaffolding
+- **Validation Rules**: Automated compliance checking
+
+### **🧪 [05. Testing and Validation](docs/05_TESTING_AND_VALIDATION.md)**
+- **Multi-Phase Testing**: Component, integration, and live system validation
+- **Framework Compliance**: Automated pattern and architecture validation
+- **Performance Testing**: Load testing and benchmarking strategies
+- **Quality Gates**: Automated quality assurance and metrics
+- **Continuous Validation**: CI/CD integration and monitoring
+
+---
+
+## **🏗️ Architecture Overview**
+
+```mermaid
+graph TB
+    subgraph "NanoBrain Framework Architecture"
+        subgraph "Configuration Layer"
+            CC[YAML Configs]
+            CV[Schema Validation]
+            CR[Dependency Resolution]
+        end
+        
+        subgraph "Component Layer"
+            A[Agents] --> S[Steps]
+            S --> W[Workflows]
+            DU[DataUnits] <--> L[Links]
+            T[Triggers] --> S
+        end
+        
+        subgraph "Execution Layer"
+            E[Executors]
+            WI[Web Interface]
+            M[Monitoring]
+        end
+        
+        subgraph "Integration Layer"
+            LC[LangChain Tools]
+            A2A[Agent-to-Agent]
+            API[REST APIs]
+        end
+    end
+    
+    CC --> CV --> CR
+    CR --> A
+    A --> E
+    S --> WI
+    W --> M
+    LC --> A
+    A2A --> A
+    WI --> API
+    
+    style CC fill:#e3f2fd
+    style A fill:#f3e5f5
+    style W fill:#e8f5e8
+    style WI fill:#fff3e0
+```
+
+---
+
+## **🎯 Use Cases**
+
+### **🔬 Scientific Research**
+- **Bioinformatics Pipelines**: Protein analysis, genomic workflows, viral research
+- **Data Processing**: Large-scale scientific data transformation and analysis
+- **Research Automation**: Automated literature review and hypothesis generation
+
+### **🏢 Enterprise Applications**  
+- **Document Intelligence**: Automated document processing and analysis
+- **Customer Support**: Intelligent chatbots with workflow orchestration
+- **Business Process Automation**: Complex multi-step business workflows
+
+### **🤖 AI Development**
+- **Multi-Agent Systems**: Collaborative AI agent orchestration
+- **LLM Integration**: Seamless integration with multiple language models
+- **Tool Orchestration**: Complex tool chains and capability composition
+
+---
+
+## **🛠️ Development Workflow**
+
+### **1. Design Phase**
 ```bash
-# Install test dependencies
-pip install pytest pytest-asyncio
+# Generate component templates
+nanobrain scaffold agent MyIntelligentAgent
+nanobrain scaffold workflow MyProcessingWorkflow
+```
+
+### **2. Configuration Phase**
+```yaml
+# Configure components via YAML
+my_agent:
+  class: "myproject.agents.MyIntelligentAgent"
+  config:
+    model: "gpt-4"
+    capabilities: ["analysis", "reasoning"]
+```
+
+### **3. Testing Phase**
+```bash
+# Run comprehensive tests
+python -m pytest tests/ --framework-compliance
+nanobrain validate config/my_workflow.yml
+```
+
+### **4. Deployment Phase**
+```bash
+# Deploy as web service
+nanobrain serve my_workflow.yml --port 8000
+# Or deploy to production cluster
+nanobrain deploy my_workflow.yml --cluster production
+```
+
+---
+
+## **🌍 Ecosystem**
+
+### **Core Components**
+- **nanobrain-core**: Framework foundation and base components
+- **nanobrain-web**: Universal web interface and API generation
+- **nanobrain-agents**: Pre-built intelligent agents and capabilities
+- **nanobrain-tools**: Bioinformatics and scientific computing tools
+
+### **Extensions**
+- **nanobrain-langchain**: Enhanced LangChain integration
+- **nanobrain-parsl**: High-performance computing integration  
+- **nanobrain-monitor**: Advanced monitoring and analytics
+- **nanobrain-deploy**: Production deployment and orchestration
+
+---
+
+## **🤝 Contributing**
+
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+
+### **Development Setup**
+```bash
+# Clone and setup development environment
+git clone https://github.com/nanobrain/nanobrain.git
+cd nanobrain
+pip install -e ".[dev]"
 
 # Run tests
-pytest tests/
+pytest tests/ --cov=nanobrain
+
+# Format code
+black nanobrain/ tests/
+isort nanobrain/ tests/
 ```
 
-### Writing Tests
+### **Architecture Compliance**
+All contributions must follow NanoBrain's architectural patterns:
+- **Mandatory from_config pattern** for all components
+- **Configuration-driven behavior** with zero hardcoding
+- **Event-driven processing** with proper data flow
+- **Comprehensive testing** including framework compliance
 
-```python
-import pytest
-from nanobrain.library.agents.specialized.code_writer import CodeWriterAgent
+---
 
-@pytest.mark.asyncio
-async def test_code_writer():
-    agent = CodeWriterAgent()
-    await agent.initialize()
-    
-    response = await agent.process("Create a hello world function")
-    assert "def" in response
-    
-    await agent.shutdown()
-```
+## **📄 License**
 
-## 🔌 Extending the Framework
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-### Creating Custom Agents
+---
 
-```python
-from nanobrain.src.core.agent import Agent, AgentConfig
+## **🔗 Links**
 
-class CustomAgent(Agent):
-    def __init__(self, config=None, **kwargs):
-        if config is None:
-            config = AgentConfig(
-                name="custom_agent",
-                description="Custom agent implementation",
-                model="gpt-3.5-turbo"
-            )
-        super().__init__(config, **kwargs)
-    
-    async def process(self, input_text: str, **kwargs) -> str:
-        # Custom processing logic
-        return await super().process(input_text, **kwargs)
-```
+- **🌐 Website**: [nanobrain.ai](https://nanobrain.ai)
+- **📖 Documentation**: [docs.nanobrain.ai](https://docs.nanobrain.ai)
+- **💬 Community**: [Discord](https://discord.gg/nanobrain)
+- **🐛 Issues**: [GitHub Issues](https://github.com/nanobrain/nanobrain/issues)
+- **📦 PyPI**: [pypi.org/project/nanobrain](https://pypi.org/project/nanobrain)
 
-### Creating Custom Steps
+---
 
-```python
-from nanobrain.src.core.step import Step, StepConfig
+## **⭐ Star History**
 
-class CustomStep(Step):
-    async def process(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
-        # Custom processing logic
-        input_data = inputs.get('input_0')
-        processed_data = self.custom_processing(input_data)
-        return {"output": processed_data}
-    
-    def custom_processing(self, data):
-        # Your custom logic here
-        return data
-```
+[![Star History Chart](https://api.star-history.com/svg?repos=nanobrain/nanobrain&type=Date)](https://star-history.com/#nanobrain/nanobrain&Date)
 
-### Creating Custom Executors
+---
 
-```python
-from nanobrain.src.core.executor import ExecutorBase, ExecutorConfig
+**Built with ❤️ by the NanoBrain Team**
 
-class CustomExecutor(ExecutorBase):
-    async def execute(self, func: Callable, **kwargs) -> Any:
-        # Custom execution logic
-        return await func(**kwargs)
-```
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Submit a pull request
-
-## 📄 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## 🙏 Acknowledgments
-
-- Inspired by modern workflow orchestration frameworks
-- Built with async/await best practices
-- Designed for scalability and maintainability
-
-## 📚 Documentation
-
-For detailed documentation, see:
-- [API Reference](docs/api.md)
-- [Configuration Guide](docs/configuration.md)
-- [Examples](examples/)
-- [Architecture Guide](docs/architecture.md)
-
-## 🐛 Issues and Support
-
-- Report bugs: [GitHub Issues](https://github.com/your-repo/nanobrain/issues)
-- Ask questions: [Discussions](https://github.com/your-repo/nanobrain/discussions)
-- Documentation: [Wiki](https://github.com/your-repo/nanobrain/wiki) 
+*Empowering the next generation of AI applications through intelligent orchestration.* 

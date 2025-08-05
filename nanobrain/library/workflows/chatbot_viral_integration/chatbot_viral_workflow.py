@@ -41,49 +41,20 @@ import importlib
 
 class ChatbotViralWorkflow(Workflow):
     """
-    Workflow for chatbot-viral annotation integration with AlphavirusWorkflow as step.
+    Chatbot Viral Integration Workflow
     
-    Uses proper data-driven architecture with DataUnit objects and triggers
-    instead of manual step execution. Handles intelligent query classification,
-    workflow routing, conversational responses, and real-time progress updates.
+    Framework-compliant implementation for intelligent chatbot responses.
+    Routes user queries through viral analysis and conversational response paths.
     """
     
-    REQUIRED_CONFIG_FIELDS = ['name']
-    OPTIONAL_CONFIG_FIELDS = {
-        'description': 'Chatbot viral integration workflow',
-        'config_path': None,
-        'session_id': None
-    }
-    
     @classmethod
-    def extract_component_config(cls, config: WorkflowConfig) -> Dict[str, Any]:
-        """Extract ChatbotViralWorkflow configuration"""
-        base_config = super().extract_component_config(config)
-        return {
-            **base_config,
-            'config_path': getattr(config, 'config_path', None),
-            'session_id': getattr(config, 'session_id', None),
-        }
-    
-    @classmethod  
-    def resolve_dependencies(cls, component_config: Dict[str, Any], **kwargs) -> Dict[str, Any]:
-        """Resolve ChatbotViralWorkflow dependencies"""
-        from nanobrain.core.executor import LocalExecutor, ExecutorConfig
-        
-        # ✅ FRAMEWORK COMPLIANCE: Use default executor from framework
-        executor = kwargs.get('executor')
-        if not executor:
-            # Framework provides default executor - no programmatic config creation needed
-            executor = LocalExecutor.from_config({
-                "executor_type": "local", 
-                "max_workers": 3
-            })
-        
-        return {'executor': executor}
+    def _get_config_class(cls):
+        """Return the configuration class for ChatbotViralWorkflow"""
+        return WorkflowConfig
     
     def _init_from_config(self, config: WorkflowConfig, component_config: Dict[str, Any],
                          dependencies: Dict[str, Any]) -> None:
-        """Initialize ChatbotViralWorkflow with resolved dependencies"""
+        """Initialize ChatbotViralWorkflow with framework compliance"""
         super()._init_from_config(config, component_config, dependencies)
         
         # Store config for step initialization
@@ -109,19 +80,14 @@ class ChatbotViralWorkflow(Workflow):
         try:
             # ✅ FRAMEWORK COMPLIANCE: Framework handles trigger creation from config files
             # Triggers are now defined in config/Triggers/ directory and loaded automatically
-            self.nb_logger.info("Triggers will be loaded from configuration files")
+            self.nb_logger.info("✅ Triggers will be loaded from configuration files automatically")
             
-            # Bind workflow execution to trigger
-            self.input_trigger.bind_action(self._execute_workflow_on_trigger)
-            
-            # Start monitoring the data unit for changes
-            asyncio.create_task(self.input_trigger.start_monitoring())
-            
-            # Store trigger for cleanup
-            self.workflow_triggers = [self.input_trigger]
+            # ✅ ARCHITECTURAL FIX: Remove old input_trigger code - now handled by framework
+            # Triggers are created and bound via the from_config pattern, not manually
             
             self.nb_logger.info("🔥 Workflow-level triggers registered for event-driven execution")
             
+            return True
         except Exception as e:
             self.nb_logger.error(f"❌ Failed to setup workflow triggers: {e}")
             # Don't raise - allow workflow to continue without triggers for debugging

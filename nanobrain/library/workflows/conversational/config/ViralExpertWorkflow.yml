@@ -1,0 +1,64 @@
+name: "ViralExpertWorkflow"
+description: "Expert conversational workflow for viral biology discussions"
+version: "1.0.0"
+execution_strategy: "event_driven"
+error_handling: "continue"
+enable_monitoring: true
+workflow_directory: "nanobrain/library/workflows/conversational"
+
+# Workflow configuration
+enable_progress_reporting: false  # Simple conversational workflow
+max_parallel_steps: 1
+step_timeout: 30.0
+retry_attempts: 2
+retry_delay: 1.0
+validate_graph: true
+allow_cycles: false
+require_connected_graph: true
+
+# Input/Output data units for conversational workflow
+input_data_units:
+  user_query:
+    class: "nanobrain.core.data_unit.DataUnitMemory"
+    name: "user_query"
+    description: "User query for viral expert conversation"
+    persistent: false
+
+output_data_units:
+  expert_response:
+    class: "nanobrain.core.data_unit.DataUnitMemory"
+    name: "expert_response"
+    description: "Expert conversational response"
+    persistent: false
+
+# Single step workflow - direct conversational processing
+steps:
+  expert_conversation:
+    class: "nanobrain.library.workflows.conversational.steps.expert_conversation_step.ExpertConversationStep"
+    config: "config/ViralExpertWorkflow/ExpertConversationStep.yml"
+    step_id: "expert_conversation"
+
+# Simple workflow links - direct input to output
+links:
+  input_to_conversation:
+    class: "nanobrain.core.link.DirectLink"
+    config:
+      source: "user_query"
+      target: "expert_conversation.conversation_input"
+      description: "Route user query to conversation step"
+  
+  conversation_to_output:
+    class: "nanobrain.core.link.DirectLink"
+    config:
+      source: "expert_conversation.conversation_output"
+      target: "expert_response"
+      description: "Route conversation output to workflow response"
+
+# Workflow-level triggers (optional for simple workflow)
+triggers:
+  - trigger_id: "conversation_start"
+    class: "nanobrain.core.trigger.DataUnitChangeTrigger"
+    config:
+      data_unit: "user_query"
+      event_type: "set"
+      description: "Start conversation when user query is received" 

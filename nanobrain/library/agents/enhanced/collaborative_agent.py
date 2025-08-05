@@ -16,7 +16,482 @@ from .delegation_engine import DelegationEngine
 
 
 class CollaborativeAgent(A2ASupportMixin, MCPSupportMixin, ConversationalAgent):
-    """Multi-protocol collaborative agent with delegation and coordination."""
+    """
+    Collaborative Agent - Multi-Protocol Team Coordination with Intelligent Delegation and Workflow Orchestration
+    ============================================================================================================
+    
+    The CollaborativeAgent provides sophisticated multi-agent coordination capabilities, combining A2A (Agent-to-Agent)
+    and MCP (Model Context Protocol) integration with intelligent task delegation and workflow orchestration. This agent
+    serves as a central coordination hub for complex multi-agent workflows, enabling seamless collaboration between
+    specialized agents, tools, and external systems in distributed AI environments.
+    
+    **Core Architecture:**
+        The collaborative agent provides enterprise-grade multi-agent coordination:
+        
+        * **Multi-Protocol Integration**: Seamless A2A and MCP protocol support for diverse agent ecosystems
+        * **Intelligent Delegation**: Advanced task analysis and optimal agent selection for subtask execution
+        * **Workflow Orchestration**: Complex multi-step workflow coordination with dependency management
+        * **Performance Tracking**: Comprehensive monitoring and optimization of collaborative processes
+        * **Context Management**: Intelligent context sharing and state synchronization across agents
+        * **Framework Integration**: Full integration with NanoBrain's distributed agent architecture
+    
+    **Collaboration Capabilities:**
+        
+        **Agent-to-Agent (A2A) Integration:**
+        * Native A2A protocol support for direct agent communication
+        * Secure message passing and state synchronization
+        * Distributed workflow execution across agent networks
+        * Real-time collaboration and task coordination
+        
+        **Model Context Protocol (MCP) Support:**
+        * MCP server and client implementation for standardized model interaction
+        * Context sharing and model state management
+        * Tool and resource sharing across different AI models
+        * Standardized protocol compliance for interoperability
+        
+        **Task Delegation Framework:**
+        * Intelligent task analysis and decomposition
+        * Agent capability matching and optimal selection
+        * Dynamic load balancing and resource allocation
+        * Dependency tracking and execution ordering
+        
+        **Workflow Orchestration:**
+        * Complex multi-agent workflow design and execution
+        * Conditional branching and parallel execution support
+        * Error handling and recovery mechanisms
+        * Progress monitoring and completion tracking
+    
+    **Team Coordination Features:**
+        
+        **Intelligent Task Analysis:**
+        * Automatic task decomposition into optimal subtasks
+        * Complexity assessment and resource requirement estimation
+        * Agent capability matching and selection algorithms
+        * Performance prediction and optimization recommendations
+        
+        **Dynamic Agent Selection:**
+        * Real-time agent availability and capability assessment
+        * Load balancing across available agent resources
+        * Specialization matching for domain-specific tasks
+        * Performance history and reliability scoring
+        
+        **Context Synchronization:**
+        * Intelligent context sharing and state management
+        * Version control and conflict resolution for shared data
+        * Secure information passing and access control
+        * Real-time synchronization and consistency maintenance
+        
+        **Performance Optimization:**
+        * Continuous monitoring of collaboration efficiency
+        * Bottleneck identification and resolution suggestions
+        * Resource utilization optimization and scaling recommendations
+        * Quality assessment and improvement tracking
+    
+    **Configuration Architecture:**
+        Comprehensive configuration supports diverse collaboration workflows:
+        
+        ```yaml
+        # Collaborative Agent Configuration
+        agent_name: "collaborative_agent"
+        agent_type: "enhanced"
+        
+        # Agent card for framework integration
+        agent_card:
+          name: "collaborative_agent"
+          description: "Multi-protocol collaborative agent with delegation"
+          version: "1.0.0"
+          category: "coordination"
+          capabilities:
+            - "task_delegation"
+            - "workflow_orchestration"
+            - "multi_protocol"
+        
+        # LLM Configuration
+        llm_config:
+          model: "gpt-4"
+          temperature: 0.3        # Balanced creativity for problem-solving
+          max_tokens: 3000
+          
+        # A2A Protocol Configuration
+        a2a_config:
+          server_host: "localhost"
+          server_port: 8080
+          encryption_enabled: true
+          message_queue_size: 1000
+          heartbeat_interval: 30
+          
+        # MCP Protocol Configuration  
+        mcp_config:
+          server_url: "ws://localhost:3000/mcp"
+          client_timeout: 30
+          max_connections: 10
+          protocol_version: "1.0"
+          
+        # Delegation Configuration
+        delegation_rules:
+          - task_type: "data_analysis"
+            preferred_agents: ["data_scientist_agent", "analytics_agent"]
+            fallback_agents: ["general_purpose_agent"]
+            max_parallel_tasks: 3
+            
+          - task_type: "bioinformatics"
+            preferred_agents: ["protein_analysis_agent", "sequence_agent"]
+            required_capabilities: ["sequence_analysis", "protein_folding"]
+            max_execution_time: 300
+            
+        # Performance Configuration
+        enable_metrics: true
+        performance_tracking:
+          collect_timing_data: true
+          track_resource_usage: true
+          monitor_quality_metrics: true
+          generate_optimization_reports: true
+          
+        # Workflow Configuration
+        workflow_settings:
+          max_concurrent_workflows: 5
+          default_timeout: 600        # 10 minutes
+          retry_attempts: 3
+          enable_checkpointing: true
+        ```
+    
+    **Usage Patterns:**
+        
+        **Basic Task Delegation:**
+        ```python
+        from nanobrain.library.agents.enhanced import CollaborativeAgent
+        
+        # Create collaborative agent with configuration
+        agent_config = AgentConfig.from_config('config/collaborative_config.yml')
+        collaborative_agent = CollaborativeAgent.from_config(agent_config)
+        
+        # Complex task requiring multiple specialized agents
+        complex_task = {
+            'objective': 'Analyze viral protein structure and predict drug targets',
+            'data': {
+                'protein_sequence': 'MKWVTFISLLFLF...',
+                'virus_species': 'SARS-CoV-2',
+                'analysis_type': 'comprehensive'
+            },
+            'requirements': [
+                'sequence_analysis',
+                'structure_prediction', 
+                'drug_target_identification',
+                'literature_validation'
+            ]
+        }
+        
+        # Delegate task with intelligent agent selection
+        delegation_result = await collaborative_agent.delegate_task(complex_task)
+        
+        # Monitor collaboration progress
+        for subtask in delegation_result['subtasks']:
+            print(f"Subtask: {subtask['name']}")
+            print(f"Assigned Agent: {subtask['assigned_agent']}")
+            print(f"Status: {subtask['status']}")
+            print(f"Progress: {subtask['progress']:.1%}")
+            print("---")
+        ```
+        
+        **Multi-Agent Workflow Orchestration:**
+        ```python
+        # Configure for complex workflow orchestration
+        workflow_config = {
+            'max_concurrent_workflows': 3,
+            'enable_parallel_execution': True,
+            'dependency_resolution': True,
+            'error_recovery': True
+        }
+        
+        agent_config = AgentConfig.from_config(workflow_config)
+        collaborative_agent = CollaborativeAgent.from_config(agent_config)
+        
+        # Define multi-step research workflow
+        research_workflow = {
+            'workflow_id': 'viral_research_pipeline',
+            'steps': [
+                {
+                    'name': 'literature_review',
+                    'agent_type': 'research_agent',
+                    'inputs': ['research_topic', 'search_parameters'],
+                    'outputs': ['relevant_papers', 'research_gaps'],
+                    'dependencies': []
+                },
+                {
+                    'name': 'data_acquisition',
+                    'agent_type': 'data_agent', 
+                    'inputs': ['virus_species', 'data_types'],
+                    'outputs': ['genomic_data', 'protein_data'],
+                    'dependencies': ['literature_review']
+                },
+                {
+                    'name': 'sequence_analysis',
+                    'agent_type': 'bioinformatics_agent',
+                    'inputs': ['genomic_data', 'analysis_parameters'],
+                    'outputs': ['sequence_alignments', 'phylogenetic_tree'],
+                    'dependencies': ['data_acquisition']
+                },
+                {
+                    'name': 'result_synthesis',
+                    'agent_type': 'synthesis_agent',
+                    'inputs': ['all_previous_outputs'],
+                    'outputs': ['final_report', 'recommendations'],
+                    'dependencies': ['literature_review', 'data_acquisition', 'sequence_analysis']
+                }
+            ]
+        }
+        
+        # Execute workflow with coordination
+        workflow_result = await collaborative_agent.orchestrate_workflow(research_workflow)
+        
+        # Monitor execution progress
+        execution_status = workflow_result['execution_status']
+        print(f"Workflow Status: {execution_status['status']}")
+        print(f"Completed Steps: {execution_status['completed_steps']}")
+        print(f"Active Steps: {execution_status['active_steps']}")
+        print(f"Total Progress: {execution_status['overall_progress']:.1%}")
+        ```
+        
+        **A2A Protocol Team Coordination:**
+        ```python
+        # Configure for A2A team coordination
+        a2a_config = {
+            'protocol': 'a2a',
+            'team_coordination': True,
+            'real_time_sync': True,
+            'secure_messaging': True
+        }
+        
+        agent_config = AgentConfig.from_config(a2a_config)
+        collaborative_agent = CollaborativeAgent.from_config(agent_config)
+        
+        # Initialize A2A team coordination
+        team_setup = {
+            'team_id': 'bioinformatics_research_team',
+            'agents': [
+                {'id': 'sequence_analyst', 'capabilities': ['sequence_analysis', 'alignment']},
+                {'id': 'structure_predictor', 'capabilities': ['protein_folding', '3d_modeling']},
+                {'id': 'drug_designer', 'capabilities': ['molecular_docking', 'drug_discovery']},
+                {'id': 'literature_expert', 'capabilities': ['research', 'validation']}
+            ],
+            'coordination_rules': {
+                'max_parallel_tasks': 2,
+                'priority_system': 'deadline_based',
+                'conflict_resolution': 'collaborative_consensus'
+            }
+        }
+        
+        # Establish A2A team coordination
+        team_session = await collaborative_agent.establish_a2a_team(team_setup)
+        
+        # Coordinate complex multi-agent research task
+        research_task = {
+            'objective': 'Design novel antiviral compounds for SARS-CoV-2',
+            'timeline': '2_weeks',
+            'deliverables': ['target_analysis', 'compound_designs', 'validation_results']
+        }
+        
+        # Real-time team coordination
+        coordination_result = await collaborative_agent.coordinate_team_task(
+            team_session,
+            research_task
+        )
+        
+        # Monitor real-time collaboration
+        for update in coordination_result['real_time_updates']:
+            print(f"Agent: {update['agent_id']}")
+            print(f"Action: {update['action']}")
+            print(f"Progress: {update['progress']}")
+            print(f"Timestamp: {update['timestamp']}")
+            print("---")
+        ```
+        
+        **MCP Protocol Model Coordination:**
+        ```python
+        # Configure for MCP model coordination
+        mcp_config = {
+            'protocol': 'mcp',
+            'model_coordination': True,
+            'context_sharing': True,
+            'resource_pooling': True
+        }
+        
+        agent_config = AgentConfig.from_config(mcp_config)
+        collaborative_agent = CollaborativeAgent.from_config(agent_config)
+        
+        # Initialize MCP model coordination
+        model_pool = {
+            'pool_id': 'research_model_pool',
+            'models': [
+                {'id': 'gpt4_research', 'specialization': 'research_analysis'},
+                {'id': 'claude_writing', 'specialization': 'document_generation'}, 
+                {'id': 'codex_analysis', 'specialization': 'code_analysis'},
+                {'id': 'biobert_domain', 'specialization': 'biomedical_nlp'}
+            ],
+            'coordination_strategy': 'capability_based_routing',
+            'context_sharing_level': 'selective'
+        }
+        
+        # Establish MCP model coordination
+        model_session = await collaborative_agent.establish_mcp_coordination(model_pool)
+        
+        # Coordinate multi-model analysis task
+        analysis_task = {
+            'input_data': 'large_biomedical_dataset.json',
+            'analysis_components': [
+                'statistical_analysis',
+                'pattern_recognition', 
+                'report_generation',
+                'visualization_creation'
+            ],
+            'output_format': 'comprehensive_research_report'
+        }
+        
+        # Execute with model coordination
+        model_result = await collaborative_agent.coordinate_model_analysis(
+            model_session,
+            analysis_task
+        )
+        
+        # Access coordinated results
+        analysis_output = model_result['coordinated_output']
+        model_contributions = model_result['model_contributions']
+        
+        print(f"Analysis Complete: {analysis_output['completion_status']}")
+        for model_id, contribution in model_contributions.items():
+            print(f"Model {model_id}: {contribution['contribution_summary']}")
+        ```
+        
+        **Performance Optimization and Monitoring:**
+        ```python
+        # Configure for performance optimization
+        performance_config = {
+            'enable_advanced_metrics': True,
+            'optimization_mode': 'adaptive',
+            'monitoring_interval': 60,  # seconds
+            'auto_scaling': True
+        }
+        
+        agent_config = AgentConfig.from_config(performance_config)
+        collaborative_agent = CollaborativeAgent.from_config(agent_config)
+        
+        # Monitor collaboration performance
+        performance_session = await collaborative_agent.start_performance_monitoring()
+        
+        # Execute monitored collaborative workflow
+        monitored_workflow = {
+            'workflow_type': 'high_performance_analysis',
+            'performance_targets': {
+                'max_execution_time': 300,
+                'min_quality_score': 0.85,
+                'max_resource_usage': 0.8
+            }
+        }
+        
+        # Run with performance optimization
+        optimized_result = await collaborative_agent.execute_optimized_workflow(
+            monitored_workflow,
+            performance_session
+        )
+        
+        # Analyze performance metrics
+        performance_report = optimized_result['performance_report']
+        optimization_suggestions = performance_report['optimization_suggestions']
+        
+        print(f"Execution Time: {performance_report['execution_time']:.2f}s")
+        print(f"Quality Score: {performance_report['quality_score']:.3f}")
+        print(f"Resource Efficiency: {performance_report['resource_efficiency']:.3f}")
+        
+        print("\\nOptimization Suggestions:")
+        for suggestion in optimization_suggestions:
+            print(f"  - {suggestion['description']}")
+            print(f"    Impact: {suggestion['expected_improvement']}")
+        ```
+    
+    **Advanced Features:**
+        
+        **Intelligent Load Balancing:**
+        * Dynamic agent workload distribution and optimization
+        * Real-time performance monitoring and adjustment
+        * Predictive scaling based on workflow complexity
+        * Resource optimization and bottleneck resolution
+        
+        **Context-Aware Delegation:**
+        * Semantic understanding of task requirements and agent capabilities
+        * Historical performance analysis for optimal agent selection
+        * Domain expertise matching and specialization routing
+        * Quality prediction and reliability assessment
+        
+        **Fault Tolerance and Recovery:**
+        * Automatic error detection and recovery mechanisms
+        * Graceful degradation and fallback strategies
+        * Checkpoint and restart capabilities for long-running workflows
+        * Data consistency and integrity maintenance
+        
+        **Security and Access Control:**
+        * Secure communication protocols and data encryption
+        * Role-based access control and permission management
+        * Audit trails and compliance monitoring
+        * Privacy-preserving collaboration and data sharing
+    
+    **Enterprise Applications:**
+        
+        **Research Coordination:**
+        * Multi-institutional research project coordination
+        * Collaborative data analysis and model development
+        * Distributed experiment execution and validation
+        * Knowledge synthesis and report generation
+        
+        **Business Process Automation:**
+        * Complex business workflow orchestration
+        * Multi-department task coordination and tracking
+        * Resource optimization and performance monitoring
+        * Quality assurance and compliance management
+        
+        **Scientific Computing:**
+        * Large-scale computational workflow management
+        * Distributed simulation and analysis coordination
+        * High-performance computing resource optimization
+        * Results aggregation and synthesis
+        
+        **AI Development:**
+        * Multi-model training and evaluation coordination
+        * Distributed hyperparameter optimization
+        * Model ensemble creation and management
+        * Performance benchmarking and comparison
+    
+    Attributes:
+        delegation_engine (DelegationEngine): Engine for intelligent task delegation
+        a2a_config (dict): A2A protocol configuration and settings
+        mcp_config (dict): MCP protocol configuration and settings
+        delegation_rules (list): Rules and policies for task delegation
+        enable_metrics (bool): Whether performance metrics are enabled
+        active_workflows (dict): Currently active workflow executions
+        team_sessions (dict): Active A2A team coordination sessions
+        model_pools (dict): Active MCP model coordination pools
+    
+    Note:
+        This agent requires A2A and/or MCP protocol support for full functionality.
+        Network connectivity is needed for distributed collaboration features.
+        Performance monitoring requires additional system resources but provides
+        valuable optimization insights. Security features should be configured
+        appropriately for enterprise deployment environments.
+    
+    Warning:
+        Collaborative workflows can consume significant computational resources
+        and network bandwidth. Monitor system performance and configure appropriate
+        limits for production deployments. Security and access control settings
+        should be carefully reviewed for multi-agent environments handling
+        sensitive data or critical workflows.
+    
+    See Also:
+        * :class:`A2ASupportMixin`: A2A protocol support implementation
+        * :class:`MCPSupportMixin`: MCP protocol support implementation  
+        * :class:`ConversationalAgent`: Base conversational agent capabilities
+        * :class:`DelegationEngine`: Intelligent task delegation engine
+        * :class:`AgentConfig`: Agent configuration schema
+        * :mod:`nanobrain.library.agents.enhanced`: Enhanced agent implementations
+    """
     
     # Component configuration
     COMPONENT_TYPE = "collaborative_agent"

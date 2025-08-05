@@ -14,10 +14,10 @@ tools:
 
 # STEP-LEVEL DATA UNITS: Step owns its data units
 input_data_units:
-  curated_sequences:
+  clustering_input_sequences:
     class: nanobrain.core.data_unit.DataUnitMemory
-    name: curated_sequences
-    description: "Curated protein sequences from sequence curation step"
+    name: clustering_input_sequences
+    description: "Aligned protein sequences from alignment step"
     persistent: false
 
 output_data_units:
@@ -27,13 +27,13 @@ output_data_units:
     description: "Protein sequence clusters with analysis summary"
     persistent: false
 
-# STEP-LEVEL TRIGGER: Execute when curated sequences received
+# STEP-LEVEL TRIGGER: Execute when aligned sequences received
 triggers:
   - trigger_id: input_data_received
     class: nanobrain.core.trigger.DataUnitChangeTrigger
-    data_unit: curated_sequences
+    data_unit: clustering_input_sequences
     event_type: "set"
-    description: "Execute step when curated sequences are received"
+    description: "Execute step when aligned sequences are received"
 
 # Clustering configuration
 clustering_config:

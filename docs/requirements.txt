@@ -1,0 +1,6 @@
+# Minimal Sphinx documentation dependencies with Markdown support
+sphinx>=7.0.0
+sphinx-rtd-theme>=2.0.0
+sphinx-autodoc-typehints>=1.25.0
+myst-parser>=2.0.0
+pydantic>=2.0.0 

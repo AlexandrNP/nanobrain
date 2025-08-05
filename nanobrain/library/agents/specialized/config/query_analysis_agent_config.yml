@@ -1,0 +1,321 @@
+# Query Analysis Agent Configuration
+# ===================================
+# 
+# Framework-compliant specialized agent configuration for query analysis and intent classification
+# Follows NanoBrain patterns for agent configuration and natural language understanding
+# 
+# Author: NanoBrain Development Team
+# Date: January 2025
+# Version: 1.0.0
+
+# ✅ FRAMEWORK COMPLIANCE: Agent identification and metadata
+agent_type: "specialized_agent"
+name: "query_analysis_agent"
+description: "Specialized agent for analyzing natural language queries and determining appropriate workflow routing"
+version: "1.0.0"
+specialization_domain: "query_analysis"
+
+# ✅ FRAMEWORK COMPLIANCE: LLM Configuration
+llm_config:
+  provider: "openai"
+  model: "gpt-4"
+  temperature: 0.3  # Lower temperature for more consistent analysis
+  max_tokens: 800
+  top_p: 0.9
+  frequency_penalty: 0.0
+  presence_penalty: 0.0
+  
+  # Framework-compliant API configuration
+  api_config:
+    timeout: 25
+    max_retries: 3
+    retry_delay: 1.0
+
+# ✅ FRAMEWORK COMPLIANCE: Specialization Configuration
+specialization:
+  domain: "query_analysis"
+  expertise_areas:
+    - "intent_classification"
+    - "domain_identification"
+    - "query_understanding"
+    - "workflow_routing"
+    - "natural_language_processing"
+    - "semantic_analysis"
+  
+  analysis_patterns:
+    - "intent_detection"
+    - "domain_classification"
+    - "task_identification"
+    - "parameter_extraction"
+    - "complexity_assessment"
+    - "routing_optimization"
+  
+  # Query analysis domains
+  supported_domains:
+    - "scientific_research"
+    - "bioinformatics"
+    - "virology"
+    - "protein_analysis"
+    - "conversational"
+    - "information_retrieval"
+  
+  # Intent categories
+  intent_categories:
+    - "analysis_request"
+    - "information_query"
+    - "workflow_execution"
+    - "data_processing"
+    - "conversational_chat"
+    - "help_support"
+
+# ✅ FRAMEWORK COMPLIANCE: Agent Capabilities
+capabilities:
+  intent_classification:
+    enabled: true
+    confidence_threshold: 0.7
+    multi_intent_support: true
+    hierarchical_classification: true
+  
+  domain_identification:
+    enabled: true
+    domain_confidence_threshold: 0.6
+    cross_domain_queries: true
+    domain_hierarchy_support: true
+  
+  query_complexity_analysis:
+    enabled: true
+    complexity_metrics:
+      - "semantic_complexity"
+      - "processing_requirements"
+      - "data_dependencies"
+      - "computational_intensity"
+  
+  parameter_extraction:
+    enabled: true
+    extraction_types:
+      - "named_entities"
+      - "scientific_terms"
+      - "workflow_parameters"
+      - "data_specifications"
+      - "constraints"
+  
+  workflow_routing:
+    enabled: true
+    routing_strategies:
+      - "intent_based"
+      - "domain_based"
+      - "complexity_based"
+      - "capability_matching"
+
+# ✅ FRAMEWORK COMPLIANCE: Query Processing Configuration
+query_processing:
+  analysis_patterns:
+    # Scientific analysis patterns
+    analysis_patterns:
+      - "(?i)\\b(analyze|analysis|examine|study|investigate)\\b"
+      - "(?i)\\b(generate|create|build|construct)\\b"
+      - "(?i)\\b(compare|contrast|evaluate|assess)\\b"
+      - "(?i)\\b(predict|forecast|model|simulate)\\b"
+    
+    # Information request patterns
+    information_patterns:
+      - "(?i)\\b(what|how|when|where|why|which)\\b"
+      - "(?i)\\b(explain|describe|tell me|show me)\\b"
+      - "(?i)\\b(find|search|look for|retrieve)\\b"
+      - "(?i)\\b(help|guide|tutorial|documentation)\\b"
+    
+    # Workflow execution patterns
+    workflow_patterns:
+      - "(?i)\\b(run|execute|start|perform|process)\\b"
+      - "(?i)\\b(workflow|pipeline|task|job)\\b"
+      - "(?i)\\b(batch|bulk|automated)\\b"
+    
+    # Domain-specific patterns
+    bioinformatics_patterns:
+      - "(?i)\\b(protein|sequence|genome|dna|rna)\\b"
+      - "(?i)\\b(alignment|clustering|phylogeny)\\b"
+      - "(?i)\\b(blast|hmmer|muscle|clustal)\\b"
+      - "(?i)\\b(pssm|matrix|profile)\\b"
+    
+    virology_patterns:
+      - "(?i)\\b(virus|viral|pathogen|infection)\\b"
+      - "(?i)\\b(alphavirus|coronavirus|influenza)\\b"
+      - "(?i)\\b(epidemic|pandemic|outbreak)\\b"
+      - "(?i)\\b(vaccine|antiviral|treatment)\\b"
+  
+  extraction_rules:
+    min_confidence: 0.5
+    max_entities: 10
+    enable_context_analysis: true
+    context_window: 100
+
+# ✅ FRAMEWORK COMPLIANCE: System Prompt Configuration
+system_prompt: |
+  You are a specialized query analysis agent with expertise in natural language understanding and workflow routing.
+  
+  Your primary responsibilities:
+  1. Analyze natural language queries to determine user intent
+  2. Classify queries by domain (bioinformatics, virology, conversational, etc.)
+  3. Extract relevant parameters and entities from queries
+  4. Assess query complexity and processing requirements
+  5. Recommend appropriate workflow routing strategies
+  
+  Specialization areas:
+  - Scientific query analysis (bioinformatics, virology)
+  - Intent classification and domain identification
+  - Parameter extraction and entity recognition
+  - Workflow routing and optimization
+  
+  Analysis categories:
+  - Analysis requests (data processing, computational analysis)
+  - Information queries (explanations, documentation, help)
+  - Workflow execution (running pipelines, batch processing)
+  - Conversational chat (general discussion, Q&A)
+  
+  Always provide:
+  - Primary and secondary intent classifications
+  - Domain confidence scores
+  - Extracted entities and parameters
+  - Routing recommendations with justifications
+  - Complexity assessment and resource requirements
+  
+  Respond with structured data optimized for downstream workflow routing.
+
+# ✅ FRAMEWORK COMPLIANCE: Output Configuration
+output_format:
+  response_structure:
+    intent_analysis:
+      type: "object"
+      fields:
+        - "primary_intent"
+        - "secondary_intents"
+        - "intent_confidence"
+        - "intent_hierarchy"
+    
+    domain_analysis:
+      type: "object"
+      fields:
+        - "primary_domain"
+        - "secondary_domains"
+        - "domain_confidence"
+        - "cross_domain_indicators"
+    
+    extracted_entities:
+      type: "list"
+      fields:
+        - "entity_text"
+        - "entity_type"
+        - "entity_category"
+        - "confidence_score"
+        - "context"
+    
+    routing_recommendation:
+      type: "object"
+      fields:
+        - "recommended_workflow"
+        - "routing_confidence"
+        - "alternative_workflows"
+        - "routing_rationale"
+        - "resource_requirements"
+    
+    complexity_analysis:
+      type: "object"
+      fields:
+        - "complexity_score"
+        - "processing_requirements"
+        - "estimated_duration"
+        - "resource_intensity"
+    
+    metadata:
+      type: "object"
+      fields:
+        - "query_length"
+        - "processing_time"
+        - "analysis_version"
+        - "confidence_threshold"
+
+# ✅ FRAMEWORK COMPLIANCE: Routing Configuration
+routing_rules:
+  workflow_mappings:
+    viral_protein_analysis:
+      intent_keywords: ["analyze", "pssm", "protein", "viral", "sequence"]
+      domain_keywords: ["virology", "bioinformatics", "protein"]
+      minimum_confidence: 0.7
+      complexity_threshold: "medium"
+    
+    conversational_chat:
+      intent_keywords: ["what", "how", "explain", "tell", "describe"]
+      domain_keywords: ["general", "conversation", "information"]
+      minimum_confidence: 0.5
+      complexity_threshold: "low"
+    
+    information_retrieval:
+      intent_keywords: ["find", "search", "show", "list", "retrieve"]
+      domain_keywords: ["data", "information", "documentation"]
+      minimum_confidence: 0.6
+      complexity_threshold: "low"
+  
+  fallback_strategy:
+    default_workflow: "conversational_chat"
+    confidence_threshold: 0.4
+    enable_hybrid_routing: true
+
+# ✅ FRAMEWORK COMPLIANCE: Performance Configuration
+performance:
+  enable_caching: true
+  cache_ttl: 900  # 15 minutes
+  max_concurrent_requests: 15
+  request_timeout: 20
+  
+  optimization:
+    enable_parallel_processing: false
+    batch_processing: true
+    memory_optimization: true
+    
+  # Analysis performance thresholds
+  performance_targets:
+    max_analysis_time: 5.0  # seconds
+    target_accuracy: 0.85
+    min_confidence: 0.6
+
+# ✅ FRAMEWORK COMPLIANCE: Error Handling
+error_handling:
+  graceful_degradation: true
+  fallback_strategies:
+    - "keyword_based_analysis"
+    - "pattern_matching"
+    - "heuristic_classification"
+    - "default_routing"
+  
+  retry_policy:
+    max_attempts: 2
+    backoff_factor: 1.5
+    timeout_multiplier: 1.2
+  
+  error_classification:
+    ambiguous_queries: "route_to_clarification"
+    incomplete_queries: "request_additional_info"
+    out_of_domain: "route_to_general_chat"
+
+# ✅ FRAMEWORK COMPLIANCE: Monitoring and Logging
+monitoring:
+  enable_performance_tracking: true
+  track_classification_accuracy: true
+  track_routing_success: true
+  track_response_times: true
+  track_confidence_distributions: true
+  
+  logging:
+    level: "INFO"
+    include_queries: false  # Privacy protection
+    include_analysis_results: true
+    include_performance_metrics: true
+    include_routing_decisions: true
+  
+  # Metrics collection
+  metrics:
+    intent_classification_accuracy: true
+    domain_classification_accuracy: true
+    routing_success_rate: true
+    average_processing_time: true
+    confidence_score_distribution: true 

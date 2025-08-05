@@ -49,12 +49,390 @@ class ToolConfig(ConfigBase):
 
 class ToolBase(FromConfigBase, ABC):
     """
-    Base class for tools that can be used by Agents.
-    Enhanced with mandatory from_config pattern implementation.
+    Base Tool Class - Specialized AI Agent Extensions and Framework Integrations
+    ===========================================================================
     
-    Biological analogy: Specialized neural circuits for specific functions.
-    Justification: Like how the brain has specialized circuits for vision, 
-    language, etc., tools provide specialized functionality for agents.
+    The ToolBase class is the foundational component for creating specialized functionality
+    extensions within the NanoBrain framework. Tools provide AI agents, steps, and workflows
+    with access to external services, computational capabilities, data sources, and
+    specialized processing functions through a unified, type-safe interface.
+    
+    **Core Architecture:**
+        Tools represent specialized capability providers that:
+        
+        * **Extend Agent Capabilities**: Provide agents with external functionality access
+        * **Enable Ecosystem Integration**: Connect with external APIs, services, and libraries
+        * **Ensure Type Safety**: Validate inputs and outputs with comprehensive schemas
+        * **Support Async Operations**: Handle concurrent and parallel tool execution
+        * **Provide Error Handling**: Robust error management with retry and fallback mechanisms
+        * **Enable Protocol Compliance**: Support A2A (Agent-to-Agent) and MCP protocols
+    
+    **Biological Analogy:**
+        Like specialized neural circuits for specific functions (visual cortex for vision,
+        motor cortex for movement), tools provide specialized functionality for agents.
+        These specialized circuits have dedicated architectures optimized for particular
+        tasks and integrate with the broader neural network - exactly how tools provide
+        specialized capabilities that integrate seamlessly with the agent ecosystem.
+    
+    **Tool Architecture Categories:**
+        
+        **Function Tools:**
+        * Direct function execution with parameter validation
+        * Synchronous and asynchronous function calls
+        * Result caching and performance optimization
+        * Type-safe parameter passing and return values
+        
+        **Agent Tools:**
+        * Integration with other AI agents and LLM services
+        * Agent delegation and collaboration patterns
+        * Context sharing and conversation management
+        * Multi-agent workflow coordination
+        
+        **Step Tools:**
+        * Workflow step execution and orchestration
+        * Data processing pipeline integration
+        * Step chaining and dependency management
+        * Result validation and error propagation
+        
+        **External Tools:**
+        * API integration with external services
+        * Database connections and queries
+        * File system operations and data access
+        * Network services and web scraping
+        
+        **LangChain Tools:**
+        * Seamless LangChain ecosystem integration
+        * Tool adapter patterns for existing LangChain tools
+        * Metadata preservation and capability mapping
+        * Protocol translation and compatibility layers
+    
+    **Framework Integration:**
+        Tools seamlessly integrate with all framework components:
+        
+        * **Agent Integration**: Automatic tool discovery and registration by agents
+        * **Workflow Orchestration**: Tools used within workflow steps for processing
+        * **Executor Support**: Tools run on various execution backends (local, distributed)
+        * **Configuration Management**: Complete YAML-driven tool configuration
+        * **Monitoring Integration**: Comprehensive logging and performance tracking
+        * **Protocol Compliance**: A2A and MCP protocol support for interoperability
+    
+    **Tool Discovery and Registration:**
+        The framework supports automatic tool discovery:
+        
+        * **Configuration-Based**: Tools defined in agent and workflow configurations
+        * **Dynamic Discovery**: Runtime tool registration and capability detection
+        * **Capability Matching**: Automatic tool selection based on task requirements
+        * **Protocol Adaptation**: Automatic adaptation between different tool protocols
+        * **Metadata Extraction**: Tool capabilities extracted from configuration and metadata
+    
+    **Configuration Architecture:**
+        Tools follow the framework's configuration-first design:
+        
+        ```yaml
+        # Basic function tool
+        name: "data_processor"
+        description: "Processes and validates data structures"
+        tool_type: "function"
+        async_execution: true
+        timeout: 30
+        
+        # Tool card for A2A protocol compliance
+        tool_card:
+          capabilities:
+            - "data_validation"
+            - "format_conversion"
+            - "schema_validation"
+          input_types:
+            - "json"
+            - "csv"
+            - "xml"
+          output_types:
+            - "json"
+            - "validated_data"
+          parameters:
+            validation_schema:
+              type: "string"
+              description: "JSON schema for validation"
+              required: true
+            output_format:
+              type: "string"
+              description: "Output format preference"
+              default: "json"
+              choices: ["json", "csv", "xml"]
+        
+        # External API tool
+        name: "web_search"
+        description: "Web search and information retrieval"
+        tool_type: "external"
+        
+        # API configuration
+        api_config:
+          base_url: "https://api.search.com"
+          api_key_env: "SEARCH_API_KEY"
+          rate_limit: 100
+          timeout: 10
+        
+        # LangChain tool integration
+        name: "langchain_calculator"
+        description: "Mathematical calculator via LangChain"
+        tool_type: "langchain"
+        
+        # LangChain adapter configuration
+        langchain_config:
+          tool_class: "langchain.tools.Calculator"
+          adapter_settings:
+            preserve_metadata: true
+            enable_streaming: false
+        ```
+    
+    **Usage Patterns:**
+        
+        **Basic Tool Implementation:**
+        ```python
+        from nanobrain.core import ToolBase, ToolConfig
+        
+        class DataProcessor(ToolBase):
+            async def execute(self, data, schema=None):
+                # Validate input data against schema
+                validated_data = self.validate_data(data, schema)
+                
+                # Process data
+                result = self.process_data(validated_data)
+                
+                # Return structured result
+                return {
+                    "processed_data": result,
+                    "validation_status": "passed",
+                    "processing_time": self.get_execution_time()
+                }
+        
+        # Create tool from configuration
+        tool = DataProcessor.from_config('config/data_processor.yml')
+        ```
+        
+        **Agent Tool Integration:**
+        ```python
+        # Tools automatically available to agents via configuration
+        agent_config = {
+            "name": "data_analyst",
+            "tools": [
+                {"class": "tools.DataProcessor", "config": "config/processor.yml"},
+                {"class": "tools.WebSearch", "config": "config/search.yml"}
+            ]
+        }
+        
+        agent = ConversationalAgent.from_config(agent_config)
+        
+        # Agent automatically discovers and uses appropriate tools
+        response = await agent.aprocess(
+            "Analyze this dataset and search for related information"
+        )
+        ```
+        
+        **LangChain Tool Integration:**
+        ```python
+        # Seamless LangChain tool integration
+        class LangChainCalculator(ToolBase):
+            def __init__(self, config):
+                super().__init__(config)
+                # Automatic LangChain tool adapter
+                self.langchain_tool = self.create_langchain_adapter()
+            
+            async def execute(self, expression):
+                # Direct LangChain tool execution
+                result = await self.langchain_tool.arun(expression)
+                return {"calculation": result, "expression": expression}
+        ```
+        
+        **External API Tool:**
+        ```python
+        class WebSearchTool(ToolBase):
+            async def execute(self, query, max_results=10):
+                # Automatic API authentication and rate limiting
+                async with self.api_client() as client:
+                    response = await client.search(
+                        query=query,
+                        limit=max_results
+                    )
+                
+                # Structured result with metadata
+                return {
+                    "results": response.results,
+                    "query": query,
+                    "total_found": response.total_count,
+                    "search_time": response.duration
+                }
+        ```
+    
+    **Advanced Features:**
+        
+        **Parallel Tool Execution:**
+        * Concurrent execution of independent tools
+        * Result aggregation and correlation
+        * Error isolation and partial result handling
+        * Resource pooling and optimization
+        
+        **Tool Chaining and Composition:**
+        * Sequential tool execution with result passing
+        * Conditional tool selection based on results
+        * Tool pipeline creation and optimization
+        * Dynamic tool workflow generation
+        
+        **Caching and Performance:**
+        * Intelligent result caching with TTL management
+        * Parameter-based cache key generation
+        * Cache invalidation and refresh strategies
+        * Performance monitoring and optimization
+        
+        **Error Handling and Resilience:**
+        * Automatic retry with exponential backoff
+        * Fallback tools for failed operations
+        * Error classification and handling strategies
+        * Circuit breaker patterns for unstable services
+    
+    **Protocol Compliance:**
+        
+        **A2A (Agent-to-Agent) Protocol:**
+        * Tool card metadata for capability advertisement
+        * Standardized tool interfaces and contracts
+        * Inter-agent tool sharing and delegation
+        * Capability negotiation and discovery
+        
+        **MCP (Model Context Protocol):**
+        * Standardized tool description and execution
+        * Context preservation across tool calls
+        * Resource management and lifecycle
+        * Security and access control integration
+        
+        **Framework Native Protocol:**
+        * Full NanoBrain framework integration
+        * Configuration-driven tool creation
+        * Event-driven execution and monitoring
+        * Complete lifecycle management
+    
+    **Security and Validation:**
+        
+        **Input Validation:**
+        * Comprehensive parameter validation with schemas
+        * Type checking and constraint enforcement
+        * Sanitization for security-sensitive operations
+        * Input size limits and resource protection
+        
+        **Access Control:**
+        * Tool permission management and restrictions
+        * API key protection and rotation
+        * Rate limiting and quota enforcement
+        * Audit logging for compliance and security
+        
+        **Output Validation:**
+        * Result schema validation and verification
+        * Content filtering and sanitization
+        * Size limits and resource management
+        * Error information sanitization
+    
+    **Performance and Scalability:**
+        
+        **Execution Optimization:**
+        * Asynchronous execution for non-blocking operations
+        * Connection pooling for external services
+        * Resource reuse and optimization
+        * Memory management and cleanup
+        
+        **Monitoring and Metrics:**
+        * Tool execution time tracking and analysis
+        * Success rate monitoring and alerting
+        * Resource usage tracking and optimization
+        * Error rate analysis and improvement recommendations
+        
+        **Scalability Features:**
+        * Horizontal scaling through tool distribution
+        * Load balancing across tool instances
+        * Resource allocation and management
+        * Auto-scaling based on demand
+    
+    **Development and Testing:**
+        
+        **Testing Support:**
+        * Mock tool implementations for testing
+        * Tool simulation and validation frameworks
+        * Performance benchmarking and profiling
+        * Integration testing with agents and workflows
+        
+        **Debugging Features:**
+        * Comprehensive logging with structured output
+        * Tool execution tracing and analysis
+        * Parameter and result inspection
+        * Performance profiling and optimization hints
+        
+        **Development Tools:**
+        * Tool template generation and scaffolding
+        * Configuration validation and linting
+        * Documentation generation from tool cards
+        * Protocol compliance verification
+    
+    **Tool Lifecycle:**
+        Tools follow a well-defined lifecycle:
+        
+        1. **Configuration Loading**: Parse and validate tool configuration
+        2. **Capability Registration**: Register tool capabilities and metadata
+        3. **Dependency Resolution**: Setup connections and external dependencies
+        4. **Authentication Setup**: Configure API keys and authentication
+        5. **Resource Initialization**: Setup connection pools and caches
+        6. **Ready State**: Tool ready for execution requests
+        7. **Execution**: Handle tool calls with validation and processing
+        8. **Cleanup**: Release resources and cleanup connections
+    
+    **Integration Patterns:**
+        
+        **Multi-Tool Coordination:**
+        * Tool orchestration for complex operations
+        * Result correlation and aggregation
+        * Conditional tool execution based on results
+        * Tool pipeline optimization and caching
+        
+        **Agent Tool Delegation:**
+        * Automatic tool selection based on capabilities
+        * Tool recommendation and suggestion systems
+        * Context-aware tool parameter generation
+        * Result interpretation and integration
+        
+        **Workflow Tool Integration:**
+        * Tools as processing steps in workflows
+        * Tool result validation and error handling
+        * Tool performance monitoring in workflows
+        * Dynamic tool configuration based on workflow state
+    
+    Attributes:
+        name (str): Tool identifier for logging and agent discovery
+        description (str): Human-readable tool description and capabilities
+        tool_type (ToolType): Tool category and execution pattern
+        parameters (Dict): Tool parameter schema and validation rules
+        async_execution (bool): Whether tool supports asynchronous execution
+        timeout (float, optional): Maximum execution time before timeout
+        tool_card (Dict, optional): A2A protocol metadata for capability advertisement
+        api_client (optional): Configured API client for external tool types
+        cache (optional): Result cache for performance optimization
+        performance_metrics (Dict): Real-time performance and usage metrics
+    
+    Note:
+        This is an abstract base class that cannot be instantiated directly.
+        Use concrete implementations or create custom tools by extending this class.
+        All tools must be created using the from_config pattern with proper
+        configuration files following the framework's architectural patterns.
+    
+    Warning:
+        Tools may access external services and APIs, consuming network resources
+        and potentially incurring costs. Monitor API usage, implement rate limiting,
+        and ensure proper authentication and security measures. Be cautious with
+        tools that modify external systems or access sensitive data.
+    
+    See Also:
+        * :class:`ToolConfig`: Tool configuration schema and validation
+        * :class:`ToolType`: Available tool types and categories
+        * :mod:`nanobrain.library.tools`: Specialized tool implementations
+        * :class:`Agent`: AI agents that use tools for extended capabilities
+        * :mod:`nanobrain.library.tools.bioinformatics`: Bioinformatics tool suite
+        * :mod:`nanobrain.library.tools.web`: Web and API integration tools
     """
     
     COMPONENT_TYPE = "tool"

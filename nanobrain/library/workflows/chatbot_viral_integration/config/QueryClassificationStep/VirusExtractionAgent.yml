@@ -35,6 +35,9 @@ config:
     Query: "Tell me about Zika virus symptoms"
     Output: {"query_type": "information", "virus_names": ["Zika virus"], "analysis_type": null, "confidence": 0.95}
 
+# Tools configuration (empty for now - no tools needed for virus extraction)
+tools: []
+
 # Timeout and performance settings
 timeout: 30.0
 max_retries: 3

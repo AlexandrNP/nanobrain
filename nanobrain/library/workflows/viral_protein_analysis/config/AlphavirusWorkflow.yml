@@ -17,7 +17,7 @@ step_timeout: 30.0
 retry_attempts: 2
 retry_delay: 5.0
 validate_graph: true
-allow_cycles: false
+allow_cycles: true
 require_connected_graph: true
 
 # Data directory configuration (existing)
@@ -31,7 +31,7 @@ csv_file_path: "data/viral_analysis/BVBRC_genome_viral.csv"
 steps:
   data_acquisition:
     class: "nanobrain.library.workflows.viral_protein_analysis.steps.data_acquisition_step.BVBRCDataAcquisitionStep"
-    config: "config/DataAcquisitionStep/DataAcquisitionStep.yml"
+    config: "nanobrain/library/workflows/viral_protein_analysis/config/DataAcquisitionStep/DataAcquisitionStep.yml"
     step_id: "data_acquisition"
   
   annotation_mapping:
@@ -69,52 +69,97 @@ steps:
     config: "config/ResultCollectionStep/ResultCollectionStep.yml"
     step_id: "result_collection"
 
-# UPDATED: Dict-based links format (was list-based)
+# FRAMEWORK COMPLIANT: Links with class+config format for proper resolution
 links:
   workflow_to_acquisition:
-    source: "workflow_input"
-    target: "data_acquisition.synonyms_input"
-    description: "Route enhanced virus resolution output to enhanced data acquisition"
+    class: "nanobrain.core.link.DirectLink"
+    config:
+      name: "workflow_to_acquisition"
+      link_type: "direct"
+      source: "workflow_input"
+      target: "data_acquisition.synonyms_input"
+      description: "Route enhanced virus resolution output to enhanced data acquisition"
+      enable_logging: true
   
   acquisition_to_annotation:
-    source: "data_acquisition.validated_genomes"
-    target: "annotation_mapping.fasta_and_annotations"
-    description: "Route validated genomes to annotation mapping"
+    class: "nanobrain.core.link.DirectLink"
+    config:
+      name: "acquisition_to_annotation"
+      link_type: "direct"
+      source: "data_acquisition.validated_genomes"
+      target: "annotation_mapping.fasta_and_annotations"
+      description: "Route validated genomes to annotation mapping"
+      enable_logging: true
   
   annotation_to_curation:
-    source: "annotation_mapping.standardized_annotations"
-    target: "sequence_curation.standardized_annotations"
-    description: "Route standardized annotations to sequence curation"
+    class: "nanobrain.core.link.DirectLink"
+    config:
+      name: "annotation_to_curation"
+      link_type: "direct"
+      source: "annotation_mapping.standardized_annotations"
+      target: "sequence_curation.curation_input_annotations"
+      description: "Route standardized annotations to sequence curation"
+      enable_logging: true
   
   curation_to_alignment:
-    source: "sequence_curation.curated_sequences"
-    target: "alignment.curated_sequences"
-    description: "Route curated sequences to alignment step"
+    class: "nanobrain.core.link.DirectLink"
+    config:
+      name: "curation_to_alignment"
+      link_type: "direct"
+      source: "sequence_curation.curated_sequences"
+      target: "alignment.alignment_input_sequences"
+      description: "Route curated sequences to alignment step"
+      enable_logging: true
   
   alignment_to_clustering:
-    source: "alignment.aligned_sequences"
-    target: "clustering_analysis.aligned_sequences"
-    description: "Route aligned sequences to clustering analysis"
+    class: "nanobrain.core.link.DirectLink"
+    config:
+      name: "alignment_to_clustering"
+      link_type: "direct"
+      source: "alignment.alignment_output_sequences"
+      target: "clustering_analysis.clustering_input_sequences"
+      description: "Route aligned sequences to clustering analysis"
+      enable_logging: true
   
   clustering_to_pssm:
-    source: "clustering_analysis.sequence_clusters"
-    target: "pssm_analysis.sequence_clusters"
-    description: "Route sequence clusters to PSSM analysis"
+    class: "nanobrain.core.link.DirectLink"
+    config:
+      name: "clustering_to_pssm"
+      link_type: "direct"
+      source: "clustering_analysis.sequence_clusters"
+      target: "pssm_analysis.pssm_input_clusters"
+      description: "Route sequence clusters to PSSM analysis"
+      enable_logging: true
   
   pssm_to_aggregation:
-    source: "pssm_analysis.pssm_matrices"
-    target: "data_aggregation.pssm_data"
-    description: "Route PSSM matrices to data aggregation"
+    class: "nanobrain.core.link.DirectLink"
+    config:
+      name: "pssm_to_aggregation"
+      link_type: "direct"
+      source: "pssm_analysis.pssm_matrices"
+      target: "data_aggregation.pssm_data"
+      description: "Route PSSM matrices to data aggregation"
+      enable_logging: true
   
   aggregation_to_results:
-    source: "data_aggregation.aggregated_data"
-    target: "result_collection.analysis_data"
-    description: "Route aggregated data to result collection"
+    class: "nanobrain.core.link.DirectLink"
+    config:
+      name: "aggregation_to_results"
+      link_type: "direct"
+      source: "data_aggregation.aggregated_data"
+      target: "result_collection.analysis_data"
+      description: "Route aggregated data to result collection"
+      enable_logging: true
   
   results_to_workflow:
-    source: "result_collection.final_results"
-    target: "workflow_output"
-    description: "Route final results to workflow output"
+    class: "nanobrain.core.link.DirectLink"
+    config:
+      name: "results_to_workflow"
+      link_type: "direct"
+      source: "result_collection.final_results"
+      target: "workflow_output"
+      description: "Route final results to workflow output"
+      enable_logging: true
 
 # Existing input/output data units (preserved)
 input_data_units:
@@ -131,6 +176,16 @@ output_data_units:
     description: "Complete workflow results with enhanced precision validation"
     persistent: true
     file_path: "results/enhanced_viral_protein_analysis.json"
+
+# ✅ SCOPE CORRECTED: Workflow-level trigger referencing workflow-level data unit
+triggers:
+  - trigger_id: "enhanced_viral_analysis_completed"
+    class: "nanobrain.core.trigger.DataUnitChangeTrigger"
+    config:
+      data_unit: "workflow_output"  # ✅ WORKFLOW-LEVEL REFERENCE: References workflow's output data unit
+      event_type: "set"
+      description: "Trigger when enhanced viral protein analysis completed"
+      enable_logging: true
 
 # Existing metadata (preserved)
 workflow_metadata:

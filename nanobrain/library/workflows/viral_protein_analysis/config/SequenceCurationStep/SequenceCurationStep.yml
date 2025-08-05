@@ -7,11 +7,11 @@ class: nanobrain.library.workflows.viral_protein_analysis.steps.sequence_curatio
 debug_mode: true
 enable_logging: true
 
-# STEP-LEVEL DATA UNITS: Step owns its data units
+# Input data units
 input_data_units:
-  standardized_annotations:
+  curation_input_annotations:
     class: nanobrain.core.data_unit.DataUnitMemory
-    name: standardized_annotations
+    name: curation_input_annotations
     description: "Standardized annotations from annotation mapping step"
     persistent: false
 
@@ -22,13 +22,13 @@ output_data_units:
     description: "Curated sequences after quality control"
     persistent: false
 
-# STEP-LEVEL TRIGGER: Execute when standardized annotations received
+# STEP-LEVEL TRIGGER: Execute when curation input annotations received
 triggers:
   - trigger_id: input_data_received
     class: nanobrain.core.trigger.DataUnitChangeTrigger
-    data_unit: standardized_annotations
+    data_unit: curation_input_annotations
     event_type: "set"
-    description: "Execute step when standardized annotations are received"
+    description: "Execute step when curation input annotations are received"
 
 # Curation configuration
 curation_config:

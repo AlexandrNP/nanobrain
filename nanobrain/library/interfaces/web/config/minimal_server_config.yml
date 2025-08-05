@@ -1,0 +1,68 @@
+# Minimal Universal NanoBrain Server Configuration
+# Quick setup example for development and testing
+# 
+# Author: NanoBrain Development Team
+# Date: January 2025
+# Version: 1.0.0
+
+# Basic server settings
+server_type: "fastapi"
+host: "0.0.0.0"
+port: 5001
+debug: true
+
+# Framework-compliant component configuration using file paths
+components:
+  
+  # Workflow Registry - Auto-discover available workflows
+  workflow_registry:
+    class: "nanobrain.library.interfaces.web.routing.workflow_registry.WorkflowRegistry"
+    config: "nanobrain/library/interfaces/web/config/workflow_registry_config.yml"
+
+  # Request Analyzer - Basic natural language understanding
+  request_analyzer:
+    class: "nanobrain.library.interfaces.web.analysis.request_analyzer.UniversalRequestAnalyzer"
+    config: "nanobrain/library/interfaces/web/config/request_analyzer_config.yml"
+
+  # Workflow Router - Basic routing strategy
+  workflow_router:
+    class: "nanobrain.library.interfaces.web.routing.workflow_router.WorkflowRouter"
+    config: "nanobrain/library/interfaces/web/config/workflow_router_config.yml"
+
+  # Response Processor - Basic response handling
+  response_processor:
+    class: "nanobrain.library.interfaces.web.processing.response_processor.UniversalResponseProcessor"
+    config: "nanobrain/library/interfaces/web/config/response_processor_config.yml"
+
+# Basic endpoints
+endpoints:
+  chat: "/api/universal-chat"
+  capabilities: "/api/workflows/capabilities"
+  health: "/api/health"
+
+# Development-friendly middleware
+middleware:
+  cors: true
+  request_validation: false  # Disable for quick testing
+  response_standardization: true
+
+# FastAPI configuration for development
+fastapi_config:
+  title: "Minimal NanoBrain Server"
+  description: "Development server for NanoBrain universal interface"
+  version: "1.0.0"
+  docs_url: "/docs"
+  redoc_url: "/redoc"
+
+# CORS configuration for local development
+cors_config:
+  allow_origins: ["*"]
+  allow_methods: ["GET", "POST"]
+  allow_headers: ["*"]
+  allow_credentials: true
+
+# Quick startup configuration
+startup_config:
+  auto_discover_workflows: true
+  validate_components: false  # Skip validation for quick start
+  preload_workflows: false 

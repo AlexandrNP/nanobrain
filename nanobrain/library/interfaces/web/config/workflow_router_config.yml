@@ -1,0 +1,30 @@
+# WorkflowRouter Configuration
+# Workflow routing and selection configuration
+#
+# Author: NanoBrain Development Team
+# Date: January 2025
+# Version: 1.0.0
+
+# Routing strategy
+routing_strategy: "best_match"
+
+# Routing thresholds (component expects all these keys)
+routing_thresholds:
+  minimum_confidence: 0.2  # Lower threshold for development
+  high_confidence: 0.8
+  medium_confidence: 0.6
+  low_confidence: 0.3
+
+# Execution configuration
+execution_config:
+  enable_caching: false  # Disable caching for development
+  
+# Performance settings
+performance_config:
+  enable_parallel_routing: true
+  routing_timeout: 30.0
+  
+# Fallback configuration
+fallback_config:
+  enable_fallback: true
+  fallback_strategy: "default_workflow" 

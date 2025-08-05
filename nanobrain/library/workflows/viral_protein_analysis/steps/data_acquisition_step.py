@@ -130,7 +130,28 @@ class BVBRCDataAcquisitionStep(Step):
     def _initialize_tools(self, config: StepConfig, bvbrc_config: Optional[Dict[str, Any]] = None):
         """Initialize BV-BRC tool with workflow-local configuration"""
         
-        # Get workflow directory path
+        # ENHANCED: Check if tools were already resolved by ConfigBase._resolve_nested_objects()
+        if hasattr(config, '_resolved_tools') and config._resolved_tools:
+            # Use already-instantiated BV-BRC tool from enhanced class+config resolution
+            self.bv_brc_tool = config._resolved_tools.get('bv_brc_tool')
+            if self.bv_brc_tool and hasattr(self, 'nb_logger') and self.nb_logger:
+                self.nb_logger.info(f"✅ Using resolved BV-BRC tool from enhanced ConfigBase system")
+            
+            # Use already-instantiated agents from enhanced class+config resolution
+            species_agent = config._resolved_tools.get('species_validation_agent')
+            taxonomic_agent = config._resolved_tools.get('taxonomic_verification_agent')
+            
+            if species_agent and hasattr(self, 'nb_logger') and self.nb_logger:
+                self.nb_logger.info(f"✅ Using resolved species validation agent from enhanced ConfigBase system")
+            if taxonomic_agent and hasattr(self, 'nb_logger') and self.nb_logger:
+                self.nb_logger.info(f"✅ Using resolved taxonomic verification agent from enhanced ConfigBase system")
+                
+            # Skip legacy initialization if enhanced tools are available
+            if self.bv_brc_tool:
+                self._finalize_tool_initialization(config)
+                return
+        
+        # Fallback: Legacy workflow-local tool configuration (only if enhanced tools not available)
         workflow_dir = Path(__file__).parent.parent
         tool_config_path = workflow_dir / "config" / "tools" / "bv_brc_tool.yml"
         
@@ -139,35 +160,23 @@ class BVBRCDataAcquisitionStep(Step):
             with open(tool_config_path, 'r') as f:
                 tool_config_dict = yaml.safe_load(f)
             
-            # Create BV-BRC tool configuration
-            tool_config = BVBRCConfig(**{
-                k: v for k, v in tool_config_dict.items() 
-                if k in ['tool_name', 'installation_path', 'executable_path', 'genome_batch_size', 
-                        'md5_batch_size', 'min_genome_length', 'max_genome_length', 'timeout_seconds', 
-                        'retry_attempts', 'verify_on_init', 'progressive_scaling', 'use_cache']
-            })
-            
-            # Create BV-BRC tool using from_config pattern
-            self.bv_brc_tool = BVBRCTool.from_config(tool_config)
+            # Create BV-BRC tool configuration using from_config pattern (file path)
+            self.bv_brc_tool = BVBRCTool.from_config(str(tool_config_path))
             if hasattr(self, 'nb_logger') and self.nb_logger:
                 self.nb_logger.info(f"✅ BV-BRC tool loaded from workflow-local config: {tool_config_path}")
             
         else:
-            # Fallback to legacy configuration
+            # Final fallback - should not happen with proper configuration
             if hasattr(self, 'nb_logger') and self.nb_logger:
                 self.nb_logger.warning(f"⚠️ Workflow-local tool config not found: {tool_config_path}")
-                self.nb_logger.warning("⚠️ Using legacy configuration approach")
+                self.nb_logger.error("❌ No BV-BRC tool available - enhanced resolution failed and no local config found")
             
-            # Legacy approach with old configuration structure
-            bvbrc_config_dict = getattr(config, 'bvbrc_config', {})
-            if bvbrc_config:
-                bvbrc_config_dict = {**bvbrc_config_dict, **bvbrc_config}
-            
-            if 'executable_path' not in bvbrc_config_dict:
-                bvbrc_config_dict['executable_path'] = '/Applications/BV-BRC.app/deployment/bin'
-            
-            tool_config = BVBRCConfig(**bvbrc_config_dict)
-            self.bv_brc_tool = BVBRCTool.from_config(tool_config)
+            raise ValueError("BV-BRC tool configuration required but not available through enhanced or legacy systems")
+        
+        self._finalize_tool_initialization(config)
+    
+    def _finalize_tool_initialization(self, config: StepConfig):
+        """Finalize tool initialization with configuration parameters"""
         
         # Store all step configuration as dict for backward compatibility
         self.step_config = config.model_dump()
@@ -177,8 +186,13 @@ class BVBRCDataAcquisitionStep(Step):
         self.max_genome_length = getattr(config, 'max_genome_length', 15000)
         
         # Use batch sizes from tool configuration (updated to 1000)
-        self.genome_batch_size = self.bv_brc_tool.bv_brc_config.genome_batch_size
-        self.md5_batch_size = self.bv_brc_tool.bv_brc_config.md5_batch_size
+        if hasattr(self.bv_brc_tool, 'bv_brc_config'):
+            self.genome_batch_size = self.bv_brc_tool.bv_brc_config.genome_batch_size
+            self.md5_batch_size = self.bv_brc_tool.bv_brc_config.md5_batch_size
+        else:
+            # Fallback defaults
+            self.genome_batch_size = 1000
+            self.md5_batch_size = 1000
         
         # Set 20 minute timeout for BV-BRC operations
         self.timeout_seconds = getattr(config, 'timeout_seconds', 1200)  # 20 minutes

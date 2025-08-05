@@ -32,11 +32,387 @@ class ContainerNotFoundError(DockerError):
 
 class DockerManager(ContainerManagerBase):
     """
-    Docker container manager implementing the universal container interface.
-    Enhanced with mandatory from_config pattern implementation.
+    Docker Container Manager - Enterprise Container Infrastructure Management and Orchestration
+    ===========================================================================================
     
-    Provides Docker-specific implementations for container lifecycle management,
-    health monitoring, and resource management.
+    The DockerManager provides comprehensive Docker container lifecycle management, infrastructure
+    orchestration, and operational capabilities for the NanoBrain framework. This manager implements
+    the universal container interface with Docker-specific optimizations, automated resource management,
+    and production-ready monitoring and health checking capabilities.
+    
+    **Core Architecture:**
+        The Docker manager provides enterprise-grade container management:
+        
+        * **Container Lifecycle**: Complete container creation, start, stop, remove operations
+        * **Infrastructure Management**: Network, volume, and image management with automation
+        * **Health Monitoring**: Real-time health checking and status monitoring
+        * **Resource Management**: Resource limit enforcement and cleanup automation
+        * **Production Operations**: Logging, monitoring, and operational excellence features
+        * **Framework Integration**: Seamless integration with NanoBrain component architecture
+    
+    **Container Lifecycle Management:**
+        
+        **Container Operations:**
+        * Automated container creation with configuration validation and optimization
+        * Intelligent container start/stop operations with health verification
+        * Graceful shutdown procedures with configurable timeout handling
+        * Force removal capabilities for stuck or unresponsive containers
+        
+        **Configuration Management:**
+        * Environment variable injection and configuration management
+        * Port mapping and network attachment configuration
+        * Volume mounting and data persistence management
+        * Resource limit enforcement for memory, CPU, and disk usage
+        
+        **Health and Status Monitoring:**
+        * Real-time container health checking with custom health check configuration
+        * Detailed status information including resource usage and performance metrics
+        * Container log access and monitoring capabilities
+        * Automatic restart and recovery for failed containers
+        
+        **Image Management:**
+        * Automatic image pulling and version management
+        * Image availability verification and caching
+        * Multi-architecture image support and platform optimization
+        * Registry authentication and secure image access
+    
+    **Infrastructure Management:**
+        
+        **Network Management:**
+        * Docker network creation and configuration for service communication
+        * Network isolation and security policy enforcement
+        * Service discovery and DNS configuration
+        * Load balancing and traffic distribution setup
+        
+        **Volume Management:**
+        * Persistent volume creation and lifecycle management
+        * Volume mounting and data sharing between containers
+        * Backup and snapshot management for data protection
+        * Volume cleanup and space management automation
+        
+        **Resource Management:**
+        * Memory and CPU limit enforcement for container isolation
+        * Disk space monitoring and quota management
+        * Resource usage tracking and optimization recommendations
+        * Automatic resource cleanup and garbage collection
+        
+        **Security and Isolation:**
+        * Container security policy enforcement and compliance
+        * Network isolation and firewall configuration
+        * Secret management and secure credential injection
+        * Access control and permission management
+    
+    **Configuration Architecture:**
+        Comprehensive configuration supports enterprise deployment:
+        
+        ```yaml
+        # Docker Manager Configuration
+        component_type: "docker_manager"
+        
+        # Docker Connection Configuration
+        docker_client: null  # Auto-configured from environment
+        enabled: true
+        
+        # Container Management
+        max_containers: 50
+        default_memory_limit: "1g"
+        default_cpu_limit: 1.0
+        
+        # Resource Management
+        resource_limits:
+          memory_default: "1Gi"
+          memory_max: "8Gi"
+          cpu_default: 1.0
+          cpu_max: 4.0
+          
+        # Health Monitoring
+        health_monitoring:
+          enabled: true
+          check_interval: 30
+          timeout: 10
+          retries: 3
+          
+        # Network Configuration
+        networking:
+          default_network: "nanobrain-network"
+          network_driver: "bridge"
+          enable_isolation: true
+          
+        # Volume Management
+        volumes:
+          default_driver: "local"
+          backup_enabled: true
+          retention_days: 30
+          
+        # Cleanup Configuration
+        cleanup:
+          auto_cleanup: true
+          cleanup_interval: 3600  # 1 hour
+          keep_stopped_containers: 5
+          prune_unused_images: true
+        ```
+    
+    **Usage Patterns:**
+        
+        **Basic Container Management:**
+        ```python
+        from nanobrain.library.infrastructure.docker import DockerManager, ContainerConfig
+        
+        # Create Docker manager with configuration
+        docker_mgr = DockerManager.from_config('config/docker_config.yml')
+        
+        # Create container configuration
+        container_config = ContainerConfig(
+            name="nanobrain-elasticsearch",
+            image="elasticsearch",
+            tag="8.14.0",
+            ports=["9200:9200", "9300:9300"],
+            environment={"discovery.type": "single-node"},
+            memory_limit="2g",
+            cpu_limit=1.0
+        )
+        
+        # Deploy and manage container
+        await docker_mgr.create_container(container_config)
+        await docker_mgr.start_container("nanobrain-elasticsearch")
+        
+        # Monitor container health
+        status = await docker_mgr.get_container_status("nanobrain-elasticsearch")
+        print(f"Container health: {status['health']}")
+        ```
+        
+        **Infrastructure Orchestration:**
+        ```python
+        # Create complete infrastructure stack
+        docker_mgr = DockerManager.from_config('config/production_docker.yml')
+        
+        # Create network for service communication
+        await docker_mgr.create_network("nanobrain-network", driver="bridge")
+        
+        # Create persistent volumes
+        await docker_mgr.create_volume("nanobrain-data", driver="local")
+        await docker_mgr.create_volume("nanobrain-logs", driver="local")
+        
+        # Deploy multiple services with dependencies
+        services = [
+            {
+                "name": "nanobrain-db",
+                "image": "postgres:15",
+                "volumes": ["nanobrain-data:/var/lib/postgresql/data"],
+                "networks": ["nanobrain-network"],
+                "environment": {"POSTGRES_DB": "nanobrain"}
+            },
+            {
+                "name": "nanobrain-search",
+                "image": "elasticsearch:8.14.0",
+                "networks": ["nanobrain-network"],
+                "depends_on": ["nanobrain-db"]
+            }
+        ]
+        
+        # Deploy services in dependency order
+        for service in services:
+            config = ContainerConfig(**service)
+            await docker_mgr.create_container(config)
+            await docker_mgr.start_container(service["name"])
+        ```
+        
+        **Health Monitoring and Management:**
+        ```python
+        # Comprehensive health monitoring
+        docker_mgr = DockerManager.from_config('config/monitored_docker.yml')
+        
+        # Monitor all managed containers
+        containers = await docker_mgr.list_containers()
+        
+        for container in containers:
+            # Get detailed health status
+            health = await docker_mgr.health_check(container["name"])
+            status = await docker_mgr.get_container_status(container["name"])
+            
+            print(f"Container: {container['name']}")
+            print(f"  Health: {'✅' if health else '❌'}")
+            print(f"  Status: {status['state']}")
+            print(f"  Memory: {status.get('memory_usage', 'N/A')}")
+            print(f"  CPU: {status.get('cpu_usage', 'N/A')}")
+            
+            # Restart unhealthy containers
+            if not health and status['state'] == 'running':
+                print(f"  🔄 Restarting unhealthy container...")
+                await docker_mgr.restart_container(container["name"])
+        ```
+        
+        **Resource Management and Cleanup:**
+        ```python
+        # Automated resource management
+        docker_mgr = DockerManager.from_config('config/resource_managed_docker.yml')
+        
+        # Monitor resource usage
+        system_info = await docker_mgr.get_system_info()
+        print(f"Docker version: {system_info['version']}")
+        print(f"Total containers: {system_info['containers']}")
+        print(f"Running containers: {system_info['containers_running']}")
+        
+        # Cleanup unused resources
+        cleanup_stats = await docker_mgr.cleanup_unused_resources()
+        print(f"Cleanup results:")
+        print(f"  Containers removed: {cleanup_stats['containers_removed']}")
+        print(f"  Images removed: {cleanup_stats['images_removed']}")
+        print(f"  Networks removed: {cleanup_stats['networks_removed']}")
+        print(f"  Space reclaimed: {cleanup_stats['space_reclaimed']} bytes")
+        
+        # Manage container lifecycle
+        for container_name in ["old-container-1", "old-container-2"]:
+            if await docker_mgr._container_exists(container_name):
+                await docker_mgr.stop_container(container_name, timeout=30)
+                await docker_mgr.remove_container(container_name)
+        ```
+        
+        **Production Deployment:**
+        ```python
+        # Production-ready deployment with full configuration
+        production_config = {
+            'max_containers': 100,
+            'default_memory_limit': '2g',
+            'default_cpu_limit': 2.0,
+            'health_monitoring': {'enabled': True, 'check_interval': 15},
+            'cleanup': {'auto_cleanup': True, 'cleanup_interval': 1800}
+        }
+        
+        docker_mgr = DockerManager.from_config(production_config)
+        
+        # Deploy with high availability configuration
+        ha_config = ContainerConfig(
+            name="nanobrain-app-ha",
+            image="nanobrain/app:latest",
+            ports=["8080:8080"],
+            environment={
+                "NODE_ENV": "production",
+                "LOG_LEVEL": "info",
+                "HEALTH_CHECK_ENABLED": "true"
+            },
+            memory_limit="4g",
+            cpu_limit=2.0,
+            restart_policy="unless-stopped",
+            health_check={
+                "test": ["CMD", "curl", "-f", "http://localhost:8080/health"],
+                "interval": "30s",
+                "timeout": "10s",
+                "retries": 3,
+                "start_period": "60s"
+            }
+        )
+        
+        await docker_mgr.create_container(ha_config)
+        await docker_mgr.start_container("nanobrain-app-ha")
+        ```
+    
+    **Advanced Features:**
+        
+        **Container Orchestration:**
+        * Multi-container application deployment and coordination
+        * Service dependency management and startup ordering
+        * Rolling updates and blue-green deployment support
+        * Container scaling and load balancing configuration
+        
+        **Security and Compliance:**
+        * Container security scanning and vulnerability assessment
+        * Network security policy enforcement and isolation
+        * Secret management and secure credential injection
+        * Compliance reporting and audit trail generation
+        
+        **Performance Optimization:**
+        * Resource usage monitoring and optimization recommendations
+        * Container performance tuning and configuration optimization
+        * Image optimization and layer caching strategies
+        * Network and storage performance optimization
+        
+        **Operational Excellence:**
+        * Comprehensive logging and monitoring integration
+        * Automated backup and disaster recovery procedures
+        * Health checking and automatic recovery mechanisms
+        * Metrics collection and dashboard integration
+    
+    **Integration Patterns:**
+        
+        **CI/CD Integration:**
+        * Integration with continuous integration and deployment pipelines
+        * Automated testing and validation in containerized environments
+        * Image building and registry management automation
+        * Deployment automation and rollback capabilities
+        
+        **Monitoring and Observability:**
+        * Integration with monitoring systems (Prometheus, Grafana, ELK stack)
+        * Structured logging with correlation IDs and distributed tracing
+        * Metrics collection and alerting for operational insights
+        * Performance monitoring and capacity planning support
+        
+        **Cloud Integration:**
+        * Cloud provider integration for managed Docker services
+        * Container registry integration with cloud providers
+        * Auto-scaling integration with cloud orchestration services
+        * Cost optimization and resource management in cloud environments
+        
+        **Enterprise Integration:**
+        * LDAP/Active Directory integration for authentication
+        * Enterprise security policy enforcement and compliance
+        * Integration with enterprise monitoring and management tools
+        * Support for enterprise networking and storage solutions
+    
+    **Production Deployment:**
+        
+        **High Availability:**
+        * Multi-node container deployment for fault tolerance
+        * Automatic failover and recovery mechanisms
+        * Load balancing and traffic distribution
+        * Geographic distribution for disaster recovery
+        
+        **Scalability Features:**
+        * Horizontal container scaling based on demand
+        * Resource allocation optimization for high-density deployments
+        * Performance monitoring and capacity planning
+        * Auto-scaling integration with orchestration platforms
+        
+        **Security Hardening:**
+        * Container security best practices implementation
+        * Network isolation and micro-segmentation
+        * Runtime security monitoring and threat detection
+        * Compliance automation and audit reporting
+        
+        **Operational Excellence:**
+        * Automated deployment and configuration management
+        * Zero-downtime updates and maintenance procedures
+        * Comprehensive backup and disaster recovery
+        * Performance optimization and troubleshooting tools
+    
+    Attributes:
+        client (docker.DockerClient): Docker client for container operations
+        api_client (docker.APIClient): Low-level Docker API client
+        docker_version (str): Docker engine version information
+        api_version (str): Docker API version information
+        managed_containers (Dict[str, ContainerConfig]): Registry of managed containers
+        max_containers (int): Maximum number of containers to manage
+        default_memory_limit (str): Default memory limit for containers
+        default_cpu_limit (float): Default CPU limit for containers
+    
+    Note:
+        This manager requires Docker to be installed and running on the host system.
+        The Docker daemon must be accessible through the Docker API. Container operations
+        require appropriate permissions and may need elevated privileges for some operations.
+        Network and volume operations may require additional system permissions.
+    
+    Warning:
+        Container operations can consume significant system resources. Monitor resource
+        usage and implement appropriate limits for production deployments. Be cautious
+        with container removal operations as they can result in data loss. Network and
+        volume operations affect system-wide resources and should be carefully planned.
+    
+    See Also:
+        * :class:`ContainerManagerBase`: Base container manager interface
+        * :class:`ContainerConfig`: Container configuration schema
+        * :class:`ContainerOrchestrator`: Container orchestration capabilities
+        * :mod:`nanobrain.library.infrastructure.docker`: Docker infrastructure components
+        * :mod:`nanobrain.core.component_base`: Framework component architecture
     """
     
     # Component configuration schema

@@ -1,5 +1,4 @@
 tool_name: "bv_brc_tool"
-class: nanobrain.library.tools.bioinformatics.bv_brc_tool.BVBRCTool
 
 # Complete BV-BRC tool configuration (BVBRCConfig fields)
 installation_path: null  # Auto-detect or use system default

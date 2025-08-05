@@ -12,6 +12,7 @@ import time
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional, List, Callable, Union
 from enum import Enum
+from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict
 
 from .component_base import FromConfigBase, ComponentConfigurationError, ComponentDependencyError
@@ -124,12 +125,373 @@ class LinkConfig(ConfigBase):
 
 class LinkBase(FromConfigBase, ABC):
     """
-    Base class for links that connect data flow between Steps.
-    Enhanced with mandatory from_config pattern implementation.
+    Base Link Class - Data Flow Connections and Workflow Communication
+    =================================================================
     
-    Biological analogy: Neural pathways connecting brain regions.
-    Justification: Like how neural pathways carry information between
-    different brain regions, links carry data between different steps.
+    The LinkBase class is the foundational component for creating data flow connections
+    within the NanoBrain framework. Links enable seamless data transfer between steps,
+    workflows, and agents with support for data transformation, conditional routing,
+    buffering, and various transport mechanisms.
+    
+    **Core Architecture:**
+        Links represent intelligent data transport systems that:
+        
+        * **Connect Components**: Establish data flow paths between steps and workflows
+        * **Transform Data**: Apply transformations during data transfer
+        * **Route Conditionally**: Support conditional data routing based on content
+        * **Buffer Data**: Provide buffering for performance and reliability
+        * **Validate Transfer**: Ensure data integrity during transmission
+        * **Monitor Performance**: Track data flow performance and throughput
+    
+    **Biological Analogy:**
+        Like neural pathways that carry information between different brain regions,
+        links carry data between different processing components. Neural pathways
+        have specialized properties (myelination for speed, neurotransmitter specificity
+        for signal type, synaptic plasticity for learning) - exactly how links have
+        specialized properties for data transformation, conditional routing, buffering,
+        and performance optimization.
+    
+    **Data Flow Architecture:**
+        
+        **Connection Management:**
+        * Direct connections for immediate data transfer
+        * Buffered connections for asynchronous processing
+        * Queue-based connections for reliable message passing
+        * File-based connections for large dataset transfer
+        
+        **Data Transformation:**
+        * Built-in transformation functions for common operations
+        * Custom transformation scripts and functions
+        * Data format conversion and normalization
+        * Schema mapping and validation
+        
+        **Conditional Routing:**
+        * Content-based routing with configurable conditions
+        * Multi-path routing for complex data flows
+        * Dynamic routing based on runtime conditions
+        * Fallback routing for error scenarios
+        
+        **Performance Optimization:**
+        * Intelligent buffering with configurable sizes
+        * Compression for large data transfers
+        * Parallel transfer for improved throughput
+        * Connection pooling and reuse
+    
+    **Framework Integration:**
+        Links seamlessly integrate with all framework components:
+        
+        * **Step Integration**: Connect step outputs to inputs for data flow
+        * **Workflow Coordination**: Enable complex multi-step data processing
+        * **Agent Communication**: Support data exchange between agents
+        * **Data Unit Connectivity**: Connect data units across processing boundaries
+        * **Executor Support**: Links work with all execution backends
+        * **Monitoring Integration**: Comprehensive logging and performance tracking
+    
+    **Link Type Implementations:**
+        The framework supports various link specializations:
+        
+        * **DirectLink**: Immediate data transfer with minimal overhead
+        * **FileLink**: File-based transfer for large datasets and persistence
+        * **QueueLink**: Reliable message queuing with persistence and retry
+        * **TransformLink**: Data transformation during transfer
+        * **ConditionalLink**: Conditional routing based on data content
+        * **CompoundLink**: Combination of multiple link types for complex scenarios
+    
+    **Configuration Architecture:**
+        Links follow the framework's configuration-first design:
+        
+        ```yaml
+        # Direct link configuration
+        name: "data_transfer"
+        link_type: "direct"
+        buffer_size: 1000
+        
+        # Source and target configuration
+        source: "step_a.output_data"
+        target: "step_b.input_data"
+        
+        # Transform link configuration
+        name: "data_transformation"
+        link_type: "transform"
+        transform_function: "normalize_data"
+        
+        # Data transformation settings
+        transformation:
+          function_name: "custom_normalizer"
+          parameters:
+            scale_factor: 1.0
+            remove_outliers: true
+          input_schema: "schemas/raw_data.json"
+          output_schema: "schemas/normalized_data.json"
+        
+        # Conditional link configuration
+        name: "conditional_routing"
+        link_type: "conditional"
+        
+        # Routing conditions
+        condition:
+          field: "data.category"
+          operator: "equals"
+          value: "priority"
+        
+        # Alternative routing
+        routes:
+          default:
+            target: "standard_processing.input"
+          priority:
+            target: "priority_processing.input"
+            condition:
+              field: "data.priority"
+              operator: "greater_than"
+              value: 5
+        
+        # Queue link configuration
+        name: "reliable_transfer"
+        link_type: "queue"
+        buffer_size: 10000
+        
+        # Queue settings
+        queue_config:
+          persistence: true
+          retry_attempts: 3
+          retry_delay_ms: 1000
+          dead_letter_queue: true
+          compression: true
+        
+        # File link configuration
+        name: "large_dataset_transfer"
+        link_type: "file"
+        file_path: "data/transfer/{timestamp}_{source}_{target}.json"
+        
+        # File transfer settings
+        file_config:
+          compression: "gzip"
+          encryption: true
+          chunk_size: "10MB"
+          cleanup_after_transfer: true
+        ```
+    
+    **Usage Patterns:**
+        
+        **Basic Data Transfer:**
+        ```python
+        from nanobrain.core import DirectLink
+        
+        # Create link from configuration
+        link = DirectLink.from_config('config/data_link.yml')
+        
+        # Connect data units
+        await link.connect(source_data_unit, target_data_unit)
+        
+        # Transfer data
+        result = await link.transfer(data)
+        print(f"Transfer completed: {result}")
+        ```
+        
+        **Data Transformation:**
+        ```python
+        # Transform link with custom function
+        transform_link = TransformLink.from_config('config/transform_link.yml')
+        
+        # Define transformation function
+        def normalize_data(data):
+            # Custom normalization logic
+            normalized = {
+                'values': [x / max(data['values']) for x in data['values']],
+                'metadata': data.get('metadata', {}),
+                'timestamp': time.time()
+            }
+            return normalized
+        
+        # Register transformation
+        transform_link.set_transform_function(normalize_data)
+        
+        # Data automatically transformed during transfer
+        await transform_link.transfer(raw_data)
+        ```
+        
+        **Conditional Routing:**
+        ```python
+        # Conditional link for dynamic routing
+        conditional_link = ConditionalLink.from_config('config/routing_link.yml')
+        
+        # Define routing conditions
+        conditional_link.add_route(
+            condition=lambda data: data.get('priority', 0) > 5,
+            target='high_priority_processor.input'
+        )
+        
+        conditional_link.add_route(
+            condition=lambda data: data.get('category') == 'urgent',
+            target='urgent_processor.input'
+        )
+        
+        # Default route for unmatched conditions
+        conditional_link.set_default_route('standard_processor.input')
+        
+        # Data automatically routed based on content
+        await conditional_link.transfer(data)
+        ```
+        
+        **Large Dataset Transfer:**
+        ```python
+        # File-based link for large datasets
+        file_link = FileLink.from_config('config/large_data_link.yml')
+        
+        # Configure compression and chunking
+        file_link.set_compression('gzip')
+        file_link.set_chunk_size('100MB')
+        
+        # Transfer large dataset efficiently
+        await file_link.transfer(large_dataset)
+        
+        # Automatic cleanup and compression
+        ```
+    
+    **Advanced Features:**
+        
+        **Performance Optimization:**
+        * Intelligent buffering with adaptive sizing
+        * Parallel transfer for large datasets
+        * Compression for reduced bandwidth usage
+        * Connection pooling and reuse for efficiency
+        
+        **Reliability and Error Handling:**
+        * Automatic retry with exponential backoff
+        * Dead letter queues for failed transfers
+        * Data integrity validation with checksums
+        * Graceful degradation for partial failures
+        
+        **Monitoring and Analytics:**
+        * Real-time transfer performance monitoring
+        * Throughput analysis and optimization recommendations
+        * Error rate tracking and alerting
+        * Data flow visualization and analysis
+        
+        **Security and Privacy:**
+        * Data encryption for sensitive transfers
+        * Access control and permission management
+        * Audit logging for compliance and debugging
+        * Data anonymization and privacy protection
+    
+    **Data Flow Patterns:**
+        
+        **Fan-Out Pattern:**
+        * Single source data distributed to multiple targets
+        * Parallel processing with result aggregation
+        * Load balancing across processing components
+        * Broadcast messaging for notifications
+        
+        **Fan-In Pattern:**
+        * Multiple sources feeding into single target
+        * Data aggregation and correlation
+        * Result collection from parallel processing
+        * Event consolidation and analysis
+        
+        **Pipeline Pattern:**
+        * Sequential data processing through multiple stages
+        * Data transformation at each pipeline stage
+        * Error propagation and recovery mechanisms
+        * Progress tracking and monitoring
+        
+        **Mesh Pattern:**
+        * Complex interconnection of multiple components
+        * Dynamic routing based on content and conditions
+        * Adaptive data flow optimization
+        * Distributed processing coordination
+    
+    **Integration Patterns:**
+        
+        **Workflow Integration:**
+        * Links coordinate data flow between workflow steps
+        * Automatic activation of downstream processing
+        * Data dependency resolution and management
+        * Result propagation and collection
+        
+        **Agent Coordination:**
+        * Inter-agent communication and data sharing
+        * Context preservation across agent interactions
+        * Result correlation and analysis
+        * Collaborative processing workflows
+        
+        **External System Integration:**
+        * API-based data exchange with external services
+        * Database integration for data persistence
+        * File system integration for large datasets
+        * Message queue integration for reliable messaging
+    
+    **Performance and Scalability:**
+        
+        **Throughput Optimization:**
+        * Asynchronous data transfer for non-blocking operations
+        * Batch processing for improved efficiency
+        * Connection pooling for resource optimization
+        * Adaptive buffering based on load patterns
+        
+        **Scalability Features:**
+        * Horizontal scaling through link distribution
+        * Load balancing across multiple link instances
+        * Dynamic resource allocation based on demand
+        * Auto-scaling for varying workloads
+        
+        **Resource Management:**
+        * Memory management for large data transfers
+        * Network bandwidth optimization and throttling
+        * Storage management for file-based transfers
+        * Cleanup and garbage collection
+    
+    **Development and Testing:**
+        
+        **Testing Support:**
+        * Mock link implementations for testing
+        * Data flow simulation and validation
+        * Performance benchmarking and profiling
+        * Integration testing with steps and workflows
+        
+        **Debugging Features:**
+        * Comprehensive logging with data flow tracing
+        * Transfer inspection and analysis tools
+        * Performance profiling and optimization hints
+        * Visual data flow monitoring and debugging
+        
+        **Development Tools:**
+        * Link configuration validation and linting
+        * Data flow visualization and analysis
+        * Performance monitoring and optimization tools
+        * Template generation for common link patterns
+    
+    Attributes:
+        name (str): Link identifier for logging and component coordination
+        link_type (LinkType): Type of link and data transfer mechanism
+        buffer_size (int): Buffer size for data transfer optimization
+        transform_function (str, optional): Transformation function name for data processing
+        condition (Union[str, Dict], optional): Routing condition for conditional links
+        source (str): Source data unit or component identifier
+        target (str): Target data unit or component identifier
+        is_connected (bool): Whether link is currently active and connected
+        transfer_count (int): Total number of data transfers performed
+        performance_metrics (Dict): Real-time performance and usage metrics
+    
+    Note:
+        This is an abstract base class that cannot be instantiated directly.
+        Use concrete implementations like DirectLink, TransformLink, or
+        ConditionalLink. All links must be created using the from_config
+        pattern with proper configuration files following framework patterns.
+    
+    Warning:
+        Links may consume significant network and memory resources depending
+        on data size and transfer patterns. Monitor resource usage and implement
+        appropriate limits, buffering, and cleanup mechanisms. Be cautious with
+        file-based links that may consume disk space.
+    
+    See Also:
+        * :class:`LinkConfig`: Link configuration schema and validation
+        * :class:`LinkType`: Available link types and transfer mechanisms
+        * :class:`DirectLink`: Direct data transfer with minimal overhead
+        * :class:`TransformLink`: Data transformation during transfer
+        * :class:`ConditionalLink`: Conditional routing based on data content
+        * :class:`BaseStep`: Steps that connect through links for data flow
+        * :class:`Workflow`: Workflows that coordinate link-based data processing
     """
     
     COMPONENT_TYPE = "link"
@@ -173,9 +535,9 @@ class LinkBase(FromConfigBase, ABC):
                          dependencies: Dict[str, Any]) -> None:
         """Initialize Link with resolved dependencies"""
         self.config = config
-        self.source = dependencies.get('source')
-        self.target = dependencies.get('target')
-        self.name = f"{getattr(self.source, 'name', 'unknown')}->{getattr(self.target, 'name', 'unknown')}"
+        self._source = dependencies.get('source')
+        self._target = dependencies.get('target')
+        self._update_name()
         self._is_active = False
         self._transfer_count = 0
         self._error_count = 0
@@ -251,6 +613,42 @@ class LinkBase(FromConfigBase, ABC):
             if self.enable_logging and self.nb_logger:
                 self.nb_logger.error(f"Failed to create transfer trigger: {e}")
     
+    def _update_name(self) -> None:
+        """Update link name based on current source and target"""
+        source_name = getattr(self._source, 'name', 'unknown') if self._source else 'unknown'
+        target_name = getattr(self._target, 'name', 'unknown') if self._target else 'unknown'
+        self.name = f"{source_name}->{target_name}"
+    
+    @property
+    def source(self):
+        """Get the source data unit"""
+        return self._source
+    
+    @source.setter
+    def source(self, value):
+        """Set the source data unit and update name"""
+        self._source = value
+        self._update_name()
+        # Update logger if it exists
+        if hasattr(self, 'nb_logger') and self.nb_logger:
+            from nanobrain.core.logging_system import get_logger
+            self.nb_logger = get_logger(self.name, category="links")
+    
+    @property
+    def target(self):
+        """Get the target data unit"""
+        return self._target
+    
+    @target.setter
+    def target(self, value):
+        """Set the target data unit and update name"""
+        self._target = value
+        self._update_name()
+        # Update logger if it exists
+        if hasattr(self, 'nb_logger') and self.nb_logger:
+            from nanobrain.core.logging_system import get_logger
+            self.nb_logger = get_logger(self.name, category="links")
+    
     async def _on_source_data_changed(self, trigger_event: Dict[str, Any]) -> None:
         """Handle source data unit change - automatically transfer data"""
         try:
@@ -306,27 +704,7 @@ class LinkBase(FromConfigBase, ABC):
         step_name, data_unit_name = reference.split('.', 1)
         return step_name.strip(), data_unit_name.strip()
 
-    def _resolve_data_unit_reference(self, reference: str, workflow_context: Dict[str, Any]) -> Any:
-        """Resolve dot notation reference to actual DataUnit instance"""
-        step_name, data_unit_name = self._parse_data_unit_reference(reference)
-        
-        # Get step instance from workflow context
-        step_instance = workflow_context.get('steps', {}).get(step_name)
-        if not step_instance:
-            raise ValueError(f"Step '{step_name}' not found in workflow context")
-        
-        # Get data unit from step (output first, then input)
-        data_unit = None
-        if hasattr(step_instance, 'output_data_units') and step_instance.output_data_units:
-            data_unit = step_instance.output_data_units.get(data_unit_name)
-        
-        if not data_unit and hasattr(step_instance, 'input_data_units'):
-            data_unit = step_instance.input_data_units.get(data_unit_name)
-        
-        if not data_unit:
-            raise ValueError(f"Data unit '{data_unit_name}' not found in step '{step_name}'")
-        
-        return data_unit
+
 
     def _validate_dot_notation_reference(self, reference: str) -> bool:
         """Validate that reference uses proper step.data_unit format"""
@@ -460,25 +838,56 @@ class DirectLink(LinkBase):
         )
     
     @classmethod
-    def from_config(cls, config: LinkConfig, **kwargs) -> 'DirectLink':
-        """Mandatory from_config implementation for DirectLink"""
+    def from_config(cls, config: Union[str, Path, LinkConfig, Dict[str, Any]], **kwargs) -> 'DirectLink':
+        """Mandatory from_config implementation for DirectLink with dictionary support"""
         # Get logger
         nb_logger = get_logger(f"{cls.__name__}.from_config")
         nb_logger.info(f"Creating {cls.__name__} from configuration")
         
-        # Step 1: Validate configuration schema
-        cls.validate_config_schema(config)
+        # Step 1: Normalize input to LinkConfig object
+        if isinstance(config, (str, Path)):
+            # File path input - use standard config loading
+            config_object = LinkConfig.from_config(config, **kwargs)
+        elif isinstance(config, dict):
+            # Dictionary input - create LinkConfig from dict (inline config support)
+            # This is specifically allowed for DataUnit, Link, Trigger classes
+            try:
+                # Enable direct instantiation for config creation
+                LinkConfig._allow_direct_instantiation = True
+                config_object = LinkConfig(**config)
+            finally:
+                LinkConfig._allow_direct_instantiation = False
+        elif isinstance(config, LinkConfig):
+            # Already a LinkConfig object
+            config_object = config
+        else:
+            # Handle other BaseModel types
+            if hasattr(config, 'model_dump'):
+                config_dict = config.model_dump()
+            elif hasattr(config, 'dict'):
+                config_dict = config.dict()
+            else:
+                raise ValueError(f"Unsupported config type: {type(config)}")
+            
+            try:
+                LinkConfig._allow_direct_instantiation = True
+                config_object = LinkConfig(**config_dict)
+            finally:
+                LinkConfig._allow_direct_instantiation = False
         
-        # Step 2: Extract component-specific configuration  
-        component_config = cls.extract_component_config(config)
+        # Step 2: Validate configuration schema
+        cls.validate_config_schema(config_object)
         
-        # Step 3: Resolve dependencies
+        # Step 3: Extract component-specific configuration  
+        component_config = cls.extract_component_config(config_object)
+        
+        # Step 4: Resolve dependencies
         dependencies = cls.resolve_dependencies(component_config, **kwargs)
         
-        # Step 4: Create instance
-        instance = cls.create_instance(config, component_config, dependencies)
+        # Step 5: Create instance
+        instance = cls.create_instance(config_object, component_config, dependencies)
         
-        # Step 5: Post-creation initialization
+        # Step 6: Post-creation initialization
         instance._post_config_initialization()
         
         nb_logger.info(f"Successfully created {cls.__name__}")
@@ -493,12 +902,14 @@ class DirectLink(LinkBase):
             'data_mapping': getattr(config, 'data_mapping', None)
         }
     
+
+
     @classmethod  
     def resolve_dependencies(cls, component_config: Dict[str, Any], **kwargs) -> Dict[str, Any]:
-        """Resolve DirectLink dependencies"""
+        """Resolve DirectLink dependencies - trust framework for string references"""
         return {
             'source': kwargs.get('source'),
-            'target': kwargs.get('target'),
+            'target': kwargs.get('target'), 
             'enable_logging': kwargs.get('enable_logging', True),
             'debug_mode': kwargs.get('debug_mode', False)
         }
@@ -776,25 +1187,56 @@ class ConditionalLink(LinkBase):
         )
     
     @classmethod
-    def from_config(cls, config: LinkConfig, **kwargs) -> 'ConditionalLink':
-        """Mandatory from_config implementation for ConditionalLink"""
+    def from_config(cls, config: Union[str, Path, LinkConfig, Dict[str, Any]], **kwargs) -> 'ConditionalLink':
+        """Mandatory from_config implementation for ConditionalLink with dictionary support"""
         # Get logger
         nb_logger = get_logger(f"{cls.__name__}.from_config")
         nb_logger.info(f"Creating {cls.__name__} from configuration")
         
-        # Step 1: Validate configuration schema
-        cls.validate_config_schema(config)
+        # Step 1: Normalize input to LinkConfig object
+        if isinstance(config, (str, Path)):
+            # File path input - use standard config loading
+            config_object = LinkConfig.from_config(config, **kwargs)
+        elif isinstance(config, dict):
+            # Dictionary input - create LinkConfig from dict (inline config support)
+            # This is specifically allowed for DataUnit, Link, Trigger classes
+            try:
+                # Enable direct instantiation for config creation
+                LinkConfig._allow_direct_instantiation = True
+                config_object = LinkConfig(**config)
+            finally:
+                LinkConfig._allow_direct_instantiation = False
+        elif isinstance(config, LinkConfig):
+            # Already a LinkConfig object
+            config_object = config
+        else:
+            # Handle other BaseModel types
+            if hasattr(config, 'model_dump'):
+                config_dict = config.model_dump()
+            elif hasattr(config, 'dict'):
+                config_dict = config.dict()
+            else:
+                raise ValueError(f"Unsupported config type: {type(config)}")
+            
+            try:
+                LinkConfig._allow_direct_instantiation = True
+                config_object = LinkConfig(**config_dict)
+            finally:
+                LinkConfig._allow_direct_instantiation = False
         
-        # Step 2: Extract component-specific configuration  
-        component_config = cls.extract_component_config(config)
+        # Step 2: Validate configuration schema
+        cls.validate_config_schema(config_object)
         
-        # Step 3: Resolve dependencies
+        # Step 3: Extract component-specific configuration  
+        component_config = cls.extract_component_config(config_object)
+        
+        # Step 4: Resolve dependencies
         dependencies = cls.resolve_dependencies(component_config, **kwargs)
         
-        # Step 4: Create instance
-        instance = cls.create_instance(config, component_config, dependencies)
+        # Step 5: Create instance
+        instance = cls.create_instance(config_object, component_config, dependencies)
         
-        # Step 5: Post-creation initialization
+        # Step 6: Post-creation initialization
         instance._post_config_initialization()
         
         nb_logger.info(f"Successfully created {cls.__name__}")
@@ -982,37 +1424,4 @@ class FileLink(LinkBase):
                     await asyncio.sleep(5.0)  # Wait longer on error
                     
         except asyncio.CancelledError:
-            logger.debug(f"FileLink {self.name} monitor cancelled")
-
-
-def create_link(config: Union[Dict[str, Any], LinkConfig], **kwargs) -> LinkBase:
-    """
-    Factory function to create links with framework compliance.
-    
-    Args:
-        config: Link configuration (dict or LinkConfig)
-        **kwargs: Additional dependencies like source, target, etc.
-        
-    Returns:
-        Configured link instance using from_config pattern
-    """
-    if isinstance(config, dict):
-        config = LinkConfig.from_config(config)
-    
-    # Handle both enum values and string values for link_type
-    link_type_value = config.link_type
-    if hasattr(link_type_value, 'value'):
-        link_type_value = link_type_value.value
-    
-    if link_type_value == "conditional":
-        return ConditionalLink.from_config(config, **kwargs)
-    elif link_type_value == "direct":
-        return DirectLink.from_config(config, **kwargs)
-    elif link_type_value == "file":
-        return FileLink(config)
-    elif link_type_value == "queue":
-        return QueueLink(config)
-    elif link_type_value == "transform":
-        return TransformLink(config)
-    else:
-        raise ValueError(f"Unknown link type: {config.link_type}") 
+            logger.debug(f"FileLink {self.name} monitor cancelled") 
