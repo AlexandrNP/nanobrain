@@ -275,20 +275,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## **🔗 Links**
 
-- **🌐 Website**: [nanobrain.ai](https://nanobrain.ai)
-- **📖 Documentation**: [docs.nanobrain.ai](https://docs.nanobrain.ai)
-- **💬 Community**: [Discord](https://discord.gg/nanobrain)
 - **🐛 Issues**: [GitHub Issues](https://github.com/nanobrain/nanobrain/issues)
-- **📦 PyPI**: [pypi.org/project/nanobrain](https://pypi.org/project/nanobrain)
 
 ---
-
-## **⭐ Star History**
-
-[![Star History Chart](https://api.star-history.com/svg?repos=nanobrain/nanobrain&type=Date)](https://star-history.com/#nanobrain/nanobrain&Date)
-
----
-
 **Built with ❤️ by the NanoBrain Team**
 
 *Empowering the next generation of AI applications through intelligent orchestration.* 
