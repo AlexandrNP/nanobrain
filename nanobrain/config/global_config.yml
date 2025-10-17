@@ -12,7 +12,7 @@ framework:
 api_keys:
   # OpenAI API Configuration
   openai:
-    api_key: "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"
+    api_key: ""
     organization: "${OPENAI_ORG_ID}"  # Optional
     base_url: "https://api.openai.com/v1"  # Default OpenAI endpoint
     

@@ -8,6 +8,7 @@ Core Modules
    nanobrain_core_a2a_support
    nanobrain_core_agent
    nanobrain_core_agent_logging
+   nanobrain_core_agent_response
    nanobrain_core_async_logging
    nanobrain_core_bioinformatics
    nanobrain_core_card_schemas
@@ -22,7 +23,9 @@ Core Modules
    nanobrain_core_prompt_template_manager
    nanobrain_core_resource_monitor
    nanobrain_core_sequence_manager
+   nanobrain_core_shared_resource
    nanobrain_core_step
    nanobrain_core_tool
    nanobrain_core_trigger
+   nanobrain_core_worker_step_pool
    nanobrain_core_workflow

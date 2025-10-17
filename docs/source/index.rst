@@ -13,7 +13,7 @@ the most advanced AI agent framework with enterprise-grade capabilities.
 * 🌐 **Web Interfaces**: REST API and WebSocket support
 * 📊 **Comprehensive Workflows**: Event-driven processing and orchestration
 
-**Documentation Coverage:** 165 modules fully documented
+**Documentation Coverage:** 200 modules fully documented
 
 .. toctree::
    :maxdepth: 2
