@@ -1,0 +1,138 @@
+# Nanobrain RAG System - Production Dependencies
+# =============================================
+# Complete dependency list for real document retrieval and LLM processing
+
+# Core Framework Dependencies
+pyyaml>=6.0
+jinja2>=3.1.0
+asyncio-mqtt>=0.13.0
+aiofiles>=23.0.0
+python-dotenv>=1.0.0
+
+# LLM Integration Libraries
+openai>=1.3.0                    # OpenAI GPT models
+anthropic>=0.7.0                 # Claude models  
+transformers>=4.35.0             # HuggingFace transformers
+torch>=2.1.0                     # PyTorch for local models
+accelerate>=0.24.0               # Model acceleration
+
+# Embedding Models and Libraries
+sentence-transformers>=2.2.2     # Sentence embeddings
+faiss-cpu>=1.7.4                 # Vector similarity search (CPU version)
+# faiss-gpu>=1.7.4               # Uncomment for GPU acceleration
+numpy>=1.24.0                    # Numerical computations
+scikit-learn>=1.3.0              # ML utilities
+
+# Document Processing Libraries
+langchain>=0.0.350               # Document processing framework
+langchain-community>=0.0.10      # Community integrations
+unstructured>=0.11.0             # Document parsing
+pypdf>=3.17.0                    # PDF processing
+python-docx>=1.1.0               # Word document processing
+beautifulsoup4>=4.12.0           # HTML parsing
+markdown>=3.5.0                  # Markdown processing
+
+# Text Processing and NLP
+spacy>=3.7.0                     # Advanced NLP
+nltk>=3.8.0                      # Natural language toolkit
+tiktoken>=0.5.0                  # Token counting for OpenAI models
+
+# Vector Database Options
+chromadb>=0.4.0                  # Chroma vector database
+pinecone-client>=2.2.0           # Pinecone vector database
+weaviate-client>=3.25.0          # Weaviate vector database
+qdrant-client>=1.6.0             # Qdrant vector database
+
+# HTTP and API Libraries
+httpx>=0.25.0                    # Async HTTP client
+requests>=2.31.0                 # HTTP requests
+aiohttp>=3.9.0                   # Async HTTP server/client
+
+# Data Processing and Utilities
+pandas>=2.1.0                    # Data manipulation
+tqdm>=4.66.0                     # Progress bars
+python-multipart>=0.0.6          # File upload handling
+
+# Logging and Monitoring
+structlog>=23.2.0                # Structured logging
+prometheus-client>=0.19.0        # Metrics collection
+
+# Development and Testing Dependencies
+pytest>=7.4.0                    # Testing framework
+pytest-asyncio>=0.21.0           # Async testing
+pytest-mock>=3.12.0              # Mocking utilities
+black>=23.11.0                   # Code formatting
+flake8>=6.1.0                    # Code linting
+mypy>=1.7.0                      # Type checking
+
+# Optional: Local Model Support
+# ollama>=0.1.0                  # Ollama local models
+# llama-cpp-python>=0.2.0        # Llama.cpp Python bindings
+
+# Optional: Advanced Features
+# redis>=5.0.0                   # Caching and session storage
+# celery>=5.3.0                  # Task queue for async processing
+# flower>=2.0.0                  # Celery monitoring
+
+# Web Interface Dependencies (if using web UI)
+fastapi>=0.104.0                 # Web framework
+uvicorn>=0.24.0                  # ASGI server
+websockets>=12.0                 # WebSocket support
+
+# Security and Authentication
+cryptography>=41.0.0             # Encryption utilities
+passlib>=1.7.4                   # Password hashing
+python-jose>=3.3.0               # JWT tokens
+
+# Configuration and Environment
+click>=8.1.0                     # CLI interface
+rich>=13.7.0                     # Rich terminal output
+typer>=0.9.0                     # CLI framework
+
+# File and Storage Handling
+pathlib2>=2.3.7                  # Enhanced path handling
+watchdog>=3.0.0                  # File system monitoring
+
+# Performance and Optimization
+cachetools>=5.3.0                # Caching utilities
+memory-profiler>=0.61.0          # Memory profiling
+psutil>=5.9.0                    # System monitoring
+
+# Data Validation and Serialization
+pydantic>=2.5.0                  # Data validation
+marshmallow>=3.20.0              # Serialization
+
+# Date and Time Utilities
+python-dateutil>=2.8.0           # Date parsing
+pytz>=2023.3                     # Timezone handling
+
+# Concurrent Processing
+concurrent-futures>=3.1.1        # Future objects
+multiprocessing-logging>=0.3.4   # Multiprocess logging
+
+# PBS Parallel Processing (for HPC clusters)
+parsl>=1.3.0                     # Parallel scripting library for PBS/SLURM
+
+# Optional: GPU Acceleration
+# nvidia-ml-py>=12.0.0           # NVIDIA GPU monitoring
+# cupy>=12.0.0                   # GPU arrays (CUDA)
+
+# Optional: Advanced Vector Operations
+# hnswlib>=0.7.0                 # Hierarchical NSW for fast ANN
+# annoy>=1.17.0                  # Approximate nearest neighbors
+
+# Optional: Document Intelligence
+# azure-ai-formrecognizer>=3.3.0 # Azure Form Recognizer
+# google-cloud-documentai>=2.20.0 # Google Document AI
+
+# Optional: Speech and Audio Processing
+# whisper>=1.1.10                # OpenAI Whisper for audio
+# speechrecognition>=3.10.0      # Speech recognition
+
+# Version Constraints for Stability
+# Ensure compatibility between major packages
+torch>=2.1.0,<3.0.0
+transformers>=4.35.0,<5.0.0
+sentence-transformers>=2.2.2,<3.0.0
+langchain>=0.0.350,<1.0.0
+openai>=1.3.0,<2.0.0
