@@ -1,0 +1,158 @@
+# Parallel RAG Workflow Configuration
+# 5-agent RAG pipeline with PARSL parallel processing for the first step
+# Supports multiple simultaneous queries
+
+name: "Parallel_RAG_Workflow"
+description: "5-agent RAG pipeline with PARSL parallel processing for multiple simultaneous queries"
+class: "nanobrain.core.workflow.Workflow"
+
+execution_strategy: "event_driven"
+enable_monitoring: true
+execution_timeout_seconds: 300
+max_processing_time: 180
+
+# Workflow-level data units for inter-step communication
+input_data_units:
+  user_query:
+    class: "nanobrain.core.data_unit.DataUnitMemory"
+    name: "user_query"
+    description: "Raw user query input for RAG processing"
+    persistent: false
+
+  document_collection:
+    class: "nanobrain.core.data_unit.DataUnitMemory"
+    name: "document_collection"
+    description: "Document collection for retrieval and analysis"
+    persistent: true
+
+output_data_units:
+  final_response:
+    class: "nanobrain.core.data_unit.DataUnitMemory"
+    name: "final_response"
+    description: "Quality-assured final response from RAG pipeline"
+    persistent: true
+
+# 5-Agent RAG Pipeline Steps
+steps:
+  # Step 1: Prompt Enhancement with PARSL Parallel Execution
+  prompt_enhancement_step:
+    class: "demos.parallel_rag_demo.parallel_query_enhancement_step.ParallelQueryEnhancementStep"
+    config: "demos/parallel_rag_demo/config/steps/prompt_enhancement_step.yml"
+
+  # Step 2: Retrieval Specialist (Sequential)
+  retrieval_specialist_step:
+    class: "nanobrain.library.workflows.rag.steps.SemanticRetrievalStep"
+    config: "demos/parallel_rag_demo/config/steps/retrieval_specialist_step.yml"
+
+  # Step 3: Analysis Specialist (Sequential)
+  analysis_specialist_step:
+    class: "nanobrain.library.workflows.rag.steps.QueryEnhancementStep"
+    config: "demos/parallel_rag_demo/config/steps/analysis_specialist_step.yml"
+
+  # Step 4: Data Synthesis Specialist (Sequential)
+  synthesis_specialist_step:
+    class: "nanobrain.library.workflows.rag.steps.ResponseEnhancementStep"
+    config: "demos/parallel_rag_demo/config/steps/synthesis_specialist_step.yml"
+
+  # Step 5: Quality Assurance Specialist (Sequential)
+  quality_assurance_step:
+    class: "nanobrain.library.workflows.rag.steps.QueryEnhancementStep"
+    config: "demos/parallel_rag_demo/config/steps/quality_assurance_step.yml"
+
+# Automatic event-driven data flow using DirectLinks
+links:
+  # Input → Step 1: Workflow input to first step input
+  user_query_to_enhancement:
+    class: "nanobrain.core.link.DirectLink"
+    config:
+      source: "user_query"
+      target: "prompt_enhancement_step.query_input"
+      description: "User query triggers prompt enhancement step (parallel)"
+
+  # Step 1 → Step 2: Enhanced query to retrieval step
+  enhanced_query_to_retrieval:
+    class: "nanobrain.core.link.DirectLink"
+    config:
+      source: "prompt_enhancement_step.enhanced_query"
+      target: "retrieval_specialist_step.retrieval_query"
+      description: "Enhanced query triggers document retrieval"
+
+  # Step 2 → Step 3: Retrieved docs to analysis step
+  documents_to_analysis:
+    class: "nanobrain.core.link.DirectLink"
+    config:
+      source: "retrieval_specialist_step.retrieved_chunks"
+      target: "analysis_specialist_step.documents_input"
+      description: "Retrieved documents trigger deep analysis"
+
+  # Step 3 → Step 4: Analysis to synthesis step
+  analysis_to_synthesis:
+    class: "nanobrain.core.link.DirectLink"
+    config:
+      source: "analysis_specialist_step.analysis_output"
+      target: "synthesis_specialist_step.analysis_input"
+      description: "Analysis results trigger data synthesis"
+
+  # Step 4 → Step 5: Synthesis to quality assurance step
+  synthesis_to_qa:
+    class: "nanobrain.core.link.DirectLink"
+    config:
+      source: "synthesis_specialist_step.synthesized_output"
+      target: "quality_assurance_step.synthesis_input"
+      description: "Synthesized response triggers quality assurance"
+
+  # Step 5 → Output: Final step output to workflow output
+  qa_to_final_response:
+    class: "nanobrain.core.link.DirectLink"
+    config:
+      source: "quality_assurance_step.final_qa_output"
+      target: "final_response"
+      description: "Quality assured response becomes final workflow output"
+
+# Monitoring and performance settings
+monitoring:
+  enable_step_timing: true
+  enable_memory_tracking: true
+  enable_error_tracking: true
+  enable_agent_performance_tracking: true
+  enable_parallel_performance_tracking: true
+  log_level: "INFO"
+  
+  performance_thresholds:
+    max_total_time: 180  # seconds
+    max_step_time: 45    # seconds per agent
+    max_memory_usage: 1024  # MB
+  
+  alert_thresholds:
+    response_time: 3.0  # seconds
+    accuracy_drop: 0.15  # 15% decrease
+
+# Parallel processing features
+parallel_features:
+  enable_parallel_first_step: true
+  max_parallel_queries: 4
+  parsl_executor: "demos/parallel_rag_demo/config/executors/parsl_executor.yml"
+  
+  parallel_processing_strategy:
+    first_step: "parsl_parallel"  # PARSL for first step
+    other_steps: "sequential"     # Sequential for remaining steps
+  
+  performance_optimization:
+    enable_query_batching: false
+    enable_result_caching: true
+    cache_ttl: 300
+
+# RAG-specific features
+rag_features:
+  enable_multi_agent_coordination: true
+  enable_context_preservation: true
+  enable_quality_validation: true
+  enable_response_optimization: true
+  
+  agent_specialization:
+    prompt_enhancement: "query_optimization"
+    retrieval: "semantic_search"
+    analysis: "deep_reasoning"
+    synthesis: "information_integration"
+    quality_assurance: "response_validation"
+

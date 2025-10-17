@@ -26,7 +26,8 @@ from nanobrain.core.step import Step
 from nanobrain.core.data_unit import DataUnit
 from nanobrain.core.agent import SimpleAgent
 from nanobrain.library.tools.bioinformatics.bv_brc_tool import BVBRCTool
-from nanobrain.core.config.component_factory import create_component, load_config_file
+import yaml
+from importlib import import_module
 
 
 @dataclass
@@ -810,25 +811,34 @@ class EnhancedBVBRCDataAcquisitionStep(Step):
         if 'config_file' in agent_config_ref:
             # Load agent from external configuration file
             config_file_path = agent_config_ref['config_file']
-            agent_config = load_config_file(config_file_path)
+            with open(config_file_path, 'r') as f:
+                agent_config = yaml.safe_load(f)
             agent_class_path = agent_config.get('class')
             
             if not agent_class_path:
                 raise ValueError(f"Agent configuration must specify 'class' field: {config_file_path}")
             
-            return create_component(agent_class_path, agent_config)
+            # Use direct from_config pattern
+            module_path, class_name = agent_class_path.rsplit('.', 1)
+            module = import_module(module_path)
+            agent_class = getattr(module, class_name)
+            return agent_class.from_config(config_file_path)
         else:
             # Fallback: Try to load from step-specific configuration directory
             try:
                 agent_config_path = "../config/DataAcquisitionStep/SynonymDetectionAgent.yml"
-                agent_config = load_config_file(agent_config_path)
+                with open(agent_config_path, 'r') as f:
+                    agent_config = yaml.safe_load(f)
                 agent_class_path = agent_config.get('class')
                 
                 if not agent_class_path:
                     raise ValueError(f"Agent configuration must specify 'class' field: {agent_config_path}")
                 
                 self.nb_logger.info(f"🔧 Species validation agent loaded from fallback path: {agent_config_path}")
-                return create_component(agent_class_path, agent_config)
+                module_path, class_name = agent_class_path.rsplit('.', 1)
+                module = import_module(module_path)
+                agent_class = getattr(module, class_name)
+                return agent_class.from_config(agent_config_path)
                 
             except Exception as e:
                 self.nb_logger.error(f"❌ Failed to load species validation agent from fallback path: {e}")
@@ -842,25 +852,34 @@ class EnhancedBVBRCDataAcquisitionStep(Step):
         if 'config_file' in agent_config_ref:
             # Load agent from external configuration file
             config_file_path = agent_config_ref['config_file']
-            agent_config = load_config_file(config_file_path)
+            with open(config_file_path, 'r') as f:
+                agent_config = yaml.safe_load(f)
             agent_class_path = agent_config.get('class')
             
             if not agent_class_path:
                 raise ValueError(f"Agent configuration must specify 'class' field: {config_file_path}")
             
-            return create_component(agent_class_path, agent_config)
+            # Use direct from_config pattern
+            module_path, class_name = agent_class_path.rsplit('.', 1)
+            module = import_module(module_path)
+            agent_class = getattr(module, class_name)
+            return agent_class.from_config(config_file_path)
         else:
             # Fallback: Try to load from step-specific configuration directory
             try:
                 agent_config_path = "../config/DataAcquisitionStep/TaxonomicVerificationAgent.yml"
-                agent_config = load_config_file(agent_config_path)
+                with open(agent_config_path, 'r') as f:
+                    agent_config = yaml.safe_load(f)
                 agent_class_path = agent_config.get('class')
                 
                 if not agent_class_path:
                     raise ValueError(f"Agent configuration must specify 'class' field: {agent_config_path}")
                 
                 self.nb_logger.info(f"🔧 Taxonomic verification agent loaded from fallback path: {agent_config_path}")
-                return create_component(agent_class_path, agent_config)
+                module_path, class_name = agent_class_path.rsplit('.', 1)
+                module = import_module(module_path)
+                agent_class = getattr(module, class_name)
+                return agent_class.from_config(agent_config_path)
                 
             except Exception as e:
                 self.nb_logger.error(f"❌ Failed to load taxonomic verification agent from fallback path: {e}")
@@ -874,25 +893,34 @@ class EnhancedBVBRCDataAcquisitionStep(Step):
         if 'config_file' in tool_config:
             # Load tool from external configuration file
             config_file_path = tool_config['config_file']
-            loaded_config = load_config_file(config_file_path)
+            with open(config_file_path, 'r') as f:
+                loaded_config = yaml.safe_load(f)
             tool_class_path = loaded_config.get('class')
             
             if not tool_class_path:
                 raise ValueError(f"Tool configuration must specify 'class' field: {config_file_path}")
             
-            return create_component(tool_class_path, loaded_config)
+            # Use direct from_config pattern
+            module_path, class_name = tool_class_path.rsplit('.', 1)
+            module = import_module(module_path)
+            tool_class = getattr(module, class_name)
+            return tool_class.from_config(config_file_path)
         else:
             # Fallback: Try to load from step-specific configuration directory  
             try:
                 tool_config_path = "../config/DataAcquisitionStep/BVBRCTool.yml"
-                loaded_config = load_config_file(tool_config_path)
+                with open(tool_config_path, 'r') as f:
+                    loaded_config = yaml.safe_load(f)
                 tool_class_path = loaded_config.get('class')
                 
                 if not tool_class_path:
                     raise ValueError(f"Tool configuration must specify 'class' field: {tool_config_path}")
                 
                 self.nb_logger.info(f"🔧 BV-BRC tool loaded from fallback path: {tool_config_path}")
-                return create_component(tool_class_path, loaded_config)
+                module_path, class_name = tool_class_path.rsplit('.', 1)
+                module = import_module(module_path)
+                tool_class = getattr(module, class_name)
+                return tool_class.from_config(tool_config_path)
                 
             except Exception as e:
                 self.nb_logger.error(f"❌ Failed to load BV-BRC tool from fallback path: {e}")

@@ -1,0 +1,458 @@
+================================================================================
+🚀 PBS PARALLEL RAG STRESS TEST
+================================================================================
+Job ID: 8087259.aurora-pbs-0001.hostmgmt.cm.aurora.alcf.anl.gov
+Job Name: nanobrain_pbs_rag_stress
+Nodes: 
+CPUs: 
+Start Time: Thu 16 Oct 2025 07:14:26 PM UTC
+Working Directory: /home/onarykov/nanobrain/demos/pbs_parallel_rag
+Nanobrain Path: /home/onarykov/nanobrain
+Output Directory: /home/onarykov/nanobrain/demos/pbs_parallel_rag/output/stress_test_20251016_191426
+Stress Test Size: 1000 queries
+Max Workers: 16
+================================================================================
+
+📊 SYSTEM INFORMATION
+================================================================================
+Hostname: x4217c5s3b0n0
+PBS Nodes: x4217c5s3b0n0.hsn.cm.aurora.alcf.anl.gov
+x4217c5s5b0n0.hsn.cm.aurora.alcf.anl.gov
+Total CPUs: 2
+Python Version: Python 3.10.14
+Python Path: /home/onarykov/.conda/envs/nanobrain/bin/python3
+Working Directory: /home/onarykov/nanobrain
+Available Memory: Mem:          1.1Ti        17Gi       780Gi       1.0Gi       8.8Gi       1.1Ti
+Disk Space: 192.168.10.8@o2ib25,192.168.10.9@o2ib25:192.168.10.12@o2ib25,192.168.10.13@o2ib25:192.168.10.10@o2ib25,192.168.10.11@o2ib25:192.168.10.14@o2ib25,192.168.10.15@o2ib25:/gecko/home   14P  1.1P   12P   9% /home
+================================================================================
+
+🔍 AURORA NODE ALLOCATION ANALYSIS
+================================================================================
+Node allocation details:
+  Total slots: 2
+  Unique nodes: 2
+  Node distribution:
+    x4217c5s3b0n0.hsn.cm.aurora.alcf.anl.gov: 1 slots
+    x4217c5s5b0n0.hsn.cm.aurora.alcf.anl.gov: 1 slots
+
+Expected worker distribution:
+  Max workers: 16
+  Workers per node: approximately 8
+Saving node allocation to /home/onarykov/nanobrain/demos/pbs_parallel_rag/output/stress_test_20251016_191426/node_allocation.txt
+================================================================================
+
+🔍 DEPENDENCY CHECK
+================================================================================
+Checking Python dependencies...
+Installing/updating dependencies from requirements.txt...
+✓ Dependencies installed
+✅ parsl
+✅ asyncio
+✅ psutil
+✅ yaml
+✅ pathlib
+✅ All required packages available
+Checking nanobrain installation...
+2025-10-16 19:14:51,242 - nanobrain.core.shared_resource - INFO - 🔧 SharedResourcePool initialized
+✅ Nanobrain PBS components available
+✅ All dependencies satisfied
+================================================================================
+
+⚙️  CONFIGURATION VALIDATION
+================================================================================
+Running configuration validation tests...
+⚠️  Configuration validation failed - proceeding with stress test anyway
+📄 Check validation log: /home/onarykov/nanobrain/demos/pbs_parallel_rag/output/stress_test_20251016_191426/config_validation.log
+Last 20 lines of validation log:
+🧪 Testing Python Imports...
+✅ PBS query enhancement step importable
+✅ All tracked steps importable
+✅ All tools importable
+
+🧪 Testing Directory Structure...
+✅ All required directories exist
+✅ All required files exist
+
+🧪 Testing Import Consistency...
+✅ All imports reference correct PBS paths
+
+🧪 Testing Stress Test Compatibility...
+✅ Stress test properly configured for PBS
+
+================================================================================
+📊 TEST RESULTS
+================================================================================
+❌ TESTS FAILED (4/5)
+🔧 Please fix issues before deployment
+🚀 Continuing with MPI stress test to validate actual functionality...
+================================================================================
+
+🧪 STRESS TEST EXECUTION
+================================================================================
+Starting stress test with 1000 queries...
+Start Time: Thu 16 Oct 2025 07:14:52 PM UTC
+Timeout: 7200 seconds
+Output Directory: /home/onarykov/nanobrain/demos/pbs_parallel_rag/output/stress_test_20251016_191426
+================================================================================
+
+================================================================================
+📊 STRESS TEST RESULTS
+================================================================================
+✅ Stress test completed successfully
+📄 Full log: /home/onarykov/nanobrain/demos/pbs_parallel_rag/output/stress_test_20251016_191426/stress_test.log
+
+📈 KEY METRICS:
+    executors=(HighThroughputExecutor(
+2025-10-16 19:15:50,263 - parsl.executors.high_throughput.executor - DEBUG - Starting HighThroughputExecutor with provider:
+✓ All queries processed!
+  Total time: 10.94s
+Throughput:
+  Average time per query: 0.011s
+✅ Throughput: 91.44 queries/second
+✅ Success rate: 100.0%
+
+🔍 AURORA NODE TRACKING ANALYSIS:
+Node distribution analysis:
+  Expected nodes: 2
+  Actual nodes used: 2
+  Resource pool usage: 16/16
+  Queries per node:
+    x4217c5s3b0n0: 1000 queries
+    x4217c5s5b0n0: 0 queries
+  ✅ Resource pool compliance: PASSED
+
+📊 RESULTS ANALYSIS
+================================================================================
+📁 Generated query logs: 0 files
+📁 Output directory: /home/onarykov/nanobrain/demos/pbs_parallel_rag/output/stress_test_20251016_191426
+================================================================================
+QUERY JOURNEY ANALYSIS SUMMARY
+================================================================================
+⚠️  Results analysis failed: 'total_queries'
+
+🧹 CLEANUP AND SUMMARY
+================================================================================
+Final system status:
+Memory usage: Mem:          1.1Ti        18Gi       779Gi       1.0Gi       8.8Gi       1.1Ti
+Disk usage: 192.168.10.8@o2ib25,192.168.10.9@o2ib25:192.168.10.12@o2ib25,192.168.10.13@o2ib25:192.168.10.10@o2ib25,192.168.10.11@o2ib25:192.168.10.14@o2ib25,192.168.10.15@o2ib25:/gecko/home   14P  1.1P   12P   9% /home
+📄 Job summary written to: /home/onarykov/nanobrain/demos/pbs_parallel_rag/output/stress_test_20251016_191426/job_summary.txt
+
+================================================================================
+🏁 PBS PARALLEL RAG STRESS TEST COMPLETE
+================================================================================
+End Time: Thu 16 Oct 2025 07:16:50 PM UTC
+Output Directory: /home/onarykov/nanobrain/demos/pbs_parallel_rag/output/stress_test_20251016_191426
+Overall Status: SUCCESS ✅
+================================================================================
+================================================================================
+🚀 PBS PARALLEL RAG STRESS TEST
+================================================================================
+Job ID: 8087293.aurora-pbs-0001.hostmgmt.cm.aurora.alcf.anl.gov
+Job Name: nanobrain_pbs_rag_stress
+Nodes: 
+CPUs: 
+Start Time: Thu 16 Oct 2025 07:20:08 PM UTC
+Working Directory: /home/onarykov/nanobrain/demos/pbs_parallel_rag
+Nanobrain Path: /home/onarykov/nanobrain
+Output Directory: /home/onarykov/nanobrain/demos/pbs_parallel_rag/output/stress_test_20251016_192007
+Stress Test Size: 1000 queries
+Max Workers: 16
+================================================================================
+
+📊 SYSTEM INFORMATION
+================================================================================
+Hostname: x4020c2s0b0n0
+PBS Nodes: x4020c2s0b0n0.hsn.cm.aurora.alcf.anl.gov
+x4020c2s1b0n0.hsn.cm.aurora.alcf.anl.gov
+Total CPUs: 2
+Python Version: Python 3.10.14
+Python Path: /home/onarykov/.conda/envs/nanobrain/bin/python3
+Working Directory: /home/onarykov/nanobrain
+Available Memory: Mem:          1.1Ti        20Gi       466Gi       437Mi       6.3Gi       1.1Ti
+Disk Space: 192.168.10.8@o2ib25,192.168.10.9@o2ib25:192.168.10.12@o2ib25,192.168.10.13@o2ib25:192.168.10.10@o2ib25,192.168.10.11@o2ib25:192.168.10.14@o2ib25,192.168.10.15@o2ib25:/gecko/home   14P  1.1P   12P   9% /home
+================================================================================
+
+🔍 AURORA NODE ALLOCATION ANALYSIS
+================================================================================
+Node allocation details:
+  Total slots: 2
+  Unique nodes: 2
+  Node distribution:
+    x4020c2s0b0n0.hsn.cm.aurora.alcf.anl.gov: 1 slots
+    x4020c2s1b0n0.hsn.cm.aurora.alcf.anl.gov: 1 slots
+
+Expected worker distribution:
+  Max workers: 16
+  Workers per node: approximately 8
+Saving node allocation to /home/onarykov/nanobrain/demos/pbs_parallel_rag/output/stress_test_20251016_192007/node_allocation.txt
+================================================================================
+
+🔍 DEPENDENCY CHECK
+================================================================================
+Checking Python dependencies...
+Installing/updating dependencies from requirements.txt...
+✓ Dependencies installed
+✅ parsl
+✅ asyncio
+✅ psutil
+✅ yaml
+✅ pathlib
+✅ All required packages available
+Checking nanobrain installation...
+2025-10-16 19:20:13,045 - nanobrain.core.shared_resource - INFO - 🔧 SharedResourcePool initialized
+✅ Nanobrain PBS components available
+✅ All dependencies satisfied
+================================================================================
+
+⚙️  CONFIGURATION VALIDATION
+================================================================================
+Running configuration validation tests...
+⚠️  Configuration validation failed - proceeding with stress test anyway
+📄 Check validation log: /home/onarykov/nanobrain/demos/pbs_parallel_rag/output/stress_test_20251016_192007/config_validation.log
+Last 20 lines of validation log:
+🧪 Testing Python Imports...
+✅ PBS query enhancement step importable
+✅ All tracked steps importable
+✅ All tools importable
+
+🧪 Testing Directory Structure...
+✅ All required directories exist
+✅ All required files exist
+
+🧪 Testing Import Consistency...
+✅ All imports reference correct PBS paths
+
+🧪 Testing Stress Test Compatibility...
+✅ Stress test properly configured for PBS
+
+================================================================================
+📊 TEST RESULTS
+================================================================================
+❌ TESTS FAILED (4/5)
+🔧 Please fix issues before deployment
+🚀 Continuing with MPI stress test to validate actual functionality...
+================================================================================
+
+🧪 STRESS TEST EXECUTION
+================================================================================
+Starting stress test with 1000 queries...
+Start Time: Thu 16 Oct 2025 07:20:13 PM UTC
+Timeout: 7200 seconds
+Output Directory: /home/onarykov/nanobrain/demos/pbs_parallel_rag/output/stress_test_20251016_192007
+================================================================================
+
+================================================================================
+📊 STRESS TEST RESULTS
+================================================================================
+✅ Stress test completed successfully
+📄 Full log: /home/onarykov/nanobrain/demos/pbs_parallel_rag/output/stress_test_20251016_192007/stress_test.log
+
+📈 KEY METRICS:
+    executors=(HighThroughputExecutor(
+2025-10-16 19:21:03,139 - parsl.executors.high_throughput.executor - DEBUG - Starting HighThroughputExecutor with provider:
+✓ All queries processed!
+  Total time: 6.95s
+Throughput:
+  Average time per query: 0.007s
+✅ Throughput: 143.94 queries/second
+✅ Success rate: 100.0%
+
+🔍 AURORA NODE TRACKING ANALYSIS:
+Node distribution analysis:
+  Expected nodes: 2
+  Actual nodes used: 2
+  Resource pool usage: 16/16
+  Queries per node:
+    x4020c2s0b0n0: 1000 queries
+    x4020c2s1b0n0: 0 queries
+  ✅ Resource pool compliance: PASSED
+
+📊 RESULTS ANALYSIS
+================================================================================
+📁 Generated query logs: 0 files
+📁 Output directory: /home/onarykov/nanobrain/demos/pbs_parallel_rag/output/stress_test_20251016_192007
+================================================================================
+QUERY JOURNEY ANALYSIS SUMMARY
+================================================================================
+
+No journey data available for analysis
+This may indicate that journey logging was not enabled
+or that the log files were not properly saved.
+
+Worker Utilization:
+  No worker data available
+================================================================================
+✓ Exported 0 queries to /home/onarykov/nanobrain/demos/pbs_parallel_rag/output/stress_test_20251016_192007/stress_test_results.csv
+✓ Exported summary to /home/onarykov/nanobrain/demos/pbs_parallel_rag/output/stress_test_20251016_192007/stress_test_summary.txt
+✅ Results exported to CSV and summary files
+
+🧹 CLEANUP AND SUMMARY
+================================================================================
+Final system status:
+Memory usage: Mem:          1.1Ti        21Gi       465Gi       416Mi       6.3Gi       1.1Ti
+Disk usage: 192.168.10.8@o2ib25,192.168.10.9@o2ib25:192.168.10.12@o2ib25,192.168.10.13@o2ib25:192.168.10.10@o2ib25,192.168.10.11@o2ib25:192.168.10.14@o2ib25,192.168.10.15@o2ib25:/gecko/home   14P  1.1P   12P   9% /home
+📄 Job summary written to: /home/onarykov/nanobrain/demos/pbs_parallel_rag/output/stress_test_20251016_192007/job_summary.txt
+
+================================================================================
+🏁 PBS PARALLEL RAG STRESS TEST COMPLETE
+================================================================================
+End Time: Thu 16 Oct 2025 07:21:59 PM UTC
+Output Directory: /home/onarykov/nanobrain/demos/pbs_parallel_rag/output/stress_test_20251016_192007
+Overall Status: SUCCESS ✅
+================================================================================
+================================================================================
+🚀 PBS PARALLEL RAG STRESS TEST
+================================================================================
+Job ID: 8087326.aurora-pbs-0001.hostmgmt.cm.aurora.alcf.anl.gov
+Job Name: nanobrain_pbs_rag_stress
+Nodes: 
+CPUs: 
+Start Time: Thu 16 Oct 2025 07:27:34 PM UTC
+Working Directory: /home/onarykov/nanobrain/demos/pbs_parallel_rag
+Nanobrain Path: /home/onarykov/nanobrain
+Output Directory: /home/onarykov/nanobrain/demos/pbs_parallel_rag/output/stress_test_20251016_192734
+Stress Test Size: 1000 queries
+Max Workers: 16
+================================================================================
+
+📊 SYSTEM INFORMATION
+================================================================================
+Hostname: x4220c1s0b0n0
+PBS Nodes: x4220c1s0b0n0.hsn.cm.aurora.alcf.anl.gov
+x4220c1s1b0n0.hsn.cm.aurora.alcf.anl.gov
+Total CPUs: 2
+Python Version: Python 3.10.14
+Python Path: /home/onarykov/.conda/envs/nanobrain/bin/python3
+Working Directory: /home/onarykov/nanobrain
+Available Memory: Mem:          1.1Ti        17Gi       853Gi       393Mi       6.4Gi       1.1Ti
+Disk Space: 192.168.10.8@o2ib25,192.168.10.9@o2ib25:192.168.10.12@o2ib25,192.168.10.13@o2ib25:192.168.10.10@o2ib25,192.168.10.11@o2ib25:192.168.10.14@o2ib25,192.168.10.15@o2ib25:/gecko/home   14P  1.1P   12P   9% /home
+================================================================================
+
+🔍 AURORA NODE ALLOCATION ANALYSIS
+================================================================================
+Node allocation details:
+  Total slots: 2
+  Unique nodes: 2
+  Node distribution:
+    x4220c1s0b0n0.hsn.cm.aurora.alcf.anl.gov: 1 slots
+    x4220c1s1b0n0.hsn.cm.aurora.alcf.anl.gov: 1 slots
+
+Expected worker distribution:
+  Max workers: 16
+  Workers per node: approximately 8
+Saving node allocation to /home/onarykov/nanobrain/demos/pbs_parallel_rag/output/stress_test_20251016_192734/node_allocation.txt
+================================================================================
+
+🔍 DEPENDENCY CHECK
+================================================================================
+Checking Python dependencies...
+Installing/updating dependencies from requirements.txt...
+✓ Dependencies installed
+✅ parsl
+✅ asyncio
+✅ psutil
+✅ yaml
+✅ pathlib
+✅ All required packages available
+Checking nanobrain installation...
+2025-10-16 19:27:59,316 - nanobrain.core.shared_resource - INFO - 🔧 SharedResourcePool initialized
+✅ Nanobrain PBS components available
+✅ All dependencies satisfied
+================================================================================
+
+⚙️  CONFIGURATION VALIDATION
+================================================================================
+Running configuration validation tests...
+⚠️  Configuration validation failed - proceeding with stress test anyway
+📄 Check validation log: /home/onarykov/nanobrain/demos/pbs_parallel_rag/output/stress_test_20251016_192734/config_validation.log
+Last 20 lines of validation log:
+🧪 Testing Python Imports...
+✅ PBS query enhancement step importable
+✅ All tracked steps importable
+✅ All tools importable
+
+🧪 Testing Directory Structure...
+✅ All required directories exist
+✅ All required files exist
+
+🧪 Testing Import Consistency...
+✅ All imports reference correct PBS paths
+
+🧪 Testing Stress Test Compatibility...
+✅ Stress test properly configured for PBS
+
+================================================================================
+📊 TEST RESULTS
+================================================================================
+❌ TESTS FAILED (4/5)
+🔧 Please fix issues before deployment
+🚀 Continuing with MPI stress test to validate actual functionality...
+================================================================================
+
+🧪 STRESS TEST EXECUTION
+================================================================================
+Starting stress test with 1000 queries...
+Start Time: Thu 16 Oct 2025 07:28:00 PM UTC
+Timeout: 7200 seconds
+Output Directory: /home/onarykov/nanobrain/demos/pbs_parallel_rag/output/stress_test_20251016_192734
+================================================================================
+
+================================================================================
+📊 STRESS TEST RESULTS
+================================================================================
+✅ Stress test completed successfully
+📄 Full log: /home/onarykov/nanobrain/demos/pbs_parallel_rag/output/stress_test_20251016_192734/stress_test.log
+
+📈 KEY METRICS:
+    executors=(HighThroughputExecutor(
+2025-10-16 19:28:58,005 - parsl.executors.high_throughput.executor - DEBUG - Starting HighThroughputExecutor with provider:
+✓ All queries processed!
+  Total time: 11.11s
+Throughput:
+  Average time per query: 0.011s
+✅ Throughput: 90.01 queries/second
+✅ Success rate: 100.0%
+
+🔍 AURORA NODE TRACKING ANALYSIS:
+Node distribution analysis:
+  Expected nodes: 2
+  Actual nodes used: 2
+  Resource pool usage: 16/16
+  Queries per node:
+    x4220c1s0b0n0: 1000 queries
+    x4220c1s1b0n0: 0 queries
+  ✅ Resource pool compliance: PASSED
+
+📊 RESULTS ANALYSIS
+================================================================================
+📁 Generated query logs: 0 files
+📁 Output directory: /home/onarykov/nanobrain/demos/pbs_parallel_rag/output/stress_test_20251016_192734
+================================================================================
+QUERY JOURNEY ANALYSIS SUMMARY
+================================================================================
+
+No journey data available for analysis
+This may indicate that journey logging was not enabled
+or that the log files were not properly saved.
+
+Worker Utilization:
+  No worker data available
+================================================================================
+✓ Exported 0 queries to /home/onarykov/nanobrain/demos/pbs_parallel_rag/output/stress_test_20251016_192734/stress_test_results.csv
+✓ Exported summary to /home/onarykov/nanobrain/demos/pbs_parallel_rag/output/stress_test_20251016_192734/stress_test_summary.txt
+✅ Results exported to CSV and summary files
+
+🧹 CLEANUP AND SUMMARY
+================================================================================
+Final system status:
+Memory usage: Mem:          1.1Ti        18Gi       852Gi       391Mi       6.5Gi       1.1Ti
+Disk usage: 192.168.10.8@o2ib25,192.168.10.9@o2ib25:192.168.10.12@o2ib25,192.168.10.13@o2ib25:192.168.10.10@o2ib25,192.168.10.11@o2ib25:192.168.10.14@o2ib25,192.168.10.15@o2ib25:/gecko/home   14P  1.1P   12P   9% /home
+📄 Job summary written to: /home/onarykov/nanobrain/demos/pbs_parallel_rag/output/stress_test_20251016_192734/job_summary.txt
+
+================================================================================
+🏁 PBS PARALLEL RAG STRESS TEST COMPLETE
+================================================================================
+End Time: Thu 16 Oct 2025 07:29:58 PM UTC
+Output Directory: /home/onarykov/nanobrain/demos/pbs_parallel_rag/output/stress_test_20251016_192734
+Overall Status: SUCCESS ✅
+================================================================================

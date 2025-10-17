@@ -158,8 +158,8 @@ class ElasticsearchSearchStep(BaseStep):
         await super().initialize()
         
         try:
-            # ✅ FRAMEWORK COMPLIANCE: Initialize MCP client using from_config
-            mcp_client_config = MCPClientConfig.from_config({
+            # Initialize MCP client using from_dict (MCP configs are not ConfigBase)
+            mcp_client_config = MCPClientConfig.from_dict({
                 'default_timeout': self.config.connection_timeout,
                 'default_max_retries': 3,
                 'default_retry_delay': 1.0
@@ -168,8 +168,8 @@ class ElasticsearchSearchStep(BaseStep):
             self.mcp_client = MCPClient(mcp_client_config, logger=self.logger)
             await self.mcp_client.initialize()
             
-            # ✅ FRAMEWORK COMPLIANCE: Add Elasticsearch MCP server using from_config
-            elasticsearch_server_config = MCPServerConfig.from_config({
+            # Add Elasticsearch MCP server using from_dict (MCP configs are not ConfigBase)
+            elasticsearch_server_config = MCPServerConfig.from_dict({
                 'name': self.config.mcp_server_name,
                 'url': self.config.mcp_server_url,
                 'description': "Elasticsearch MCP server for viral protein search",

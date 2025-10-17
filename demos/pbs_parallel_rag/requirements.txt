@@ -1,0 +1,65 @@
+# PBS Parallel RAG Demo - Requirements
+# ===================================
+# Minimal dependencies for PBS parallel RAG demonstration
+
+# Core Framework (from pyproject.toml)
+pyyaml>=6.0
+jinja2
+aiofiles
+python-dotenv
+
+# LLM Integration
+openai
+transformers
+accelerate
+
+# Embeddings and Vector Search
+sentence-transformers>=2.2.2,<3.0.0
+faiss-cpu
+numpy
+scikit-learn
+
+# Document Processing
+langchain
+langchain-community
+unstructured>=0.11.0
+pypdf>=3.17.0
+python-docx>=1.1.0
+beautifulsoup4>=4.12.0
+markdown>=3.5.0
+
+# Text Processing
+spacy>=3.7.0
+nltk>=3.8.0
+tiktoken>=0.5.0
+
+# HTTP and API
+httpx>=0.25.0
+requests>=2.31.0
+aiohttp>=3.9.0
+
+# Data Processing
+pandas>=2.1.0
+tqdm>=4.66.0
+
+# Logging and Monitoring
+structlog>=23.2.0
+
+# Data Validation
+pydantic>=2.5.0
+
+# Utilities
+python-dateutil>=2.8.0
+click>=8.1.0
+rich>=13.7.0
+
+# PBS/HPC Parallel Processing
+parsl>=1.3.0                     # Parallel scripting library for PBS/SLURM/Aurora
+psutil>=5.9.0                    # System monitoring for resource tracking
+
+# Aurora/HPC specific dependencies
+asyncio>=3.4.3                   # Async processing
+# concurrent-futures>=3.1.1        # Future objects for parallel processing
+
+# Optional: For advanced node tracking and analysis
+# matplotlib>=3.7.0              # For plotting node distribution graphs

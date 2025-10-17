@@ -12,13 +12,13 @@ framework:
 api_keys:
   # OpenAI API Configuration
   openai:
-    api_key: "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"
+    api_key: "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"
     organization: "${OPENAI_ORG_ID}"  # Optional
     base_url: "https://api.openai.com/v1"  # Default OpenAI endpoint
     
   # Anthropic Claude API Configuration
   anthropic:
-    api_key: "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"
+    api_key: "${ANTHROPIC_API_KEY}"
     base_url: "https://api.anthropic.com"
     
   # Google AI (Gemini) API Configuration

@@ -34,7 +34,7 @@ output_data_units:
 # Single step workflow - direct conversational processing
 steps:
   expert_conversation:
-    class: "nanobrain.library.workflows.conversational.steps.expert_conversation_step.ExpertConversationStep"
+    class: "nanobrain.library.workflows.chatbot_viral_integration.steps.conversational_response_step.ConversationalResponseStep"
     config: "config/ViralExpertWorkflow/ExpertConversationStep.yml"
     step_id: "expert_conversation"
 
@@ -46,7 +46,7 @@ links:
       source: "user_query"
       target: "expert_conversation.conversation_input"
       description: "Route user query to conversation step"
-  
+
   conversation_to_output:
     class: "nanobrain.core.link.DirectLink"
     config:
@@ -54,11 +54,11 @@ links:
       target: "expert_response"
       description: "Route conversation output to workflow response"
 
-# Workflow-level triggers (optional for simple workflow)
+# Workflow-level triggers - activate the first link when input is received
 triggers:
   - trigger_id: "conversation_start"
     class: "nanobrain.core.trigger.DataUnitChangeTrigger"
     config:
       data_unit: "user_query"
       event_type: "set"
-      description: "Start conversation when user query is received" 
+      description: "Start conversation when user query is received"

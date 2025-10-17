@@ -39,10 +39,37 @@ import json
 import time
 import uuid
 import os
+import csv
+import io
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Union
 from dataclasses import dataclass, field
+
+# CSV processing imports
+try:
+    import pandas as pd
+    PANDAS_AVAILABLE = True
+except ImportError:
+    PANDAS_AVAILABLE = False
+
+try:
+    from fuzzywuzzy import fuzz, process
+    FUZZYWUZZY_AVAILABLE = True
+except ImportError:
+    FUZZYWUZZY_AVAILABLE = False
+
+try:
+    import chardet
+    CHARDET_AVAILABLE = True
+except ImportError:
+    CHARDET_AVAILABLE = False
+
+try:
+    import numpy as np
+    NUMPY_AVAILABLE = True
+except ImportError:
+    NUMPY_AVAILABLE = False
 
 try:
     from elasticsearch import AsyncElasticsearch
@@ -136,14 +163,68 @@ class ElasticsearchMCPConfig(ExternalToolConfig):
     # Docker integration (disabled when running in Docker)
     docker_service_name: str = "nanobrain-elasticsearch"
     auto_start_docker: bool = False  # Default to False to avoid dependency issues
-    
-    # Tool card (mandatory)
+
+    # === CSV PROCESSING CONFIGURATION ===
+
+    # Core CSV Processing
+    csv_processing_enabled: bool = True
+    csv_max_file_size_mb: int = 500
+    csv_max_rows_per_batch: int = 10000
+    csv_processing_timeout: int = 1800  # 30 minutes for large files
+
+    # File Format Detection
+    csv_delimiter_auto_detect: bool = True
+    csv_supported_delimiters: List[str] = field(default_factory=lambda: [",", ";", "\t", "|", "^"])
+    csv_encoding_auto_detect: bool = True
+    csv_supported_encodings: List[str] = field(default_factory=lambda: ["utf-8", "latin-1", "cp1252", "utf-16"])
+    csv_quote_char_detection: bool = True
+    csv_escape_char_detection: bool = True
+
+    # Data Validation
+    csv_validation_enabled: bool = True
+    csv_max_field_length: int = 10000
+    csv_allow_empty_fields: bool = True
+    csv_strict_mode: bool = False
+
+    # Performance Optimization
+    csv_parallel_processing: bool = True
+    csv_chunk_size: int = 1000
+    csv_memory_limit_mb: int = 2048
+    csv_cache_enabled: bool = True
+    csv_cache_ttl: int = 3600
+
+    # Fuzzy Search Configuration
+    csv_fuzzy_threshold: float = 0.7
+    csv_max_search_results: int = 100
+    csv_confidence_scoring: bool = True
+    csv_phonetic_matching: bool = True
+
+    # Algorithm Selection
+    csv_primary_algorithm: str = "elasticsearch"
+    csv_fallback_algorithm: str = "fuzzywuzzy"
+    csv_hybrid_mode: bool = True
+
+    # Field-specific Settings
+    csv_field_weights: Dict[str, float] = field(default_factory=lambda: {
+        "default": 1.0,
+        "name_fields": 2.0,
+        "description_fields": 1.5,
+        "id_fields": 3.0
+    })
+
+    # Result Enhancement
+    csv_include_highlights: bool = True
+    csv_include_suggestions: bool = True
+    csv_include_corrections: bool = True
+    csv_max_suggestions: int = 5
+
+    # Tool card (mandatory) - updated with CSV capabilities
     tool_card: Dict[str, Any] = field(default_factory=lambda: {
         "name": "elasticsearch_mcp_server",
-        "description": "Elasticsearch MCP server for search and analytics",
-        "version": "1.0.0",
+        "description": "Enhanced Elasticsearch MCP server with CSV fuzzy search capabilities",
+        "version": "1.1.0",
         "category": "search_analytics",
-        "capabilities": ["search", "indexing", "analytics", "mcp"]
+        "capabilities": ["search", "indexing", "analytics", "mcp", "csv_processing", "fuzzy_search"]
     })
 
 
@@ -212,6 +293,7 @@ class ElasticsearchMCPServer(ExternalTool):
         
         # Tool registry
         self.mcp_tools = {
+            # Existing Elasticsearch tools
             "index_document": self._index_document,
             "bulk_index": self._bulk_index,
             "search": self._search,
@@ -220,7 +302,30 @@ class ElasticsearchMCPServer(ExternalTool):
             "delete_document": self._delete_document,
             "create_index": self._create_index,
             "delete_index": self._delete_index,
-            "cluster_health": self._cluster_health
+            "cluster_health": self._cluster_health,
+
+            # === CSV FILE PROCESSING ===
+            "import_csv_file": self._import_csv_file,
+            "analyze_csv_structure": self._analyze_csv_structure,
+            "validate_csv_format": self._validate_csv_format,
+            "preview_csv_data": self._preview_csv_data,
+
+            # === CSV INDEX MANAGEMENT ===
+            "create_csv_index": self._create_csv_index,
+            "update_csv_mapping": self._update_csv_mapping,
+            "get_csv_index_info": self._get_csv_index_info,
+            "delete_csv_index": self._delete_csv_index,
+
+            # === CSV SEARCH OPERATIONS ===
+            "fuzzy_search_csv": self._fuzzy_search_csv,
+            "exact_search_csv": self._exact_search_csv,
+            "range_search_csv": self._range_search_csv,
+            "aggregate_csv_data": self._aggregate_csv_data,
+
+            # === CSV UTILITIES ===
+            "get_csv_field_suggestions": self._get_csv_field_suggestions,
+            "detect_csv_data_types": self._detect_csv_data_types,
+            "generate_csv_mapping": self._generate_csv_mapping
         }
     
     async def initialize_tool(self):
@@ -954,6 +1059,1558 @@ class ElasticsearchMCPServer(ExternalTool):
     async def _build_tool_in_environment(self, source_dir: str) -> bool:
         """Build MCP server in environment - not applicable"""
         return False
+
+    # ===================================================================
+    # CSV PROCESSING METHODS
+    # ===================================================================
+
+    async def _import_csv_file(self, file_path: str, index_name: str, **kwargs) -> Dict[str, Any]:
+        """Import CSV file and index data in Elasticsearch"""
+        try:
+            if not self.config.csv_processing_enabled:
+                raise ElasticsearchMCPError("CSV processing is disabled")
+
+            self.logger.info(f"🔄 Importing CSV file: {file_path}")
+
+            # Validate file size
+            file_size_mb = os.path.getsize(file_path) / (1024 * 1024)
+            if file_size_mb > self.config.csv_max_file_size_mb:
+                raise ElasticsearchMCPError(f"File size {file_size_mb:.1f}MB exceeds limit {self.config.csv_max_file_size_mb}MB")
+
+            # Analyze CSV structure first
+            structure_result = await self._analyze_csv_structure(file_path)
+            if not structure_result.get("success", False):
+                raise ElasticsearchMCPError(f"Failed to analyze CSV structure: {structure_result.get('error')}")
+
+            # Create index with appropriate mapping
+            mapping_result = await self._create_csv_index(index_name, structure_result["structure"])
+            if not mapping_result.get("success", False):
+                self.logger.warning(f"Index creation warning: {mapping_result.get('message', 'Unknown issue')}")
+
+            # Import data in batches
+            total_rows = 0
+            batch_size = self.config.csv_chunk_size
+
+            if PANDAS_AVAILABLE:
+                # Use pandas for efficient processing
+                for chunk in pd.read_csv(file_path, chunksize=batch_size,
+                                       delimiter=structure_result["structure"]["delimiter"],
+                                       encoding=structure_result["structure"]["encoding"]):
+                    documents = chunk.to_dict('records')
+                    await self._bulk_index_documents(index_name, documents)
+                    total_rows += len(documents)
+
+                    if total_rows >= self.config.csv_max_rows_per_batch:
+                        break
+            else:
+                # Fallback to manual CSV processing
+                with open(file_path, 'r', encoding=structure_result["structure"]["encoding"]) as f:
+                    reader = csv.DictReader(f, delimiter=structure_result["structure"]["delimiter"])
+                    batch = []
+
+                    for row in reader:
+                        batch.append(row)
+                        total_rows += 1
+
+                        if len(batch) >= batch_size:
+                            await self._bulk_index_documents(index_name, batch)
+                            batch = []
+
+                        if total_rows >= self.config.csv_max_rows_per_batch:
+                            break
+
+                    # Index remaining documents
+                    if batch:
+                        await self._bulk_index_documents(index_name, batch)
+
+            self.logger.info(f"✅ Successfully imported {total_rows} rows from CSV file")
+
+            return {
+                "success": True,
+                "index_name": index_name,
+                "rows_imported": total_rows,
+                "file_size_mb": file_size_mb,
+                "structure": structure_result["structure"]
+            }
+
+        except Exception as e:
+            self.logger.error(f"❌ CSV import failed: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "file_path": file_path
+            }
+
+    async def _analyze_csv_structure(self, file_path: str) -> Dict[str, Any]:
+        """Analyze CSV file structure and detect format"""
+        try:
+            self.logger.info(f"🔍 Analyzing CSV structure: {file_path}")
+
+            # Read sample of file for analysis
+            with open(file_path, 'rb') as f:
+                sample = f.read(8192)  # Read first 8KB
+
+            # Detect encoding
+            encoding = "utf-8"  # Default
+            if CHARDET_AVAILABLE:
+                detected = chardet.detect(sample)
+                if detected['confidence'] > 0.7:
+                    encoding = detected['encoding']
+
+            # Convert to text for analysis
+            sample_text = sample.decode(encoding, errors='ignore')
+            lines = sample_text.split('\n')[:10]  # First 10 lines
+
+            # Detect delimiter
+            delimiter = ","  # Default
+            if self.config.csv_delimiter_auto_detect:
+                delimiter_counts = {}
+                for delim in self.config.csv_supported_delimiters:
+                    count = sum(line.count(delim) for line in lines[:5])
+                    delimiter_counts[delim] = count
+
+                # Choose delimiter with highest consistent count
+                if delimiter_counts:
+                    delimiter = max(delimiter_counts, key=delimiter_counts.get)
+
+            # Analyze first few rows to determine structure
+            with open(file_path, 'r', encoding=encoding) as f:
+                reader = csv.reader(f, delimiter=delimiter)
+                rows = [next(reader, None) for _ in range(5)]
+                rows = [row for row in rows if row]  # Remove empty rows
+
+            if not rows:
+                raise ValueError("No valid rows found in CSV file")
+
+            headers = rows[0]
+            data_rows = rows[1:] if len(rows) > 1 else []
+
+            # Detect column types
+            column_types = {}
+            for i, header in enumerate(headers):
+                column_types[header] = self._detect_column_type([row[i] if i < len(row) else "" for row in data_rows])
+
+            structure = {
+                "delimiter": delimiter,
+                "encoding": encoding,
+                "headers": headers,
+                "column_count": len(headers),
+                "estimated_rows": len(lines) - 1,  # Rough estimate
+                "column_types": column_types,
+                "sample_data": data_rows[:3]  # First 3 data rows
+            }
+
+            self.logger.info(f"✅ CSV structure analyzed: {len(headers)} columns, delimiter='{delimiter}', encoding={encoding}")
+
+            return {
+                "success": True,
+                "structure": structure,
+                "file_path": file_path
+            }
+
+        except Exception as e:
+            self.logger.error(f"❌ CSV structure analysis failed: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "file_path": file_path
+            }
+
+    async def _validate_csv_format(self, file_path: str) -> Dict[str, Any]:
+        """Validate CSV file format and data quality"""
+        try:
+            self.logger.info(f"🔍 Validating CSV format: {file_path}")
+
+            validation_results = {
+                "file_exists": os.path.exists(file_path),
+                "file_readable": False,
+                "valid_format": False,
+                "encoding_detected": None,
+                "delimiter_detected": None,
+                "issues": [],
+                "warnings": []
+            }
+
+            if not validation_results["file_exists"]:
+                validation_results["issues"].append("File does not exist")
+                return {"success": False, "validation": validation_results}
+
+            # Check file readability
+            try:
+                with open(file_path, 'r') as f:
+                    f.read(1)
+                validation_results["file_readable"] = True
+            except Exception as e:
+                validation_results["issues"].append(f"File not readable: {e}")
+                return {"success": False, "validation": validation_results}
+
+            # Analyze structure (reuse existing method)
+            structure_result = await self._analyze_csv_structure(file_path)
+            if structure_result.get("success"):
+                structure = structure_result["structure"]
+                validation_results["encoding_detected"] = structure["encoding"]
+                validation_results["delimiter_detected"] = structure["delimiter"]
+                validation_results["valid_format"] = True
+
+                # Additional validation checks
+                if structure["column_count"] == 0:
+                    validation_results["issues"].append("No columns detected")
+                elif structure["column_count"] > 1000:
+                    validation_results["warnings"].append(f"Large number of columns: {structure['column_count']}")
+
+                # Check for duplicate headers
+                headers = structure["headers"]
+                if len(headers) != len(set(headers)):
+                    validation_results["warnings"].append("Duplicate column headers detected")
+
+                # Check for empty headers
+                empty_headers = [i for i, h in enumerate(headers) if not h.strip()]
+                if empty_headers:
+                    validation_results["warnings"].append(f"Empty headers at positions: {empty_headers}")
+
+            else:
+                validation_results["issues"].append(structure_result.get("error", "Structure analysis failed"))
+
+            success = len(validation_results["issues"]) == 0
+
+            self.logger.info(f"✅ CSV validation complete: {'PASSED' if success else 'FAILED'}")
+
+            return {
+                "success": success,
+                "validation": validation_results,
+                "file_path": file_path
+            }
+
+        except Exception as e:
+            self.logger.error(f"❌ CSV validation failed: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "file_path": file_path
+            }
+
+    async def _preview_csv_data(self, file_path: str, max_rows: int = 10) -> Dict[str, Any]:
+        """Preview CSV file data"""
+        try:
+            self.logger.info(f"👀 Previewing CSV data: {file_path}")
+
+            # Get structure first
+            structure_result = await self._analyze_csv_structure(file_path)
+            if not structure_result.get("success"):
+                raise ValueError(f"Failed to analyze CSV structure: {structure_result.get('error')}")
+
+            structure = structure_result["structure"]
+
+            # Read preview data
+            preview_data = []
+            with open(file_path, 'r', encoding=structure["encoding"]) as f:
+                reader = csv.DictReader(f, delimiter=structure["delimiter"])
+                for i, row in enumerate(reader):
+                    if i >= max_rows:
+                        break
+                    preview_data.append(row)
+
+            return {
+                "success": True,
+                "preview": {
+                    "headers": structure["headers"],
+                    "data": preview_data,
+                    "total_columns": structure["column_count"],
+                    "preview_rows": len(preview_data),
+                    "column_types": structure["column_types"]
+                },
+                "file_path": file_path
+            }
+
+        except Exception as e:
+            self.logger.error(f"❌ CSV preview failed: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "file_path": file_path
+            }
+
+    def _detect_column_type(self, values: List[str]) -> str:
+        """Detect the data type of a column based on sample values"""
+        if not values:
+            return "text"
+
+        # Remove empty values for analysis
+        non_empty_values = [v.strip() for v in values if v.strip()]
+        if not non_empty_values:
+            return "text"
+
+        # Check for numeric types
+        numeric_count = 0
+        integer_count = 0
+        float_count = 0
+        date_count = 0
+
+        for value in non_empty_values:
+            # Check integer
+            try:
+                int(value)
+                numeric_count += 1
+                integer_count += 1
+                continue
+            except ValueError:
+                pass
+
+            # Check float
+            try:
+                float(value)
+                numeric_count += 1
+                float_count += 1
+                continue
+            except ValueError:
+                pass
+
+            # Check date patterns (basic)
+            if any(sep in value for sep in ['-', '/', '.']):
+                parts = value.replace('-', '/').replace('.', '/').split('/')
+                if len(parts) >= 2 and all(part.isdigit() for part in parts):
+                    date_count += 1
+
+        total_values = len(non_empty_values)
+
+        # Determine type based on majority
+        if integer_count / total_values > 0.8:
+            return "integer"
+        elif numeric_count / total_values > 0.8:
+            return "float"
+        elif date_count / total_values > 0.6:
+            return "date"
+        else:
+            return "text"
+
+    async def _bulk_index_documents(self, index_name: str, documents: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Bulk index documents into Elasticsearch"""
+        try:
+            if not documents:
+                return {"success": True, "indexed": 0}
+
+            # Prepare bulk operations
+            operations = []
+            for doc in documents:
+                # Add document ID if not present
+                doc_id = doc.get('id') or str(uuid.uuid4())
+
+                operations.append({
+                    "index": {
+                        "_index": index_name,
+                        "_id": doc_id
+                    }
+                })
+                operations.append(doc)
+
+            # Execute bulk operation
+            response = await self.client.bulk(
+                operations=operations,
+                refresh=True
+            )
+
+            # Check for errors
+            errors = []
+            indexed_count = 0
+
+            if response.get("errors"):
+                for item in response.get("items", []):
+                    if "index" in item and "error" in item["index"]:
+                        errors.append(item["index"]["error"])
+                    else:
+                        indexed_count += 1
+            else:
+                indexed_count = len(documents)
+
+            if errors:
+                self.logger.warning(f"Bulk indexing completed with {len(errors)} errors")
+                return {
+                    "success": True,
+                    "indexed": indexed_count,
+                    "errors": errors[:10]  # Limit error reporting
+                }
+
+            return {
+                "success": True,
+                "indexed": indexed_count
+            }
+
+        except Exception as e:
+            self.logger.error(f"❌ Bulk indexing failed: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "indexed": 0
+            }
+
+    # ===================================================================
+    # CSV INDEX MANAGEMENT METHODS
+    # ===================================================================
+
+    async def _create_csv_index(self, index_name: str, csv_structure: Dict[str, Any]) -> Dict[str, Any]:
+        """Create Elasticsearch index optimized for CSV data"""
+        try:
+            self.logger.info(f"🔧 Creating CSV index: {index_name}")
+
+            # Generate mapping based on CSV structure
+            mapping = self._generate_csv_mapping(csv_structure)
+
+            # Index settings optimized for CSV data
+            settings = {
+                "number_of_shards": 1,
+                "number_of_replicas": 0,
+                "analysis": {
+                    "analyzer": {
+                        "csv_text_analyzer": {
+                            "type": "standard",
+                            "stopwords": "_english_"
+                        },
+                        "csv_fuzzy_analyzer": {
+                            "type": "custom",
+                            "tokenizer": "standard",
+                            "filter": ["lowercase", "asciifolding"]
+                        }
+                    }
+                }
+            }
+
+            # Check if index already exists
+            exists = await self.client.indices.exists(index=index_name)
+            if exists:
+                self.logger.warning(f"Index {index_name} already exists, updating mapping")
+                # Update mapping for existing index
+                await self.client.indices.put_mapping(
+                    index=index_name,
+                    body=mapping
+                )
+                return {
+                    "success": True,
+                    "action": "updated",
+                    "index_name": index_name,
+                    "mapping": mapping
+                }
+
+            # Create new index
+            await self.client.indices.create(
+                index=index_name,
+                body={
+                    "settings": settings,
+                    "mappings": mapping
+                }
+            )
+
+            self.logger.info(f"✅ CSV index created: {index_name}")
+
+            return {
+                "success": True,
+                "action": "created",
+                "index_name": index_name,
+                "mapping": mapping,
+                "settings": settings
+            }
+
+        except Exception as e:
+            self.logger.error(f"❌ CSV index creation failed: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "index_name": index_name
+            }
+
+    async def _update_csv_mapping(self, index_name: str, new_mapping: Dict[str, Any]) -> Dict[str, Any]:
+        """Update mapping for existing CSV index"""
+        try:
+            self.logger.info(f"🔧 Updating CSV mapping: {index_name}")
+
+            # Check if index exists
+            exists = await self.client.indices.exists(index=index_name)
+            if not exists:
+                return {
+                    "success": False,
+                    "error": f"Index {index_name} does not exist"
+                }
+
+            # Update mapping
+            await self.client.indices.put_mapping(
+                index=index_name,
+                body=new_mapping
+            )
+
+            self.logger.info(f"✅ CSV mapping updated: {index_name}")
+
+            return {
+                "success": True,
+                "index_name": index_name,
+                "mapping": new_mapping
+            }
+
+        except Exception as e:
+            self.logger.error(f"❌ CSV mapping update failed: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "index_name": index_name
+            }
+
+    async def _get_csv_index_info(self, index_name: str) -> Dict[str, Any]:
+        """Get information about CSV index"""
+        try:
+            self.logger.info(f"ℹ️ Getting CSV index info: {index_name}")
+
+            # Check if index exists
+            exists = await self.client.indices.exists(index=index_name)
+            if not exists:
+                return {
+                    "success": False,
+                    "error": f"Index {index_name} does not exist"
+                }
+
+            # Get index stats
+            stats = await self.client.indices.stats(index=index_name)
+            index_stats = stats["indices"][index_name]
+
+            # Get mapping
+            mapping_response = await self.client.indices.get_mapping(index=index_name)
+            mapping = mapping_response[index_name]["mappings"]
+
+            # Get settings
+            settings_response = await self.client.indices.get_settings(index=index_name)
+            settings = settings_response[index_name]["settings"]
+
+            info = {
+                "index_name": index_name,
+                "document_count": index_stats["total"]["docs"]["count"],
+                "store_size": index_stats["total"]["store"]["size_in_bytes"],
+                "mapping": mapping,
+                "settings": settings,
+                "health": "green"  # Simplified health check
+            }
+
+            self.logger.info(f"✅ CSV index info retrieved: {index_name}")
+
+            return {
+                "success": True,
+                "info": info
+            }
+
+        except Exception as e:
+            self.logger.error(f"❌ Failed to get CSV index info: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "index_name": index_name
+            }
+
+    async def _delete_csv_index(self, index_name: str) -> Dict[str, Any]:
+        """Delete CSV index"""
+        try:
+            self.logger.info(f"🗑️ Deleting CSV index: {index_name}")
+
+            # Check if index exists
+            exists = await self.client.indices.exists(index=index_name)
+            if not exists:
+                return {
+                    "success": False,
+                    "error": f"Index {index_name} does not exist"
+                }
+
+            # Delete index
+            await self.client.indices.delete(index=index_name)
+
+            self.logger.info(f"✅ CSV index deleted: {index_name}")
+
+            return {
+                "success": True,
+                "index_name": index_name,
+                "action": "deleted"
+            }
+
+        except Exception as e:
+            self.logger.error(f"❌ CSV index deletion failed: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "index_name": index_name
+            }
+
+    def _generate_csv_mapping(self, csv_structure: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate Elasticsearch mapping from CSV structure"""
+        try:
+            properties = {}
+            column_types = csv_structure.get("column_types", {})
+            headers = csv_structure.get("headers", [])
+
+            for header in headers:
+                column_type = column_types.get(header, "text")
+
+                # Map CSV types to Elasticsearch types
+                if column_type == "integer":
+                    properties[header] = {
+                        "type": "long"
+                    }
+                elif column_type == "float":
+                    properties[header] = {
+                        "type": "double"
+                    }
+                elif column_type == "boolean":
+                    properties[header] = {
+                        "type": "boolean"
+                    }
+                elif column_type == "date":
+                    properties[header] = {
+                        "type": "date",
+                        "format": "yyyy-MM-dd||yyyy/MM/dd||dd-MM-yyyy||dd/MM/yyyy||strict_date_optional_time"
+                    }
+                else:  # text or unknown
+                    properties[header] = {
+                        "type": "text",
+                        "analyzer": "csv_text_analyzer",
+                        "fields": {
+                            "keyword": {
+                                "type": "keyword",
+                                "ignore_above": 256
+                            },
+                            "fuzzy": {
+                                "type": "text",
+                                "analyzer": "csv_fuzzy_analyzer"
+                            }
+                        }
+                    }
+
+            # Add metadata fields
+            properties["_csv_import_timestamp"] = {
+                "type": "date"
+            }
+            properties["_csv_row_number"] = {
+                "type": "long"
+            }
+
+            mapping = {
+                "properties": properties
+            }
+
+            return mapping
+
+        except Exception as e:
+            self.logger.error(f"❌ Mapping generation failed: {e}")
+            return {
+                "properties": {
+                    "_error": {
+                        "type": "text"
+                    }
+                }
+            }
+
+    # ===================================================================
+    # CSV FUZZY SEARCH METHODS
+    # ===================================================================
+
+    async def _fuzzy_search_csv(self, index_name: str, query: str,
+                               fuzzy_threshold: float = None,
+                               max_results: int = None,
+                               search_fields: List[str] = None) -> Dict[str, Any]:
+        """Execute fuzzy search on CSV data with confidence scoring"""
+        try:
+            # Use configuration defaults if not provided
+            fuzzy_threshold = fuzzy_threshold or self.config.csv_fuzzy_threshold
+            max_results = max_results or self.config.csv_max_search_results
+
+            self.logger.info(f"🔍 Fuzzy searching '{query}' in index: {index_name}")
+
+            # Initialize fuzzy matcher if not already done
+            if not hasattr(self, '_fuzzy_matcher'):
+                from .csv_fuzzy_matcher import CSVFuzzyMatcher
+                matcher_config = {
+                    'default_threshold': fuzzy_threshold,
+                    'max_results': max_results,
+                    'field_weights': self.config.csv_field_weights,
+                    'enable_suggestions': self.config.csv_include_suggestions
+                }
+                self._fuzzy_matcher = CSVFuzzyMatcher(matcher_config)
+
+            # Initialize search optimizer if not already done
+            if not hasattr(self, '_search_optimizer'):
+                from .csv_search_optimizer import CSVSearchOptimizer
+                optimizer_config = {
+                    'cache_enabled': self.config.csv_cache_enabled,
+                    'cache_ttl': self.config.csv_cache_ttl,
+                    'max_results_per_field': max_results
+                }
+                self._search_optimizer = CSVSearchOptimizer(optimizer_config)
+
+            # Get index information to determine available fields
+            index_info = await self._get_csv_index_info(index_name)
+            if not index_info.get('success'):
+                return {
+                    'success': False,
+                    'error': f"Index {index_name} not found or inaccessible"
+                }
+
+            # Extract field names from mapping
+            mapping = index_info['info']['mapping']
+            available_fields = list(mapping.get('properties', {}).keys())
+            available_fields = [f for f in available_fields if not f.startswith('_csv_')]  # Exclude metadata
+
+            # Optimize search fields if not provided
+            if not search_fields:
+                # Get field types for optimization
+                field_types = {}
+                for field, field_mapping in mapping.get('properties', {}).items():
+                    field_types[field] = field_mapping.get('type', 'text')
+
+                search_fields = self._search_optimizer.optimize_search_fields(
+                    query, available_fields, field_types
+                )
+
+            # Analyze query for optimization
+            query_analysis = self._search_optimizer.analyze_query(query, search_fields)
+
+            # Check cache first
+            cached_results = self._search_optimizer.get_cached_results(query_analysis.cache_key)
+            if cached_results is not None:
+                self.logger.info(f"📋 Returning cached results for query: {query}")
+                return {
+                    'success': True,
+                    'results': cached_results,
+                    'total_results': len(cached_results),
+                    'query_analysis': query_analysis.__dict__,
+                    'from_cache': True
+                }
+
+            # Execute search based on query type
+            if query_analysis.query_type == "exact":
+                # Use exact search for quoted queries
+                search_results = await self._exact_search_csv(
+                    index_name, query.strip('"'), search_fields
+                )
+            elif query_analysis.query_type == "range":
+                # Use range search for numeric/date ranges
+                search_results = await self._range_search_csv(
+                    index_name, query, search_fields
+                )
+            else:
+                # Use Elasticsearch fuzzy search combined with fuzzywuzzy
+                search_results = await self._execute_elasticsearch_fuzzy_search(
+                    index_name, query, search_fields, fuzzy_threshold
+                )
+
+            if not search_results.get('success'):
+                return search_results
+
+            # Enhance results with fuzzy matching if needed
+            enhanced_results = await self._enhance_with_fuzzy_matching(
+                search_results['results'], query, search_fields, fuzzy_threshold
+            )
+
+            # Generate suggestions if results are limited
+            suggestions = []
+            if len(enhanced_results) < 5 and self.config.csv_include_suggestions:
+                suggestions = await self._generate_search_suggestions(
+                    query, index_name, search_fields
+                )
+
+            # Cache results
+            self._search_optimizer.cache_results(
+                query_analysis.cache_key, enhanced_results, search_fields, index_name
+            )
+
+            result = {
+                'success': True,
+                'results': enhanced_results[:max_results],
+                'total_results': len(enhanced_results),
+                'query_analysis': query_analysis.__dict__,
+                'suggestions': suggestions,
+                'search_fields': search_fields,
+                'fuzzy_threshold': fuzzy_threshold,
+                'from_cache': False
+            }
+
+            self.logger.info(f"✅ Fuzzy search completed: {len(enhanced_results)} results")
+
+            return result
+
+        except Exception as e:
+            self.logger.error(f"❌ Fuzzy search failed: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'query': query,
+                'index_name': index_name
+            }
+
+
+    async def _exact_search_csv(self, index_name: str, query: str,
+                               search_fields: List[str] = None) -> Dict[str, Any]:
+        """Execute exact search for precise matching"""
+        try:
+            self.logger.info(f"🎯 Exact searching '{query}' in index: {index_name}")
+
+            # Build exact match query
+            if search_fields:
+                # Multi-field exact search
+                should_clauses = []
+                for field in search_fields:
+                    # Try both text and keyword fields
+                    should_clauses.extend([
+                        {"term": {f"{field}.keyword": query}},
+                        {"match_phrase": {field: query}}
+                    ])
+
+                es_query = {
+                    "query": {
+                        "bool": {
+                            "should": should_clauses,
+                            "minimum_should_match": 1
+                        }
+                    },
+                    "size": self.config.csv_max_search_results,
+                    "highlight": {
+                        "fields": {field: {} for field in search_fields}
+                    }
+                }
+            else:
+                # Search all fields
+                es_query = {
+                    "query": {
+                        "multi_match": {
+                            "query": query,
+                            "type": "phrase"
+                        }
+                    },
+                    "size": self.config.csv_max_search_results
+                }
+
+            # Execute search
+            response = await self.client.search(
+                index=index_name,
+                body=es_query
+            )
+
+            # Process results
+            results = []
+            for hit in response['hits']['hits']:
+                result = {
+                    'document': hit['_source'],
+                    'score': hit['_score'],
+                    'document_id': hit['_id'],
+                    'match_type': 'exact',
+                    'highlights': hit.get('highlight', {}),
+                    'confidence': 1.0  # Exact matches have full confidence
+                }
+                results.append(result)
+
+            self.logger.info(f"✅ Exact search completed: {len(results)} results")
+
+            return {
+                'success': True,
+                'results': results,
+                'total_results': len(results),
+                'query': query,
+                'search_type': 'exact'
+            }
+
+        except Exception as e:
+            self.logger.error(f"❌ Exact search failed: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'query': query,
+                'index_name': index_name
+            }
+
+    async def _range_search_csv(self, index_name: str, query: str,
+                               search_fields: List[str] = None) -> Dict[str, Any]:
+        """Execute range search for numeric and date fields"""
+        try:
+            self.logger.info(f"📊 Range searching '{query}' in index: {index_name}")
+
+            # Parse range query
+            range_conditions = self._parse_range_query(query)
+            if not range_conditions:
+                return {
+                    'success': False,
+                    'error': 'Invalid range query format'
+                }
+
+            # Build range query
+            range_clauses = []
+            for field in search_fields or []:
+                for condition in range_conditions:
+                    range_clause = {
+                        "range": {
+                            field: condition
+                        }
+                    }
+                    range_clauses.append(range_clause)
+
+            if not range_clauses:
+                return {
+                    'success': False,
+                    'error': 'No valid range conditions found'
+                }
+
+            es_query = {
+                "query": {
+                    "bool": {
+                        "should": range_clauses,
+                        "minimum_should_match": 1
+                    }
+                },
+                "size": self.config.csv_max_search_results
+            }
+
+            # Execute search
+            response = await self.client.search(
+                index=index_name,
+                body=es_query
+            )
+
+            # Process results
+            results = []
+            for hit in response['hits']['hits']:
+                result = {
+                    'document': hit['_source'],
+                    'score': hit['_score'],
+                    'document_id': hit['_id'],
+                    'match_type': 'range',
+                    'confidence': 0.9  # High confidence for range matches
+                }
+                results.append(result)
+
+            self.logger.info(f"✅ Range search completed: {len(results)} results")
+
+            return {
+                'success': True,
+                'results': results,
+                'total_results': len(results),
+                'query': query,
+                'search_type': 'range'
+            }
+
+        except Exception as e:
+            self.logger.error(f"❌ Range search failed: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'query': query,
+                'index_name': index_name
+            }
+
+    async def _aggregate_csv_data(self, index_name: str, aggregation_config: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute data aggregation operations on CSV data"""
+        try:
+            self.logger.info(f"📈 Aggregating data in index: {index_name}")
+
+            # Build aggregation query
+            aggs = {}
+
+            # Support common aggregation types
+            for agg_name, agg_config in aggregation_config.items():
+                agg_type = agg_config.get('type', 'terms')
+                field = agg_config.get('field')
+
+                if not field:
+                    continue
+
+                if agg_type == 'terms':
+                    aggs[agg_name] = {
+                        "terms": {
+                            "field": f"{field}.keyword" if agg_config.get('use_keyword', True) else field,
+                            "size": agg_config.get('size', 10)
+                        }
+                    }
+                elif agg_type == 'stats':
+                    aggs[agg_name] = {
+                        "stats": {
+                            "field": field
+                        }
+                    }
+                elif agg_type == 'histogram':
+                    aggs[agg_name] = {
+                        "histogram": {
+                            "field": field,
+                            "interval": agg_config.get('interval', 1)
+                        }
+                    }
+                elif agg_type == 'date_histogram':
+                    aggs[agg_name] = {
+                        "date_histogram": {
+                            "field": field,
+                            "calendar_interval": agg_config.get('interval', 'day')
+                        }
+                    }
+
+            if not aggs:
+                return {
+                    'success': False,
+                    'error': 'No valid aggregations specified'
+                }
+
+            es_query = {
+                "size": 0,  # Don't return documents, just aggregations
+                "aggs": aggs
+            }
+
+            # Execute aggregation
+            response = await self.client.search(
+                index=index_name,
+                body=es_query
+            )
+
+            # Process aggregation results
+            aggregation_results = {}
+            for agg_name, agg_data in response.get('aggregations', {}).items():
+                aggregation_results[agg_name] = agg_data
+
+            self.logger.info(f"✅ Aggregation completed: {len(aggregation_results)} aggregations")
+
+            return {
+                'success': True,
+                'aggregations': aggregation_results,
+                'total_documents': response['hits']['total']['value']
+            }
+
+        except Exception as e:
+            self.logger.error(f"❌ Aggregation failed: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'index_name': index_name
+            }
+
+
+    # ===================================================================
+    # HELPER METHODS FOR FUZZY SEARCH
+    # ===================================================================
+
+    async def _execute_elasticsearch_fuzzy_search(self, index_name: str, query: str,
+                                                 search_fields: List[str],
+                                                 fuzzy_threshold: float) -> Dict[str, Any]:
+        """Execute Elasticsearch-based fuzzy search"""
+        try:
+            # Build fuzzy search query
+            should_clauses = []
+
+            for field in search_fields:
+                # Add different types of fuzzy matching
+                should_clauses.extend([
+                    # Fuzzy match
+                    {
+                        "fuzzy": {
+                            field: {
+                                "value": query,
+                                "fuzziness": "AUTO",
+                                "boost": 1.0
+                            }
+                        }
+                    },
+                    # Match with fuzzy analyzer
+                    {
+                        "match": {
+                            f"{field}.fuzzy": {
+                                "query": query,
+                                "boost": 0.8
+                            }
+                        }
+                    },
+                    # Wildcard search for partial matches
+                    {
+                        "wildcard": {
+                            f"{field}.keyword": {
+                                "value": f"*{query}*",
+                                "boost": 0.6
+                            }
+                        }
+                    }
+                ])
+
+            es_query = {
+                "query": {
+                    "bool": {
+                        "should": should_clauses,
+                        "minimum_should_match": 1
+                    }
+                },
+                "size": self.config.csv_max_search_results,
+                "highlight": {
+                    "fields": {field: {} for field in search_fields}
+                },
+                "min_score": fuzzy_threshold * 10  # Convert to Elasticsearch score scale
+            }
+
+            # Execute search
+            response = await self.client.search(
+                index=index_name,
+                body=es_query
+            )
+
+            # Process results
+            results = []
+            for hit in response['hits']['hits']:
+                # Normalize Elasticsearch score to 0-1 range
+                normalized_score = min(1.0, hit['_score'] / 10.0)
+
+                result = {
+                    'document': hit['_source'],
+                    'score': hit['_score'],
+                    'normalized_score': normalized_score,
+                    'document_id': hit['_id'],
+                    'match_type': 'elasticsearch_fuzzy',
+                    'highlights': hit.get('highlight', {}),
+                    'confidence': normalized_score
+                }
+                results.append(result)
+
+            return {
+                'success': True,
+                'results': results,
+                'total_results': len(results)
+            }
+
+        except Exception as e:
+            self.logger.error(f"❌ Elasticsearch fuzzy search failed: {e}")
+            return {
+                'success': False,
+                'error': str(e)
+            }
+
+    async def _enhance_with_fuzzy_matching(self, es_results: List[Dict[str, Any]],
+                                         query: str, search_fields: List[str],
+                                         threshold: float) -> List[Dict[str, Any]]:
+        """Enhance Elasticsearch results with fuzzywuzzy matching"""
+        try:
+            if not FUZZYWUZZY_AVAILABLE:
+                # Return ES results as-is if fuzzywuzzy not available
+                return es_results
+
+            enhanced_results = []
+
+            # Convert ES results to format expected by fuzzy matcher
+            candidates = []
+            for result in es_results:
+                candidate = result['document'].copy()
+                candidate['_id'] = result['document_id']
+                candidates.append(candidate)
+
+            # Apply fuzzy matching
+            fuzzy_matches = self._fuzzy_matcher.fuzzy_search(
+                query, candidates, search_fields, threshold
+            )
+
+            # Combine ES and fuzzy scores
+            for es_result in es_results:
+                doc_id = es_result['document_id']
+
+                # Find corresponding fuzzy match
+                fuzzy_match = None
+                for match in fuzzy_matches:
+                    if match.document_id == doc_id:
+                        fuzzy_match = match
+                        break
+
+                if fuzzy_match:
+                    # Combine scores (weighted average)
+                    es_score = es_result.get('normalized_score', 0.5)
+                    fuzzy_score = fuzzy_match.score
+                    combined_score = (es_score * 0.4) + (fuzzy_score * 0.6)  # Favor fuzzy score
+
+                    enhanced_result = es_result.copy()
+                    enhanced_result.update({
+                        'fuzzy_score': fuzzy_score,
+                        'combined_score': combined_score,
+                        'confidence': combined_score,
+                        'fuzzy_algorithm': fuzzy_match.algorithm,
+                        'fuzzy_highlights': fuzzy_match.highlights or []
+                    })
+                    enhanced_results.append(enhanced_result)
+                else:
+                    # Keep ES result with lower confidence
+                    enhanced_result = es_result.copy()
+                    enhanced_result['confidence'] = enhanced_result.get('normalized_score', 0.5) * 0.8
+                    enhanced_results.append(enhanced_result)
+
+            # Sort by combined confidence score
+            enhanced_results.sort(key=lambda x: x.get('confidence', 0), reverse=True)
+
+            return enhanced_results
+
+        except Exception as e:
+            self.logger.error(f"❌ Fuzzy enhancement failed: {e}")
+            return es_results  # Return original results on error
+
+    async def _generate_search_suggestions(self, query: str, index_name: str,
+                                         search_fields: List[str]) -> List[Dict[str, Any]]:
+        """Generate search suggestions for improved results"""
+        try:
+            suggestions = []
+
+            if not FUZZYWUZZY_AVAILABLE:
+                return suggestions
+
+            # Get sample field values for suggestion generation
+            sample_query = {
+                "size": 100,
+                "_source": search_fields,
+                "query": {"match_all": {}}
+            }
+
+            response = await self.client.search(
+                index=index_name,
+                body=sample_query
+            )
+
+            # Extract field values
+            field_values = []
+            for hit in response['hits']['hits']:
+                for field in search_fields:
+                    if field in hit['_source']:
+                        value = str(hit['_source'][field])
+                        if value and len(value) > 1:
+                            field_values.append(value)
+
+            # Generate suggestions using fuzzy matcher
+            if field_values:
+                fuzzy_suggestions = self._fuzzy_matcher.generate_suggestions(query, field_values)
+
+                for suggestion in fuzzy_suggestions:
+                    suggestions.append({
+                        'original_query': suggestion.original_query,
+                        'suggested_query': suggestion.suggested_query,
+                        'confidence': suggestion.confidence,
+                        'reason': suggestion.reason
+                    })
+
+            return suggestions[:5]  # Limit to 5 suggestions
+
+        except Exception as e:
+            self.logger.error(f"❌ Suggestion generation failed: {e}")
+            return []
+
+    def _parse_range_query(self, query: str) -> List[Dict[str, Any]]:
+        """Parse range query string into Elasticsearch range conditions"""
+        try:
+            conditions = []
+
+            # Simple range patterns
+            if '>=' in query:
+                parts = query.split('>=')
+                if len(parts) == 2:
+                    value = parts[1].strip()
+                    conditions.append({"gte": self._convert_value(value)})
+            elif '>' in query:
+                parts = query.split('>')
+                if len(parts) == 2:
+                    value = parts[1].strip()
+                    conditions.append({"gt": self._convert_value(value)})
+
+            if '<=' in query:
+                parts = query.split('<=')
+                if len(parts) == 2:
+                    value = parts[1].strip()
+                    conditions.append({"lte": self._convert_value(value)})
+            elif '<' in query:
+                parts = query.split('<')
+                if len(parts) == 2:
+                    value = parts[1].strip()
+                    conditions.append({"lt": self._convert_value(value)})
+
+            # Between pattern
+            if 'between' in query.lower():
+                parts = query.lower().split('between')
+                if len(parts) == 2:
+                    range_part = parts[1].strip()
+                    if ' and ' in range_part:
+                        values = range_part.split(' and ')
+                        if len(values) == 2:
+                            min_val = self._convert_value(values[0].strip())
+                            max_val = self._convert_value(values[1].strip())
+                            conditions.append({"gte": min_val, "lte": max_val})
+
+            return conditions
+
+        except Exception as e:
+            self.logger.warning(f"Range query parsing failed: {e}")
+            return []
+
+    def _convert_value(self, value: str) -> Any:
+        """Convert string value to appropriate type"""
+        value = value.strip()
+
+        # Try integer
+        try:
+            return int(value)
+        except ValueError:
+            pass
+
+        # Try float
+        try:
+            return float(value)
+        except ValueError:
+            pass
+
+        # Return as string
+        return value
+
+
+    # ===================================================================
+    # CSV UTILITY METHODS
+    # ===================================================================
+
+    async def _get_csv_field_suggestions(self, index_name: str, query: str) -> Dict[str, Any]:
+        """Get field suggestions based on query content"""
+        try:
+            self.logger.info(f"💡 Getting field suggestions for query: {query}")
+
+            # Get index mapping to understand available fields
+            index_info = await self._get_csv_index_info(index_name)
+            if not index_info.get('success'):
+                return {
+                    'success': False,
+                    'error': 'Could not retrieve index information'
+                }
+
+            mapping = index_info['info']['mapping']
+            available_fields = list(mapping.get('properties', {}).keys())
+            available_fields = [f for f in available_fields if not f.startswith('_csv_')]
+
+            # Analyze query to suggest relevant fields
+            query_lower = query.lower()
+            field_suggestions = []
+
+            for field in available_fields:
+                field_lower = field.lower()
+                relevance_score = 0
+
+                # Direct field name match
+                if field_lower in query_lower:
+                    relevance_score += 10
+
+                # Partial field name match
+                for word in query_lower.split():
+                    if word in field_lower:
+                        relevance_score += 5
+
+                # Field type relevance
+                field_mapping = mapping['properties'].get(field, {})
+                field_type = field_mapping.get('type', 'text')
+
+                if field_type == 'text' and any(char.isalpha() for char in query):
+                    relevance_score += 3
+                elif field_type in ['long', 'double'] and any(char.isdigit() for char in query):
+                    relevance_score += 5
+                elif field_type == 'date' and self._looks_like_date(query):
+                    relevance_score += 8
+
+                if relevance_score > 0:
+                    field_suggestions.append({
+                        'field_name': field,
+                        'field_type': field_type,
+                        'relevance_score': relevance_score,
+                        'reason': self._get_suggestion_reason(field, field_type, query)
+                    })
+
+            # Sort by relevance score
+            field_suggestions.sort(key=lambda x: x['relevance_score'], reverse=True)
+
+            return {
+                'success': True,
+                'suggestions': field_suggestions[:10],  # Top 10 suggestions
+                'total_fields': len(available_fields),
+                'query': query
+            }
+
+        except Exception as e:
+            self.logger.error(f"❌ Field suggestion failed: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'query': query
+            }
+
+    async def _detect_csv_data_types(self, index_name: str, sample_size: int = 100) -> Dict[str, Any]:
+        """Detect data types in CSV index by sampling documents"""
+        try:
+            self.logger.info(f"🔍 Detecting data types in index: {index_name}")
+
+            # Sample documents from the index
+            sample_query = {
+                "size": sample_size,
+                "query": {"match_all": {}}
+            }
+
+            response = await self.client.search(
+                index=index_name,
+                body=sample_query
+            )
+
+            if not response['hits']['hits']:
+                return {
+                    'success': False,
+                    'error': 'No documents found in index'
+                }
+
+            # Analyze field types from sample data
+            field_analysis = {}
+
+            for hit in response['hits']['hits']:
+                document = hit['_source']
+
+                for field_name, field_value in document.items():
+                    if field_name.startswith('_csv_'):
+                        continue  # Skip metadata fields
+
+                    if field_name not in field_analysis:
+                        field_analysis[field_name] = {
+                            'values': [],
+                            'types': {},
+                            'null_count': 0,
+                            'total_count': 0
+                        }
+
+                    field_analysis[field_name]['total_count'] += 1
+
+                    if field_value is None or field_value == '':
+                        field_analysis[field_name]['null_count'] += 1
+                        continue
+
+                    field_analysis[field_name]['values'].append(str(field_value))
+
+                    # Detect type
+                    detected_type = self._detect_value_type(str(field_value))
+                    if detected_type not in field_analysis[field_name]['types']:
+                        field_analysis[field_name]['types'][detected_type] = 0
+                    field_analysis[field_name]['types'][detected_type] += 1
+
+            # Determine primary type for each field
+            field_types = {}
+            for field_name, analysis in field_analysis.items():
+                if analysis['types']:
+                    # Get most common type
+                    primary_type = max(analysis['types'], key=analysis['types'].get)
+                    type_confidence = analysis['types'][primary_type] / analysis['total_count']
+
+                    field_types[field_name] = {
+                        'primary_type': primary_type,
+                        'confidence': type_confidence,
+                        'type_distribution': analysis['types'],
+                        'null_percentage': (analysis['null_count'] / analysis['total_count']) * 100,
+                        'sample_values': analysis['values'][:5]  # First 5 sample values
+                    }
+
+            return {
+                'success': True,
+                'field_types': field_types,
+                'sample_size': len(response['hits']['hits']),
+                'total_fields': len(field_types)
+            }
+
+        except Exception as e:
+            self.logger.error(f"❌ Data type detection failed: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'index_name': index_name
+            }
+
+    async def _generate_csv_mapping(self, index_name: str, csv_structure: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate optimized mapping for CSV data"""
+        try:
+            # Use the mapping generator utility
+            from .csv_mapping_generator import CSVMappingGenerator
+
+            generator_config = {
+                'enable_fuzzy_fields': self.config.csv_include_highlights,
+                'enable_keyword_fields': True,
+                'max_keyword_length': 256,
+                'default_analyzer': 'csv_text_analyzer',
+                'fuzzy_analyzer': 'csv_fuzzy_analyzer'
+            }
+
+            generator = CSVMappingGenerator(generator_config)
+            mapping = generator.generate_mapping(csv_structure)
+
+            return {
+                'success': True,
+                'mapping': mapping,
+                'index_name': index_name
+            }
+
+        except Exception as e:
+            self.logger.error(f"❌ CSV mapping generation failed: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'index_name': index_name
+            }
+
+    def _detect_value_type(self, value: str) -> str:
+        """Detect the type of a single value"""
+        if not value or not value.strip():
+            return 'empty'
+
+        value = value.strip()
+
+        # Boolean check
+        if value.lower() in ['true', 'false', 'yes', 'no', '1', '0', 'y', 'n']:
+            return 'boolean'
+
+        # Integer check
+        try:
+            int(value)
+            return 'integer'
+        except ValueError:
+            pass
+
+        # Float check
+        try:
+            float(value)
+            return 'float'
+        except ValueError:
+            pass
+
+        # Date check
+        if self._looks_like_date(value):
+            return 'date'
+
+        # Email check
+        if '@' in value and '.' in value:
+            return 'email'
+
+        # URL check
+        if value.startswith(('http://', 'https://', 'ftp://')):
+            return 'url'
+
+        return 'text'
+
+    def _looks_like_date(self, value: str) -> bool:
+        """Check if value looks like a date"""
+        import re
+
+        date_patterns = [
+            r'\d{4}[-/]\d{1,2}[-/]\d{1,2}',  # YYYY-MM-DD
+            r'\d{1,2}[-/]\d{1,2}[-/]\d{4}',  # MM-DD-YYYY
+            r'\d{1,2}[-/]\d{1,2}[-/]\d{2}',  # MM-DD-YY
+        ]
+
+        return any(re.match(pattern, value) for pattern in date_patterns)
+
+    def _get_suggestion_reason(self, field_name: str, field_type: str, query: str) -> str:
+        """Get reason for field suggestion"""
+        field_lower = field_name.lower()
+        query_lower = query.lower()
+
+        if field_lower in query_lower:
+            return "Field name matches query"
+        elif any(word in field_lower for word in query_lower.split()):
+            return "Field name contains query words"
+        elif field_type == 'text' and any(char.isalpha() for char in query):
+            return "Text field suitable for text query"
+        elif field_type in ['long', 'double'] and any(char.isdigit() for char in query):
+            return "Numeric field suitable for numeric query"
+        elif field_type == 'date' and self._looks_like_date(query):
+            return "Date field suitable for date query"
+        else:
+            return "General field relevance"
 
 
 # Main execution block for Docker container

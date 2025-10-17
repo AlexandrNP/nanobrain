@@ -106,7 +106,7 @@ from .core.agent import ConversationalAgent, AgentConfig
 from .core.executor import LocalExecutor, ParslExecutor, ExecutorConfig
 from .core.data_unit import DataUnitMemory, DataUnitConfig
 from .core.step import Step, StepConfig
-from .core.trigger import DataUpdatedTrigger, TriggerConfig
+from .core.trigger import DataUnitChangeTrigger, TriggerConfig
 from .core.link import DirectLink, LinkConfig
 
 # Configuration imports

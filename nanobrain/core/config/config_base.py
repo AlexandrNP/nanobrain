@@ -850,7 +850,7 @@ class ConfigBase(BaseModel, ABC):
                 if key == 'tools' and cls.__name__ == 'StepConfig':
                     resolved_config[key] = value.copy()  # Keep original for schema validation
                     resolved_tools = {}
-                    
+
                     # Process each tool for instantiation
                     for tool_name, tool_config in value.items():
                         if isinstance(tool_config, dict) and 'class' in tool_config and 'config' in tool_config:
@@ -858,6 +858,61 @@ class ConfigBase(BaseModel, ABC):
                                 # Extract class path and config
                                 class_path = tool_config['class']
                                 config_value = tool_config['config']
+
+                                # Import the class
+                                module_path, class_name = class_path.rsplit('.', 1)
+                                module = importlib.import_module(module_path)
+                                target_class = getattr(module, class_name)
+
+                                # Resolve config and create instance
+                                if isinstance(config_value, str):
+                                    # File path - all classes support this
+                                    config_path = cls._resolve_config_path(config_value, context)
+                                    instance = target_class.from_config(config_path, **context.additional_context)
+                                else:
+                                    # Inline configuration dict - only supported for DataUnit, Link, Trigger classes
+                                    if cls._is_inline_config_supported(target_class):
+                                        instance = target_class.from_config(config_value, **context.additional_context)
+                                    else:
+                                        raise ValueError(
+                                            f"❌ FRAMEWORK VIOLATION: Inline dict configuration not supported for {class_path}\n"
+                                            f"   SUPPORTED CLASSES: DataUnit, Link, Trigger and their subclasses only\n"
+                                            f"   REQUIRED: Use file path for config field\n"
+                                            f"   EXAMPLE: config: 'path/to/{class_name.lower()}.yml'\n"
+                                            f"   CURRENT: config: {config_value}"
+                                        )
+
+                                # Store instantiated tool separately
+                                resolved_tools[tool_name] = instance
+
+                                logger.debug(f"✅ Instantiated tool {class_name} for key '{tool_name}'")
+
+                            except Exception as e:
+                                raise ValueError(
+                                    f"❌ FAILED TO INSTANTIATE OBJECT: {tool_name}\n"
+                                    f"   CLASS: {tool_config.get('class', 'unknown')}\n"
+                                    f"   CONFIG: {tool_config.get('config', 'unknown')}\n"
+                                    f"   ERROR: {str(e)}\n"
+                                    f"   SOLUTION: Ensure class path is correct and config is valid"
+                                ) from e
+                        else:
+                            # Keep non-class+config tools as-is
+                            resolved_tools[tool_name] = tool_config
+
+                    # Store resolved tools for later access
+                    resolved_config['resolved_tools'] = resolved_tools
+                # Special handling for WorkflowConfig agents field
+                elif key == 'agents' and cls.__name__ == 'WorkflowConfig':
+                    resolved_config[key] = value.copy()  # Keep original for schema validation
+                    resolved_agents = {}
+                    
+                    # Process each agent for instantiation
+                    for agent_name, agent_config in value.items():
+                        if isinstance(agent_config, dict) and 'class' in agent_config and 'config' in agent_config:
+                            try:
+                                # Extract class path and config
+                                class_path = agent_config['class']
+                                config_value = agent_config['config']
                                 
                                 # Import the class
                                 module_path, class_name = class_path.rsplit('.', 1)
@@ -882,26 +937,26 @@ class ConfigBase(BaseModel, ABC):
                                             f"   CURRENT: config: {config_value}"
                                         )
                                 
-                                # Store instantiated tool separately
-                                resolved_tools[tool_name] = instance
-                                
-                                logger.debug(f"✅ Instantiated tool {class_name} for key '{tool_name}'")
-                                
+                                # Store instantiated agent separately
+                                resolved_agents[agent_name] = instance
+
+                                logger.debug(f"✅ Instantiated agent {class_name} for key '{agent_name}'")
+
                             except Exception as e:
                                 raise ValueError(
-                                    f"❌ FAILED TO INSTANTIATE TOOL: {tool_name}\n"
-                                    f"   CLASS: {tool_config.get('class', 'unknown')}\n"
-                                    f"   CONFIG: {tool_config.get('config', 'unknown')}\n"
+                                    f"❌ FAILED TO INSTANTIATE AGENT: {agent_name}\n"
+                                    f"   CLASS: {agent_config.get('class', 'unknown')}\n"
+                                    f"   CONFIG: {agent_config.get('config', 'unknown')}\n"
                                     f"   ERROR: {str(e)}\n"
                                     f"   SOLUTION: Ensure class path is correct and config is valid"
                                 ) from e
                         else:
-                            # Keep non-class+config tools as-is
-                            resolved_tools[tool_name] = tool_config
-                    
-                    # Store resolved tools for later access
-                    resolved_config['_resolved_tools'] = resolved_tools
-                    
+                            # Keep non-class+config agents as-is
+                            resolved_agents[agent_name] = agent_config
+
+                    # Store resolved agents for later access
+                    resolved_config['resolved_agents'] = resolved_agents
+
                 # Check if this dict has both 'class' and 'config' fields (non-tools)
                 elif 'class' in value and 'config' in value:
                     # Extract class path and config
@@ -1248,7 +1303,19 @@ class ConfigBase(BaseModel, ABC):
         # Temporarily allow instantiation for validated config data
         cls._allow_direct_instantiation = True
         try:
+            # Extract resolved objects before creating instance
+            resolved_tools = config_data.pop('resolved_tools', {})
+            resolved_agents = config_data.pop('resolved_agents', {})
+
+            # Create instance with remaining config data
             instance = cls(**config_data)
+
+            # Attach resolved objects as attributes for step access
+            if resolved_tools:
+                setattr(instance, 'resolved_tools', resolved_tools)
+            if resolved_agents:
+                setattr(instance, 'resolved_agents', resolved_agents)
+
             return instance
         finally:
             cls._allow_direct_instantiation = False

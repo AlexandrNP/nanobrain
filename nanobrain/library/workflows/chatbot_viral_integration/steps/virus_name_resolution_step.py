@@ -18,7 +18,6 @@ from datetime import datetime
 from nanobrain.core.step import Step
 from nanobrain.core.data_unit import DataUnit
 from nanobrain.core.agent import SimpleAgent
-from nanobrain.core.config.component_factory import create_component, load_config_file
 
 
 class UltraHighConfidenceCacheManager:

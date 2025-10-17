@@ -67,7 +67,7 @@ web_interface:
   # NanoBrain workflow integration - EVENT-DRIVEN
   workflow_integration:
     workflow_type: "chatbot_viral_integration"
-    workflow_config: "nanobrain/library/workflows/chatbot_viral_integration/config/ChatbotViralWorkflow.yml"
+    workflow_config: "nanobrain/library/workflows/chatbot_viral_integration/ChatbotViralWorkflow.yml"
     enable_workflow_metrics: true
     data_unit_communication: true  # Event-driven communication
     communication_timeout: 30.0

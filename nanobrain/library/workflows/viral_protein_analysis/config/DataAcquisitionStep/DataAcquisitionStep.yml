@@ -43,15 +43,15 @@ triggers:
 tools:
   bv_brc_tool:
     class: "nanobrain.library.tools.bioinformatics.bv_brc_tool.BVBRCTool"
-    config: "config/DataAcquisitionStep/BVBRCTool.yml"
+    config: "nanobrain/library/workflows/viral_protein_analysis/config/DataAcquisitionStep/BVBRCTool.yml"
   
   species_validation_agent:
     class: "nanobrain.library.agents.specialized.protein_synonym_agent.ProteinSynonymAgent"
-    config: "../AnnotationMappingStep/SynonymDetectionAgent.yml"
-  
+    config: "nanobrain/library/workflows/viral_protein_analysis/config/AnnotationMappingStep/SynonymDetectionAgent.yml"
+
   taxonomic_verification_agent:
     class: "nanobrain.library.agents.specialized.protein_synonym_agent.ProteinSynonymAgent"
-    config: "../AnnotationMappingStep/SynonymDetectionAgent.yml"
+    config: "nanobrain/library/workflows/viral_protein_analysis/config/AnnotationMappingStep/SynonymDetectionAgent.yml"
 
 # Step-specific configuration (existing)
 confidence_threshold: 0.9
@@ -62,7 +62,7 @@ ultra_precision_mode: true
 enable_multi_stage_validation: true
 
 # CSV file configuration (existing)
-csv_file_path: "data/alphavirus_analysis/BVBRC_genome_alphavirus.csv"
+csv_file_path: "data/bvbrc_cache/alphavirus_genomes.tsv"
 
 # Search configuration (existing)
 search_strategies:

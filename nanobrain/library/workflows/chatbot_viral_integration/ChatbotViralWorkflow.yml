@@ -6,6 +6,13 @@ error_handling: "continue"
 enable_monitoring: true
 workflow_directory: "nanobrain/library/workflows/chatbot_viral_integration"
 
+# CRITICAL FIX: Add missing executor configuration
+executor:
+  executor_type: "local"
+  class: "nanobrain.core.executor.LocalExecutor"
+  max_workers: 4
+  timeout: 300.0
+
 # Existing configuration preserved
 enable_progress_reporting: true
 progress_batch_interval: 3.0

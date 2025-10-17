@@ -27,7 +27,7 @@ from datetime import datetime
 # Core framework imports with proper nanobrain package structure
 from nanobrain.core.component_base import FromConfigBase
 from nanobrain.core.data_unit import DataUnitMemory, DataUnitConfig
-from nanobrain.core.trigger import DataUpdatedTrigger, TriggerConfig, TriggerType
+from nanobrain.core.trigger import DataUnitChangeTrigger, TriggerConfig, TriggerType
 from nanobrain.core.link import DirectLink, LinkConfig, LinkType
 from nanobrain.core.executor import LocalExecutor, ExecutorConfig
 from nanobrain.core.logging_system import get_logger, OperationType
@@ -578,12 +578,7 @@ class ChatWorkflow(FromConfigBase):
             executor = LocalExecutor.from_config(executor_config)
         except Exception as e:
             # Fallback: Use LocalExecutor's default configuration
-            executor = LocalExecutor.from_config({
-                'name': 'fallback_local_executor',
-                'description': 'Fallback local executor',
-                'execution_mode': 'local',
-                'max_workers': 2
-            })
+            executor = LocalExecutor.from_config('config/workflows/chat/fallback_executor.yml')
         
         return {
             'executor': executor,
@@ -663,19 +658,9 @@ class ChatWorkflow(FromConfigBase):
             # Fallback: Use DataUnit creation with dictionary configuration (allowed for DataUnits)
             self.logger.warning(f"Failed to load DataUnit config files, using fallback: {e}")
             
-            self.data_units['user_input'] = DataUnitMemory.from_config({
-                "name": "user_input",
-                "data_type": "memory",
-                "description": "User input messages",
-                "persistent": False
-            })
+            self.data_units['user_input'] = DataUnitMemory.from_config('config/workflows/chat/user_input_unit.yml')
             
-            self.data_units['agent_output'] = DataUnitMemory.from_config({
-                "name": "agent_output",
-                "data_type": "memory", 
-                "description": "Agent response output",
-                "persistent": False
-            })
+            self.data_units['agent_output'] = DataUnitMemory.from_config('config/workflows/chat/agent_output_unit.yml')
         
         # ✅ FRAMEWORK COMPLIANCE: Use simple config for ConversationHistoryUnit
         try:

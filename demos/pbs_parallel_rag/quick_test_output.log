@@ -1,0 +1,48 @@
+================================================================================
+⚡ PBS PARALLEL RAG QUICK TEST
+================================================================================
+Job ID: 8087393.aurora-pbs-0001.hostmgmt.cm.aurora.alcf.anl.gov
+Job Name: nanobrain_pbs_rag_quick
+Nodes: 
+CPUs: 
+Start Time: Thu 16 Oct 2025 07:39:08 PM UTC
+Working Directory: /home/onarykov/nanobrain/demos/pbs_parallel_rag
+Quick Test Size: 10 queries
+================================================================================
+
+🔍 QUICK DEPENDENCY CHECK
+================================================================================
+2025-10-16 19:39:23,665 - nanobrain.core.shared_resource - INFO - 🔧 SharedResourcePool initialized
+✅ All critical dependencies available
+✅ Dependencies satisfied
+
+🔍 AURORA NODE ALLOCATION
+================================================================================
+Quick test node allocation:
+  Total slots: 1
+  Unique nodes: 1
+  Nodes: x4220c4s4b0n0.hsn.cm.aurora.alcf.anl.gov 
+================================================================================
+
+⚙️  CONFIGURATION VALIDATION
+================================================================================
+❌ Configuration validation failed
+================================================================================
+🧪 PBS PARALLEL RAG CONFIGURATION TESTS
+================================================================================
+Testing PBS Executor Configuration Structure...
+✅ PBS executor config loaded successfully
+❌ PBS provider not configured correctly
+
+Testing Workflow Configuration Structure...
+✅ Workflow config loaded successfully
+✅ PBS query enhancement step correctly configured
+✅ PBS executor correctly referenced in workflow
+✅ PBS config paths correctly set (using relative paths)
+✅ Workflow configuration structure is valid!
+
+================================================================================
+📊 TEST SUMMARY
+================================================================================
+❌ SOME TESTS FAILED (1/2)
+🔧 Please fix configuration issues before deployment

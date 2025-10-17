@@ -24,46 +24,131 @@ class ViralExpertWorkflow(Workflow):
     """
     ✅ REUSED LOGIC: Extracted from ConversationalResponseStep
     Specialized workflow for viral expert conversations
-    
+
     This workflow provides expert-level conversational responses about viral biology,
     particularly focused on alphaviruses. Uses specialized LLM agents for accurate
     scientific information delivery.
     """
-    
+
     def _init_from_config(self, config: WorkflowConfig, component_config: Dict[str, Any],
-                         dependencies: Dict[str, Any]) -> None:
+                          dependencies: Dict[str, Any]) -> None:
         """Initialize viral expert workflow from configuration"""
         super()._init_from_config(config, component_config, dependencies)
-        
+
         # ✅ FRAMEWORK COMPLIANCE: Initialize instance variables
         self.conversational_agent: Optional[Any] = None
         self.response_formatter: Optional[Any] = None
-        
-        self.nb_logger.info("🧠 Initializing Viral Expert Conversational Workflow")
-        
-        # Load conversational agent
-        self._load_conversational_agent()
-        
-        # Initialize response formatter
-        self._initialize_response_formatter()
-        
-        self.nb_logger.info("✅ Viral Expert Conversational Workflow initialized")
 
-    def _load_conversational_agent(self) -> None:
+        self.nb_logger.info(
+            "🧠 Initializing Viral Expert Conversational Workflow")
+
+        # Initialize response formatter (sync)
+        self._initialize_response_formatter()
+
+        self.nb_logger.info(
+            "✅ Viral Expert Conversational Workflow basic initialization completed - agent will be loaded in initialize()")
+
+    async def initialize(self) -> None:
         """
-        ✅ REUSED COMPONENT: Load ConversationalAgent from chatbot_viral_integration
+        ✅ ASYNC INITIALIZATION: Initialize workflow without redundant agent creation
+        The step will handle agent creation and initialization
+        """
+        # Initialize parent first
+        await super().initialize()
+
+        # ✅ CRITICAL FIX: Initialize and start all workflow links
+        await self._initialize_workflow_links()
+
+        # ✅ CRITICAL FIX: Connect workflow-level triggers to link callbacks
+        await self._setup_trigger_callbacks()
+
+        # PHASE 2 DEBUG: Add debugging to see what data is received by the workflow
+        if hasattr(self, 'data_units') and 'user_query' in self.data_units:
+            user_query_data_unit = self.data_units['user_query']
+            original_set_data = user_query_data_unit.set_data
+
+            def debug_set_data(data):
+                self.nb_logger.info(f"🔍 [WORKFLOW-DEBUG] user_query received data type: {type(data)}")
+                self.nb_logger.info(f"🔍 [WORKFLOW-DEBUG] user_query received data: {data}")
+                return original_set_data(data)
+
+            user_query_data_unit.set_data = debug_set_data
+
+        self.nb_logger.info(
+            "✅ Viral Expert Workflow initialized - agents handled by steps")
+
+    async def _initialize_workflow_links(self) -> None:
+        """
+        ✅ CRITICAL FIX: Verify workflow links are properly set up
+        The framework already initializes and starts links automatically
         """
         try:
-            from nanobrain.library.agents.specialized_agents.conversational_specialized_agent import ConversationalSpecializedAgent
-            
-            # ✅ FRAMEWORK COMPLIANCE: Load agent via from_config
-            config_path = "nanobrain/library/workflows/chatbot_viral_integration/config/ConversationalResponseStep/ConversationalAgent.yml"
-            self.conversational_agent = ConversationalSpecializedAgent.from_config(config_path)
-            
-            self.nb_logger.info("✅ Conversational agent loaded successfully")
-            
+            # Get workflow links
+            if not hasattr(self, 'step_links'):
+                self.nb_logger.warning("⚠️ No workflow links found")
+                return
+
+            self.nb_logger.info(f"🔗 Verifying {len(self.step_links)} workflow links")
+
+            # Verify all links are properly configured
+            for link_id, link in self.step_links.items():
+                if hasattr(link, '_is_active') and link._is_active:
+                    self.nb_logger.info(f"✅ Link active: {link_id}")
+                else:
+                    self.nb_logger.warning(f"⚠️ Link not active: {link_id}")
+
+            self.nb_logger.info("✅ All workflow links verified")
+
         except Exception as e:
-            self.nb_logger.error(f"❌ Failed to load conversational agent: {e}")
+            self.nb_logger.error(f"❌ Failed to verify workflow links: {e}", exc_info=True)
+            raise
+
+    async def _setup_trigger_callbacks(self) -> None:
+        """
+        ✅ CRITICAL FIX: Connect workflow-level triggers to link transfer methods
+        This is the missing piece that enables data flow through the workflow
+        """
+        try:
+            # Get workflow-level triggers
+            if not hasattr(self, '_workflow_triggers'):
+                self.nb_logger.warning("⚠️ No workflow triggers found")
+                return
+
+            # Get workflow links
+            if not hasattr(self, 'step_links'):
+                self.nb_logger.warning("⚠️ No workflow links found")
+                return
+
+            # Connect conversation_start trigger to input_to_conversation link
+            conversation_start_trigger = None
+            input_to_conversation_link = None
+
+            # Find the conversation_start trigger
+            for trigger_id, trigger in self._workflow_triggers.items():
+                if hasattr(trigger, 'trigger_id') and trigger.trigger_id == 'conversation_start':
+                    conversation_start_trigger = trigger
+                    break
+                elif trigger_id == 'conversation_start':
+                    conversation_start_trigger = trigger
+                    break
+
+            # Find the input_to_conversation link
+            if 'input_to_conversation' in self.step_links:
+                input_to_conversation_link = self.step_links['input_to_conversation']
+
+            # Connect trigger to link
+            if conversation_start_trigger and input_to_conversation_link:
+                await conversation_start_trigger.add_callback(input_to_conversation_link.transfer)
+                self.nb_logger.info(
+                    "✅ Connected conversation_start trigger to input_to_conversation link")
+            else:
+                self.nb_logger.warning(
+                    f"⚠️ Failed to connect trigger to link: "
+                    f"trigger={conversation_start_trigger is not None}, "
+                    f"link={input_to_conversation_link is not None}")
+
+        except Exception as e:
+            self.nb_logger.error(f"❌ Failed to setup trigger callbacks: {e}", exc_info=True)
             raise
 
     def _initialize_response_formatter(self) -> None:
@@ -74,83 +159,22 @@ class ViralExpertWorkflow(Workflow):
             # Simple response formatter for conversational workflows
             self.response_formatter = ConversationalResponseFormatter()
             self.nb_logger.debug("✅ Response formatter initialized")
-            
+
         except Exception as e:
-            self.nb_logger.error(f"❌ Failed to initialize response formatter: {e}")
+            self.nb_logger.error(
+                f"❌ Failed to initialize response formatter: {e}", exc_info=True)
             raise
 
-    async def process(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        ✅ REUSED LOGIC: Adapted from ConversationalResponseStep.process
-        Generate expert conversational response about viral biology
-        """
-        start_time = time.time()
-        
-        try:
-            # Extract user query from input
-            user_query = input_data.get('user_query', '')
-            session_id = input_data.get('session_id', f"session_{uuid.uuid4().hex[:8]}")
-            
-            if not user_query:
-                return self._create_error_response("No user query provided", session_id)
-            
-            self.nb_logger.info(f"🧠 Generating expert response for query: {user_query[:100]}...")
-            
-            # ✅ REUSED LOGIC: Generate response using conversational agent
-            expert_response = await self._generate_expert_response(user_query, input_data)
-            
-            # Format response for output
-            formatted_response = self._format_conversational_response(
-                expert_response, user_query, session_id, start_time
-            )
-            
-            processing_time = time.time() - start_time
-            self.nb_logger.info(f"✅ Expert response generated in {processing_time:.2f}s")
-            
-            return formatted_response
-            
-        except Exception as e:
-            self.nb_logger.error(f"❌ Conversational workflow failed: {e}")
-            return self._create_error_response(str(e), session_id, start_time)
+    # ✅ STEP-BASED PROCESSING: Workflow now delegates to steps
+    # The ExpertConversationStep handles all agent processing
 
-    async def _generate_expert_response(self, user_query: str, context_data: Dict[str, Any]) -> str:
-        """
-        ✅ REUSED LOGIC: Generate expert response using specialized agent
-        """
-        try:
-            # Prepare context for expert response
-            expert_context = {
-                'expertise': 'virology',
-                'focus': 'alphaviruses',
-                'query_type': 'conversational',
-                'user_query': user_query
-            }
-            
-            # Add virus context if available from intelligent routing
-            virus_species = context_data.get('virus_species', [])
-            if virus_species:
-                expert_context['virus_context'] = virus_species
-                expert_context['contextual_expertise'] = True
-            
-            # ✅ FRAMEWORK COMPLIANCE: Use agent's specialized request processing
-            response = await self.conversational_agent._process_specialized_request(
-                user_query,
-                context=expert_context
-            )
-            
-            return response or "I apologize, but I couldn't generate a response at this time."
-            
-        except Exception as e:
-            self.nb_logger.error(f"❌ Expert response generation failed: {e}")
-            return f"I encountered an error while processing your question: {str(e)}"
-
-    def _format_conversational_response(self, expert_response: str, user_query: str, 
-                                      session_id: str, start_time: float) -> Dict[str, Any]:
+    def _format_conversational_response(self, expert_response: str, user_query: str,
+                                        session_id: str, start_time: float) -> Dict[str, Any]:
         """
         ✅ FRAMEWORK COMPLIANCE: Format conversational response for output
         """
         processing_time = time.time() - start_time
-        
+
         return {
             'success': True,
             'response_type': 'conversational',
@@ -167,13 +191,13 @@ class ViralExpertWorkflow(Workflow):
             }
         }
 
-    def _create_error_response(self, error_message: str, session_id: str, 
-                             start_time: Optional[float] = None) -> Dict[str, Any]:
+    def _create_error_response(self, error_message: str, session_id: str,
+                               start_time: Optional[float] = None) -> Dict[str, Any]:
         """
         ✅ FRAMEWORK COMPLIANCE: Create structured error response
         """
         processing_time = (time.time() - start_time) if start_time else 0.0
-        
+
         return {
             'success': False,
             'response_type': 'error',
@@ -192,10 +216,10 @@ class ConversationalResponseFormatter:
     """
     ✅ FRAMEWORK COMPLIANCE: Simple response formatter for conversational workflows
     """
-    
+
     def __init__(self):
         self.formatter_id = f"formatter_{uuid.uuid4().hex[:8]}"
-        
+
     def format_response(self, response: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
         """Format conversational response with metadata"""
         return {
@@ -205,4 +229,4 @@ class ConversationalResponseFormatter:
                 'formatting_timestamp': datetime.now().isoformat()
             },
             'original_metadata': metadata
-        } 
+        }

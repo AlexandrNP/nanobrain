@@ -1,0 +1,47 @@
+name: pbs_chat_executor_small
+type: executor
+executor_type: parsl
+max_workers: 4   # Smaller configuration for limited resources
+timeout: 300
+parsl_config:
+  strategy: null
+  app_cache: true
+  checkpoint_mode: null
+  retries: 1
+  executors:
+  - label: htex_pbs_small
+    class: parsl.executors.HighThroughputExecutor
+    max_workers_per_node: 4  # Conservative for smaller nodes
+    worker_debug: false
+    heartbeat_period: 30
+    heartbeat_threshold: 120
+    provider_config:
+      class: parsl.providers.PBSProvider
+      queue: batch
+      nodes_per_block: 1     # Single node for small clusters
+      cpus_per_node: 4       # Smaller node configuration
+      walltime: "01:00:00"   # Shorter walltime for quick tests
+      scheduler_options: "#PBS -l mem=16gb"  # Moderate memory request
+      worker_init: |
+        # Environment setup for smaller clusters
+        module load frameworks
+        conda activate nanobrain
+        export OMP_NUM_THREADS=1
+        export PYTHONPATH=$PBS_O_WORKDIR:$PYTHONPATH
+
+        # Alternative setups for other systems:
+        # module load python/3.9
+        # source /path/to/venv/bin/activate
+      parallelism: 1.0       # Full parallelism for smaller setup
+fallback:
+  executor_type: local
+  max_workers: 4
+thread_fallback:
+  executor_type: thread
+  max_workers: 4
+_metadata:
+  last_updated: '2025-10-14T12:00:00.000000'
+  updated_by: pbs_optimization
+  migration_version: 1.0.0
+  uses_modular_config: true
+  description: "Small cluster configuration for PBS parallel RAG"

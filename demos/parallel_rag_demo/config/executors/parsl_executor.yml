@@ -1,0 +1,35 @@
+name: parsl_chat_executor
+type: executor
+executor_type: parsl
+max_workers: 2
+timeout: 10
+parsl_config:
+  strategy: null
+  app_cache: true
+  checkpoint_mode: null
+  retries: 0
+  executors:
+  - label: htex_local_fast
+    class: parsl.executors.HighThroughputExecutor
+    max_workers_per_node: 2
+    worker_debug: false
+    heartbeat_period: 5
+    heartbeat_threshold: 10
+    provider_config:
+      class: parsl.providers.LocalProvider
+      min_blocks: 1
+      init_blocks: 1
+      max_blocks: 1
+      worker_init: ''
+      parallelism: 0.5
+fallback:
+  executor_type: local
+  max_workers: 4
+thread_fallback:
+  executor_type: thread
+  max_workers: 4
+_metadata:
+  last_updated: '2025-06-22T23:41:37.537480'
+  updated_by: modular_config_migration
+  migration_version: 1.0.0
+  uses_modular_config: true

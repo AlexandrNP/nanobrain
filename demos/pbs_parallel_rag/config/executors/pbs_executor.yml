@@ -1,0 +1,49 @@
+name: pbs_mpi_executor
+type: executor
+executor_type: parsl
+max_workers: 16  # Total workers across all nodes
+timeout: 300     # Increased timeout for HPC environments
+parsl_config:
+  strategy: null
+  app_cache: true
+  checkpoint_mode: null
+  retries: 1     # Allow retries for HPC reliability
+  executors:
+  - label: htex_pbs_mpi
+    class: parsl.executors.HighThroughputExecutor
+    max_workers_per_node: 8  # 8 workers per node (16 total across 2 nodes)
+    cores_per_worker: 1      # Single-threaded workers
+    worker_debug: false
+    heartbeat_period: 30     # Longer heartbeat for HPC networks
+    heartbeat_threshold: 120 # More tolerance for HPC latency
+    working_dir: "/tmp"      # Use shorter path to avoid AF_UNIX path length issues
+    provider_config:
+      class: parsl.providers.LocalProvider
+      launcher:
+        class: parsl.launchers.MpiExecLauncher
+        overrides: "-bootstrap pbs -genv I_MPI_FABRICS shm:ofi"
+        bind_cmd: "--cpu-bind"
+      init_blocks: 1         # Single block spanning both nodes
+      max_blocks: 1          # Only one block needed
+      min_blocks: 1          # Ensure block starts
+      nodes_per_block: 2     # Both nodes in one block
+      parallelism: 1.0       # Full parallelism
+      worker_init: |
+        # Aurora Intel MPI environment setup
+        conda activate nanobrain
+        export I_MPI_PIN_DOMAIN=auto
+        export I_MPI_FABRICS=shm:ofi
+        export OMP_NUM_THREADS=1
+        export PYTHONPATH=$PBS_O_WORKDIR:$PYTHONPATH
+      parallelism: 1.0       # Full parallelism with MPI coordination
+fallback:
+  executor_type: local
+  max_workers: 4
+thread_fallback:
+  executor_type: thread
+  max_workers: 4
+_metadata:
+  last_updated: '2025-06-22T23:41:37.537480'
+  updated_by: modular_config_migration
+  migration_version: 1.0.0
+  uses_modular_config: true

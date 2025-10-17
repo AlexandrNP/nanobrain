@@ -1,0 +1,108 @@
+# Data Synthesis Specialist Step Configuration (AUTOMATIC TRIGGERS)
+# APECX-RAG Pipeline - Step 4: Information integration and response generation
+
+name: "synthesis_specialist_step"
+description: "Information integration and response generation using synthesis agent"
+
+# Agent configuration for synthesis processing
+agent_class: "nanobrain.library.workflows.rag.agents.response_synthesis_agent.ResponseSynthesisAgent"
+agent_config: "nanobrain/library/workflows/rag/config/agents/response_synthesis_agent.yml"
+
+# AgentStep data bridging configuration
+input_extraction_strategy: "auto_detect"
+output_formatting_strategy: "conversational_response"
+input_field_name: "analysis_input"
+input_template: "{{ analysis_input }}"
+output_template: "{{ response }}"
+
+# Conversation management
+enable_conversation_tracking: false
+conversation_id_field: null
+conversation_context_size: 10
+conversation_timeout: 3600
+max_conversation_length: 50
+
+# Performance settings
+agent_timeout: 70.0
+enable_agent_caching: false
+cache_ttl: 300
+auto_initialize_agent: true
+
+# Step-level data units (automatically connected via automatic triggers)
+input_data_units:
+  analysis_input:
+    class: "nanobrain.core.data_unit.DataUnitMemory"
+    name: "analysis_input"
+    description: "Analysis results for information synthesis"
+    persistent: false
+
+  original_query:
+    class: "nanobrain.core.data_unit.DataUnitMemory"
+    name: "original_query"
+    description: "Original user query for response alignment"
+    persistent: false
+
+output_data_units:
+  synthesized_output:
+    class: "nanobrain.core.data_unit.DataUnitMemory"
+    name: "synthesized_output"
+    description: "Synthesized response ready for quality assurance"
+    persistent: false
+
+# ✅ NO TRIGGER CONFIGURATION NEEDED!
+# Automatic triggers handle synthesis processing seamlessly
+
+# Processing configuration
+processing_config:
+  enable_input_validation: true
+  enable_output_formatting: true
+  enable_error_recovery: true
+  max_processing_time: 70
+  
+  synthesis_features:
+    - "information_integration"
+    - "narrative_construction"
+    - "citation_management"
+    - "clarity_optimization"
+    - "coherence_checking"
+
+# Synthesis configuration
+synthesis_config:
+  enable_citation_management: true
+  enable_coherence_checking: true
+  enable_clarity_optimization: true
+  enable_structure_validation: true
+  response_style: "comprehensive"
+  citation_format: "academic"
+  narrative_approach: "logical_flow"
+  max_response_length: 5000
+
+# Performance settings
+performance:
+  timeout: 70
+  retry_attempts: 2
+  enable_caching: false  # Each synthesis is unique
+  
+# Quality assurance
+quality_assurance:
+  enable_validation: true
+  min_response_length: 300
+  coherence_threshold: 0.8
+  clarity_threshold: 0.8
+  required_output_sections:
+    - "SYNTHESIS_SUMMARY"
+    - "MAIN_RESPONSE"
+    - "SOURCE_CITATIONS"
+    - "CONFIDENCE_INDICATORS"
+
+# Step-specific settings
+timeout: 70
+max_retries: 3
+enable_fallback: true
+
+# Monitoring
+monitoring:
+  enable_step_timing: true
+  enable_synthesis_quality: true
+  track_response_coherence: true
+  log_level: "INFO"

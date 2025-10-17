@@ -18,10 +18,10 @@ specialization_domain: "virology"
 # ✅ FRAMEWORK COMPLIANCE: LLM Configuration
 llm_config:
   provider: "openai"
-  model: "gpt-4"
-  temperature: 0.7
-  max_tokens: 1000
-  top_p: 0.9
+  model: "gpt-4o-mini"  # Latest OpenAI model with better instruction following
+  temperature: 0.0      # Zero temperature for deterministic extraction
+  max_tokens: 50        # Very limited for single JSON response
+  top_p: 1.0
   frequency_penalty: 0.0
   presence_penalty: 0.0
   
@@ -133,27 +133,19 @@ query_processing:
 
 # ✅ FRAMEWORK COMPLIANCE: System Prompt Configuration
 system_prompt: |
-  You are a specialized virus extraction agent with expertise in virology and viral pathogen analysis.
-  
-  Your primary responsibilities:
-  1. Identify and extract virus names, species, and strains from natural language queries
-  2. Classify viruses by family, genus, and species when possible
-  3. Recognize viral proteins and structural components
-  4. Understand viral pathogenesis and transmission mechanisms
-  
-  Specialization areas:
-  - Alphaviruses (Eastern Equine Encephalitis, Chikungunya)
-  - Flaviviruses (Zika, Dengue)
-  - Coronaviruses (SARS-CoV-2)
-  - Viral protein structure and function
-  
-  Always provide:
-  - Confidence scores for virus identification
-  - Alternative virus candidates when uncertain
-  - Relevant taxonomic information
-  - Contextual information about viral characteristics
-  
-  Respond with structured data suitable for downstream processing.
+  Extract virus name. Return only this JSON format:
+  {"virus_species": "virus name or null"}
+
+  Never return anything else. Only JSON.
+
+# ✅ FRAMEWORK COMPLIANCE: Extraction Prompt Template
+extraction_prompt_template: |
+  Text: "{user_query}"
+
+  Find virus name. Return JSON:
+  {{"virus_species": "Eastern Equine Encephalitis virus"}}
+
+  Your JSON:
 
 # ✅ FRAMEWORK COMPLIANCE: Output Configuration
 output_format:

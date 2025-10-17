@@ -773,6 +773,7 @@ class ParslExecutor(ExecutorBase):
         super()._init_from_config(config, component_config, dependencies)
         self._parsl_dfk = None
         self._parsl_config = None
+        self._worker_step_pools = {}  # step_id -> WorkerStepPool
         
 
         
@@ -822,7 +823,53 @@ class ParslExecutor(ExecutorBase):
                             if 'provider_config' in exec_config:
                                 provider_config = exec_config.pop('provider_config')
                                 provider_class_name = provider_config.pop('class', 'parsl.providers.LocalProvider')
-                                
+
+                                # Handle launcher configuration if present
+                                launcher = None
+                                if 'launcher' in provider_config:
+                                    launcher_config = provider_config.pop('launcher')
+                                    if isinstance(launcher_config, dict) and 'class' in launcher_config:
+                                        launcher_class_name = launcher_config.pop('class')
+
+                                        # Import launcher class
+                                        if launcher_class_name == 'parsl.launchers.MpiExecLauncher':
+                                            from parsl.launchers import MpiExecLauncher
+                                            launcher_class = MpiExecLauncher
+                                        elif launcher_class_name == 'parsl.launchers.SrunLauncher':
+                                            from parsl.launchers import SrunLauncher
+                                            launcher_class = SrunLauncher
+                                        elif launcher_class_name == 'parsl.launchers.AprunLauncher':
+                                            from parsl.launchers import AprunLauncher
+                                            launcher_class = AprunLauncher
+                                        else:
+                                            # Dynamic import for other launcher types
+                                            module_name, class_name = launcher_class_name.rsplit('.', 1)
+                                            module = __import__(module_name, fromlist=[class_name])
+                                            launcher_class = getattr(module, class_name)
+
+                                        # Handle PBS nodefile for MPI launchers
+                                        if launcher_class_name == 'parsl.launchers.MpiExecLauncher':
+                                            import os
+                                            pbs_nodefile = os.environ.get('PBS_NODEFILE')
+                                            if pbs_nodefile and os.path.exists(pbs_nodefile):
+                                                # Read and process PBS nodefile for multi-node distribution
+                                                with open(pbs_nodefile, 'r') as f:
+                                                    nodes = [line.strip() for line in f if line.strip()]
+
+                                                if len(nodes) >= 2:
+                                                    # Configure MPI for multi-node execution with explicit process count
+                                                    current_overrides = launcher_config.get('overrides', '')
+                                                    # Use Intel MPI options for multi-node distribution
+                                                    # Let Parsl handle the hostfile, just add ppn for process distribution
+                                                    launcher_config['overrides'] = f"{current_overrides} --ppn 1".strip()
+                                                else:
+                                                    # Single node fallback
+                                                    current_overrides = launcher_config.get('overrides', '')
+                                                    launcher_config['overrides'] = current_overrides
+
+                                        # Create launcher instance
+                                        launcher = launcher_class(**launcher_config)
+
                                 # Import provider class
                                 if provider_class_name == 'parsl.providers.LocalProvider':
                                     provider_class = LocalProvider
@@ -831,10 +878,14 @@ class ParslExecutor(ExecutorBase):
                                     module_name, class_name = provider_class_name.rsplit('.', 1)
                                     module = __import__(module_name, fromlist=[class_name])
                                     provider_class = getattr(module, class_name)
-                                
+
                                 # Add worker initialization
                                 provider_config['worker_init'] = worker_init
-                                
+
+                                # Add launcher if configured
+                                if launcher:
+                                    provider_config['launcher'] = launcher
+
                                 # Create provider instance
                                 provider = provider_class(**provider_config)
                                 exec_config['provider'] = provider
@@ -947,28 +998,138 @@ class ParslExecutor(ExecutorBase):
             logger.error(f"Parsl task submission failed: {e}")
             raise
 
-    async def execute(self, task: Any, **kwargs) -> Any:
-        """Execute a task using Parsl."""
+    async def setup_worker_step_pool(
+        self,
+        step_class: type,
+        step_config: Dict[str, Any],
+        step_id: str
+    ) -> None:
+        """
+        Set up per-worker step instances for parallel execution.
+
+        This creates one step instance per PARSL worker, ensuring:
+        1. Each worker has its own step instance
+        2. Each instance has a unique worker_id
+        3. @shared resources are NOT duplicated
+        4. Non-shared resources ARE duplicated per worker
+
+        Args:
+            step_class: Class of the step to instantiate
+            step_config: Configuration for step instances
+            step_id: Unique identifier for this step
+        """
+        from .worker_step_pool import WorkerStepPool
+
+        if step_id in self._worker_step_pools:
+            logger.warning(f"Worker step pool already exists for {step_id}")
+            return
+
+        logger.info(f"🔧 Setting up worker step pool for {step_id}")
+
+        # Create pool with same number of workers as PARSL executor
+        num_workers = self.config.max_workers if hasattr(self.config, 'max_workers') else 4
+
+        pool = WorkerStepPool(
+            step_class=step_class,
+            step_config=step_config,
+            num_workers=num_workers,
+            step_id=step_id
+        )
+
+        # Initialize all worker instances
+        await pool.initialize_workers()
+
+        # Store pool
+        self._worker_step_pools[step_id] = pool
+
+        logger.info(f"✅ Worker step pool ready for {step_id}")
+        logger.info(f"   Workers: {pool.get_all_worker_ids()}")
+        logger.info(f"   Shared resources: {list(pool.shared_resources.keys())}")
+
+    def get_worker_step_pool(self, step_id: str):
+        """
+        Get worker step pool for a specific step.
+
+        Args:
+            step_id: Step identifier
+
+        Returns:
+            WorkerStepPool instance or None
+        """
+        return self._worker_step_pools.get(step_id)
+
+    def get_worker_step_pools_stats(self) -> Dict[str, Any]:
+        """
+        Get statistics for all worker step pools.
+
+        Returns:
+            Dictionary with pool statistics
+        """
+        return {
+            step_id: pool.get_stats()
+            for step_id, pool in self._worker_step_pools.items()
+        }
+
+    async def execute(self, task: Any, add_worker_id: bool = True, **kwargs) -> Any:
+        """
+        Execute a task using Parsl.
+
+        Args:
+            task: Task to execute
+            add_worker_id: Whether to add worker ID to result (default: True)
+            **kwargs: Additional arguments
+
+        Returns:
+            Task result, optionally wrapped with worker ID metadata
+        """
         if not self.is_initialized:
             await self.initialize()
-            
+
         try:
+            # Generate worker ID for this execution
+            import uuid
+            worker_id = f"parsl_worker_{uuid.uuid4().hex[:8]}"
+
             # Use submit and await the result
             future = self.submit(task, **kwargs)
             result = await future
+
+            # Add worker ID to result if requested
+            if add_worker_id:
+                # If result is a dict, add worker_id field
+                if isinstance(result, dict):
+                    result['_worker_id'] = worker_id
+                    result['_executor_type'] = 'parsl'
+                # Otherwise, wrap in metadata dict
+                else:
+                    result = {
+                        'result': result,
+                        '_worker_id': worker_id,
+                        '_executor_type': 'parsl'
+                    }
+
             return result
-            
+
         except Exception as e:
             logger.error(f"Parsl task execution failed: {e}")
             raise
     
     async def shutdown(self) -> None:
-        """Shutdown Parsl executor."""
+        """Shutdown Parsl executor and all worker step pools."""
         try:
+            # Shutdown all worker step pools
+            for step_id, pool in self._worker_step_pools.items():
+                logger.info(f"Shutting down worker step pool: {step_id}")
+                await pool.shutdown()
+
+            self._worker_step_pools.clear()
+
+            # Shutdown PARSL
             if self._parsl_dfk:
                 import parsl
                 parsl.clear()
                 self._parsl_dfk = None
+
             self._is_initialized = False
             logger.info("ParslExecutor shutdown complete")
         except Exception as e:
@@ -998,7 +1159,16 @@ def create_executor(executor_type: Union[ExecutorType, str],
     if isinstance(executor_type, str):
         executor_type = ExecutorType(executor_type)
     
-    config = config or ExecutorConfig.from_config({"executor_type": executor_type})
+    if not config:
+        # Create a temporary YAML config file for the executor type
+        import tempfile
+        import yaml
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.yml', delete=False) as f:
+            yaml.dump({"executor_type": executor_type}, f)
+            temp_config_path = f.name
+        config = ExecutorConfig.from_config(temp_config_path)
+        import os
+        os.unlink(temp_config_path)
     
     try:
         if executor_type == ExecutorType.LOCAL:

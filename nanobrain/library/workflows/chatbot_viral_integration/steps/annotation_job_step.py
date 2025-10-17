@@ -189,7 +189,7 @@ class AnnotationJobStep(Step):
         executor = kwargs.get('executor')
         if not executor:
             # ✅ FRAMEWORK COMPLIANCE: Use from_config instead of constructor
-            executor_config = ExecutorConfig.from_config({'executor_type': 'local', 'max_workers': 3})
+            executor_config = ExecutorConfig.from_config('config/workflows/chatbot_viral/annotation_executor.yml')
             executor = LocalExecutor.from_config(executor_config)
         
         return {
