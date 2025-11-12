@@ -22,10 +22,13 @@ output_data_units:
     description: "Output containing expert response and metadata"
     persistent: false
 
-# Conversational agent configuration
+# Conversational agent configuration - use the viral expert agent
 conversational_agent:
-  class: "nanobrain.library.agents.specialized_agents.conversational_specialized_agent.ConversationalSpecializedAgent"
-  config: "nanobrain/library/workflows/chatbot_viral_integration/config/ConversationalResponseStep/ConversationalAgent.yml"
+  class: "nanobrain.library.agents.specialized.viral_expert_agent.ViralExpertConversationalAgent"
+  config: "/Users/onarykov/git/nanobrain-upd-Jun/nanobrain/Chatbot/config/components/viral_expert_agent_config.yml"
+
+# CRITICAL FIX: Add agent_config_file for ConversationalResponseStep compatibility
+agent_config_file: "/Users/onarykov/git/nanobrain-upd-Jun/nanobrain/Chatbot/config/components/viral_expert_agent_config.yml"
 
 # Step-level triggers
 triggers:

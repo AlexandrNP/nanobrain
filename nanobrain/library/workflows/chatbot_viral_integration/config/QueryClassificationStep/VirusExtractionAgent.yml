@@ -1,6 +1,6 @@
 name: virus_extraction_agent
 description: "LLM agent specialized in extracting virus species from user queries"
-class: nanobrain.library.agents.specialized_agents.conversational_specialized_agent.ConversationalSpecializedAgent
+class: nanobrain.library.agents.specialized.virus_extraction_agent.VirusExtractionAgent
 
 # Agent configuration
 config:

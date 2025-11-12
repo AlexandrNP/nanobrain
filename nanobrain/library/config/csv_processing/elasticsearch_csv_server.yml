@@ -1,0 +1,360 @@
+# Elasticsearch CSV MCP Server Configuration
+#
+# This configuration provides settings for the enhanced Elasticsearch MCP server
+# with CSV processing and fuzzy search capabilities.
+#
+# Usage:
+#   from nanobrain.library.tools.search.elasticsearch_mcp_server import ElasticsearchMCPServer
+#   server = ElasticsearchMCPServer.from_config('config/csv_processing/elasticsearch_csv_server.yml')
+
+# Server Identification
+tool_name: "elasticsearch_csv_server"
+description: "Enhanced Elasticsearch MCP server with CSV fuzzy search capabilities"
+version: "1.1.0"
+
+# MCP Server Configuration
+mcp_host: "localhost"
+mcp_port: 8080
+mcp_timeout: 30
+
+# Elasticsearch Connection Configuration
+elasticsearch_host: "localhost"
+elasticsearch_port: 9200
+elasticsearch_scheme: "http"
+elasticsearch_timeout: 30
+elasticsearch_max_retries: 3
+
+# Authentication Configuration (if required)
+elasticsearch_auth:
+  enabled: false
+  username: null
+  password: null
+  api_key: null
+  ssl_verify: true
+  ssl_cert_path: null
+  ssl_key_path: null
+
+# Connection Pool Configuration
+connection_pool:
+  max_connections: 10
+  max_connections_per_host: 5
+  connection_timeout: 10
+  read_timeout: 30
+  keepalive_timeout: 30
+
+# === CSV PROCESSING CONFIGURATION ===
+
+# Core CSV Processing Settings
+csv_processing_enabled: true
+csv_max_file_size_mb: 500
+csv_max_rows_per_batch: 10000
+csv_processing_timeout: 1800  # 30 minutes
+
+# File Format Detection
+csv_delimiter_auto_detect: true
+csv_supported_delimiters: [",", ";", "\t", "|", "^"]
+csv_encoding_auto_detect: true
+csv_supported_encodings: ["utf-8", "latin-1", "cp1252", "utf-16"]
+csv_quote_char_detection: true
+csv_escape_char_detection: true
+
+# Data Validation
+csv_validation_enabled: true
+csv_max_field_length: 10000
+csv_allow_empty_fields: true
+csv_strict_mode: false
+
+# Performance Optimization
+csv_parallel_processing: true
+csv_chunk_size: 1000
+csv_memory_limit_mb: 2048
+csv_cache_enabled: true
+csv_cache_ttl: 3600
+
+# === FUZZY SEARCH CONFIGURATION ===
+
+# Core Fuzzy Search Settings
+csv_fuzzy_threshold: 0.7
+csv_max_search_results: 100
+csv_confidence_scoring: true
+csv_phonetic_matching: true
+
+# Algorithm Selection
+csv_primary_algorithm: "elasticsearch"
+csv_fallback_algorithm: "fuzzywuzzy"
+csv_hybrid_mode: true
+
+# Field-specific Settings
+csv_field_weights:
+  default: 1.0
+  name_fields: 2.0
+  description_fields: 1.5
+  id_fields: 3.0
+  category_fields: 1.0
+  tag_fields: 0.8
+
+# Result Enhancement
+csv_include_highlights: true
+csv_include_suggestions: true
+csv_include_corrections: true
+csv_max_suggestions: 5
+
+# === INDEX MANAGEMENT CONFIGURATION ===
+
+# Index Creation Settings
+index_creation:
+  default_shards: 1
+  default_replicas: 0
+  refresh_interval: "1s"
+  max_result_window: 10000
+  
+  # Mapping Configuration
+  enable_dynamic_mapping: false
+  enable_fuzzy_fields: true
+  enable_keyword_fields: true
+  max_keyword_length: 256
+
+# Bulk Indexing Configuration
+bulk_indexing:
+  batch_size: 1000
+  max_batch_bytes: 10485760  # 10MB
+  request_timeout: 60
+  max_retries: 3
+  retry_delay: 1
+  
+  # Progress Tracking
+  enable_progress_tracking: true
+  progress_update_interval: 1000
+  log_progress: true
+
+# Index Optimization
+index_optimization:
+  auto_optimize: true
+  optimize_after_import: true
+  max_segments: 1
+  force_merge_timeout: 300
+
+# === SEARCH OPTIMIZATION CONFIGURATION ===
+
+# Query Analysis
+query_analysis:
+  enable_auto_analysis: true
+  detect_query_type: true
+  extract_field_hints: true
+  normalize_queries: true
+
+# Search Caching
+search_caching:
+  enabled: true
+  ttl: 3600
+  max_cache_size: 1000
+  cache_hit_threshold: 2
+  
+  # Cache Key Generation
+  include_query_in_key: true
+  include_fields_in_key: true
+  include_threshold_in_key: true
+
+# Result Processing
+result_processing:
+  enable_deduplication: true
+  duplicate_threshold: 0.95
+  enable_result_ranking: true
+  ranking_algorithm: "confidence_weighted"
+  
+  # Result Formatting
+  include_metadata: true
+  include_debug_info: false
+  max_highlight_length: 200
+
+# === PERFORMANCE CONFIGURATION ===
+
+# Resource Limits
+resource_limits:
+  max_memory_mb: 4096
+  max_cpu_percentage: 80
+  max_concurrent_requests: 10
+  request_queue_size: 100
+
+# Timeout Configuration
+timeouts:
+  default_request_timeout: 30
+  csv_import_timeout: 1800
+  search_timeout: 30
+  index_creation_timeout: 120
+  bulk_operation_timeout: 300
+
+# Rate Limiting
+rate_limiting:
+  enabled: false
+  requests_per_minute: 1000
+  burst_size: 100
+  rate_limit_key: "client_ip"
+
+# === MONITORING CONFIGURATION ===
+
+# Health Checks
+health_checks:
+  enabled: true
+  interval: 30
+  timeout: 10
+  elasticsearch_health_check: true
+  memory_health_check: true
+  disk_health_check: true
+
+# Metrics Collection
+metrics:
+  enabled: true
+  collection_interval: 60
+  
+  # Metric Types
+  collect_request_metrics: true
+  collect_performance_metrics: true
+  collect_error_metrics: true
+  collect_cache_metrics: true
+  
+  # Metric Storage
+  store_metrics: true
+  metrics_retention_days: 30
+
+# Logging Configuration
+logging:
+  level: "INFO"
+  format: "structured"
+  
+  # Log Content
+  log_requests: true
+  log_responses: false  # Can be verbose
+  log_errors: true
+  log_performance: true
+  log_cache_operations: false
+  
+  # Log Rotation
+  enable_rotation: true
+  max_file_size_mb: 100
+  max_files: 10
+
+# === ERROR HANDLING CONFIGURATION ===
+
+# Retry Configuration
+retry_config:
+  max_retries: 3
+  base_delay: 1.0
+  max_delay: 30.0
+  exponential_backoff: true
+  jitter: true
+
+# Error Recovery
+error_recovery:
+  enable_circuit_breaker: true
+  failure_threshold: 10
+  recovery_timeout: 60
+  half_open_max_calls: 5
+  
+  # Fallback Behavior
+  enable_fallback_search: true
+  fallback_to_exact_match: true
+  return_partial_results: true
+
+# Error Reporting
+error_reporting:
+  log_all_errors: true
+  include_stack_traces: true
+  error_sampling_rate: 1.0
+  max_error_details: 1000
+
+# === SECURITY CONFIGURATION ===
+
+# Access Control
+access_control:
+  enabled: false
+  require_authentication: false
+  allowed_hosts: ["localhost", "127.0.0.1"]
+  blocked_hosts: []
+
+# Request Validation
+request_validation:
+  validate_input: true
+  sanitize_queries: true
+  max_query_length: 1000
+  allowed_file_types: [".csv", ".tsv"]
+  max_file_size_mb: 500
+
+# Data Privacy
+data_privacy:
+  anonymize_logs: false
+  encrypt_cache: false
+  secure_headers: true
+  
+  # PII Detection
+  detect_pii: false
+  mask_pii_in_logs: false
+  pii_patterns: []
+
+# === INTEGRATION CONFIGURATION ===
+
+# External Services
+external_services:
+  spell_check_service: null
+  synonym_service: null
+  analytics_service: null
+  notification_service: null
+
+# Webhook Configuration
+webhooks:
+  enabled: false
+  import_completion_webhook: null
+  error_notification_webhook: null
+  health_status_webhook: null
+
+# API Integration
+api_integration:
+  enable_rest_api: false
+  rest_api_port: 8081
+  enable_graphql: false
+  graphql_port: 8082
+
+# === DEVELOPMENT CONFIGURATION ===
+
+# Debug Settings
+debug:
+  enabled: false
+  verbose_logging: false
+  include_debug_headers: false
+  enable_profiling: false
+  
+  # Development Features
+  enable_hot_reload: false
+  enable_test_endpoints: false
+  mock_elasticsearch: false
+
+# Testing Configuration
+testing:
+  enable_test_mode: false
+  use_test_data: false
+  test_data_path: "tests/data"
+  
+  # Test Overrides
+  override_timeouts: false
+  test_timeout_multiplier: 0.1
+  enable_test_fixtures: false
+
+# Tool Card Configuration (mandatory)
+tool_card:
+  name: "elasticsearch_csv_server"
+  description: "Enhanced Elasticsearch MCP server with CSV fuzzy search capabilities"
+  version: "1.1.0"
+  category: "search_analytics"
+  capabilities: ["search", "indexing", "analytics", "mcp", "csv_processing", "fuzzy_search"]
+  
+  # Tool Metadata
+  author: "NanoBrain CSV Processing Team"
+  license: "MIT"
+  documentation_url: "https://docs.nanobrain.ai/tools/elasticsearch-csv-server"
+  support_url: "https://support.nanobrain.ai"
+  
+  # Compatibility
+  min_nanobrain_version: "1.0.0"
+  supported_platforms: ["linux", "macos", "windows"]
+  required_dependencies: ["elasticsearch", "pandas", "aiohttp"]
+  optional_dependencies: ["fuzzywuzzy", "chardet", "python-magic"]

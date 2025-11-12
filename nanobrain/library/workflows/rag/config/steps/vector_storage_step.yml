@@ -1,0 +1,136 @@
+# Vector Storage Step Configuration
+# Database operations for storing and retrieving embeddings
+
+name: "vector_storage_step"
+description: "Deterministic vector database operations for storing and retrieving embeddings"
+
+# Vector database configuration
+vector_db_type: "faiss"
+index_type: "IVF"
+dimension: 384  # Matches sentence-transformers default
+enable_persistence: true
+persistence_path: "data/rag_index"
+
+# Performance settings
+batch_insert_size: 1000
+enable_gpu: false
+memory_map: true
+enable_compression: false
+
+# FAISS-specific configuration
+faiss_config:
+  nlist: 100          # Number of clusters for IVF
+  nprobe: 10          # Number of clusters to search
+  metric: "COSINE"        # Distance metric: L2, IP (inner product), COSINE
+  enable_gpu: false
+  gpu_device: 0
+  use_precomputed_tables: true
+  
+  # Index factory string for advanced configurations
+  # Examples:
+  # - "IVF100,Flat" - IVF with flat quantizer
+  # - "IVF100,PQ8" - IVF with product quantization
+  # - "HNSW32" - Hierarchical Navigable Small World
+  index_factory: "IVF100,Flat"
+
+# Alternative database configurations (commented out)
+
+# Pinecone configuration:
+# vector_db_type: "pinecone"
+# pinecone_config:
+#   api_key_env: "PINECONE_API_KEY"
+#   environment: "us-west1-gcp"
+#   index_name: "rag-index"
+#   metric: "cosine"
+#   pods: 1
+#   replicas: 1
+#   pod_type: "p1.x1"
+
+# Weaviate configuration:
+# vector_db_type: "weaviate"
+# weaviate_config:
+#   url: "http://localhost:8080"
+#   api_key_env: "WEAVIATE_API_KEY"
+#   class_name: "Document"
+#   distance_metric: "cosine"
+#   ef_construction: 128
+#   max_connections: 64
+
+# Chroma configuration:
+# vector_db_type: "chroma"
+# chroma_config:
+#   persist_directory: "data/chroma_db"
+#   collection_name: "rag_collection"
+#   distance_function: "cosine"
+#   embedding_function: "sentence-transformers"
+
+# Storage optimization
+storage_optimization:
+  enable_compression: false
+  compression_ratio: 0.5
+  enable_quantization: false
+  quantization_bits: 8
+  enable_pruning: false
+  pruning_threshold: 0.1
+
+# Index management
+index_management:
+  auto_rebuild_threshold: 10000  # Rebuild index after N insertions
+  enable_background_optimization: true
+  optimization_interval_hours: 24
+  backup_enabled: true
+  backup_interval_hours: 6
+  max_backups: 7
+
+# Performance monitoring
+monitoring:
+  track_insertion_time: true
+  track_search_time: true
+  track_memory_usage: true
+  log_performance_metrics: true
+  enable_profiling: false
+
+# Error handling
+error_handling:
+  retry_failed_insertions: true
+  max_insertion_retries: 3
+  continue_on_insertion_error: true
+  log_insertion_errors: true
+  enable_data_validation: true
+
+# Concurrency settings
+concurrency:
+  max_concurrent_insertions: 4
+  max_concurrent_searches: 8
+  thread_pool_size: 8
+  enable_async_operations: true
+
+# Data validation
+validation:
+  validate_vector_dimensions: true
+  validate_metadata_schema: false
+  check_duplicate_ids: true
+  normalize_vectors_on_insert: false
+
+# Maintenance
+maintenance:
+  enable_periodic_cleanup: true
+  cleanup_interval_hours: 168  # Weekly
+  remove_orphaned_vectors: true
+  compact_index_threshold: 0.3
+  enable_health_checks: true
+
+# Input/Output data units
+input_data_units:
+  input_embeddings:
+    class: "nanobrain.core.data_unit.DataUnitMemory"
+    name: "input_embeddings"
+    description: "Embeddings to store in vector database"
+    persistent: false
+
+output_data_units:
+  vector_index:
+    class: "nanobrain.core.data_unit.DataUnitMemory"
+    name: "vector_index"
+    description: "Vector database index"
+    persistent: false

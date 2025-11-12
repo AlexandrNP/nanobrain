@@ -12,6 +12,9 @@ from typing import Any, Dict, Optional, List, Union
 from pathlib import Path
 from nanobrain.core.data_unit import DataUnitBase
 
+# Async file operations
+import aiofiles
+
 
 class ExportManager(DataUnitBase):
     """Data export and import utilities."""
@@ -74,48 +77,60 @@ class ExportManager(DataUnitBase):
             if isinstance(obj, datetime):
                 return obj.isoformat()
             raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
-            
-        with open(file_path, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=indent, default=json_serializer, ensure_ascii=False)
+
+        # NON-BLOCKING JSON export using aiofiles
+        content = json.dumps(data, indent=indent, default=json_serializer, ensure_ascii=False)
+        async with aiofiles.open(file_path, 'w', encoding='utf-8') as f:
+            await f.write(content)
             
     async def _export_csv(self, data: Any, file_path: Path, **kwargs) -> None:
         """Export data as CSV."""
         if not isinstance(data, list):
             raise TypeError("CSV export requires list of dictionaries")
-            
+
         if not data:
             # Create empty CSV file
-            with open(file_path, 'w', newline='', encoding='utf-8') as f:
-                pass
+            async with aiofiles.open(file_path, 'w', encoding='utf-8') as f:
+                await f.write('')
             return
-            
+
         # Get fieldnames from first item
         if isinstance(data[0], dict):
             fieldnames = list(data[0].keys())
         else:
             raise TypeError("CSV export requires list of dictionaries")
-            
-        with open(file_path, 'w', newline='', encoding='utf-8') as f:
-            writer = csv.DictWriter(f, fieldnames=fieldnames)
-            writer.writeheader()
-            
-            for row in data:
-                # Convert datetime objects to strings
-                processed_row = {}
-                for key, value in row.items():
-                    if isinstance(value, datetime):
-                        processed_row[key] = value.isoformat()
-                    else:
-                        processed_row[key] = value
-                writer.writerow(processed_row)
+
+        # NON-BLOCKING CSV export using StringIO and aiofiles
+        from io import StringIO
+        output = StringIO()
+        writer = csv.DictWriter(output, fieldnames=fieldnames)
+        writer.writeheader()
+
+        for row in data:
+            # Convert datetime objects to strings
+            processed_row = {}
+            for key, value in row.items():
+                if isinstance(value, datetime):
+                    processed_row[key] = value.isoformat()
+                else:
+                    processed_row[key] = value
+            writer.writerow(processed_row)
+
+        # Write the CSV content to file asynchronously
+        csv_content = output.getvalue()
+        async with aiofiles.open(file_path, 'w', encoding='utf-8') as f:
+            await f.write(csv_content)
                 
     async def _export_txt(self, data: Any, file_path: Path, separator: str = '\n', **kwargs) -> None:
         """Export data as text."""
-        with open(file_path, 'w', encoding='utf-8') as f:
-            if isinstance(data, (list, tuple)):
-                f.write(separator.join(str(item) for item in data))
-            else:
-                f.write(str(data))
+        # NON-BLOCKING text export using aiofiles
+        if isinstance(data, (list, tuple)):
+            content = separator.join(str(item) for item in data)
+        else:
+            content = str(data)
+
+        async with aiofiles.open(file_path, 'w', encoding='utf-8') as f:
+            await f.write(content)
                 
     async def import_data(self, file_path: Union[str, Path], format: Optional[str] = None) -> Any:
         """Import data from file."""
@@ -140,25 +155,34 @@ class ExportManager(DataUnitBase):
             
     async def _import_json(self, file_path: Path) -> Any:
         """Import data from JSON file."""
-        with open(file_path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
+        # NON-BLOCKING JSON import using aiofiles
+        async with aiofiles.open(file_path, 'r', encoding='utf-8') as f:
+            content = await f.read()
+            data = json.loads(content)
         self.logger.info(f"Imported JSON data from {file_path}")
         return data
         
     async def _import_csv(self, file_path: Path) -> List[Dict[str, Any]]:
         """Import data from CSV file."""
+        # NON-BLOCKING CSV import using aiofiles and StringIO
+        async with aiofiles.open(file_path, 'r', encoding='utf-8') as f:
+            content = await f.read()
+
+        # Process CSV content in memory (non-blocking)
+        from io import StringIO
         data = []
-        with open(file_path, 'r', newline='', encoding='utf-8') as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                data.append(dict(row))
+        csv_reader = csv.DictReader(StringIO(content))
+        for row in csv_reader:
+            data.append(dict(row))
+
         self.logger.info(f"Imported {len(data)} rows from CSV file {file_path}")
         return data
         
     async def _import_txt(self, file_path: Path) -> str:
         """Import data from text file."""
-        with open(file_path, 'r', encoding='utf-8') as f:
-            data = f.read()
+        # NON-BLOCKING text import using aiofiles
+        async with aiofiles.open(file_path, 'r', encoding='utf-8') as f:
+            data = await f.read()
         self.logger.info(f"Imported text data from {file_path}")
         return data
         

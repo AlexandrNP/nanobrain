@@ -1,0 +1,105 @@
+# Embedding Generator Step Configuration
+# API-based embedding generation with sentence-transformers as default
+
+name: "embedding_generator_step"
+description: "Deterministic embedding generation via API calls to embedding services"
+
+# Embedding provider configuration (sentence-transformers as default)
+provider: "sentence-transformers"
+model_name: "all-MiniLM-L6-v2"
+dimension: 384
+normalize_embeddings: true
+
+# Alternative provider configurations (commented out)
+# OpenAI configuration:
+# provider: "openai"
+# model_name: "text-embedding-ada-002"
+# dimension: 1536
+# api_key_env: "OPENAI_API_KEY"
+
+# HuggingFace configuration:
+# provider: "huggingface"
+# model_name: "sentence-transformers/all-MiniLM-L6-v2"
+# dimension: 384
+# api_key_env: "HUGGINGFACE_API_KEY"
+
+# Processing settings
+batch_size: 100
+max_retries: 3
+timeout_seconds: 30
+parallel_batches: 4
+
+# Caching configuration
+cache_embeddings: true
+cache_directory: "data/embedding_cache"
+cache_compression: true
+cache_expiry_days: 30
+
+# Performance optimization
+enable_gpu: false
+memory_map_cache: true
+preload_model: true
+model_cache_dir: "models/sentence_transformers"
+
+# Quality settings
+embedding_precision: "float32"
+truncate_long_texts: true
+max_text_length: 512
+padding_strategy: "max_length"
+
+# Error handling
+skip_failed_embeddings: false
+continue_on_batch_error: true
+log_embedding_errors: true
+fallback_to_zero_vector: false
+
+# Monitoring and logging
+log_batch_progress: true
+log_cache_hits: true
+log_processing_time: true
+enable_progress_bar: false
+
+# Advanced settings
+use_mean_pooling: true
+use_cls_pooling: false
+apply_layer_norm: false
+temperature_scaling: 1.0
+
+# Sentence-transformers specific settings
+sentence_transformers_config:
+  device: "cpu"  # or "cuda" if GPU available
+  show_progress_bar: false
+  convert_to_numpy: true
+  convert_to_tensor: false
+  normalize_embeddings: true
+
+# Model loading settings
+model_loading:
+  trust_remote_code: false
+  use_auth_token: false
+  revision: "main"
+  cache_folder: "models/sentence_transformers"
+  force_download: false
+  resume_download: true
+
+# Output configuration
+output_format: "numpy"
+include_text_preview: true
+preview_length: 100
+include_embedding_metadata: true
+include_model_info: true
+
+# Input/Output data units
+input_data_units:
+  chunks:
+    class: "nanobrain.core.data_unit.DataUnitMemory"
+    name: "chunks"
+    description: "Text chunks for embedding generation"
+    persistent: false
+
+output_data_units:
+  embeddings:
+    class: "nanobrain.core.data_unit.DataUnitMemory"
+    name: "embeddings"
+    description: "Generated embeddings"
+    persistent: false

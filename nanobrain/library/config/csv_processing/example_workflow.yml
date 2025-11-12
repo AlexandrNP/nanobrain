@@ -1,0 +1,385 @@
+# Example CSV Fuzzy Search Workflow Configuration
+#
+# This configuration demonstrates a complete workflow for CSV data processing
+# and fuzzy search operations using the NanoBrain framework.
+#
+# Workflow Flow:
+#   1. QueryInputStep: Process and validate user search queries
+#   2. CSVImportStep: Import and index CSV files in Elasticsearch
+#   3. CSVFuzzySearchStep: Execute fuzzy search operations
+#
+# Usage:
+#   from nanobrain.core.workflow import Workflow
+#   workflow = Workflow.from_config('config/csv_processing/example_workflow.yml')
+
+# Workflow Identification
+name: "csv_data_processing_workflow"
+description: "Complete CSV data processing with fuzzy search capabilities"
+version: "1.0.0"
+
+# Workflow Metadata
+metadata:
+  author: "NanoBrain CSV Processing Team"
+  created_date: "2024-01-01"
+  tags: ["csv", "fuzzy_search", "data_processing", "elasticsearch"]
+  category: "data_processing"
+
+# Workflow Components
+components:
+  # Step 1: Query Input Processing
+  query_input:
+    class: "nanobrain.library.infrastructure.steps.QueryInputStep"
+    config:
+      name: "query_input"
+      description: "Process and validate user search queries"
+      
+      # Query Validation
+      query_validation:
+        min_length: 2
+        max_length: 1000
+        sanitization_enabled: true
+        allow_empty: false
+        trim_whitespace: true
+      
+      # Query Enhancement
+      query_enhancement:
+        spell_check_enabled: true
+        synonym_expansion: true
+        stemming_enabled: true
+        case_normalization: true
+        special_char_handling: "normalize"
+      
+      # Parameter Extraction
+      parameter_extraction:
+        extract_field_hints: true
+        extract_operators: true
+        extract_quotes: true
+        extract_wildcards: true
+        default_search_fields: ["name", "description", "category"]
+      
+      # Input/Output Data Units
+      input_data_units:
+        user_query:
+          class: "nanobrain.core.data_unit.DataUnitMemory"
+          config:
+            description: "Raw user search query"
+            validation:
+              required: true
+              type: "string"
+      
+      output_data_units:
+        processed_query:
+          class: "nanobrain.core.data_unit.DataUnitMemory"
+          config:
+            description: "Enhanced and validated search query"
+            persistent: true
+
+  # Step 2: CSV File Import
+  csv_import:
+    class: "nanobrain.library.infrastructure.steps.CSVImportStep"
+    config:
+      name: "csv_import"
+      description: "Import and index CSV files in Elasticsearch"
+      
+      # CSV Processing Configuration
+      csv_processing:
+        max_file_size_mb: 500
+        auto_detect_delimiter: true
+        auto_detect_encoding: true
+        validation_enabled: true
+        chunk_size: 1000
+        parallel_processing: true
+      
+      # Elasticsearch Configuration
+      elasticsearch_config:
+        index_prefix: "csv_data_"
+        bulk_size: 1000
+        refresh_interval: "1s"
+        create_index: true
+        optimize_mapping: true
+      
+      # Input/Output Data Units
+      input_data_units:
+        csv_file:
+          class: "nanobrain.core.data_unit.DataUnitFile"
+          config:
+            file_path: "${csv_file_path}"
+            encoding: "auto"
+            description: "CSV file to import and process"
+        
+        import_config:
+          class: "nanobrain.core.data_unit.DataUnitMemory"
+          config:
+            optional: true
+            description: "Runtime import configuration"
+            initial_value:
+              index_name: null
+              custom_mapping: null
+      
+      output_data_units:
+        indexed_data:
+          class: "nanobrain.core.data_unit.DataUnitMemory"
+          config:
+            persistent: true
+            description: "Import results and index information"
+
+  # Step 3: Fuzzy Search Execution
+  fuzzy_search:
+    class: "nanobrain.library.infrastructure.steps.CSVFuzzySearchStep"
+    config:
+      name: "csv_fuzzy_search"
+      description: "Execute fuzzy search operations on CSV data"
+      
+      # Search Parameters
+      search_parameters:
+        fuzzy_threshold: 0.7
+        max_results: 50
+        result_scoring: "confidence"
+        field_weights:
+          name: 2.0
+          description: 1.5
+          category: 1.0
+      
+      # Fuzzy Algorithms
+      fuzzy_algorithms:
+        primary: "elasticsearch_fuzzy"
+        fallback: "fuzzywuzzy"
+        phonetic_matching: true
+        hybrid_mode: true
+      
+      # Result Formatting
+      result_formatting:
+        include_confidence_scores: true
+        include_field_highlights: true
+        include_suggestions: true
+        include_metadata: true
+      
+      # Input/Output Data Units
+      input_data_units:
+        search_query:
+          class: "nanobrain.core.data_unit.DataUnitMemory"
+          config:
+            description: "Processed search query from query input step"
+        
+        indexed_data:
+          class: "nanobrain.core.data_unit.DataUnitMemory"
+          config:
+            description: "Indexed CSV data from import step"
+        
+        search_config:
+          class: "nanobrain.core.data_unit.DataUnitMemory"
+          config:
+            optional: true
+            description: "Runtime search configuration"
+            initial_value:
+              fuzzy_threshold: 0.7
+              max_results: 50
+              search_fields: ["all"]
+      
+      output_data_units:
+        search_results:
+          class: "nanobrain.core.data_unit.DataUnitMemory"
+          config:
+            description: "Fuzzy search results with metadata"
+            persistent: true
+
+# Data Flow Links
+links:
+  # Query processing to search
+  query_to_search:
+    class: "nanobrain.core.link.DirectLink"
+    config:
+      source: "query_input.processed_query"
+      target: "fuzzy_search.search_query"
+      description: "Transfer processed query to search step"
+      
+      # Link Configuration
+      transformation: "extract_enhanced_query"
+      validation_enabled: true
+      retry_on_failure: true
+  
+  # CSV import to search
+  csv_to_search:
+    class: "nanobrain.core.link.DirectLink"
+    config:
+      source: "csv_import.indexed_data"
+      target: "fuzzy_search.indexed_data"
+      description: "Transfer indexed CSV data to search step"
+      
+      # Link Configuration
+      transformation: null
+      validation_enabled: true
+      retry_on_failure: false
+
+# Event Triggers
+triggers:
+  # CSV file import trigger
+  - trigger_type: "data_updated"
+    data_unit: "csv_file"
+    target_step: "csv_import"
+    description: "Import CSV when file is available"
+    
+    # Trigger Configuration
+    debounce_ms: 1000
+    max_retries: 3
+    retry_delay: 5000
+
+  # Query processing trigger
+  - trigger_type: "data_updated"
+    data_unit: "user_query"
+    target_step: "query_input"
+    description: "Process query when user input is received"
+    
+    # Trigger Configuration
+    debounce_ms: 500
+    max_retries: 2
+    retry_delay: 1000
+
+  # Search execution trigger
+  - trigger_type: "data_updated"
+    data_unit: "search_query"
+    target_step: "fuzzy_search"
+    description: "Execute search when query is processed"
+    
+    # Trigger Configuration
+    debounce_ms: 100
+    max_retries: 3
+    retry_delay: 2000
+
+# Workflow Execution Configuration
+executor:
+  class: "nanobrain.core.executor.LocalExecutor"
+  config:
+    # Execution Settings
+    max_workers: 4
+    timeout: 300
+    retry_attempts: 3
+    
+    # Resource Management
+    memory_limit_mb: 4096
+    cpu_limit_percentage: 80
+    
+    # Concurrency Control
+    max_concurrent_steps: 3
+    step_execution_timeout: 120
+
+# Monitoring and Logging
+monitoring:
+  # Performance Tracking
+  enable_performance_tracking: true
+  enable_error_tracking: true
+  enable_resource_monitoring: true
+  
+  # Metrics Collection
+  collect_step_metrics: true
+  collect_data_unit_metrics: true
+  collect_link_metrics: true
+  
+  # Logging Configuration
+  log_level: "INFO"
+  log_search_queries: true
+  log_result_quality: true
+  log_performance_metrics: true
+  
+  # Health Checks
+  health_check_interval: 30
+  health_check_timeout: 10
+
+# Error Handling and Recovery
+error_handling:
+  # Global Error Handling
+  continue_on_step_failure: false
+  max_workflow_retries: 2
+  workflow_retry_delay: 10000
+  
+  # Step-Specific Error Handling
+  step_error_policies:
+    query_input:
+      continue_on_failure: false
+      max_retries: 2
+      retry_delay: 1000
+    
+    csv_import:
+      continue_on_failure: false
+      max_retries: 3
+      retry_delay: 5000
+    
+    fuzzy_search:
+      continue_on_failure: true
+      max_retries: 2
+      retry_delay: 2000
+      fallback_enabled: true
+
+# Workflow Variables
+variables:
+  # File Paths
+  csv_file_path: "${CSV_FILE_PATH}"
+  output_directory: "${OUTPUT_DIR:/tmp/nanobrain_output}"
+  
+  # Search Configuration
+  default_fuzzy_threshold: 0.7
+  default_max_results: 50
+  
+  # Performance Settings
+  elasticsearch_host: "${ELASTICSEARCH_HOST:localhost}"
+  elasticsearch_port: "${ELASTICSEARCH_PORT:9200}"
+  
+  # Feature Flags
+  enable_caching: true
+  enable_suggestions: true
+  enable_analytics: false
+
+# Dependencies
+dependencies:
+  # Required Services
+  required_services:
+    - name: "elasticsearch"
+      version: ">=8.0.0"
+      health_check_url: "http://localhost:9200/_cluster/health"
+  
+  # Optional Services
+  optional_services:
+    - name: "redis"
+      version: ">=6.0.0"
+      health_check_url: "redis://localhost:6379/ping"
+  
+  # Required Libraries
+  required_libraries:
+    - "pandas>=2.0.0"
+    - "elasticsearch>=8.11.0"
+    - "aiohttp>=3.8.0"
+    - "fuzzywuzzy>=0.18.0"
+  
+  # Optional Libraries
+  optional_libraries:
+    - "chardet>=5.0.0"
+    - "python-magic>=0.4.27"
+    - "numpy>=1.24.0"
+
+# Validation Schema
+validation:
+  # Required Components
+  required_components:
+    - "query_input"
+    - "csv_import"
+    - "fuzzy_search"
+  
+  # Required Links
+  required_links:
+    - "query_to_search"
+    - "csv_to_search"
+  
+  # Component Validation
+  component_validation:
+    query_input:
+      required_config: ["query_validation", "query_enhancement"]
+    csv_import:
+      required_config: ["csv_processing", "elasticsearch_config"]
+    fuzzy_search:
+      required_config: ["search_parameters", "fuzzy_algorithms"]
+  
+  # Data Unit Validation
+  data_unit_validation:
+    enforce_schema: true
+    validate_types: true
+    check_required_fields: true

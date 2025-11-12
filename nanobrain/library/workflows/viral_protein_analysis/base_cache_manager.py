@@ -121,56 +121,60 @@ class BaseCacheManager(ABC):
     def get_cached_result(self, cache_key: str, file_extension: str = ".json") -> Optional[Dict[str, Any]]:
         """Generic method to get cached result"""
         cache_path = self._get_cache_path(cache_key, file_extension)
-        
+
         if not self._is_cache_valid(cache_path):
             self.cache_misses += 1
+            self.logger.info(f"🧩 Cache MISS for result: key={cache_key} path={cache_path}")
             return None
-        
+
         self.cache_hits += 1
+        self.logger.info(f"📦 Cache HIT for result: key={cache_key} path={cache_path}")
         return self._load_from_cache(cache_path)
-    
+
     def store_result(self, cache_key: str, data: Union[Dict[str, Any], str, bytes], 
                     file_extension: str = ".json") -> bool:
         """Generic method to store result in cache"""
         cache_path = self._get_cache_path(cache_key, file_extension)
         return self._save_to_cache(cache_path, data)
     
-    def get_cached_file(self, cache_key: str, source_file: Path, 
+    def get_cached_file(self, cache_key: str, source_file: Path,
                        target_extension: Optional[str] = None) -> Optional[Path]:
         """Get cached file path if valid"""
         if target_extension is None:
             target_extension = source_file.suffix
-        
+
         cache_path = self._get_cache_path(cache_key, target_extension)
-        
+
         if self._is_cache_valid(cache_path):
             self.cache_hits += 1
+            self.logger.info(f"📦 Cache HIT for file: key={cache_key} path={cache_path}")
             return cache_path
-        
+
         self.cache_misses += 1
+        self.logger.info(f"🧩 Cache MISS for file: key={cache_key} path={cache_path}")
         return None
-    
-    def cache_file(self, cache_key: str, source_file: Path, 
+
+    def cache_file(self, cache_key: str, source_file: Path,
                   target_extension: Optional[str] = None) -> Optional[Path]:
         """Cache a file and return cached path"""
         if not source_file.exists():
             self.logger.warning(f"Source file does not exist: {source_file}")
             return None
-        
+
         if target_extension is None:
             target_extension = source_file.suffix
-        
+
         cache_path = self._get_cache_path(cache_key, target_extension)
-        
+
         try:
             # Copy file to cache
             shutil.copy2(source_file, cache_path)
-            self.logger.debug(f"Cached file: {source_file} -> {cache_path}")
+            self.logger.info(f"🗂️ Cached file: {source_file} -> {cache_path}")
             return cache_path
         except Exception as e:
             self.logger.warning(f"Failed to cache file {source_file}: {e}")
             return None
-    
+
     def clear_cache(self, cache_key: Optional[str] = None) -> bool:
         """Clear cache (specific key or all cache)"""
         try:

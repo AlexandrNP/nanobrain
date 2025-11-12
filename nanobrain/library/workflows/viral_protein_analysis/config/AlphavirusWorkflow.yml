@@ -4,7 +4,39 @@ version: "5.1.0"  # Compliance update version
 execution_strategy: "event_driven"
 error_handling: "continue"
 enable_monitoring: true
+
+# Configurable timeout for workflow execution (in seconds) - Extended for PSSM processing
+execution_timeout_seconds: 600  # 10 minutes per step
 workflow_directory: "nanobrain/library/workflows/viral_protein_analysis"
+
+# Enhanced monitoring configuration for step-by-step tracking
+monitoring_config:
+  enable_step_monitoring: true
+  enable_substep_monitoring: true
+  enable_performance_tracking: true
+  enable_error_tracking: true
+  log_level: "DEBUG"
+  step_timeout_monitoring: true
+  progress_update_interval: 5  # seconds
+  detailed_step_logging: true
+
+# Workflow-level data units
+input_data_units:
+  workflow_input:
+    class: "nanobrain.core.data_unit.DataUnitMemory"
+    name: "workflow_input"
+    description: "Enhanced workflow input with ultra-high-confidence synonyms and validation criteria"
+    persistent: false
+    cache_size: 1000
+
+output_data_units:
+  workflow_output:
+    class: "nanobrain.core.data_unit.DataUnitFile"
+    name: "workflow_output"
+    description: "Complete workflow results with enhanced precision validation"
+    persistent: true
+    cache_size: 1000
+    file_path: "results/enhanced_viral_protein_analysis.json"
 
 # Existing configuration preserved
 enable_progress_reporting: true
@@ -80,6 +112,9 @@ links:
       target: "data_acquisition.synonyms_input"
       description: "Route enhanced virus resolution output to enhanced data acquisition"
       enable_logging: true
+      auto_transfer: true
+      transfer_on: "data_updated"
+      enable_monitoring: true
   
   acquisition_to_annotation:
     class: "nanobrain.core.link.DirectLink"
@@ -90,6 +125,9 @@ links:
       target: "annotation_mapping.fasta_and_annotations"
       description: "Route validated genomes to annotation mapping"
       enable_logging: true
+      auto_transfer: true
+      transfer_on: "data_updated"
+      enable_monitoring: true
   
   annotation_to_curation:
     class: "nanobrain.core.link.DirectLink"
@@ -100,6 +138,9 @@ links:
       target: "sequence_curation.curation_input_annotations"
       description: "Route standardized annotations to sequence curation"
       enable_logging: true
+      auto_transfer: true
+      transfer_on: "data_updated"
+      enable_monitoring: true
   
   curation_to_alignment:
     class: "nanobrain.core.link.DirectLink"
@@ -110,6 +151,9 @@ links:
       target: "alignment.alignment_input_sequences"
       description: "Route curated sequences to alignment step"
       enable_logging: true
+      auto_transfer: true
+      transfer_on: "data_updated"
+      enable_monitoring: true
   
   alignment_to_clustering:
     class: "nanobrain.core.link.DirectLink"
@@ -120,6 +164,9 @@ links:
       target: "clustering_analysis.clustering_input_sequences"
       description: "Route aligned sequences to clustering analysis"
       enable_logging: true
+      auto_transfer: true
+      transfer_on: "data_updated"
+      enable_monitoring: true
   
   clustering_to_pssm:
     class: "nanobrain.core.link.DirectLink"
@@ -130,6 +177,9 @@ links:
       target: "pssm_analysis.pssm_input_clusters"
       description: "Route sequence clusters to PSSM analysis"
       enable_logging: true
+      auto_transfer: true
+      transfer_on: "data_updated"
+      enable_monitoring: true
   
   pssm_to_aggregation:
     class: "nanobrain.core.link.DirectLink"
@@ -140,6 +190,9 @@ links:
       target: "data_aggregation.pssm_data"
       description: "Route PSSM matrices to data aggregation"
       enable_logging: true
+      auto_transfer: true
+      transfer_on: "data_updated"
+      enable_monitoring: true
   
   aggregation_to_results:
     class: "nanobrain.core.link.DirectLink"
@@ -150,6 +203,9 @@ links:
       target: "result_collection.analysis_data"
       description: "Route aggregated data to result collection"
       enable_logging: true
+      auto_transfer: true
+      transfer_on: "data_updated"
+      enable_monitoring: true
   
   results_to_workflow:
     class: "nanobrain.core.link.DirectLink"
@@ -160,6 +216,9 @@ links:
       target: "workflow_output"
       description: "Route final results to workflow output"
       enable_logging: true
+      auto_transfer: true
+      transfer_on: "data_updated"
+      enable_monitoring: true
 
 # Existing input/output data units (preserved)
 input_data_units:

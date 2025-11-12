@@ -111,18 +111,40 @@ class ConversationalResponseStep(Step):
         ✅ FRAMEWORK COMPLIANCE: Uses agent_config_file reference, no programmatic creation.
         """
         # Get agent config file path from step configuration
-        component_config = getattr(self.config, 'config', {}) if hasattr(self.config, 'config') else {}
-        agent_config_file = component_config.get('agent_config_file')
-        
+        # The configuration is loaded as attributes on the config object
+        agent_config_file = None
+
+        # Method 1: Direct attribute access (most common)
+        if hasattr(self.config, 'agent_config_file'):
+            agent_config_file = getattr(self.config, 'agent_config_file')
+            self.nb_logger.info(f"✅ Found agent_config_file: {agent_config_file}")
+
+        # Method 2: From config dict if available
+        elif hasattr(self.config, '__dict__') and 'agent_config_file' in self.config.__dict__:
+            agent_config_file = self.config.__dict__['agent_config_file']
+            self.nb_logger.info(f"✅ Found agent_config_file in __dict__: {agent_config_file}")
+
+        # Method 3: From nested config structure
+        elif hasattr(self.config, 'config') and hasattr(self.config.config, 'agent_config_file'):
+            agent_config_file = self.config.config.agent_config_file
+            self.nb_logger.info(f"✅ Found agent_config_file in nested config: {agent_config_file}")
+
         if not agent_config_file:
+            # Enhanced error message with debugging info
+            config_attrs = [attr for attr in dir(self.config) if not attr.startswith('_')]
+            config_dict_keys = list(self.config.__dict__.keys()) if hasattr(self.config, '__dict__') else []
+
             raise ValueError(
-                "❌ FRAMEWORK VIOLATION: No agent_config_file specified in step configuration.\n"
-                "   REQUIRED: Specify agent_config_file in step config YAML.\n"
-                "   EXAMPLE: agent_config_file: 'config/ConversationalResponseStep/ConversationalAgent.yml'"
+                f"❌ FRAMEWORK VIOLATION: No agent_config_file specified in step configuration.\n"
+                f"   REQUIRED: Specify agent_config_file in step config YAML.\n"
+                f"   EXAMPLE: agent_config_file: 'config/ConversationalResponseStep/ConversationalAgent.yml'\n"
+                f"   DEBUG: Config type: {type(self.config)}\n"
+                f"   DEBUG: Config attributes: {config_attrs}\n"
+                f"   DEBUG: Config dict keys: {config_dict_keys}"
             )
         
         # ✅ FRAMEWORK COMPLIANCE: Load agent from config file using from_config pattern
-        from nanobrain.library.agents.specialized_agents.conversational_specialized_agent import ConversationalSpecializedAgent
+        from nanobrain.library.agents.specialized.viral_expert_agent import ViralExpertConversationalAgent
         
         try:
             # Resolve agent config file path relative to workflow directory
@@ -136,7 +158,7 @@ class ConversationalResponseStep(Step):
                 agent_config_path = step_dir / agent_config_file
             
             # Load agent using framework's from_config pattern
-            agent = ConversationalSpecializedAgent.from_config(str(agent_config_path))
+            agent = ViralExpertConversationalAgent.from_config(str(agent_config_path))
             
             # Return as AlphavirusConversationalAgent (should be compatible)
             return agent
@@ -151,27 +173,104 @@ class ConversationalResponseStep(Step):
     async def process(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Generate conversational response about alphaviruses using LLM.
-        
+
         Args:
             input_data: Contains classification_data and routing_decision
-            
+
         Returns:
             Dictionary with ConversationalResponseData
         """
+        # CRITICAL FIX: Initialize start_time at the very beginning to avoid undefined variable errors
         start_time = time.time()
-        
+
         try:
             # Handle both direct input data and data unit structure
             actual_data = input_data
             if len(input_data) == 1 and 'input_0' in input_data:
                 # Data came from data unit
                 actual_data = input_data['input_0']
-            
+
+            # PHASE 2 DEBUG: Log the actual input data structure
+            self.nb_logger.info(f"🔍 [DEBUG-TRACE] Raw input_data keys: {list(input_data.keys())}")
+            self.nb_logger.info(f"🔍 [DEBUG-TRACE] Raw input_data: {input_data}")
+            self.nb_logger.info(f"🔍 [DEBUG-TRACE] Actual_data type: {type(actual_data)}")
+            self.nb_logger.info(f"🔍 [DEBUG-TRACE] Actual_data: {actual_data}")
+
+            # CRITICAL DEBUG: Log detailed structure for request_id debugging
+            if isinstance(input_data, dict):
+                for key, value in input_data.items():
+                    self.nb_logger.info(f"🔍 [REQUEST-ID-DEBUG] input_data[{key}] = {type(value).__name__}: {value}")
+            if isinstance(actual_data, dict):
+                for key, value in actual_data.items():
+                    self.nb_logger.info(f"🔍 [REQUEST-ID-DEBUG] actual_data[{key}] = {type(value).__name__}: {value}")
+
+            # PHASE 2 FIX: Extract request_id and session_id for HTTP response matching
+            # Handle different input data structures
+            request_id = None
+            session_id = 'default'
+            query_text = None
+
+            # CRITICAL FIX: Check all possible input data structures for request_id
+            if isinstance(actual_data, dict):
+                # Method 1: Direct request_id in actual_data
+                if 'request_id' in actual_data:
+                    request_id = actual_data.get('request_id')
+                    session_id = actual_data.get('session_id', 'default')
+                    query_text = actual_data.get('user_query') or actual_data.get('message') or actual_data.get('query') or actual_data.get('text')
+                    self.nb_logger.info(f"🔍 [REQUEST-ID-FIX] Found request_id in actual_data: {request_id}")
+
+                # Method 2: Check if actual_data contains nested request structure
+                elif isinstance(actual_data, dict) and len(actual_data) == 1:
+                    nested_value = list(actual_data.values())[0]
+                    if isinstance(nested_value, dict) and 'request_id' in nested_value:
+                        request_id = nested_value.get('request_id')
+                        session_id = nested_value.get('session_id', 'default')
+                        query_text = nested_value.get('user_query') or nested_value.get('message') or nested_value.get('query') or nested_value.get('text')
+                        self.nb_logger.info(f"🔍 [REQUEST-ID-FIX] Found request_id in nested structure: {request_id}")
+
+                # Method 3: Check original input_data for request_id (before actual_data extraction)
+                if not request_id and isinstance(input_data, dict):
+                    for key, value in input_data.items():
+                        if isinstance(value, dict) and 'request_id' in value:
+                            request_id = value.get('request_id')
+                            session_id = value.get('session_id', 'default')
+                            query_text = value.get('user_query') or value.get('message') or value.get('query') or value.get('text')
+                            self.nb_logger.info(f"🔍 [REQUEST-ID-FIX] Found request_id in input_data[{key}]: {request_id}")
+                            break
+
+                # Method 4: Extract query text if we haven't found it yet
+                if not query_text:
+                    query_text = actual_data.get('user_query') or actual_data.get('query') or actual_data.get('message') or actual_data.get('text')
+                    if not query_text and len(actual_data) == 1:
+                        # Single key-value pair, use the value as query
+                        single_value = list(actual_data.values())[0]
+                        # If the single value is a dict, try to extract user_query from it
+                        if isinstance(single_value, dict):
+                            query_text = single_value.get('user_query') or single_value.get('query') or single_value.get('message')
+                        else:
+                            query_text = single_value
+            elif isinstance(actual_data, str):
+                # Direct string input
+                query_text = actual_data
+
+            # CRITICAL FIX: Ensure query_text is always a string
+            if query_text and not isinstance(query_text, str):
+                # If query_text is not a string, try to extract the actual query
+                if isinstance(query_text, dict):
+                    query_text = query_text.get('user_query') or query_text.get('query') or query_text.get('message') or str(query_text)
+                else:
+                    query_text = str(query_text)
+
+            self.nb_logger.info(f"🔍 [HTTP-TRACE] Processing request_id: {request_id}, session_id: {session_id}")
+            self.nb_logger.info(f"🔍 [HTTP-TRACE] Extracted query_text type: {type(query_text)}")
+            self.nb_logger.info(f"🔍 [HTTP-TRACE] Extracted query_text: {str(query_text)[:100] if query_text else 'None'}...")
+
             # Check if this step should execute based on routing decision
             routing_decision = actual_data.get('routing_decision', {})
             next_step = routing_decision.get('next_step')
-            
-            if next_step != 'conversational_response':
+
+            # CRITICAL FIX: Handle direct conversational queries without routing
+            if next_step is not None and next_step != 'conversational_response':
                 # This step shouldn't execute for this query type
                 self.nb_logger.info(f"🚫 Skipping conversational response step (routing to: {next_step})")
                 return {
@@ -180,16 +279,33 @@ class ConversationalResponseStep(Step):
                     'reason': f'Query routed to {next_step}',
                     'response_data': None
                 }
-            
+
+            # If no routing decision or routing to conversational_response, process the query
+            self.nb_logger.info(f"✅ Processing conversational query (routing: {next_step or 'direct'})")
+
             classification_data = actual_data.get('classification_data')
-            
+
+            # CRITICAL FIX: Handle direct user queries without classification_data
             if not classification_data:
-                raise ValueError("Missing classification_data")
-            
+                # Use the extracted query_text
+                if not query_text:
+                    self.nb_logger.error(f"🔍 DEBUG: No query_text extracted from input data")
+                    raise ValueError("Missing both classification_data and query_text")
+
+                # Create a simple classification data structure
+                from types import SimpleNamespace
+                classification_data = SimpleNamespace()
+                classification_data.original_query = str(query_text)  # Ensure it's a string
+                self.nb_logger.info(f"✅ Created classification_data from query_text: {str(query_text)[:50]}...")
+
             query = classification_data.original_query
+            # CRITICAL FIX: Ensure query is always a string
+            if not isinstance(query, str):
+                query = str(query)
+
             topic_hints = routing_decision.get('topic_hints', ['general'])
             clarification_needed = routing_decision.get('clarification_needed', False)
-            
+
             self.nb_logger.info(f"🧠 Generating LLM response for query: {query[:100]}...")
             
             # Generate response using LLM agent
@@ -201,33 +317,80 @@ class ConversationalResponseStep(Step):
             # Calculate processing time
             processing_time = (time.time() - start_time) * 1000
             response_data.processing_time_ms = processing_time
-            
+
             self.nb_logger.info(f"✅ Generated {response_data.response_type} response ({len(response_data.response)} chars)")
-            
+
+            # PHASE 2 FIX: Create HTTP-compatible response with request_id for web interface matching
+            http_compatible_response = {
+                'request_id': request_id,
+                'session_id': session_id,
+                'response': response_data.response,
+                'workflow_type': 'conversational_viral_expert',
+                'processing_time': processing_time,
+                'response_type': response_data.response_type,
+                'confidence': response_data.confidence,
+                'topic_area': response_data.topic_area,
+                'timestamp': datetime.now().isoformat()
+            }
+
+            self.nb_logger.info(f"🔍 [HTTP-TRACE] Created HTTP-compatible response with request_id: {request_id}")
+
             return {
                 'success': True,
-                'response_data': response_data,
+                'conversation_output': http_compatible_response,  # ✅ CRITICAL FIX: HTTP-compatible format
+                'response_data': response_data,  # Keep for backward compatibility
                 'processing_time_ms': processing_time
             }
             
         except Exception as e:
             self.nb_logger.error(f"❌ Conversational response generation failed: {e}")
-            
+
+            # CRITICAL FIX: Ensure start_time is defined for processing time calculation
+            if 'start_time' not in locals():
+                start_time = time.time()
+
+            # CRITICAL FIX: Safely extract request_id and session_id for error response
+            request_id = None
+            session_id = 'default'
+            try:
+                # Try to extract from input_data if available
+                if isinstance(input_data, dict):
+                    request_id = input_data.get('request_id')
+                    session_id = input_data.get('session_id', 'default')
+            except:
+                pass  # Use defaults if extraction fails
+
             # Generate fallback response
-            classification_data = input_data.get('classification_data')
+            classification_data = input_data.get('classification_data') if isinstance(input_data, dict) else None
             query = classification_data.original_query if classification_data else ''
-            
+
+            processing_time = (time.time() - start_time) * 1000
+
             fallback_response = ConversationalResponseData(
                 query=query,
-                response="I apologize, but I encountered an error generating a response. Please try rephrasing your question or ask about alphavirus structure, replication, or diseases.",
+                response=f"I encountered an error while processing your request: {str(e)}",
                 response_type='error',
                 confidence=0.0,
-                processing_time_ms=(time.time() - start_time) * 1000
+                processing_time_ms=processing_time
             )
-            
+
+            # PHASE 2 FIX: Create HTTP-compatible fallback response with request_id
+            http_compatible_fallback = {
+                'request_id': request_id,
+                'session_id': session_id,
+                'response': fallback_response.response,
+                'workflow_type': 'conversational_viral_expert',
+                'processing_time': processing_time,
+                'response_type': 'error',
+                'confidence': 0.0,
+                'error': str(e),
+                'timestamp': datetime.now().isoformat()
+            }
+
             return {
                 'success': False,
-                'response_data': fallback_response,
+                'conversation_output': http_compatible_fallback,  # ✅ HTTP-compatible format
+                'response_data': fallback_response,  # Keep for backward compatibility
                 'error': str(e)
             }
     
@@ -241,8 +404,20 @@ class ConversationalResponseStep(Step):
         enhanced_query = self._enhance_query_with_context(query, topic_hints)
         
         try:
+            # PHASE 1 DIAGNOSTICS: Enhanced agent call tracing
+            self.nb_logger.info(f"🔍 [STEP-TRACE] Calling agent.process() with enhanced query...")
+            self.nb_logger.info(f"🔍 [STEP-TRACE] Agent type: {type(self.agent)}")
+            self.nb_logger.info(f"🔍 [STEP-TRACE] Agent name: {getattr(self.agent, 'name', 'unknown')}")
+            self.nb_logger.info(f"🔍 [STEP-TRACE] Enhanced query length: {len(enhanced_query)}")
+
+            agent_call_start = time.time()
+
             # Generate response using conversational agent
             llm_response = await self.agent.process(enhanced_query)
+
+            agent_call_duration = time.time() - agent_call_start
+            self.nb_logger.info(f"✅ [STEP-TRACE] agent.process() completed in {agent_call_duration:.2f}s")
+            self.nb_logger.info(f"🔍 [STEP-TRACE] Response length: {len(llm_response) if llm_response else 0}")
             
             # Determine primary topic and confidence
             primary_topic = topic_hints[0] if topic_hints else 'general'

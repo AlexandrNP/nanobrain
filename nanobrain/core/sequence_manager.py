@@ -13,6 +13,9 @@ from io import StringIO
 from dataclasses import dataclass
 from enum import Enum
 
+# Async file operations
+import aiofiles
+
 from .bioinformatics import (
     SequenceRegion, SequenceCoordinate, SequenceType, CoordinateSystem,
     BioinformaticsConfig, create_sequence_region
@@ -173,7 +176,9 @@ class FastaParser:
         ) as context:
             
             try:
-                content = file_path.read_text()
+                # NON-BLOCKING file read using aiofiles
+                async with aiofiles.open(file_path, 'r', encoding='utf-8') as f:
+                    content = await f.read()
                 sequences = self.parse_fasta_string(content)
                 
                 context.metadata['file_size'] = file_path.stat().st_size
@@ -211,7 +216,9 @@ class FastaParser:
             
             try:
                 fasta_content = self.write_fasta_string(sequences, line_width)
-                file_path.write_text(fasta_content)
+                # NON-BLOCKING file write using aiofiles
+                async with aiofiles.open(file_path, 'w', encoding='utf-8') as f:
+                    await f.write(fasta_content)
                 
                 context.metadata['file_size'] = file_path.stat().st_size
                 context.metadata['sequences_count'] = len(sequences)

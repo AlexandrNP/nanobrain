@@ -539,10 +539,11 @@ export class UniversalResponseParser {
                 max_initial_items: 50
             };
 
-            // Add content summary for large text
-            if (data.format === ResponseFormats.TEXT && data.content.length > 5000) {
-                processed.content_summary = data.content.substring(0, 500) + '...';
-                processed.metadata.truncated = true;
+            // No content truncation - display full content
+            if (data.format === ResponseFormats.TEXT && data.content.length > 50000) {
+                // Only add summary for extremely large content, but don't truncate
+                processed.content_summary = data.content.substring(0, 1000) + '...';
+                processed.metadata.has_summary = true;
             }
 
             return processed;

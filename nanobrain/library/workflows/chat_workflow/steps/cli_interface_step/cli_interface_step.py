@@ -202,9 +202,20 @@ CLI Interface Status:
         }
     
     async def _clear_screen(self) -> Dict[str, Any]:
-        """Clear the screen."""
-        # Clear screen command for different platforms
-        os.system('cls' if os.name == 'nt' else 'clear')
+        """Clear the screen (NON-BLOCKING)."""
+        # Clear screen command for different platforms using async subprocess
+        clear_cmd = 'cls' if os.name == 'nt' else 'clear'
+
+        try:
+            process = await asyncio.create_subprocess_shell(
+                clear_cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            await process.communicate()
+        except Exception as e:
+            # Fallback: just print newlines if clear command fails
+            print('\n' * 50)
         return {
             'message': 'Screen cleared',
             'display': '',

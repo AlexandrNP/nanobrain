@@ -112,16 +112,22 @@ class IntelligentWorkflowRouter(WorkflowRouter):
         self.virus_extraction_agent: Optional[Any] = None
         self.query_analysis_agent: Optional[Any] = None
         self.workflow_mappings: Dict[str, Dict[str, Any]] = {}
-        
+        self._agents_initialized = False
+
         self.nb_logger.info("🧠 Initializing Intelligent Workflow Router")
-        
-        # Load LLM agents for query classification
-        self._load_classification_agents()
-        
-        # Setup workflow mappings
+
+        # Setup workflow mappings (sync operation)
         self._setup_workflow_mappings()
-        
-        self.nb_logger.info("✅ Intelligent Workflow Router initialized with LLM-based classification")
+
+        self.nb_logger.info("✅ Intelligent Workflow Router initialized (agents will be loaded on first use)")
+
+    async def _ensure_agents_initialized(self):
+        """Ensure agents are initialized (lazy initialization)"""
+        if not self._agents_initialized:
+            self.nb_logger.info("🤖 Loading classification agents...")
+            await self._load_classification_agents()
+            self._agents_initialized = True
+            self.nb_logger.info("✅ Classification agents loaded and initialized")
 
     def setup_routing_configuration(self) -> None:
         """
@@ -237,9 +243,10 @@ class IntelligentWorkflowRouter(WorkflowRouter):
         
         logger.debug("✅ Intelligent routing thresholds validated")
 
-    def _load_classification_agents(self) -> None:
+    async def _load_classification_agents(self) -> None:
         """
         ✅ FRAMEWORK COMPLIANCE: Load LLM agents for query classification
+        CRITICAL FIX: Made async to support agent initialization
         """
         try:
             # Load virus extraction agent (check if already resolved by framework)
@@ -250,7 +257,7 @@ class IntelligentWorkflowRouter(WorkflowRouter):
                 logger.debug("✅ Virus extraction agent already resolved by framework")
             else:
                 # Load via framework pattern (fallback for dictionary config)
-                self.virus_extraction_agent = self._load_agent_component(
+                self.virus_extraction_agent = await self._load_agent_component(
                     virus_agent_config.get('class'), virus_agent_config.get('config')
                 )
 
@@ -262,29 +269,36 @@ class IntelligentWorkflowRouter(WorkflowRouter):
                 logger.debug("✅ Query analysis agent already resolved by framework")
             else:
                 # Load via framework pattern (fallback for dictionary config)
-                self.query_analysis_agent = self._load_agent_component(
+                self.query_analysis_agent = await self._load_agent_component(
                     query_agent_config.get('class'), query_agent_config.get('config')
                 )
-                
+
             logger.debug("✅ Classification agents loaded successfully")
-            
+
         except Exception as e:
             logger.error(f"❌ Failed to load classification agents: {e}")
             raise
 
-    def _load_agent_component(self, agent_class: str, config_path: str):
+    async def _load_agent_component(self, agent_class: str, config_path: str):
         """
         ✅ FRAMEWORK COMPLIANCE: Load agent component using framework patterns
+        CRITICAL FIX: Added initialize() call to ensure LLM client setup
         """
         try:
             # Import agent class dynamically
             module_path, class_name = agent_class.rsplit('.', 1)
             module = __import__(module_path, fromlist=[class_name])
             agent_cls = getattr(module, class_name)
-            
+
             # Create agent using from_config pattern
-            return agent_cls.from_config(config_path)
-            
+            agent = agent_cls.from_config(config_path)
+
+            # CRITICAL FIX: Initialize agent to set up LLM client and other components
+            await agent.initialize()
+            logger.debug(f"✅ Agent {class_name} initialized successfully")
+
+            return agent
+
         except Exception as e:
             logger.error(f"❌ Failed to load agent component {agent_class}: {e}")
             raise
@@ -332,9 +346,12 @@ class IntelligentWorkflowRouter(WorkflowRouter):
         Extract virus species and analysis type using specialized LLM agent
         """
         try:
+            # CRITICAL FIX: Ensure agents are initialized before use
+            await self._ensure_agents_initialized()
+
             # Use virus extraction agent to analyze query
             logger.debug("🔍 Extracting virus species using LLM agent")
-            
+
             extraction_result = await self.virus_extraction_agent._process_specialized_request(
                 user_query,
                 expected_format='json',
@@ -428,6 +445,9 @@ class IntelligentWorkflowRouter(WorkflowRouter):
         ✅ FRAMEWORK COMPLIANCE: Fallback query processing using general agent methods
         """
         try:
+            # CRITICAL FIX: Ensure agents are initialized before use
+            await self._ensure_agents_initialized()
+
             # Use general agent processing method
             fallback_result = await self.virus_extraction_agent.process({
                 'user_query': user_query,

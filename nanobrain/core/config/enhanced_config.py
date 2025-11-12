@@ -307,8 +307,8 @@ class EnhancedAgentConfig(YAMLConfig):
               llm_provider: "openai"
               model: "gpt-4"
               temperature: 0.7
-              max_tokens: 4096
-              timeout: 30
+              max_tokens: 8000
+              timeout: 60
               
             # Tool integration
             tools:

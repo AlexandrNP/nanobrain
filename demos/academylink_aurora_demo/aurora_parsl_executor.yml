@@ -1,0 +1,60 @@
+# Aurora Parsl Executor Configuration
+# For deploying Nanobrain workflow to Aurora PBS system
+
+name: "aurora_parsl_executor"
+description: "ParslExecutor for Aurora HPC system with PBS"
+executor_type: "parsl"
+max_workers: 8
+timeout: 600
+
+# Complete Parsl configuration for Aurora PBS execution
+parsl_config:
+  # Parsl framework configuration
+  strategy: null
+  app_cache: true
+  checkpoint_mode: "task_exit"
+  checkpoint_period: "00:05:00"
+  retries: 2
+  
+  # Executors configuration - contains all necessary information for Parsl
+  executors:
+  - label: "aurora_pbs_htex"
+    class: "parsl.executors.HighThroughputExecutor"
+    max_workers_per_node: 2  # Fewer workers for lightweight demo
+    cores_per_worker: 1
+    worker_debug: true
+    heartbeat_period: 10  # Faster heartbeat
+    heartbeat_threshold: 30  # Shorter threshold
+    
+    # Provider configuration for Aurora PBS - LIGHTWEIGHT for real-time demo
+    provider_config:
+      class: "parsl.providers.PBSProProvider"
+      queue: "debug"
+      account: "FoundEpidem"
+      nodes_per_block: 1  # Just 1 node for lightweight demo
+      cpus_per_node: 4
+      walltime: "00:05:00"  # Only 5 minutes needed
+      scheduler_options: "#PBS -l filesystems=home:flare"
+      worker_init: |
+        module load frameworks
+        source /home/onarykov/miniconda3/etc/profile.d/conda.sh
+        conda activate nanobrain-upd
+        export PYTHONPATH="/home/onarykov/nanobrain:$PYTHONPATH"
+        echo "🔥 BRUTAL TRUTH: Starting on Aurora node $(hostname)"
+        echo "📋 PBS_JOBID: $PBS_JOBID"
+        echo "📄 PBS_NODEFILE: $PBS_NODEFILE"
+        if [ -f "$PBS_NODEFILE" ]; then
+          echo "🌐 Allocated Aurora nodes:"
+          cat $PBS_NODEFILE
+        fi
+      parallelism: 1.0
+
+# Fallback configurations for Aurora - DISABLED to force Parsl execution
+fallback:
+  enable_fallback: false
+  executor_type: "local"
+  max_workers: 4
+
+thread_fallback:
+  executor_type: "thread"
+  max_workers: 4

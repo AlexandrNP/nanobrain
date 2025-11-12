@@ -143,11 +143,12 @@ class ChatbotServer:
             # Try to load chatbot viral workflow
             try:
                 from nanobrain.library.workflows.chatbot_viral_integration.chatbot_viral_workflow import ChatbotViralWorkflow
-                from nanobrain.core.config.component_factory import load_config_file
+                import yaml
                 
                 # Load workflow configuration
                 if Path(config_path).exists():
-                    workflow_config_dict = load_config_file(config_path)
+                    with open(config_path, 'r') as f:
+                        workflow_config_dict = yaml.safe_load(f)
                     self.workflow = ChatbotViralWorkflow.from_config(workflow_config_dict)
                     await self.workflow.initialize()
                     self.logger.info("✅ Workflow initialized successfully")

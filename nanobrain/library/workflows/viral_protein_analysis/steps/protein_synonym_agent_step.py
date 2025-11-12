@@ -72,7 +72,7 @@ class ProteinSynonymAgentStep(Step):
             self.nb_logger.info(f"Successfully initialized ProteinSynonymAgent from {agent_config_path}")
             
         except Exception as e:
-            self.nb_logger.error(f"Failed to initialize agent: {str(e)}")
+            self.nb_logger.error(f"Failed to initialize agent: {str(e)}", exc_info=True)
             raise
     
     async def cleanup(self):
@@ -81,7 +81,7 @@ class ProteinSynonymAgentStep(Step):
             try:
                 await self.agent.shutdown()
             except Exception as e:
-                self.nb_logger.error(f"Error shutting down agent: {str(e)}")
+                self.nb_logger.error(f"Error shutting down agent: {str(e)}", exc_info=True)
         await super().cleanup()
     
     async def process(self, input_data: Dict[str, Any], **kwargs) -> Dict[str, Any]:
@@ -175,7 +175,7 @@ class ProteinSynonymAgentStep(Step):
                 'processing_time': time.time() - start_time
             }
         except Exception as e:
-            self.nb_logger.error(f"Error processing synonym request: {str(e)}")
+            self.nb_logger.error(f"Error processing synonym request: {str(e)}", exc_info=True)
             return {
                 'status': 'error',
                 'error': str(e),

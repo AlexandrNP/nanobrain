@@ -10,6 +10,9 @@ import re
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+# Async file operations
+import aiofiles
+
 # Updated imports for nanobrain package structure
 from nanobrain.core.agent import AgentConfig
 from .base import SpecializedAgentBase, SimpleSpecializedAgent, ConversationalSpecializedAgent
@@ -730,8 +733,10 @@ class FileWriterAgentMixin(SpecializedAgentBase):
             
             if not path.exists():
                 return f"Error: File {file_path} does not exist"
-            
-            content = path.read_text(encoding=encoding)
+
+            # NON-BLOCKING file read using aiofiles
+            async with aiofiles.open(path, 'r', encoding=encoding) as f:
+                content = await f.read()
             self.specialized_logger.info(f"Successfully read {len(content)} characters from {file_path}")
             self._track_specialized_operation("read_file", success=True)
             return content

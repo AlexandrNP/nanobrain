@@ -17,6 +17,9 @@ from pathlib import Path
 import json
 from pydantic import BaseModel, Field, ConfigDict, field_validator
 
+# Async file operations
+import aiofiles
+
 from .step import Step, StepConfig
 from .agent import Agent, AgentConfig
 from .tool import ToolBase, ToolConfig
@@ -402,10 +405,15 @@ class ExternalToolManager:
                     'return_code': -1
                 }
     
-    def create_temp_file(self, content: str, suffix: str = ".tmp") -> str:
-        """Create a temporary file with given content."""
-        temp_file = self.temp_dir / f"temp_{asyncio.get_event_loop().time()}{suffix}"
-        temp_file.write_text(content)
+    async def create_temp_file(self, content: str, suffix: str = ".tmp") -> str:
+        """Create a temporary file with given content (NON-BLOCKING)."""
+        import uuid
+        temp_file = self.temp_dir / f"temp_{uuid.uuid4().hex[:8]}{suffix}"
+
+        # NON-BLOCKING temp file creation using aiofiles
+        async with aiofiles.open(temp_file, 'w', encoding='utf-8') as f:
+            await f.write(content)
+
         return str(temp_file)
     
     def cleanup_temp_files(self) -> None:

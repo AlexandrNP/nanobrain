@@ -1,0 +1,107 @@
+name: "SimpleWorkflow"  
+description: "Simple workflow for UI builder demonstration"
+version: "1.0.0"
+execution_strategy: "event_driven"
+error_handling: "continue"
+enable_monitoring: true
+
+# Input data units
+input_data_units:
+  initial_input:
+    class: "nanobrain.core.data_unit.DataUnitString"
+    name: "initial_input"
+    description: "Workflow input data"
+    data_type: "string"
+    persistent: false
+
+# Output data units  
+output_data_units:
+  final_output:
+    class: "nanobrain.core.data_unit.DataUnitString"
+    name: "final_output"
+    description: "Workflow output data"
+    data_type: "string"
+    persistent: false
+
+# Workflow steps
+steps:
+  data_generator:
+    class: "nanobrain.library.steps.DataGeneratorStep"
+    step_id: "data_generator"
+    name: "Data Generator"
+    description: "Generates test data"
+    config: "data_generator_config.yml"
+    input_ports:
+      seed_input:
+        class: "nanobrain.core.data_unit.DataUnitString"
+        name: "seed_input"
+        description: "Input seed for data generation"
+    output_ports:
+      generated_data:
+        class: "nanobrain.core.data_unit.DataUnitString"
+        name: "generated_data"
+        description: "Generated data output"
+
+  data_processor:
+    class: "nanobrain.library.steps.DataProcessorStep"
+    step_id: "data_processor"
+    name: "Data Processor"
+    description: "Processes the generated data"
+    config: "data_processor_config.yml"
+    input_ports:
+      raw_data:
+        class: "nanobrain.core.data_unit.DataUnitString"
+        name: "raw_data"
+        description: "Raw data to process"
+    output_ports:
+      processed_data:
+        class: "nanobrain.core.data_unit.DataUnitString"
+        name: "processed_data"
+        description: "Processed data output"
+
+  sub_workflow:
+    class: "nanobrain.library.workflows.SubWorkflow"
+    step_id: "sub_workflow"
+    name: "Sub-Workflow"
+    description: "Sub-workflow component"
+    config: "sub_workflow_config.yml"
+    input_ports:
+      workflow_input:
+        class: "nanobrain.core.data_unit.DataUnitString"
+        name: "workflow_input"
+        description: "Input to sub-workflow"
+    output_ports:
+      workflow_output:
+        class: "nanobrain.core.data_unit.DataUnitString"
+        name: "workflow_output"
+        description: "Output from sub-workflow"
+
+# Data flow links
+links:
+  initial_to_generator:
+    class: "nanobrain.core.link.DirectLink"
+    config:
+      name: "initial_to_generator"
+      source: "initial_input"
+      target: "data_generator.seed_input"
+      
+  generator_to_processor:
+    class: "nanobrain.core.link.DirectLink"
+    config:
+      name: "generator_to_processor"
+      source: "data_generator.generated_data"
+      target: "data_processor.raw_data"
+      
+  processor_to_sub:
+    class: "nanobrain.core.link.DirectLink"
+    config:
+      name: "processor_to_sub"
+      source: "data_processor.processed_data"
+      target: "sub_workflow.workflow_input"
+      
+  sub_to_output:
+    class: "nanobrain.core.link.DirectLink"
+    config:
+      name: "sub_to_output"
+      source: "sub_workflow.workflow_output"
+      target: "final_output"

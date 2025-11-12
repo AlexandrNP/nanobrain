@@ -1,0 +1,26 @@
+name: data_preparation_step
+description: "Local data preparation step"
+step_name: data_preparation
+class: steps.data_preparation_step.DataPreparationStep
+processing_delay: 1.0
+
+# Input data units - WHAT THE STEP EXPECTS
+input_data_units:
+  raw_input:
+    class: "nanobrain.core.data_unit.DataUnitMemory"
+    name: "raw_input"
+    description: "Raw input data for preparation"
+    persistent: false
+
+# Output data units - WHAT THE STEP PRODUCES
+output_data_units:
+  prepared_data:
+    class: "nanobrain.core.data_unit.DataUnitMemory"
+    name: "prepared_data"
+    description: "Prepared data for heavy computation"
+    persistent: false
+
+# Executor configuration - LOCAL EXECUTION
+executor:
+  class: nanobrain.core.executor.LocalExecutor
+  config: local_step_executor.yml

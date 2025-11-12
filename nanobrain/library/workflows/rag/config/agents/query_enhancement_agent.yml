@@ -1,0 +1,92 @@
+# Query Enhancement Agent Configuration
+# The ONLY LLM-based component in the RAG pipeline
+
+name: "query_enhancement_agent"
+description: "LLM-based query optimization and enhancement specialist"
+
+# LLM Configuration
+model: "gpt-4"
+temperature: 0.3
+max_tokens: 1500
+timeout: 30
+
+# All templates defined directly in configuration (no external files)
+prompt_template: |
+  You are a Query Enhancement Specialist for RAG systems. Your task is to optimize the following user query for better document retrieval.
+
+  Original Query: "{{ original_query }}"
+
+  Enhancement Configuration:
+  - Max query length: {{ max_query_length }} characters
+  - Domain context: {{ domain_context }}
+  - Enhancement strategies: {{ enhancement_strategies|join(', ') }}
+  - Preserve original intent: {{ preserve_original_intent }}
+
+  Context Information:
+  - Previous conversation: {{ conversation_history|length }} messages
+  - Additional context: {{ additional_context }}
+
+  Instructions:
+  1. Analyze the query for intent, scope, and information requirements
+  2. Apply the specified enhancement strategies: {{ enhancement_strategies|join(', ') }}
+  3. Preserve the original intent while improving retrieval effectiveness
+  4. Generate synonyms and related terms for better matching
+  5. Consider domain-specific terminology and concepts
+
+  {% if conversation_history %}
+  Previous Conversation Context:
+  {% for message in conversation_history[-3:] %}
+  - {{ message.role }}: {{ message.content[:100] }}...
+  {% endfor %}
+  {% endif %}
+
+  {% if domain_context != 'General' %}
+  Domain-Specific Instructions:
+  - Focus on {{ domain_context }} terminology and concepts
+  - Consider field-specific synonyms and related terms
+  - Apply domain knowledge for query expansion
+  {% endif %}
+
+  Output Format (JSON):
+  {
+      "enhanced_query": "optimized version of the query",
+      "search_terms": ["key", "terms", "and", "synonyms"],
+      "context_additions": "additional context for retrieval",
+      "enhancement_rationale": "explanation of changes made",
+      "confidence_score": 0.95
+  }
+
+  Ensure the enhanced query is under {{ max_query_length }} characters and maintains the original intent.
+
+# Fallback template (used when main template fails)
+fallback_template: |
+  Query Enhancement Task
+
+  Query: "{{ original_query }}"
+  Domain: {{ domain_context }}
+  Context: {{ additional_context }}
+  Previous messages: {{ conversation_count }}
+
+  Instructions:
+  - Max query length: {{ max_query_length }} characters
+  - Preserve original intent: {{ preserve_original_intent }}
+  - Apply available strategies: {{ enhancement_strategies|join(', ') if enhancement_strategies else 'basic enhancement' }}
+
+  Provide an enhanced query that improves retrieval effectiveness while preserving the original intent. 
+  Output as JSON with enhanced_query, search_terms, and confidence_score fields.
+
+# Template variables
+template_variables:
+  enhancement_strategies:
+    - "synonym_expansion"
+    - "context_integration" 
+    - "domain_optimization"
+    - "abbreviation_expansion"
+  domain_context: "General"
+  preserve_original_intent: true
+
+# Agent configuration
+max_query_length: 500
+
+# Emergency fallback (used when all templates fail)
+emergency_instruction: "Enhance this query for better retrieval"

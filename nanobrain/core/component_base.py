@@ -575,7 +575,7 @@ class FromConfigBase(ABC):
             ComponentConfigurationError: If config validation fails
         """
         # Import utilities on-demand to avoid circular imports
-        from .config.component_factory import load_config_file
+        import yaml
         
         # Step 1: Normalize input to dictionary format
         if isinstance(config, (str, Path)):
@@ -590,7 +590,8 @@ class FromConfigBase(ABC):
                 raise FileNotFoundError(f"Configuration file not found: {config_path}")
             
             # Load YAML to dictionary
-            config_dict = load_config_file(str(config_path))
+            with open(str(config_path), 'r') as f:
+                config_dict = yaml.safe_load(f)
             
             # Handle class auto-detection
             if 'class' in config_dict:

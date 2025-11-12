@@ -1,0 +1,156 @@
+# Semantic Retrieval Step Configuration
+# Similarity search and ranking operations
+
+name: "semantic_retrieval_step"
+description: "Deterministic similarity search and ranking operations"
+
+# Retrieval configuration
+top_k: 10
+similarity_threshold: 0.7
+search_strategy: "dense"  # Options: dense, sparse, hybrid
+
+# Ranking configuration
+enable_reranking: true
+rerank_model: "cross-encoder/ms-marco-MiniLM-L-6-v2"
+rerank_top_k: 50
+rerank_batch_size: 32
+
+# Query processing
+embedding_model: "all-MiniLM-L6-v2"  # Should match embedding generator
+max_query_length: 500
+preprocessing_enabled: true
+query_expansion_enabled: false
+
+# Search strategies configuration
+dense_search:
+  similarity_metric: "cosine"  # cosine, euclidean, dot_product
+  normalize_query: true
+  normalize_documents: true
+  use_approximate_search: true
+
+sparse_search:
+  algorithm: "bm25"
+  k1: 1.2
+  b: 0.75
+  enable_stemming: true
+  remove_stopwords: true
+
+hybrid_search:
+  dense_weight: 0.7
+  sparse_weight: 0.3
+  fusion_method: "rrf"  # reciprocal rank fusion
+  rrf_k: 60
+
+# Query preprocessing
+preprocessing:
+  lowercase: true
+  remove_punctuation: false
+  remove_stopwords: false
+  apply_stemming: false
+  expand_abbreviations: false
+  normalize_unicode: true
+
+# Query expansion (if enabled)
+query_expansion:
+  method: "wordnet"  # wordnet, word2vec, fasttext
+  max_synonyms: 3
+  synonym_weight: 0.5
+  enable_phrase_expansion: false
+
+# Reranking configuration
+reranking:
+  model_type: "cross-encoder"
+  model_name: "cross-encoder/ms-marco-MiniLM-L-6-v2"
+  batch_size: 32
+  max_length: 512
+  device: "cpu"
+  enable_caching: true
+  cache_size: 1000
+
+# Filtering and post-processing
+filtering:
+  min_similarity_score: 0.0
+  max_similarity_score: 1.0
+  remove_duplicates: true
+  duplicate_threshold: 0.95
+  diversity_threshold: 0.8
+  enable_mmr: false  # Maximal Marginal Relevance
+  mmr_lambda: 0.5
+
+# Performance optimization
+performance:
+  enable_parallel_search: true
+  max_parallel_queries: 4
+  search_timeout_seconds: 30
+  enable_search_caching: true
+  cache_size: 500
+  cache_ttl_seconds: 3600
+
+# Result formatting
+result_formatting:
+  include_similarity_scores: true
+  include_rerank_scores: true
+  include_chunk_metadata: true
+  include_source_info: true
+  sort_by_relevance: true
+  deduplicate_sources: false
+
+# Monitoring and logging
+monitoring:
+  log_search_queries: true
+  log_search_results: false  # Set to true for debugging
+  log_performance_metrics: true
+  track_search_latency: true
+  track_result_quality: false
+
+# Error handling
+error_handling:
+  fallback_to_keyword_search: true
+  continue_on_rerank_error: true
+  return_partial_results: true
+  log_search_errors: true
+  max_retries: 2
+
+# Advanced search features
+advanced_features:
+  enable_semantic_clustering: false
+  cluster_threshold: 0.8
+  enable_temporal_boosting: false
+  temporal_decay_factor: 0.1
+  enable_source_boosting: false
+  source_boost_factors: {}
+
+# Quality assurance
+quality_assurance:
+  min_results_threshold: 1
+  quality_score_threshold: 0.5
+  enable_result_validation: true
+  validate_metadata_completeness: true
+
+# Search result enhancement
+result_enhancement:
+  include_context_snippets: true
+  snippet_length: 200
+  highlight_query_terms: false
+  include_passage_boundaries: true
+  add_relevance_explanations: false
+
+# Input/Output data units
+input_data_units:
+  input_enhanced_query:
+    class: "nanobrain.core.data_unit.DataUnitMemory"
+    name: "input_enhanced_query"
+    description: "Enhanced query for retrieval"
+    persistent: false
+  input_vector_index:
+    class: "nanobrain.core.data_unit.DataUnitMemory"
+    name: "input_vector_index"
+    description: "Vector database index for search"
+    persistent: false
+
+output_data_units:
+  retrieved_chunks:
+    class: "nanobrain.core.data_unit.DataUnitMemory"
+    name: "retrieved_chunks"
+    description: "Retrieved relevant chunks"
+    persistent: false

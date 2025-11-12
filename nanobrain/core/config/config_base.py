@@ -787,7 +787,10 @@ class ConfigBase(BaseModel, ABC):
             
             # Create and validate configuration instance
             config_instance = cls._create_validated_instance(enhanced_config)
-            
+
+            # Add source path tracking for distributed execution
+            setattr(config_instance, 'source_path', str(config_path))
+
             logger.info(f"✅ Successfully loaded {cls.__name__} from {config_path}")
             return config_instance
             
@@ -850,7 +853,7 @@ class ConfigBase(BaseModel, ABC):
                 if key == 'tools' and cls.__name__ == 'StepConfig':
                     resolved_config[key] = value.copy()  # Keep original for schema validation
                     resolved_tools = {}
-                    
+
                     # Process each tool for instantiation
                     for tool_name, tool_config in value.items():
                         if isinstance(tool_config, dict) and 'class' in tool_config and 'config' in tool_config:
@@ -858,6 +861,61 @@ class ConfigBase(BaseModel, ABC):
                                 # Extract class path and config
                                 class_path = tool_config['class']
                                 config_value = tool_config['config']
+
+                                # Import the class
+                                module_path, class_name = class_path.rsplit('.', 1)
+                                module = importlib.import_module(module_path)
+                                target_class = getattr(module, class_name)
+
+                                # Resolve config and create instance
+                                if isinstance(config_value, str):
+                                    # File path - all classes support this
+                                    config_path = cls._resolve_config_path(config_value, context)
+                                    instance = target_class.from_config(config_path, **context.additional_context)
+                                else:
+                                    # Inline configuration dict - only supported for DataUnit, Link, Trigger classes
+                                    if cls._is_inline_config_supported(target_class):
+                                        instance = target_class.from_config(config_value, **context.additional_context)
+                                    else:
+                                        raise ValueError(
+                                            f"❌ FRAMEWORK VIOLATION: Inline dict configuration not supported for {class_path}\n"
+                                            f"   SUPPORTED CLASSES: DataUnit, Link, Trigger and their subclasses only\n"
+                                            f"   REQUIRED: Use file path for config field\n"
+                                            f"   EXAMPLE: config: 'path/to/{class_name.lower()}.yml'\n"
+                                            f"   CURRENT: config: {config_value}"
+                                        )
+
+                                # Store instantiated tool separately
+                                resolved_tools[tool_name] = instance
+
+                                logger.debug(f"✅ Instantiated tool {class_name} for key '{tool_name}'")
+
+                            except Exception as e:
+                                raise ValueError(
+                                    f"❌ FAILED TO INSTANTIATE OBJECT: {tool_name}\n"
+                                    f"   CLASS: {tool_config.get('class', 'unknown')}\n"
+                                    f"   CONFIG: {tool_config.get('config', 'unknown')}\n"
+                                    f"   ERROR: {str(e)}\n"
+                                    f"   SOLUTION: Ensure class path is correct and config is valid"
+                                ) from e
+                        else:
+                            # Keep non-class+config tools as-is
+                            resolved_tools[tool_name] = tool_config
+
+                    # Store resolved tools for later access
+                    resolved_config['resolved_tools'] = resolved_tools
+                # Special handling for WorkflowConfig agents field
+                elif key == 'agents' and cls.__name__ == 'WorkflowConfig':
+                    resolved_config[key] = value.copy()  # Keep original for schema validation
+                    resolved_agents = {}
+                    
+                    # Process each agent for instantiation
+                    for agent_name, agent_config in value.items():
+                        if isinstance(agent_config, dict) and 'class' in agent_config and 'config' in agent_config:
+                            try:
+                                # Extract class path and config
+                                class_path = agent_config['class']
+                                config_value = agent_config['config']
                                 
                                 # Import the class
                                 module_path, class_name = class_path.rsplit('.', 1)
@@ -882,26 +940,26 @@ class ConfigBase(BaseModel, ABC):
                                             f"   CURRENT: config: {config_value}"
                                         )
                                 
-                                # Store instantiated tool separately
-                                resolved_tools[tool_name] = instance
-                                
-                                logger.debug(f"✅ Instantiated tool {class_name} for key '{tool_name}'")
-                                
+                                # Store instantiated agent separately
+                                resolved_agents[agent_name] = instance
+
+                                logger.debug(f"✅ Instantiated agent {class_name} for key '{agent_name}'")
+
                             except Exception as e:
                                 raise ValueError(
-                                    f"❌ FAILED TO INSTANTIATE TOOL: {tool_name}\n"
-                                    f"   CLASS: {tool_config.get('class', 'unknown')}\n"
-                                    f"   CONFIG: {tool_config.get('config', 'unknown')}\n"
+                                    f"❌ FAILED TO INSTANTIATE AGENT: {agent_name}\n"
+                                    f"   CLASS: {agent_config.get('class', 'unknown')}\n"
+                                    f"   CONFIG: {agent_config.get('config', 'unknown')}\n"
                                     f"   ERROR: {str(e)}\n"
                                     f"   SOLUTION: Ensure class path is correct and config is valid"
                                 ) from e
                         else:
-                            # Keep non-class+config tools as-is
-                            resolved_tools[tool_name] = tool_config
-                    
-                    # Store resolved tools for later access
-                    resolved_config['_resolved_tools'] = resolved_tools
-                    
+                            # Keep non-class+config agents as-is
+                            resolved_agents[agent_name] = agent_config
+
+                    # Store resolved agents for later access
+                    resolved_config['resolved_agents'] = resolved_agents
+
                 # Check if this dict has both 'class' and 'config' fields (non-tools)
                 elif 'class' in value and 'config' in value:
                     # Extract class path and config
@@ -931,6 +989,9 @@ class ConfigBase(BaseModel, ABC):
                                     f"   EXAMPLE: config: 'path/to/{class_name.lower()}.yml'\n"
                                     f"   CURRENT: config: {config_value}"
                                 )
+
+                        # ACADEMY INTEGRATION: Automatically wrap steps in Academy agents if needed
+                        instance = cls._maybe_wrap_step_in_academy(instance, key, context)
                         
                         # Replace the configuration dict with the instantiated object
                         resolved_config[key] = instance
@@ -1248,7 +1309,19 @@ class ConfigBase(BaseModel, ABC):
         # Temporarily allow instantiation for validated config data
         cls._allow_direct_instantiation = True
         try:
+            # Extract resolved objects before creating instance
+            resolved_tools = config_data.pop('resolved_tools', {})
+            resolved_agents = config_data.pop('resolved_agents', {})
+
+            # Create instance with remaining config data
             instance = cls(**config_data)
+
+            # Attach resolved objects as attributes for step access
+            if resolved_tools:
+                setattr(instance, 'resolved_tools', resolved_tools)
+            if resolved_agents:
+                setattr(instance, 'resolved_agents', resolved_agents)
+
             return instance
         finally:
             cls._allow_direct_instantiation = False
@@ -1444,4 +1517,92 @@ class ConfigBase(BaseModel, ABC):
             if hasattr(self, key):
                 setattr(self, key, value)
             else:
-                logger.warning(f"Unknown configuration key: {key}") 
+                logger.warning(f"Unknown configuration key: {key}")
+
+    @classmethod
+    def _maybe_wrap_step_in_academy(cls, instance: Any, step_name: str, context: 'ConfigLoadingContext') -> Any:
+        """
+        Automatically wrap Nanobrain steps in Academy agents if Academy integration is enabled
+
+        Args:
+            instance: The instantiated component
+            step_name: Name of the step in configuration
+            context: Configuration loading context
+
+        Returns:
+            Original instance or Academy-wrapped instance
+        """
+        try:
+            # Check if Academy integration is enabled
+            if not context.additional_context.get('_academy_integration_enabled', False):
+                return instance
+
+            # Check if this is a Step instance
+            from nanobrain.core.step import BaseStep
+            if not isinstance(instance, BaseStep):
+                return instance
+
+            # Load the full workflow configuration to check for Academy links
+            workflow_config = cls._load_workflow_config_for_academy_check(context)
+            if not workflow_config:
+                return instance
+
+            # Check if this step should be wrapped in Academy
+            from nanobrain.academy_integration.academy_step_wrapper import should_wrap_step_in_academy
+            if should_wrap_step_in_academy(step_name, workflow_config):
+                logger.info(f"🎯 Wrapping step '{step_name}' in Academy agent")
+
+                # Import Academy wrapper
+                from nanobrain.academy_integration.academy_step_wrapper import AcademyStepWrapper
+
+                # Wrap the step in Academy agent
+                wrapped_instance = AcademyStepWrapper(instance, step_name)
+
+                logger.info(f"✅ Step '{step_name}' successfully wrapped in Academy agent")
+                return wrapped_instance
+
+            return instance
+
+        except Exception as e:
+            # If Academy wrapping fails, log warning and return original instance
+            logger.warning(f"⚠️ Could not wrap step '{step_name}' in Academy agent: {e}")
+            return instance
+
+    @classmethod
+    def _load_workflow_config_for_academy_check(cls, context: 'ConfigLoadingContext') -> Optional[Dict[str, Any]]:
+        """
+        Load workflow configuration for Academy link checking
+
+        Args:
+            context: Configuration loading context
+
+        Returns:
+            Workflow configuration dict or None if not available
+        """
+        try:
+            # Try to find the workflow config file from context
+            if hasattr(context, 'workflow_directory') and context.workflow_directory:
+                # Look for workflow config in the workflow directory
+                import os
+                workflow_dir = context.workflow_directory
+                for filename in ['workflow.yml', 'workflow.yaml', 'distributed_rag_workflow.yml']:
+                    config_path = os.path.join(workflow_dir, filename)
+                    if os.path.exists(config_path):
+                        import yaml
+                        with open(config_path, 'r') as f:
+                            return yaml.safe_load(f)
+
+            # Try to get from base path
+            base_path = context.base_path
+            for filename in ['workflow.yml', 'workflow.yaml', 'distributed_rag_workflow.yml']:
+                config_path = base_path / filename
+                if config_path.exists():
+                    import yaml
+                    with open(config_path, 'r') as f:
+                        return yaml.safe_load(f)
+
+            return None
+
+        except Exception as e:
+            logger.warning(f"Could not load workflow config for Academy check: {e}")
+            return None

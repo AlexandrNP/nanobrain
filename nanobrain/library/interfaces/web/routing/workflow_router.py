@@ -582,7 +582,7 @@ class WorkflowRouter(FromConfigBase):
             }
         }
     
-    async def wait_for_workflow_completion(self, output_data_unit, timeout: float = 30.0):
+    async def wait_for_workflow_completion(self, output_data_unit, timeout: float = 900.0):
         """Wait for workflow completion with timeout"""
         import asyncio
         import time

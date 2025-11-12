@@ -353,11 +353,7 @@ class DockerHealthMonitor(DockerComponentBase):
                 
             async def initialize_platform(self):
                 # Initialize Docker manager with enterprise configuration
-                self.docker_manager = DockerManager.from_config({
-                    'connection_url': 'unix:///var/run/docker.sock',
-                    'api_version': 'auto',
-                    'timeout': 60
-                })
+                self.docker_manager = DockerManager.from_config('config/infrastructure/docker/docker_manager.yml')
                 await self.docker_manager.initialize()
                 
                 # Configure comprehensive health monitoring

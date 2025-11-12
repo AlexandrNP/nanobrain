@@ -20,12 +20,19 @@ core_workflow_config:
   workflow_class: "nanobrain.library.workflows.viral_protein_analysis.alphavirus_workflow.AlphavirusWorkflow"
   config_path: "nanobrain/library/workflows/viral_protein_analysis/config/AlphavirusWorkflow.yml"
 
-# Progress tracking configuration
+# ✅ FRAMEWORK COMPLIANCE: Add existing VirusExtractionAgent for entity extraction
+agents:
+  virus_extraction_agent:
+    class: "nanobrain.library.agents.specialized.virus_extraction_agent.VirusExtractionAgent"
+    config: "nanobrain/library/agents/specialized/config/virus_extraction_agent_config.yml"
+
+# Progress tracking configuration - Enhanced for detailed monitoring
 progress_tracking:
   enable_step_level_tracking: true
-  enable_substep_tracking: false
-  update_interval_seconds: 1.0
-  persistence_enabled: false
+  enable_substep_tracking: true  # Enable detailed substep tracking
+  update_interval_seconds: 0.5  # More frequent updates for monitoring
+  persistence_enabled: true  # Enable persistence for debugging
+  enable_detailed_logging: true  # Detailed step execution logging
   
   # Step weights for overall progress calculation
   step_weights:
@@ -96,4 +103,14 @@ logging:
   log_result_formatting: true
   log_session_management: true
   enable_performance_metrics: true
-  enable_detailed_timing: true 
+  enable_detailed_timing: true
+
+# ✅ FRAMEWORK COMPLIANCE: Workflow-level triggers using proper YAML format
+triggers:
+  - trigger_id: "web_analysis_request_received"
+    class: "nanobrain.core.trigger.DataUnitChangeTrigger"
+    config:
+      data_unit: "web_analysis_request"
+      event_type: "set"
+      description: "Execute viral analysis workflow when request data arrives"
+      enable_logging: true

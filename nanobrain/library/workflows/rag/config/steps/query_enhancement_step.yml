@@ -1,0 +1,77 @@
+# Query Enhancement Step Configuration
+# AgentStep wrapper for QueryEnhancementAgent
+
+name: "query_enhancement_step"
+description: "LLM-based query optimization and enhancement (ONLY LLM component in RAG pipeline)"
+
+# Agent configuration
+agent_class: "nanobrain.library.workflows.rag.agents.QueryEnhancementAgent"
+agent_config: "config/agents/query_enhancement_agent.yml"
+
+# AgentStep data bridging configuration
+input_extraction_strategy: "auto_detect"
+output_formatting_strategy: "conversational_response"
+input_field_name: "user_query"
+input_template: "{{ user_query }}"
+output_template: "{{ response }}"
+
+# Conversation management
+enable_conversation_tracking: false
+conversation_id_field: null
+conversation_context_size: 10
+conversation_timeout: 3600
+max_conversation_length: 50
+
+# Performance settings
+agent_timeout: 30.0
+enable_agent_caching: false
+cache_ttl: 300
+auto_initialize_agent: true
+
+# Input/Output data units
+input_data_units:
+  user_query:
+    class: "nanobrain.core.data_unit.DataUnitMemory"
+    name: "user_query"
+    description: "User query input for enhancement"
+    persistent: false
+
+output_data_units:
+  enhanced_query:
+    class: "nanobrain.core.data_unit.DataUnitMemory"
+    name: "enhanced_query"
+    description: "Enhanced query output"
+    persistent: false
+
+# Step-specific settings
+timeout: 30
+max_retries: 3
+enable_fallback: true
+fallback_to_original_query: true
+
+# Processing configuration
+enable_async_processing: true
+enable_result_caching: false
+cache_ttl_seconds: 3600
+
+# Error handling
+continue_on_agent_error: true
+log_agent_errors: true
+include_error_context: true
+
+# Monitoring
+track_processing_time: true
+track_enhancement_quality: false
+log_query_transformations: true
+
+# Quality assurance
+validate_enhanced_query: true
+max_query_length: 500
+min_query_length: 5
+preserve_original_intent: true
+
+# Output formatting
+output_format: "json"
+include_enhancement_metadata: true
+include_confidence_scores: true
+include_processing_stats: true

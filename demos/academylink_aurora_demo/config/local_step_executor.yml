@@ -1,0 +1,5 @@
+name: local_step_executor
+description: "Local executor for individual steps"
+executor_type: "local"
+max_workers: 2
+timeout: 30

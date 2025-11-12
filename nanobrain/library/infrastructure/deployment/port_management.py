@@ -1047,9 +1047,28 @@ class PortManager(FromConfigBase):
         conflicts = {}
         
         try:
-            # Cross-platform netstat command
+            # Cross-platform netstat command (NON-BLOCKING)
             cmd = ['netstat', '-tulpn'] if hasattr(subprocess, 'DEVNULL') else ['netstat', '-tln']
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+
+            stdout, stderr = await asyncio.wait_for(
+                process.communicate(),
+                timeout=10
+            )
+
+            # Create result object to match original interface
+            class AsyncResult:
+                def __init__(self, returncode, stdout, stderr):
+                    self.returncode = returncode
+                    self.stdout = stdout.decode('utf-8') if stdout else ''
+                    self.stderr = stderr.decode('utf-8') if stderr else ''
+
+            result = AsyncResult(process.returncode, stdout, stderr)
             
             if result.returncode == 0:
                 for line in result.stdout.split('\n'):
@@ -1087,7 +1106,27 @@ class PortManager(FromConfigBase):
         try:
             for port in ports:
                 cmd = ['lsof', '-i', f':{port}', '-t']
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+
+                # NON-BLOCKING lsof execution
+                process = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+
+                stdout, stderr = await asyncio.wait_for(
+                    process.communicate(),
+                    timeout=5
+                )
+
+                # Create result object to match original interface
+                class AsyncResult:
+                    def __init__(self, returncode, stdout, stderr):
+                        self.returncode = returncode
+                        self.stdout = stdout.decode('utf-8') if stdout else ''
+                        self.stderr = stderr.decode('utf-8') if stderr else ''
+
+                result = AsyncResult(process.returncode, stdout, stderr)
                 
                 if result.returncode == 0 and result.stdout.strip():
                     pids = [int(pid.strip()) for pid in result.stdout.split() if pid.strip().isdigit()]

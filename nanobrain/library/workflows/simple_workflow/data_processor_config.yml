@@ -1,0 +1,8 @@
+name: "Data Processor Configuration"
+description: "Configuration for DataProcessorStep"
+version: "1.0.0"
+
+# Simple configuration for data processor step
+processing_delay: 1.0
+output_prefix: "Processed"
+include_timestamp: true

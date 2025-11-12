@@ -1,0 +1,25 @@
+name: result_aggregation_step
+description: "Local result aggregation step"
+step_name: result_aggregation
+aggregation_method: summary
+
+# Input data units - WHAT THE STEP EXPECTS
+input_data_units:
+  computation_data:
+    class: "nanobrain.core.data_unit.DataUnitMemory"
+    name: "computation_data"
+    description: "Computation data for aggregation"
+    persistent: false
+
+# Output data units - WHAT THE STEP PRODUCES
+output_data_units:
+  final_results:
+    class: "nanobrain.core.data_unit.DataUnitMemory"
+    name: "final_results"
+    description: "Final aggregated results"
+    persistent: false
+
+# Executor configuration - LOCAL EXECUTION
+executor:
+  class: nanobrain.core.executor.LocalExecutor
+  config: local_step_executor.yml

@@ -8,6 +8,7 @@ This module provides:
 - Agent-specific parallel processing with health monitoring
 - Conversational agent steps with chat-specific features
 - Generic parallel processing framework for extensibility
+- CSV processing steps for data import and fuzzy search operations
 
 Key Features:
 - Generic parallel processing with pluggable processors
@@ -40,6 +41,22 @@ from .parallel_conversational_agent_step import (
     ChatResponse
 )
 
+# CSV Processing Steps
+from .csv_import_step import (
+    CSVImportStep,
+    CSVImportStepConfig
+)
+
+from .csv_fuzzy_search_step import (
+    CSVFuzzySearchStep,
+    CSVFuzzySearchStepConfig
+)
+
+from .query_input_step import (
+    QueryInputStep,
+    QueryInputStepConfig
+)
+
 __all__ = [
     # Base parallel processing
     'ParallelStep',
@@ -59,5 +76,13 @@ __all__ = [
     'ParallelConversationalAgentStep',
     'ParallelConversationalAgentConfig',
     'ChatRequest',
-    'ChatResponse'
+    'ChatResponse',
+
+    # CSV Processing Steps
+    'CSVImportStep',
+    'CSVImportStepConfig',
+    'CSVFuzzySearchStep',
+    'CSVFuzzySearchStepConfig',
+    'QueryInputStep',
+    'QueryInputStepConfig'
 ] 

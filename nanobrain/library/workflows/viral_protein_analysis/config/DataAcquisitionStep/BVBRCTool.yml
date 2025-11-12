@@ -1,8 +1,8 @@
 tool_name: "bv_brc_tool"
 
 # Complete BV-BRC tool configuration (BVBRCConfig fields)
-installation_path: null  # Auto-detect or use system default
-executable_path: null    # Auto-detect or use system default
+installation_path: "/Applications/BV-BRC.app"  # Explicit install location
+executable_path: "/Applications/BV-BRC.app/deployment/bin"    # Explicit CLI directory
 
 # Complete bioinformatics tool card
 tool_card:

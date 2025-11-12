@@ -217,8 +217,8 @@ validation:
     max_tokens:
       type: integer
       min: 100
-      max: 16000
-      message: "Max tokens must be between 100 and 16000"
+      max: 32000
+      message: "Max tokens must be between 100 and 32000"
     complexity_level:
       class: nanobrain.core.data_unit.DataUnitString
       enum: ["simple", "intermediate", "advanced", "expert"]

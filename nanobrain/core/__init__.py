@@ -229,27 +229,27 @@ event-driven architecture with comprehensive configuration management.
 """
 
 from .executor import (
-    ExecutorBase, LocalExecutor, ThreadExecutor, ProcessExecutor, 
+    ExecutorBase, LocalExecutor, ThreadExecutor, ProcessExecutor,
     ParslExecutor, ExecutorConfig, create_executor
 )
 
 from .data_unit import (
-    DataUnitBase, DataUnitMemory, DataUnitFile, DataUnitString, 
+    DataUnitBase, DataUnitMemory, DataUnitFile, DataUnitString,
     DataUnitStream, DataUnitConfig
 )
 
 from .trigger import (
-    TriggerBase, DataUpdatedTrigger, AllDataReceivedTrigger, TimerTrigger, ManualTrigger, 
+    TriggerBase, DataUnitChangeTrigger, AllDataReceivedTrigger, TimerTrigger, ManualTrigger,
     TriggerConfig, TriggerType
 )
 
 from .link import (
-    LinkBase, DirectLink, FileLink, QueueLink, TransformLink, 
+    LinkBase, DirectLink, FileLink, QueueLink, TransformLink,
     ConditionalLink, LinkConfig, LinkType
 )
 
 from .tool import (
-    ToolBase, FunctionTool, AgentTool, StepTool, LangChainTool, 
+    ToolBase, FunctionTool, AgentTool, StepTool, LangChainTool,
     ToolRegistry, ToolConfig, ToolType, create_tool
 )
 
@@ -263,8 +263,7 @@ from .step import (
 )
 
 from .workflow import (
-    Workflow, WorkflowConfig, WorkflowGraph, ConfigLoader, 
-    ExecutionStrategy, ErrorHandlingStrategy, create_workflow
+    Workflow, WorkflowConfig, WorkflowGraph, create_workflow
 )
 
 from .agent import (
@@ -273,7 +272,7 @@ from .agent import (
 
 from .logging_system import (
     NanoBrainLogger, get_logger, set_debug_mode, trace_function_calls,
-    LogLevel, OperationType, ExecutionContext, ToolCallLog, 
+    LogLevel, OperationType, ExecutionContext, ToolCallLog,
     AgentConversationLog
 )
 
@@ -296,55 +295,55 @@ from .prompt_template_manager import (
 
 __all__ = [
     # Executors
-    'ExecutorBase', 'LocalExecutor', 'ThreadExecutor', 'ProcessExecutor', 
+    'ExecutorBase', 'LocalExecutor', 'ThreadExecutor', 'ProcessExecutor',
     'ParslExecutor', 'ExecutorConfig', 'create_executor',
-    
+
     # Data Units
-    'DataUnitBase', 'DataUnitMemory', 'DataUnitFile', 'DataUnitString', 
+    'DataUnitBase', 'DataUnitMemory', 'DataUnitFile', 'DataUnitString',
     'DataUnitStream', 'DataUnitConfig',
-    
+
     # Triggers
-    'TriggerBase', 'DataUpdatedTrigger', 'AllDataReceivedTrigger', 'TimerTrigger', 'ManualTrigger', 
+    'TriggerBase', 'DataUpdatedTrigger', 'AllDataReceivedTrigger', 'TimerTrigger', 'ManualTrigger',
     'TriggerConfig', 'TriggerType',
-    
+
     # Links
-    'LinkBase', 'DirectLink', 'FileLink', 'QueueLink', 'TransformLink', 
+    'LinkBase', 'DirectLink', 'FileLink', 'QueueLink', 'TransformLink',
     'ConditionalLink', 'LinkConfig', 'LinkType',
-    
+
     # Tools
-    'ToolBase', 'FunctionTool', 'AgentTool', 'StepTool', 'LangChainTool', 
+    'ToolBase', 'FunctionTool', 'AgentTool', 'StepTool', 'LangChainTool',
     'ToolRegistry', 'ToolConfig', 'ToolType', 'create_tool',
-    
+
     # Component Base
     'FromConfigBase', 'ComponentConfigurationError', 'ComponentDependencyError',
     'import_class_from_path',
-    
+
     # Steps
     'BaseStep', 'Step', 'TransformStep', 'StepConfig',
-    
+
     # Workflows
-    'Workflow', 'WorkflowConfig', 'WorkflowGraph', 'ConfigLoader', 
+    'Workflow', 'WorkflowConfig', 'WorkflowGraph', 'ConfigLoader',
     'ExecutionStrategy', 'ErrorHandlingStrategy', 'create_workflow',
-    
+
     # Agents
     'Agent', 'SimpleAgent', 'ConversationalAgent', 'AgentConfig', 'create_agent',
-    
+
     # Logging
     'NanoBrainLogger', 'get_logger', 'set_debug_mode', 'trace_function_calls',
-    'LogLevel', 'OperationType', 'ExecutionContext', 'ToolCallLog', 
+    'LogLevel', 'OperationType', 'ExecutionContext', 'ToolCallLog',
     'AgentConversationLog',
-    
+
     # Bioinformatics
     'BioinformaticsConfig', 'CoordinateSystem', 'SequenceType',
     'SequenceCoordinate', 'SequenceRegion', 'BioinformaticsDataUnit',
     'ExternalToolManager', 'BioinformaticsStep', 'BioinformaticsAgent', 'BioinformaticsTool',
     'create_bioinformatics_data_unit', 'create_sequence_coordinate', 'create_sequence_region',
-    
+
     # Sequence Management
     'SequenceManager', 'SequenceValidator', 'FastaParser', 'SequenceFormat',
     'SequenceStats', 'SequenceValidationError',
     'create_sequence_manager', 'create_fasta_parser', 'create_sequence_validator',
-    
+
     # Prompt Template Management
     'PromptTemplateManager', 'PromptTemplate', 'PromptTemplateConfig'
-] 
+]

@@ -369,11 +369,24 @@ class ResponseFormattingStep(Step):
                 }
             
             if matrix_data:
+                # Create properly formatted JSON without truncation that breaks JSON syntax
+                json_str = json.dumps(matrix_data, indent=2)
+                if len(json_str) > 2000:
+                    # Instead of truncating JSON (which breaks it), provide a summary
+                    matrix_summary = {
+                        "matrix_size": len(str(matrix_data)),
+                        "data_type": type(matrix_data).__name__,
+                        "note": "Full PSSM matrix data available - truncated for display"
+                    }
+                    if isinstance(matrix_data, dict):
+                        matrix_summary["keys"] = list(matrix_data.keys())[:10]  # Show first 10 keys
+                    json_str = json.dumps(matrix_summary, indent=2)
+
                 content_parts.extend([
                     "## PSSM Matrix Data",
                     "",
                     "```json",
-                    json.dumps(matrix_data, indent=2)[:2000] + ("..." if len(json.dumps(matrix_data, indent=2)) > 2000 else ""),
+                    json_str,
                     "```",
                     ""
                 ])
@@ -722,10 +735,9 @@ Your viral protein annotation results are ready! The analysis has identified fun
         # Format response with references
         content = response_data.format_with_references()
         
-        # Truncate if too long
-        max_len = getattr(self, 'max_response_length', 10000)
-        if len(content) > max_len:
-            content = content[:max_len] + "\n\n*[Response truncated for length]*"
+        # No truncation - provide full response
+        max_len = getattr(self, 'max_response_length', 100000)
+        # Removed truncation logic to ensure complete responses
         
         formatted_response = {
             'content': content,

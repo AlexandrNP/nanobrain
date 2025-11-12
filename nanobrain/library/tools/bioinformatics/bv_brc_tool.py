@@ -29,6 +29,9 @@ from pathlib import Path
 from typing import Dict, List, Optional, Any, Union
 from pydantic import Field
 
+# Async file operations
+import aiofiles
+
 from nanobrain.core.external_tool import (
     ExternalTool,
     ToolResult,
@@ -49,7 +52,7 @@ class BVBRCConfig(ExternalToolConfig):
     """Configuration for BV-BRC tool"""
     # Tool identification
     tool_name: str = "bv_brc"
-    
+
     # Default tool card
     tool_card: Dict[str, Any] = Field(default_factory=lambda: {
         "name": "bv_brc",
@@ -58,23 +61,23 @@ class BVBRCConfig(ExternalToolConfig):
         "category": "bioinformatics",
         "capabilities": ["genome_analysis", "protein_extraction", "viral_data"]
     })
-    
+
     # BV-BRC API configuration - NEW
     api_base_url: str = "https://www.bv-brc.org/api"
     use_http_api: bool = True  # NEW: Enable HTTP API fallback
-    
+
     # BV-BRC specific installation paths
     local_installation_paths: List[str] = Field(default_factory=lambda: [
         "/Applications/BV-BRC.app/deployment/bin",
         "/Applications/BV-BRC.app/Contents/Resources/deployment/bin"
     ])
-    
+
     # BV-BRC specific data processing
     genome_batch_size: int = 50
     md5_batch_size: int = 25
     min_genome_length: int = 8000
     max_genome_length: int = 15000
-    
+
     # BV-BRC specific progressive scaling
     progressive_scaling: Dict[int, Dict[str, Any]] = Field(default_factory=lambda: {
         1: {"limit": 5, "batch_size": 5, "description": "Small test"},
@@ -82,11 +85,11 @@ class BVBRCConfig(ExternalToolConfig):
         3: {"limit": 20, "batch_size": 15, "description": "Medium test"},
         4: {"limit": 50, "batch_size": 25, "description": "Full scale"}
     })
-    
+
     # BV-BRC specific timeouts - Updated for long-running operations
     timeout_seconds: int = 600  # 10 minutes for data retrieval operations
     retry_attempts: int = 2
-    
+
     # BV-BRC specific features
     use_cache: bool = True
     verify_on_init: bool = False
@@ -101,7 +104,7 @@ class GenomeData:
     taxon_lineage: str
     genome_status: Optional[str] = None
     contigs: Optional[int] = None
-    
+
     def __post_init__(self):
         # Ensure genome_length is integer
         if isinstance(self.genome_length, str):
@@ -119,7 +122,7 @@ class ProteinData:
     product: str = ""
     aa_sequence: str = ""
     genome_id: str = ""
-    
+
     @property
     def fasta_header(self) -> str:
         """Generate FASTA header for this protein"""
@@ -140,81 +143,81 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
     """
     BV-BRC Tool - Bacterial and Viral Bioinformatics Resource Center Integration
     ===========================================================================
-    
+
     The BVBRCTool provides comprehensive integration with the Bacterial and Viral
     Bioinformatics Resource Center (BV-BRC), enabling automated genomic and proteomic
     analysis workflows. This tool implements the complete BV-BRC CLI pipeline for
     genome retrieval, feature extraction, and sequence analysis with intelligent
     optimization and caching capabilities.
-    
+
     **Core Architecture:**
         The BV-BRC tool provides sophisticated bioinformatics capabilities:
-        
+
         * **Genome Data Retrieval**: Automated retrieval of bacterial and viral genomes from BV-BRC
         * **Feature Extraction**: Protein and gene feature extraction with metadata enrichment
         * **Sequence Processing**: Batch processing of genomic sequences with optimization
         * **Intelligent Caching**: Advanced caching system with configurable expiration and validation
         * **Progressive Scaling**: Adaptive processing for datasets from small tests to full-scale analysis
         * **Quality Control**: Comprehensive validation and quality assurance for biological data
-    
+
     **Bioinformatics Workflow:**
         The tool implements the complete BV-BRC analysis pipeline:
-        
+
         **Genome Discovery:**
         * Taxonomic ID-based genome retrieval with filtering criteria
         * Virus name resolution with fuzzy matching across ~1000 taxa
         * Genome quality assessment and size-based filtering
         * Duplicate detection and consolidation
-        
+
         **Feature Extraction:**
         * Automated protein and gene feature extraction
         * Metadata enrichment with functional annotations
         * Cross-reference resolution with external databases
         * Feature validation and quality control
-        
+
         **Sequence Processing:**
         * Batch sequence retrieval with optimization
         * MD5-based deduplication and integrity validation
         * Parallel processing for large dataset analysis
         * Memory-efficient streaming for large sequences
-        
+
         **Data Quality Management:**
         * Sequence validation against biological standards
         * Length-based filtering for quality control
         * Contamination detection and removal
         * Statistical analysis and reporting
-    
+
     **Scientific Methodology:**
         The tool follows established bioinformatics best practices:
-        
+
         **Exact CLI Command Pipeline:**
         ```bash
         # 1. Retrieve all genomes for taxonomic group
         p3-all-genomes --eq taxon_id,<taxon_id> > <taxon_id>.tsv
-        
+
         # 2. Extract genome features with annotations
         cut -f1 <taxon_id>.tsv | p3-get-genome-features --attr patric_id --attr product > <taxon_id>.id_md5
-        
+
         # 3. Filter unique protein sequences
         grep "CDS\\|mat" <taxon_id>.id_md5 | cut -f2 | sort -u | perl -e 'while (<>){chomp; if ($_ =~ /\\w/){print "$_\\n";}}' > <taxon_id>.unique.md5
-        
+
         # 4. Retrieve sequence data
         p3-get-feature-sequence --input <taxon_id>.unique.md5 --col 0 > <taxon_id>.unique.seq
         ```
-        
+
         **Data Processing Standards:**
         * FASTA format compliance and validation
         * Standard bioinformatics file format support
         * Metadata preservation and enrichment
         * Reproducible analysis with versioning
-    
+
     **Configuration Architecture:**
         Comprehensive configuration for bioinformatics workflows:
-        
+
         ```yaml
         # BV-BRC Tool Configuration
         tool_name: "bv_brc"
-        
+
         # Tool card for framework integration
         tool_card:
           name: "bv_brc"
@@ -226,22 +229,22 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
             - "protein_extraction"
             - "viral_data"
             - "bacterial_data"
-        
+
         # BV-BRC API Configuration
         api_base_url: "https://www.bv-brc.org/api"
         use_http_api: true
-        
+
         # Local Installation Paths
         local_installation_paths:
           - "/Applications/BV-BRC.app/deployment/bin"
           - "/Applications/BV-BRC.app/Contents/Resources/deployment/bin"
-        
+
         # Data Processing Parameters
         genome_batch_size: 50
         md5_batch_size: 25
         min_genome_length: 8000
         max_genome_length: 15000
-        
+
         # Progressive Scaling Configuration
         progressive_scaling:
           1:
@@ -260,13 +263,13 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
             limit: 50
             batch_size: 25
             description: "Full scale - complete analysis"
-        
+
         # Performance Configuration
         timeout_seconds: 600
         retry_attempts: 2
         use_cache: true
         verify_on_init: false
-        
+
         # Quality Control Settings
         quality_control:
           sequence_validation: true
@@ -274,37 +277,37 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
           contamination_detection: true
           statistical_analysis: true
         ```
-    
+
     **Usage Patterns:**
-        
+
         **Basic Viral Genome Analysis:**
         ```python
         from nanobrain.library.tools.bioinformatics import BVBRCTool
-        
+
         # Create tool from configuration
         bvbrc = BVBRCTool.from_config('config/bvbrc_config.yml')
-        
+
         # Analyze viral proteins
         result = await bvbrc.get_viral_proteins(
             virus_name="chikungunya virus",
             analysis_level="comprehensive"
         )
-        
+
         print(f"Retrieved {len(result.proteins)} proteins")
         print(f"Analysis quality: {result.quality_score}")
         ```
-        
+
         **Large-Scale Genomic Analysis:**
         ```python
         # Configure for large-scale analysis
         bvbrc = BVBRCTool.from_config('config/large_scale_bvbrc.yml')
-        
+
         # Enable progressive scaling
         await bvbrc.initialize()
-        
+
         # Analyze multiple viral families
         viral_families = ["Alphaviridae", "Flaviviridae", "Coronaviridae"]
-        
+
         results = {}
         for family in viral_families:
             result = await bvbrc.analyze_viral_family(
@@ -313,185 +316,185 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
                 quality_threshold=0.9
             )
             results[family] = result
-        
+
         # Generate comparative analysis
         comparative_report = bvbrc.generate_comparative_analysis(results)
         ```
-        
+
         **Protein Functional Analysis:**
         ```python
         # Specialized protein analysis
         bvbrc = BVBRCTool.from_config('config/protein_analysis.yml')
-        
+
         # Analyze specific protein functions
         protein_analysis = await bvbrc.analyze_protein_functions(
             taxon_id="12637",  # Chikungunya virus
             protein_types=["structural", "non-structural"],
             functional_categories=["replication", "virulence"]
         )
-        
+
         # Access detailed results
         for protein in protein_analysis.proteins:
             print(f"Protein: {protein.name}")
             print(f"Function: {protein.functional_annotation}")
             print(f"Conservation: {protein.conservation_score}")
         ```
-        
+
         **Batch Processing with Caching:**
         ```python
         # Configure with intelligent caching
         bvbrc = BVBRCTool.from_config('config/cached_bvbrc.yml')
-        
+
         # Process multiple queries with caching
         virus_queries = [
             {"name": "SARS-CoV-2", "variants": True},
             {"name": "Influenza A", "subtypes": ["H1N1", "H3N2"]},
             {"name": "Dengue virus", "serotypes": [1, 2, 3, 4]}
         ]
-        
+
         results = []
         for query in virus_queries:
             # Automatic cache usage for repeated queries
             result = await bvbrc.process_virus_query(query)
             results.append(result)
-        
+
         # Cache statistics and performance
         cache_stats = bvbrc.get_cache_statistics()
         print(f"Cache hit rate: {cache_stats.hit_rate:.2%}")
         ```
-    
+
     **Advanced Features:**
-        
+
         **Intelligent Virus Resolution:**
         * Fuzzy name matching with confidence scoring
         * Taxonomic hierarchy traversal and validation
         * Synonym detection and cross-referencing
         * Multi-language name support and normalization
-        
+
         **Progressive Scaling Capabilities:**
         * Automatic dataset size detection and optimization
         * Adaptive batch sizing based on system resources
         * Memory usage optimization for large datasets
         * Parallel processing coordination and load balancing
-        
+
         **Quality Control and Validation:**
         * Sequence integrity validation with checksums
         * Biological plausibility assessment
         * Contamination detection and flagging
         * Statistical quality metrics and reporting
-        
+
         **Performance Optimization:**
         * Multi-level caching with intelligent expiration
         * Parallel processing for independent operations
         * Memory-efficient streaming for large datasets
         * Network optimization for API interactions
-    
+
     **Scientific Applications:**
-        
+
         **Comparative Genomics:**
         * Cross-species genome comparison and analysis
         * Evolutionary relationship reconstruction
         * Phylogenetic analysis support and data preparation
         * Functional annotation comparison across species
-        
+
         **Viral Epidemiology:**
         * Outbreak strain analysis and characterization
         * Viral evolution tracking and monitoring
         * Antigenic variation analysis and prediction
         * Public health surveillance data integration
-        
+
         **Drug Discovery:**
         * Target protein identification and validation
         * Conserved region analysis for therapeutic targeting
         * Resistance mechanism analysis and prediction
         * Drug interaction prediction and validation
-        
+
         **Vaccine Development:**
         * Antigen identification and characterization
         * Immunogenic region prediction and analysis
         * Cross-protective antigen identification
         * Vaccine efficacy prediction and optimization
-    
+
     **Integration Patterns:**
-        
+
         **Workflow Integration:**
         * Seamless integration with bioinformatics workflows
         * Pipeline component for automated analysis
         * Result passing to downstream analysis tools
         * Quality control checkpoints and validation
-        
+
         **Database Integration:**
         * Connection to major biological databases
         * Cross-reference resolution and validation
         * Metadata enrichment from multiple sources
         * Data provenance tracking and management
-        
+
         **Analysis Tool Integration:**
         * Integration with sequence alignment tools
         * Phylogenetic analysis tool coordination
         * Structure prediction tool compatibility
         * Functional annotation tool integration
-    
+
     **Performance and Scalability:**
-        
+
         **Processing Optimization:**
         * Adaptive batch sizing for optimal throughput
         * Memory management for large-scale analysis
         * Network optimization for API efficiency
         * Parallel processing coordination
-        
+
         **Scalability Features:**
         * Horizontal scaling across multiple compute nodes
         * Cloud deployment and auto-scaling support
         * Resource usage monitoring and optimization
         * Load balancing for high-throughput analysis
-        
+
         **Monitoring and Analytics:**
         * Real-time performance monitoring and alerting
         * Resource utilization tracking and optimization
         * Quality metrics dashboard and reporting
         * Usage pattern analysis and optimization recommendations
-    
+
     **Error Handling and Reliability:**
-        
+
         **Robust Error Management:**
         * Comprehensive error classification and handling
         * Automatic retry with exponential backoff
         * Graceful degradation for partial failures
         * Detailed error logging and diagnostic information
-        
+
         **Data Quality Assurance:**
         * Input validation with biological constraints
         * Output verification and quality assessment
         * Data integrity checking with checksums
         * Reproducibility validation and reporting
-        
+
         **Reliability Features:**
         * Fault tolerance with automatic recovery
         * Transaction-like operations with rollback
         * Health monitoring and alerting
         * Backup and recovery mechanisms
-    
+
     **Development and Testing:**
-        
+
         **Testing Support:**
         * Comprehensive test suite with biological datasets
         * Performance benchmarking against reference standards
         * Quality validation with known datasets
         * Integration testing with real BV-BRC services
-        
+
         **Debugging Features:**
         * Detailed logging with execution tracing
         * Intermediate file preservation for analysis
         * Performance profiling and bottleneck identification
         * Visual analysis workflow monitoring
-        
+
         **Development Tools:**
         * Configuration validation and optimization tools
         * Performance monitoring and analysis utilities
         * Data quality assessment and reporting tools
         * Workflow visualization and debugging interfaces
-    
+
     Attributes:
         bio_config (BVBRCConfig): Tool configuration with bioinformatics parameters
         genome_batch_size (int): Batch size for genome processing optimization
@@ -503,19 +506,19 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
         command_pipeline: BV-BRC CLI command execution pipeline
         genome_cache (Dict): Cache for genome data with expiration management
         protein_cache (Dict): Cache for protein data with quality validation
-    
+
     Note:
         The BV-BRC tool requires either local BV-BRC CLI installation or network
         access to BV-BRC APIs. Progressive scaling is automatically applied based
         on dataset size and system resources. All tools must be created using the
         from_config pattern with proper biological parameter validation.
-    
+
     Warning:
         Bioinformatics operations may consume significant computational resources
         and network bandwidth. Monitor resource usage and implement appropriate
         timeouts for large-scale analyses. Be aware of BV-BRC usage policies and
         rate limits when accessing public databases.
-    
+
     See Also:
         * :class:`ExternalTool`: Base external tool implementation
         * :class:`ProgressiveScalingMixin`: Progressive scaling capabilities
@@ -524,120 +527,185 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
         * :mod:`nanobrain.library.agents.specialized`: Bioinformatics agents
         * :mod:`nanobrain.core.external_tool`: External tool framework
     """
-    
+
     @classmethod
     def _get_config_class(cls):
         """UNIFIED PATTERN: Return BVBRCConfig - ONLY method that differs from other components"""
         return BVBRCConfig
-    
-    # REMOVED: Custom from_config method - now inherits unified implementation
-    # The unified pattern will use BVBRCConfig via _get_config_class()
-    # All existing BVBRCTool functionality preserved through BVBRCConfig
-    
-    # Now inherits unified from_config implementation from FromConfigBase
-    # Uses BVBRCConfig returned by _get_config_class() to preserve all existing functionality
-    
+
+    @classmethod
+    def from_config(cls, config_path: Union[str, Path], **kwargs) -> 'BVBRCTool':
+        """
+        Create BVBRCTool from configuration file with proper error handling.
+
+        This method provides a robust configuration loading pattern that handles
+        the BVBRCConfig instantiation properly and provides clear error messages.
+        """
+        logger = get_logger(f"{cls.__name__}.from_config")
+        logger.info(f"Creating {cls.__name__} from configuration: {config_path}")
+
+        try:
+            # Load BVBRCConfig from file path
+            if isinstance(config_path, (str, Path)):
+                bvbrc_config = BVBRCConfig.from_config(config_path)
+            else:
+                raise ValueError(
+                    f"❌ CONFIGURATION ERROR: BVBRCTool.from_config requires file path, got {type(config_path)}\n"
+                    f"   SOLUTION: Ensure tool configuration uses file path reference\n"
+                    f"   EXAMPLE: config: 'path/to/bvbrc_tool.yml'"
+                )
+
+            # Create instance using framework-compliant pattern
+            # Use the unified framework pattern from FromConfigBase
+            cls._allow_direct_instantiation = True
+            try:
+                instance = cls.__new__(cls)
+                instance._init_from_config(bvbrc_config, bvbrc_config.model_dump(), kwargs)
+                return instance
+            finally:
+                cls._allow_direct_instantiation = False
+
+        except Exception as e:
+            logger.error(f"❌ Failed to create {cls.__name__} from config: {e}")
+            raise
+
+
+    def _init_from_config(self, config: BVBRCConfig, component_config: Dict[str, Any], dependencies: Dict[str, Any]) -> None:
+        """Framework-compliant initialization when constructed via FromConfigBase.from_config.
+        Ensures bv_brc_config is present and key attributes are set without calling __init__.
+        """
+        # Initialize common ExternalTool fields (sets self.config, tool_name, paths, logger, etc.)
+        super()._init_from_config(config, component_config, dependencies)
+
+        # BV-BRC specific references expected by the subclass methods
+        self.bv_brc_config = config
+        self.bio_config = config
+        self.name = getattr(config, 'tool_name', component_config.get('tool_name', 'bv_brc'))
+
+        # Ensure logger exists with a predictable name used in logs
+        try:
+            self.logger = get_logger(f"external_tool_{self.name}")
+        except Exception:
+            # Fallback if logging system not ready yet
+            pass
+
+        # Initialize optional convenience attributes used elsewhere in the class
+        self.genome_batch_size = getattr(config, 'genome_batch_size', 50)
+        self.md5_batch_size = getattr(config, 'md5_batch_size', 25)
+        self.min_genome_length = getattr(config, 'min_genome_length', 8000)
+        self.max_genome_length = getattr(config, 'max_genome_length', 15000)
+        self.use_cache = getattr(config, 'use_cache', True)
+
+        # Legacy CLI tool path holders (not strictly required, but kept for compatibility)
+        self.p3_all_genomes = None
+        self.p3_get_genome_features = None
+        self.p3_get_feature_sequence = None
+
+        # Simple counters used by some logging paths
+        self.requests_processed = 0
+        self.cache_hit_count = 0
+
     def __init__(self, config: BVBRCConfig, **kwargs):
         """Initialize BVBRCTool with configuration"""
         if config is None:
             config = BVBRCConfig()
-            
+
         # Ensure name is set consistently
         if not hasattr(config, 'tool_name') or not config.tool_name:
             config.tool_name = "bv_brc"
-        
+
         # Initialize parent classes
         super().__init__(config, **kwargs)
-        
+
         # BV-BRC specific initialization
         self.bio_config = config
         self.bv_brc_config = config
         self.name = config.tool_name
         self.logger = get_logger(f"bio_tool_{self.name}")
-        
+
         # BV-BRC specific attributes
         self.genome_batch_size = getattr(config, 'genome_batch_size', 50)
         self.md5_batch_size = getattr(config, 'md5_batch_size', 25)
         self.min_genome_length = getattr(config, 'min_genome_length', 8000)
         self.max_genome_length = getattr(config, 'max_genome_length', 15000)
         self.use_cache = getattr(config, 'use_cache', True)
-        
+
         # CLI tool paths (legacy)
         self.p3_all_genomes = None
         self.p3_get_genome_features = None
-        
+
         # Legacy data caches
         self.genome_cache = {}
         self.protein_cache = {}
-        
+
         # New enhanced components (initialized on demand)
         self.virus_resolver = None
         self.command_pipeline = None  # Initialized after CLI path detection
         self.cache_manager = None
-        
+
         # Statistics
         self.requests_processed = 0
         self.cache_hit_count = 0
-    
+
     # BVBRCTool inherits FromConfigBase.__init__ which prevents direct instantiation
-        
+
     async def initialize_tool(self) -> InstallationStatus:
         """Initialize BV-BRC tool with enhanced command pipeline"""
         self.logger.info("🔄 Initializing enhanced BV-BRC tool...")
-        
+
         try:
             # Detect local BV-BRC installation
             status = await self.detect_existing_installation()
-            
+
             if not status.found:
                 raise BVBRCInstallationError(
                     f"BV-BRC not found at {self.bv_brc_config.installation_path}. "
                     f"Please install BV-BRC from https://www.bv-brc.org/"
                 )
-            
+
             # For BV-BRC, the installation_path IS the executable_path
             if status.installation_path and not status.executable_path:
                 status.executable_path = status.installation_path
                 self.logger.info(f"Using installation_path as executable_path: {status.executable_path}")
-            
+
             # Update the config with the detected path
             self.bv_brc_config.executable_path = status.executable_path
-            
+
             # Set up CLI tool paths (legacy)
             await self._setup_cli_tools(status.executable_path)
-            
+
             # Initialize enhanced components dynamically
             await self._initialize_enhanced_components(status.executable_path)
-            
+
             # Verify installation if requested
             if self.bv_brc_config.verify_on_init:
                 await self._verify_installation()
-                
+
             self.logger.info(f"✅ Enhanced BV-BRC tool initialized successfully")
             self.logger.info(f"   - Command pipeline: {status.executable_path}")
-            
+
             if self._enhanced_components_available():
                 taxa_count = len(await self.virus_resolver.get_available_taxa())
                 self.logger.info(f"   - Cache directory: {self.cache_manager.cache_base_dir}")
                 self.logger.info(f"   - Virus resolver: {taxa_count} taxa available")
             else:
                 self.logger.info("   - Enhanced features: Not available (using legacy mode)")
-            
+
             return status
-            
+
         except Exception as e:
             self.logger.error(f"❌ Enhanced BV-BRC initialization failed: {e}")
             raise
-    
+
     async def _setup_cli_tools(self, executable_path: str) -> None:
         """Set up paths to BV-BRC CLI tools"""
         base_path = Path(executable_path)
-        
+
         # Use correct BV-BRC script names
         self.p3_all_genomes = str(base_path / "p3-all-genomes")
         self.p3_get_genome_features = str(base_path / "p3-get-genome-features")
         self.p3_get_feature_sequence = str(base_path / "p3-get-feature-sequence")
-        
+
         # Verify CLI tools exist
         for tool_name, tool_path in [
             ("p3-all-genomes", self.p3_all_genomes),
@@ -646,12 +714,12 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
         ]:
             if not Path(tool_path).exists():
                 raise BVBRCInstallationError(f"CLI tool not found: {tool_path}")
-                
+
             if not os.access(tool_path, os.X_OK):
                 raise BVBRCInstallationError(f"CLI tool not executable: {tool_path}")
-        
+
         self.logger.info(f"CLI tools configured: {base_path}")
-    
+
     async def _initialize_enhanced_components(self, executable_path: str) -> None:
         """Initialize enhanced components with dynamic imports"""
         try:
@@ -659,26 +727,26 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
             from ...workflows.viral_protein_analysis.virus_name_resolver import VirusNameResolver
             from ...workflows.viral_protein_analysis.bvbrc_command_pipeline import BVBRCCommandPipeline
             from ...workflows.viral_protein_analysis.virus_specific_cache_manager import VirusSpecificCacheManager
-            
+
             # Initialize virus name resolver
             self.virus_resolver = VirusNameResolver()
             await self.virus_resolver.initialize_virus_index()
-            
+
             # Initialize command pipeline
             self.command_pipeline = BVBRCCommandPipeline(
                 bvbrc_cli_path=executable_path,
                 timeout_seconds=self.bv_brc_config.timeout_seconds,
                 preserve_files=True  # Always preserve for debugging
             )
-            
+
             # Initialize cache manager with enhanced functionality
             self.cache_manager = VirusSpecificCacheManager(
                 cache_base_dir="data/cache/bvbrc",
                 cache_ttl_hours=168  # 1 week default like BVBRCCacheManager
             )
-            
+
             self.logger.info("✅ Enhanced components initialized successfully")
-            
+
         except ImportError as e:
             self.logger.warning(f"⚠️ Enhanced components not available: {e}")
             self.logger.info("🔄 Falling back to legacy BV-BRC functionality")
@@ -686,7 +754,7 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
         except Exception as e:
             self.logger.error(f"❌ Failed to initialize enhanced components: {e}")
             raise
-    
+
     async def _verify_installation(self) -> Dict[str, Any]:
         """Verify BV-BRC installation with test API call"""
         verification_result = {
@@ -697,37 +765,37 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
             "executable_path": self.bv_brc_config.executable_path,
             "diagnostics": []
         }
-        
+
         try:
             # Check application bundle
             app_path = Path(self.bv_brc_config.installation_path)
             verification_result["bv_brc_app_exists"] = app_path.exists()
-            
+
             if not app_path.exists():
                 verification_result["diagnostics"].append(
                     f"❌ BV-BRC app not found at {app_path}. Install from https://www.bv-brc.org/"
                 )
                 return verification_result
-            
+
             # Check CLI tools accessibility
             cli_path = Path(self.bv_brc_config.executable_path)
             p3_all_genomes = cli_path / "p3-all-genomes"
             verification_result["cli_tools_accessible"] = p3_all_genomes.exists()
-            
+
             if not p3_all_genomes.exists():
                 verification_result["diagnostics"].append(
                     f"❌ CLI tools not found at {cli_path}. Check BV-BRC installation."
                 )
                 return verification_result
-            
+
             verification_result["diagnostics"].append("✅ CLI tools accessible")
-            
+
             # Test actual API call with a known genome ID (E. coli K-12)
             result = await self.execute_p3_command("p3-all-genomes", [
                 "--eq", "genome_id,511145.12",
                 "--attr", "genome_id,genome_name"
             ])
-            
+
             if result.success and result.stdout:
                 lines = result.stdout_text.strip().split('\n')
                 if len(lines) > 1:  # Header + at least one data line
@@ -739,12 +807,12 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
                 verification_result["diagnostics"].append(
                     f"❌ API call failed: {result.stderr_text}"
                 )
-                
+
         except Exception as e:
             verification_result["diagnostics"].append(f"❌ Verification exception: {e}")
-        
+
         return verification_result
-    
+
     async def execute_p3_command(self, command: str, args: List[str],
                                  timeout: Optional[int] = None, **kwargs) -> ToolResult:
         """Execute BV-BRC p3 command with retry logic and progress tracking"""
@@ -757,7 +825,7 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
         # Log detailed progress for long operations
         self.logger.info(f"🔄 Executing BV-BRC command: {command} {' '.join(args[:3])}{'...' if len(args) > 3 else ''}")
         self.logger.info(f"⏱️  Timeout set to {timeout} seconds ({timeout/60:.1f} minutes)")
-        
+
         # For potentially long operations, add progress indicators
         long_operations = ['p3-all-genomes', 'p3-get-genome-features', 'p3-get-feature-sequence']
         if any(op in command for op in long_operations):
@@ -770,35 +838,35 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
                 full_command,
                 timeout=timeout
             )
-            
+
             # Log completion with timing
             self.logger.info(f"✅ BV-BRC command completed in {result.execution_time:.1f} seconds")
             if result.execution_time > 60:
                 self.logger.info(f"⏱️  Execution time: {result.execution_time/60:.1f} minutes")
-            
+
             return result
-            
+
         except ToolExecutionError as e:
             self.logger.error(f"❌ BV-BRC command failed after {timeout} seconds: {e}")
             raise
-    
+
     async def download_alphavirus_genomes(self, limit: Optional[int] = None) -> List[GenomeData]:
         """
         Download Alphavirus genomes from BV-BRC with real API calls
-        
+
         Args:
             limit: Maximum number of genomes to download (uses scale level if None)
-            
+
         Returns:
             List[GenomeData]: List of genome data objects
         """
         self.logger.info("🔄 Starting Alphavirus genome download from BV-BRC")
-        
+
         # Use progressive scaling if no limit specified
         if limit is None:
             scale_config = self.scale_config.get(self.current_scale_level, {})
             limit = scale_config.get("limit", 50)
-        
+
         try:
             # Real API call - no mocks
             # Note: p3-all-genomes doesn't support --limit, we'll limit during parsing
@@ -807,205 +875,205 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
                 "--eq", "taxon_lineage_names,Alphavirus",
                 "--attr", "genome_id,genome_length,genome_name,taxon_lineage_names,genome_status"
             ]
-            
+
             result = await self.execute_p3_command("p3-all-genomes", command_args)
-            
+
             if not result.success:
                 raise BVBRCDataError(f"Failed to download Alphavirus genomes: {result.stderr_text}")
-            
+
             # Parse real data with validation
             all_genomes = await self._parse_genome_data(result.stdout)
-            
+
             # Apply limit after parsing since p3-all-genomes doesn't support --limit
             genomes = all_genomes[:limit] if limit else all_genomes
-            
+
             # Real data validation
             if len(all_genomes) == 0:
                 self.logger.warning("No Alphavirus genomes found - this may indicate API issues")
             elif len(all_genomes) < 5:
                 self.logger.warning(f"Only {len(all_genomes)} Alphavirus genomes found - unusually low")
-            
+
             if limit and len(all_genomes) > limit:
                 self.logger.info(f"✅ Downloaded {len(all_genomes)} Alphavirus genomes, limited to {len(genomes)}")
             else:
                 self.logger.info(f"✅ Downloaded {len(genomes)} Alphavirus genomes")
-            
+
             return genomes
-            
+
         except Exception as e:
             self.logger.error(f"❌ Alphavirus genome download failed: {e}")
             raise BVBRCDataError(f"Failed to download Alphavirus genomes: {e}")
-    
+
     async def filter_genomes_by_size(self, genomes: List[GenomeData]) -> List[GenomeData]:
         """Filter genomes by size constraints"""
         self.logger.info(f"🔄 Filtering {len(genomes)} genomes by size...")
-        
+
         filtered_genomes = []
         for genome in genomes:
-            if (self.bv_brc_config.min_genome_length <= 
-                genome.genome_length <= 
+            if (self.bv_brc_config.min_genome_length <=
+                genome.genome_length <=
                 self.bv_brc_config.max_genome_length):
                 filtered_genomes.append(genome)
-        
+
         self.logger.info(
             f"✅ Filtered to {len(filtered_genomes)} genomes "
             f"({self.bv_brc_config.min_genome_length}-{self.bv_brc_config.max_genome_length} bp)"
         )
-        
+
         return filtered_genomes
-    
+
     async def get_unique_protein_md5s(self, genome_ids: List[str]) -> List[ProteinData]:
         """
         Get unique protein MD5s for given genome IDs with validation
-        
+
         Args:
             genome_ids: List of genome IDs to process
-            
+
         Returns:
             List[ProteinData]: List of unique proteins with MD5 hashes
         """
         if not genome_ids:
             raise BVBRCDataError("No genome IDs provided for protein extraction")
-        
+
         self.logger.info(f"🔄 Extracting unique proteins from {len(genome_ids)} genomes...")
-        
+
         # Process in batches
         batch_size = self.bv_brc_config.genome_batch_size
         all_proteins = []
-        
+
         for i in range(0, len(genome_ids), batch_size):
             batch = genome_ids[i:i + batch_size]
             batch_proteins = await self._get_proteins_for_batch(batch)
             all_proteins.extend(batch_proteins)
-            
+
             self.logger.debug(f"Processed batch {i//batch_size + 1}: {len(batch_proteins)} proteins")
-        
+
         # Get unique proteins by MD5
         unique_proteins = {}
         for protein in all_proteins:
             if protein.aa_sequence_md5 not in unique_proteins:
                 unique_proteins[protein.aa_sequence_md5] = protein
-        
+
         unique_list = list(unique_proteins.values())
-        
+
         self.logger.info(f"✅ Extracted {len(unique_list)} unique proteins")
         return unique_list
-    
+
     async def _get_proteins_for_batch(self, genome_ids: List[str]) -> List[ProteinData]:
         """Get proteins for a batch of genome IDs using p3-get-genome-features"""
         try:
             # Build query for multiple genomes using correct BV-BRC command
             genome_query = ",".join(genome_ids)
-            
+
             command_args = [
                 "--in", f"genome_id,({genome_query})",
                 "--eq", "feature_type,CDS",
                 "--attr", "patric_id,aa_sequence_md5,product,genome_id"
             ]
-            
+
             # Use correct BV-BRC command: p3-get-genome-features
             result = await self.execute_p3_command("p3-get-genome-features", command_args)
-            
+
             if not result.success:
                 raise BVBRCDataError(f"Failed to get proteins for batch: {result.stderr_text}")
-            
+
             return await self._parse_protein_data(result.stdout)
-            
+
         except Exception as e:
             self.logger.error(f"Error processing protein batch: {e}")
             raise
-    
+
     async def get_feature_sequences(self, md5_list: List[str]) -> List[ProteinData]:
         """
         Get protein sequences for MD5 hashes with validation
-        
+
         Args:
             md5_list: List of MD5 hashes to fetch sequences for
-            
+
         Returns:
             List[ProteinData]: Proteins with sequences populated
         """
         if not md5_list:
             raise BVBRCDataError("No MD5 hashes provided for sequence retrieval")
-        
+
         self.logger.info(f"🔄 Fetching sequences for {len(md5_list)} unique proteins...")
-        
+
         # Process in batches to avoid command line length limits
         batch_size = self.bv_brc_config.md5_batch_size
         all_proteins_with_sequences = []
-        
+
         for i in range(0, len(md5_list), batch_size):
             batch = md5_list[i:i + batch_size]
             batch_proteins = await self._get_sequences_for_batch(batch)
             all_proteins_with_sequences.extend(batch_proteins)
-            
+
             self.logger.debug(f"Fetched sequences for batch {i//batch_size + 1}")
-        
+
         self.logger.info(f"✅ Retrieved {len(all_proteins_with_sequences)} protein sequences")
         return all_proteins_with_sequences
-    
+
     async def _get_sequences_for_batch(self, md5_batch: List[str]) -> List[ProteinData]:
         """Get sequences for a batch of MD5 hashes using p3-get-feature-sequence"""
         try:
             # Step 1: Get feature metadata (patric_id, product, genome_id) for MD5 hashes
             md5_query = ",".join(md5_batch)
-            
+
             metadata_args = [
                 "--in", f"aa_sequence_md5,({md5_query})",
                 "--attr", "patric_id,aa_sequence_md5,product,genome_id"
             ]
-            
+
             metadata_result = await self.execute_p3_command("p3-get-genome-features", metadata_args)
-            
+
             if not metadata_result.success:
                 raise BVBRCDataError(f"Failed to get feature metadata for batch: {metadata_result.stderr_text}")
-            
+
             # Parse the metadata
             proteins_metadata = await self._parse_protein_data(metadata_result.stdout)
-            
+
             if not proteins_metadata:
                 return []
-            
+
             # Step 2: Get sequences using p3-get-feature-sequence with MD5s as input
             # (p3-get-feature-sequence expects MD5 sequences, not patric_ids as documented)
             md5_input = "\n".join(md5_batch)
-            
+
             sequence_result = await self.execute_command(
                 ["p3-get-feature-sequence"],  # Remove --protein, use default amino acid mode
                 stdin=md5_input
             )
-            
+
             if not sequence_result.success:
                 # If sequence fetch fails, return metadata without sequences
                 self.logger.warning(f"Failed to get sequences: {sequence_result.stderr_text}")
                 return proteins_metadata
-            
+
             # Step 3: Parse FASTA output and merge with metadata
             sequences_dict = self._parse_fasta_output(sequence_result.stdout_text)
-            
+
             # Merge sequences with metadata using MD5 as key
             for protein in proteins_metadata:
                 if protein.aa_sequence_md5 in sequences_dict:
                     protein.aa_sequence = sequences_dict[protein.aa_sequence_md5]
-            
+
             return proteins_metadata
-            
+
         except Exception as e:
             self.logger.error(f"Error fetching sequence batch: {e}")
             raise
-    
+
     def _parse_fasta_output(self, fasta_text: str) -> Dict[str, str]:
         """Parse FASTA output from p3-get-feature-sequence"""
         sequences = {}
         current_id = None
         current_sequence = []
-        
+
         for line in fasta_text.strip().split('\n'):
             if line.startswith('>'):
                 # Save previous sequence
                 if current_id and current_sequence:
                     sequences[current_id] = ''.join(current_sequence)
-                
+
                 # Extract MD5 from FASTA header
                 header = line[1:]  # Remove '>'
                 # When using MD5 input, the header typically contains the MD5 hash
@@ -1023,52 +1091,52 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
                         current_id = parts[0]  # Fallback to first part
                 else:
                     current_id = header.strip()
-                    
+
                 current_sequence = []
             else:
                 current_sequence.append(line.strip())
-        
+
         # Save last sequence
         if current_id and current_sequence:
             sequences[current_id] = ''.join(current_sequence)
-        
+
         return sequences
-    
+
     async def create_annotated_fasta(self, proteins: List[ProteinData]) -> str:
         """
         Create annotated FASTA file from protein data
-        
+
         Args:
             proteins: List of proteins with sequences
-            
+
         Returns:
             str: FASTA formatted string
         """
         self.logger.info(f"🔄 Creating annotated FASTA for {len(proteins)} proteins...")
-        
+
         fasta_lines = []
         valid_proteins = 0
-        
+
         for protein in proteins:
             if protein.aa_sequence and len(protein.aa_sequence) > 0:
                 fasta_lines.append(protein.fasta_header)
                 fasta_lines.append(protein.aa_sequence)
                 valid_proteins += 1
-        
+
         if valid_proteins == 0:
             raise BVBRCDataError("No valid protein sequences found for FASTA creation")
-        
+
         fasta_content = "\n".join(fasta_lines)
-        
+
         self.logger.info(f"✅ Created FASTA file with {valid_proteins} protein sequences")
         return fasta_content
-    
+
     async def _parse_genome_data(self, csv_data: bytes) -> List[GenomeData]:
         """Parse genome data from BV-BRC CSV output"""
         try:
             csv_text = csv_data.decode('utf-8')
             reader = csv.DictReader(io.StringIO(csv_text), delimiter='\t')
-            
+
             genomes = []
             for row in reader:
                 try:
@@ -1078,13 +1146,13 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
                     genome_name = row.get('genome.genome_name', row.get('genome_name', ''))
                     taxon_lineage = row.get('genome.taxon_lineage_names', row.get('taxon_lineage_names', ''))
                     genome_status = row.get('genome.genome_status', row.get('genome_status', None))
-                    
+
                     # Convert genome_length to int
                     try:
                         genome_length = int(genome_length) if genome_length else 0
                     except ValueError:
                         genome_length = 0
-                    
+
                     genome = GenomeData(
                         genome_id=genome_id,
                         genome_length=genome_length,
@@ -1092,25 +1160,25 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
                         taxon_lineage=taxon_lineage,
                         genome_status=genome_status
                     )
-                    
+
                     if genome.genome_id and genome.genome_length > 0:
                         genomes.append(genome)
-                        
+
                 except (ValueError, KeyError) as e:
                     self.logger.warning(f"Skipping invalid genome row: {e}")
                     continue
-            
+
             return genomes
-            
+
         except Exception as e:
             raise BVBRCDataError(f"Failed to parse genome data: {e}")
-    
+
     async def _parse_protein_data(self, csv_data: bytes) -> List[ProteinData]:
         """Parse protein data from BV-BRC CSV output"""
         try:
             csv_text = csv_data.decode('utf-8')
             reader = csv.DictReader(io.StringIO(csv_text), delimiter='\t')
-            
+
             proteins = []
             for row in reader:
                 try:
@@ -1120,7 +1188,7 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
                     product = row.get('feature.product', row.get('product', ''))
                     aa_sequence = row.get('feature.aa_sequence', row.get('aa_sequence', ''))
                     genome_id = row.get('feature.genome_id', row.get('genome_id', ''))
-                    
+
                     protein = ProteinData(
                         patric_id=patric_id,
                         aa_sequence_md5=aa_sequence_md5,
@@ -1128,36 +1196,36 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
                         aa_sequence=aa_sequence,
                         genome_id=genome_id
                     )
-                    
+
                     if protein.aa_sequence_md5:  # MD5 is required
                         proteins.append(protein)
-                        
+
                 except (ValueError, KeyError) as e:
                     self.logger.warning(f"Skipping invalid protein row: {e}")
                     continue
-            
+
             return proteins
-            
+
         except Exception as e:
             raise BVBRCDataError(f"Failed to parse protein data: {e}")
-    
+
     # Implementation of abstract methods from base class
-    
+
     async def _execute_at_scale(self, scale_config: Dict[str, Any]) -> Any:
         """Execute BV-BRC operations at specified scale"""
         limit = scale_config.get("limit", 50)
         self.logger.info(f"Executing BV-BRC at scale level with limit: {limit}")
-        
+
         # Download genomes at this scale
         genomes = await self.download_alphavirus_genomes(limit=limit)
-        
+
         # Return scale execution result
         return {
             "genomes_downloaded": len(genomes),
             "scale_config": scale_config,
             "success": True
         }
-    
+
     async def _find_executable_in_path(self) -> Optional[str]:
         """Find BV-BRC executables in system PATH"""
         try:
@@ -1168,20 +1236,20 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
                 stderr=asyncio.subprocess.PIPE
             )
             stdout, stderr = await result.communicate()
-            
+
             if result.returncode == 0:
                 return stdout.decode().strip()
-                
+
         except Exception:
             pass
-            
+
         return None
-    
+
     async def _check_tool_in_environment(self, env_path: str, env_name: str) -> bool:
         """Check if BV-BRC is available in conda environment"""
         # BV-BRC is typically not available via conda
         return False
-    
+
     async def _check_tool_in_directory(self, directory: str) -> bool:
         """Check if BV-BRC tools are available in directory"""
         try:
@@ -1189,11 +1257,11 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
             return test_path.exists() and os.access(test_path, os.X_OK)
         except Exception:
             return False
-    
+
     async def _build_tool_in_environment(self, source_dir: str) -> bool:
         """BV-BRC doesn't support building from source"""
         return False
-    
+
     async def _generate_specific_suggestions(self) -> List[str]:
         """Generate BV-BRC specific installation suggestions"""
         return [
@@ -1203,7 +1271,7 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
             "Check that you have internet connectivity for BV-BRC API calls",
             "Ensure sufficient disk space for genome downloads"
         ]
-    
+
     async def _get_alternative_methods(self) -> List[str]:
         """Get alternative installation methods for BV-BRC"""
         return [
@@ -1212,50 +1280,50 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
             "Install via Docker container (if available)",
             "Contact BV-BRC support for installation assistance"
         ]
-    
+
     # Required abstract methods from base ExternalTool class
     async def execute_command(self, command: List[str], **kwargs) -> ToolResult:
         """
         Execute BV-BRC command with stdin support.
-        
+
         BREAKING CHANGE: Now enforces mandatory initialization before execution.
         """
         # MANDATORY: Ensure tool is initialized before any execution
         await self.ensure_initialized()
-        
+
         if len(command) < 1:
             raise BVBRCDataError("Empty command provided")
-        
+
         # Handle stdin properly for shell commands
         stdin_text = kwargs.pop('stdin', None)
         stdin_input = None
-        
+
         if stdin_text:
             stdin_input = asyncio.subprocess.PIPE
-            
+
         # For BV-BRC tools (p3-*), use the execute_p3_command
         if command[0].startswith('p3-'):
             tool_name = command[0]
             args = command[1:] if len(command) > 1 else []
-            
+
             if stdin_text:
                 # For p3 tools with stdin, we need to handle it specially
                 return await self._execute_p3_with_stdin(tool_name, args, stdin_text, **kwargs)
             else:
                 return await self.execute_p3_command(tool_name, args, **kwargs)
-        
+
         # For shell commands (cut, grep, sort, perl), use direct execution
         else:
             return await self._execute_shell_command(command, stdin_text, **kwargs)
-    
+
     async def _execute_p3_with_stdin(self, tool_name: str, args: List[str], stdin_text: str, **kwargs) -> ToolResult:
         """Execute p3 command with stdin input"""
         import time
         start_time = time.time()
-        
+
         # Build full command
         full_command = [str(Path(self.bv_brc_config.executable_path) / tool_name)] + args
-        
+
         try:
             # Create process with stdin pipe
             process = await asyncio.create_subprocess_exec(
@@ -1265,12 +1333,12 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
                 stderr=asyncio.subprocess.PIPE,
                 env=os.environ.copy()
             )
-            
+
             # Send stdin data and get output
             stdout, stderr = await process.communicate(input=stdin_text.encode('utf-8'))
-            
+
             execution_time = time.time() - start_time
-            
+
             return ToolResult(
                 returncode=process.returncode,
                 stdout=stdout,
@@ -1279,21 +1347,21 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
                 command=full_command,
                 success=process.returncode == 0
             )
-            
+
         except Exception as e:
             execution_time = time.time() - start_time
             self.logger.error(f"Failed to execute {tool_name} with stdin: {e}")
             raise BVBRCDataError(f"P3 command execution failed: {e}")
-    
+
     async def _execute_shell_command(self, command: List[str], stdin_text: str = None, timeout: Optional[int] = None, **kwargs) -> ToolResult:
         """Execute shell command (cut, grep, sort, perl) with optional stdin and timeout"""
         import time
         start_time = time.time()
-        
+
         # Use default timeout from config if not specified
         if timeout is None:
             timeout = self.bv_brc_config.timeout_seconds
-        
+
         try:
             # Create process
             if stdin_text:
@@ -1303,7 +1371,7 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE
                 )
-                
+
                 # Send stdin and get output with timeout
                 stdout, stderr = await asyncio.wait_for(
                     process.communicate(input=stdin_text.encode('utf-8')),
@@ -1315,14 +1383,14 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE
                 )
-                
+
                 stdout, stderr = await asyncio.wait_for(
                     process.communicate(),
                     timeout=timeout
                 )
-            
+
             execution_time = time.time() - start_time
-            
+
             return ToolResult(
                 returncode=process.returncode,
                 stdout=stdout,
@@ -1331,7 +1399,7 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
                 command=command,
                 success=process.returncode == 0
             )
-            
+
         except asyncio.TimeoutError:
             execution_time = time.time() - start_time
             error_msg = f"Shell command timed out after {timeout} seconds: {' '.join(command)}"
@@ -1341,7 +1409,7 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
             execution_time = time.time() - start_time
             self.logger.error(f"Failed to execute shell command {' '.join(command)}: {e}")
             raise BVBRCDataError(f"Shell command execution failed: {e}")
-    
+
     async def parse_output(self, raw_output: str, output_type: str = "genome") -> Any:
         """Parse BV-BRC tool output"""
         if output_type == "genome":
@@ -1351,11 +1419,11 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
         else:
             # Generic parsing - return as text lines
             return raw_output.strip().split('\n')
-    
+
     async def verify_installation(self) -> bool:
         """Verify BV-BRC installation is functional"""
         try:
-            # For testing scenarios where verify_on_init=False, 
+            # For testing scenarios where verify_on_init=False,
             # check if we have a mocked execute_p3_command and use it for verification
             if not getattr(self.bv_brc_config, 'verify_on_init', True):
                 # If we can call execute_p3_command (likely mocked in tests), use it
@@ -1371,11 +1439,11 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
                     return False
                 except Exception:
                     # Fall back to basic path existence check for testing
-                    if (hasattr(self.bv_brc_config, 'installation_path') and 
+                    if (hasattr(self.bv_brc_config, 'installation_path') and
                         self.bv_brc_config.installation_path):
                         return Path(self.bv_brc_config.installation_path).exists()
                     return False
-            
+
             # Full initialization for production scenarios
             status = await self.initialize_tool()
             return status.found and status.is_functional
@@ -1386,90 +1454,90 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
     # ========================================================================
     # ENHANCED METHODS: Exact Command Sequence Implementation
     # ========================================================================
-    
+
     def _enhanced_components_available(self) -> bool:
         """Check if enhanced components are available"""
-        return (self.virus_resolver is not None and 
-                self.command_pipeline is not None and 
+        return (self.virus_resolver is not None and
+                self.command_pipeline is not None and
                 self.cache_manager is not None)
 
     async def get_proteins_for_virus_exact_sequence(self, taxon_id: str) -> Dict[str, Any]:
         """
         Execute the exact 4-step BV-BRC command sequence provided by the user.
-        
+
         1. p3-all-genomes --eq taxon_id,<taxon_id> > <taxon_id>.tsv
         2. cut -f1 <taxon_id>.tsv | p3-get-genome-features --attr patric_id --attr product > <taxon_id>.id_md5
         3. grep "CDS\\|mat" <taxon_id>.id_md5 |cut -f2 | sort -u | perl -e 'while (<>){chomp; if ($_ =~ /\\w/){print "$_\\n";}}' > <taxon_id>.uniqe.md5
         4. p3-get-feature-sequence --input <taxon_id>.uniqe.md5 --col 0 > <taxon_id>.unique.seq
-        
+
         Args:
             taxon_id: Taxon ID for the virus family
-            
+
         Returns:
             Dict containing the pipeline results with sequences and intermediate files
         """
         self.logger.info(f"🔄 Starting exact BV-BRC pipeline for taxon_id={taxon_id}")
-        
+
         try:
             # Step 1: p3-all-genomes --eq taxon_id,<taxon_id>
             self.logger.info(f"Step 1: Getting all genomes for taxon {taxon_id}")
-            
+
             result1 = await self.execute_p3_command("p3-all-genomes", [
                 "--eq", f"taxon_id,{taxon_id}"
             ])
-            
+
             if not result1.success:
                 raise BVBRCDataError(f"Step 1 failed: {result1.stderr_text}")
-            
+
             # Parse genome IDs from first column
             genome_lines = result1.stdout_text.strip().split('\n')
             if len(genome_lines) <= 1:
                 raise BVBRCDataError(f"No genomes found for taxon {taxon_id}")
-            
+
             genome_ids = []
             for line in genome_lines[1:]:  # Skip header
                 if line.strip():
                     parts = line.split('\t')
                     if parts:
                         genome_ids.append(parts[0])
-            
+
             self.logger.info(f"Step 1 complete: Found {len(genome_ids)} genomes")
-            
+
             # Step 2: cut -f1 <taxon_id>.tsv | p3-get-genome-features --attr patric_id --attr product
             self.logger.info(f"Step 2: Getting genome features (may take 1-2 minutes for viral data)")
-            
+
             # Write Step 1 results to temporary file for exact pipeline replication
             temp_tsv_file = f"/tmp/{taxon_id}.tsv"
             with open(temp_tsv_file, 'w') as f:
                 f.write(result1.stdout_text)
-            
+
             # Execute exact bash pipeline: cut -f1 file.tsv | p3-get-genome-features --attr patric_id --attr product
             # Note: We need aa_sequence_md5 for step 3, but using full path to p3-get-genome-features
             p3_features_path = Path(self.bv_brc_config.executable_path) / "p3-get-genome-features"
             cmd2 = f'cut -f1 {temp_tsv_file} | {p3_features_path} --attr patric_id --attr product --attr aa_sequence_md5'
-            
+
             self.logger.info(f"⏳ Executing: {cmd2}")
             self.logger.info(f"   Please wait... retrieving features from BV-BRC database")
-            
+
             result2 = await self._execute_shell_command([
                 "/bin/bash", "-c", cmd2
             ], timeout=300)  # 5 minute timeout for viral data
-            
+
             # Clean up temp file
             if os.path.exists(temp_tsv_file):
                 os.remove(temp_tsv_file)
-            
+
             if not result2.success:
                 raise BVBRCDataError(f"Step 2 failed: {result2.stderr_text}")
-            
+
             feature_lines = result2.stdout_text.strip().split('\n')
             self.logger.info(f"Step 2 complete: Found {len(feature_lines)} feature lines")
-            
+
             # Check if we got actual feature data
             if len(feature_lines) <= 1:
                 self.logger.warning("⚠️ No feature data found - viral genomes may not have feature annotations")
                 self.logger.info("💡 Attempting alternative viral genome sequence retrieval...")
-                
+
                 # Try alternative approach for viral genomes
                 viral_sequences = []
                 for genome_id in genome_ids[:3]:  # Test first 3 genomes
@@ -1485,7 +1553,7 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
                             self.logger.info(f"   ❌ No sequence for {genome_id}")
                     except Exception as e:
                         self.logger.info(f"   ❌ Error with {genome_id}: {e}")
-                
+
                 if viral_sequences:
                     return {
                         'success': True,
@@ -1497,66 +1565,66 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
                     }
                 else:
                     raise BVBRCDataError("No feature data and no viral sequences found - taxon may not have data in BV-BRC")
-            
+
             # Debug: Show sample feature lines to understand format
             if len(feature_lines) > 1:
                 self.logger.debug(f"Sample feature header: {feature_lines[0]}")
                 self.logger.debug(f"Sample feature data: {feature_lines[1][:100]}...")
             else:
                 self.logger.warning("Only header line found in feature data")
-                
+
             # Step 3: grep "CDS\|mat" <taxon_id>.id_md5 |cut -f2 | sort -u | perl filter
             self.logger.info(f"Step 3: Filtering and extracting unique MD5s")
-            
-            # Use shell command for complex pipe exactly as specified
+
+            # Use shell command for complex pipe exactly as specified (NON-BLOCKING)
             temp_file = f"/tmp/{taxon_id}.id_md5"
-            with open(temp_file, 'w') as f:
-                f.write(result2.stdout_text)
-            
+            async with aiofiles.open(temp_file, 'w') as f:
+                await f.write(result2.stdout_text)
+
             cmd3 = f'grep "CDS\\|mat" {temp_file} | cut -f4 | sort -u | perl -e \'while (<>){{chomp; if ($_ =~ /\\w/){{print "$_\\n";}}}}\''
-            
+
             result3 = await self._execute_shell_command([
                 "/bin/bash", "-c", cmd3
             ])
-            
+
             if not result3.success:
                 raise BVBRCDataError(f"Step 3 failed: {result3.stderr_text}")
-            
+
             # Clean up temp file
             if os.path.exists(temp_file):
                 os.remove(temp_file)
-            
+
             md5_lines = result3.stdout_text.strip().split('\n')
             unique_md5s = [line.strip() for line in md5_lines if line.strip()]
-            
+
             if not unique_md5s:
                 raise BVBRCDataError(f"Step 3 found no unique MD5 hashes")
-            
+
             self.logger.info(f"Step 3 complete: Found {len(unique_md5s)} unique MD5s")
-            
+
             # Step 4: p3-get-feature-sequence --input <taxon_id>.uniqe.md5 --col 0
             self.logger.info(f"Step 4: Getting feature sequences")
-            
-            # Create temporary MD5 file
+
+            # Create temporary MD5 file (NON-BLOCKING)
             md5_file = f"/tmp/{taxon_id}.uniqe.md5"
-            with open(md5_file, 'w') as f:
-                f.write('\n'.join(unique_md5s))
-            
+            async with aiofiles.open(md5_file, 'w') as f:
+                await f.write('\n'.join(unique_md5s))
+
             result4 = await self.execute_p3_command("p3-get-feature-sequence", [
                 "--input", md5_file,
                 "--col", "0"
             ])
-            
+
             # Clean up temp file
             if os.path.exists(md5_file):
                 os.remove(md5_file)
-            
+
             if not result4.success:
                 raise BVBRCDataError(f"Step 4 failed: {result4.stderr_text}")
-            
+
             sequence_count = result4.stdout_text.count('>')
             self.logger.info(f"Step 4 complete: Retrieved {sequence_count} protein sequences")
-            
+
             # Return complete results
             return {
                 'success': True,
@@ -1569,31 +1637,31 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
                 'genome_ids': genome_ids,
                 'md5_hashes': unique_md5s
             }
-            
+
         except Exception as e:
             self.logger.error(f"❌ Exact BV-BRC pipeline failed: {e}")
             raise BVBRCDataError(f"Exact pipeline failed: {e}")
 
-    async def get_proteins_for_virus(self, virus_name: str, 
+    async def get_proteins_for_virus(self, virus_name: str,
                                    confidence_threshold: int = 80):
         """
         Get all unique protein sequences for a virus using exact BV-BRC command sequence.
-        
+
         This implements the user-specified 4-step BV-BRC CLI process:
         1. p3-all-genomes --eq taxon_id,<taxon_id> > <taxon_id>.tsv
         2. cut -f1 <taxon_id>.tsv | p3-get-genome-features --attr patric_id --attr product > <taxon_id>.id_md5
         3. grep "CDS\\|mat" <taxon_id>.id_md5 |cut -f2 | sort -u | perl -e 'while (<>){chomp; if ($_ =~ /\\w/){print "$_\\n";}}' > <taxon_id>.uniqe.md5
         4. p3-get-feature-sequence --input <taxon_id>.uniqe.md5 --col 0 > <taxon_id>.unique.seq
-        
+
         Args:
-            virus_name: User-provided virus name (e.g., "CHIKV", "Chikungunya virus") 
+            virus_name: User-provided virus name (e.g., "CHIKV", "Chikungunya virus")
             confidence_threshold: Not used in this implementation - kept for API compatibility
-            
+
         Returns:
             Dict with protein sequences and file paths
         """
         self.logger.info(f"🔍 Processing virus: '{virus_name}' using exact BV-BRC CLI sequence")
-        
+
         # For now, we'll use a simple taxon_id mapping for common viruses
         # This can be expanded with a proper resolver later
         taxon_mapping = {
@@ -1602,27 +1670,27 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
             "western equine encephalitis": "11040", "weev": "11040",
             "venezuelan equine encephalitis": "11036", "veev": "11036"
         }
-        
+
         # Find taxon ID for virus
         virus_lower = virus_name.lower()
         taxon_id = None
-        
+
         for key, value in taxon_mapping.items():
             if key in virus_lower:
                 taxon_id = value
                 break
-        
+
         if not taxon_id:
             # Default to Alphavirus family for testing
             taxon_id = "11018"
             self.logger.warning(f"Using default Alphavirus taxon ID {taxon_id} for '{virus_name}'")
         else:
             self.logger.info(f"✅ Resolved '{virus_name}' -> taxon {taxon_id}")
-        
+
         try:
             # Execute the exact 4-step BV-BRC command sequence
             return await self._execute_bv_brc_pipeline(taxon_id, virus_name)
-            
+
         except Exception as e:
             self.logger.error(f"❌ Failed to process virus '{virus_name}': {e}")
             raise
@@ -1630,30 +1698,30 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
     async def _execute_bv_brc_pipeline(self, taxon_id: str, virus_name: str) -> Dict:
         """
         Execute the exact BV-BRC CLI command pipeline as specified by user.
-        
+
         Args:
             taxon_id: Taxonomic ID for the virus
             virus_name: Original virus name for logging
-            
+
         Returns:
             Dict with results and file information
         """
         import tempfile
         import time
         start_time = time.time()
-        
+
         self.logger.info(f"🚀 Executing BV-BRC CLI pipeline for taxon {taxon_id}")
-        
+
         # Create working directory
         with tempfile.TemporaryDirectory(prefix=f"bv_brc_{taxon_id}_") as work_dir:
             work_path = Path(work_dir)
-            
+
             # File paths for the 4-step process
             genomes_file = work_path / f"{taxon_id}.tsv"
             features_file = work_path / f"{taxon_id}.id_md5"
             unique_md5_file = work_path / f"{taxon_id}.uniqe.md5"
             sequences_file = work_path / f"{taxon_id}.unique.seq"
-            
+
             try:
                 # Step 1: Get all genomes for taxon
                 self.logger.info(f"Step 1: Getting genomes for taxon {taxon_id}")
@@ -1661,48 +1729,48 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
                     str(Path(self.bv_brc_config.executable_path) / "p3-all-genomes"),
                     "--eq", f"taxon_id,{taxon_id}"
                 ]
-                
+
                 result1 = await self.execute_command(cmd1)
                 if not result1.success:
                     raise BVBRCDataError(f"Step 1 failed: {result1.stderr_text}")
-                
-                # Write output to file
-                with open(genomes_file, 'w') as f:
-                    f.write(result1.stdout_text)
-                
+
+                # Write output to file (NON-BLOCKING)
+                async with aiofiles.open(genomes_file, 'w') as f:
+                    await f.write(result1.stdout_text)
+
                 genome_count = len(result1.stdout_text.strip().split('\n')) - 1  # Subtract header
                 self.logger.info(f"✅ Step 1: Found {genome_count} genomes")
-                
+
                 # Step 2: Get genome features using pipeline
                 self.logger.info(f"Step 2: Getting genome features")
-                
+
                 # First part: extract genome IDs
                 cut_cmd = ["cut", "-f1", str(genomes_file)]
                 cut_result = await self.execute_command(cut_cmd)
                 if not cut_result.success:
                     raise BVBRCDataError(f"Step 2a (cut) failed: {cut_result.stderr_text}")
-                
+
                 # Second part: get features (pipe the genome IDs)
                 features_cmd = [
                     str(Path(self.bv_brc_config.executable_path) / "p3-get-genome-features"),
                     "--attr", "patric_id", "--attr", "product"
                 ]
-                
+
                 # Use the cut output as input to p3-get-genome-features
                 result2 = await self.execute_command(features_cmd, stdin=cut_result.stdout_text)
                 if not result2.success:
                     raise BVBRCDataError(f"Step 2b (features) failed: {result2.stderr_text}")
-                
+
                 # Write features output to file
                 with open(features_file, 'w') as f:
                     f.write(result2.stdout_text)
-                
+
                 features_count = len(result2.stdout_text.strip().split('\n')) - 1
                 self.logger.info(f"✅ Step 2: Found {features_count} features")
-                
+
                 # Step 3: Filter unique MD5s using shell pipeline
                 self.logger.info(f"Step 3: Filtering unique MD5 hashes")
-                
+
                 # grep "CDS\\|mat" file.id_md5 | cut -f2 | sort -u | perl filter
                 grep_cmd = ["grep", "CDS\\|mat", str(features_file)]
                 grep_result = await self.execute_command(grep_cmd)
@@ -1712,77 +1780,77 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
                     grep_output = ""
                 else:
                     grep_output = grep_result.stdout_text
-                
+
                 if not grep_output.strip():
                     raise BVBRCDataError("No CDS or mat features found in features file")
-                
+
                 # cut -f2 (extract MD5 column)
                 cut2_cmd = ["cut", "-f2"]
                 cut2_result = await self.execute_command(cut2_cmd, stdin=grep_output)
                 if not cut2_result.success:
                     raise BVBRCDataError(f"Step 3b (cut MD5) failed: {cut2_result.stderr_text}")
-                
+
                 # sort -u (unique sort)
                 sort_cmd = ["sort", "-u"]
                 sort_result = await self.execute_command(sort_cmd, stdin=cut2_result.stdout_text)
                 if not sort_result.success:
                     raise BVBRCDataError(f"Step 3c (sort) failed: {sort_result.stderr_text}")
-                
+
                 # perl filter for non-empty lines
                 perl_cmd = ["perl", "-e", "while (<>){chomp; if ($_ =~ /\\w/){print \"$_\\n\";}}"]
                 perl_result = await self.execute_command(perl_cmd, stdin=sort_result.stdout_text)
                 if not perl_result.success:
                     raise BVBRCDataError(f"Step 3d (perl filter) failed: {perl_result.stderr_text}")
-                
+
                 # Write unique MD5s to file
                 with open(unique_md5_file, 'w') as f:
                     f.write(perl_result.stdout_text)
-                
+
                 unique_count = len(perl_result.stdout_text.strip().split('\n'))
                 self.logger.info(f"✅ Step 3: Found {unique_count} unique MD5 hashes")
-                
+
                 # Step 4: Get sequences for unique MD5s
                 self.logger.info(f"Step 4: Getting protein sequences")
-                
+
                 # p3-get-feature-sequence actually expects MD5 sequences as input (not feature IDs as documented)
                 # So we can use the unique MD5 file directly
-                
+
                 sequences_cmd = [
                     str(Path(self.bv_brc_config.executable_path) / "p3-get-feature-sequence"),
                     "--protein"  # Get amino acid sequences
                 ]
-                
-                # Read MD5s from file and pass as stdin
-                with open(unique_md5_file, 'r') as f:
-                    md5_input = f.read()
-                
+
+                # Read MD5s from file and pass as stdin (NON-BLOCKING)
+                async with aiofiles.open(unique_md5_file, 'r') as f:
+                    md5_input = await f.read()
+
                 result4 = await self.execute_command(sequences_cmd, stdin=md5_input)
                 if not result4.success:
                     raise BVBRCDataError(f"Step 4 failed: {result4.stderr_text}")
-                
-                # Write sequences to file
-                with open(sequences_file, 'w') as f:
-                    f.write(result4.stdout_text)
-                
+
+                # Write sequences to file (NON-BLOCKING)
+                async with aiofiles.open(sequences_file, 'w') as f:
+                    await f.write(result4.stdout_text)
+
                 # Count sequences (FASTA entries start with >)
                 sequence_count = result4.stdout_text.count('>')
                 execution_time = time.time() - start_time
-                
+
                 self.logger.info(f"✅ Step 4: Retrieved {sequence_count} protein sequences")
                 self.logger.info(f"🎉 Pipeline completed in {execution_time:.2f}s")
-                
+
                 # Copy files to persistent location for debugging (optional)
                 persistent_dir = Path(tempfile.gettempdir()) / f"bv_brc_debug_{taxon_id}"
                 persistent_dir.mkdir(exist_ok=True)
-                
+
                 import shutil
                 for src_file in [genomes_file, features_file, unique_md5_file, sequences_file]:
                     if src_file.exists():
                         dst_file = persistent_dir / src_file.name
                         shutil.copy2(src_file, dst_file)
-                
+
                 self.logger.info(f"📁 Debug files saved to: {persistent_dir}")
-                
+
                 return {
                     "success": True,
                     "virus_name": virus_name,
@@ -1800,7 +1868,7 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
                         "sequences": str(persistent_dir / sequences_file.name)
                     }
                 }
-                
+
             except Exception as e:
                 self.logger.error(f"Pipeline failed at intermediate step: {e}")
                 raise
@@ -1808,89 +1876,89 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
     async def resolve_virus_name_interactive(self, virus_name: str):
         """
         Resolve virus name with interactive suggestions if no match found.
-        
+
         Args:
             virus_name: User-provided virus name
-            
+
         Returns:
             TaxonResolution if resolved, None if user cancels
         """
         if not self._enhanced_components_available():
             raise BVBRCDataError("Enhanced BV-BRC functionality not available.")
-            
+
         # Try normal resolution first
         resolution = await self.virus_resolver.resolve_virus_name(virus_name)
-        
+
         if resolution:
             return resolution
-        
+
         # Get suggestions for failed match
         suggestions = await self.virus_resolver.suggest_similar_names(virus_name, max_suggestions=10)
-        
+
         if not suggestions:
             self.logger.warning(f"No similar virus names found for '{virus_name}'")
             return None
-        
+
         self.logger.info(f"No exact match for '{virus_name}'. Similar viruses found:")
         for i, (name, confidence) in enumerate(suggestions, 1):
             self.logger.info(f"  {i}. {name} ({confidence}% match)")
-        
+
         # In a real interactive scenario, would prompt user for selection
         # For now, return the best match if confidence is reasonable
         best_name, best_confidence = suggestions[0]
         if best_confidence >= 70:  # Lower threshold for suggestions
             self.logger.info(f"Auto-selecting best match: {best_name} ({best_confidence}%)")
             return await self.virus_resolver.resolve_virus_name(best_name)
-        
+
         return None
 
     async def list_available_viruses(self, limit: Optional[int] = None):
         """
         List all available virus taxa from the CSV data.
-        
+
         Args:
             limit: Optional limit on number of results
-            
+
         Returns:
             List of TaxonInfo objects
         """
         if not self._enhanced_components_available():
             raise BVBRCDataError("Enhanced BV-BRC functionality not available.")
-            
+
         available_taxa = await self.virus_resolver.get_available_taxa()
-        
+
         if limit:
             available_taxa = available_taxa[:limit]
-        
+
         self.logger.info(f"📊 Found {len(available_taxa)} available virus taxa")
-        
+
         return available_taxa
 
     async def get_cache_statistics(self):
         """Get current cache statistics"""
         if not self._enhanced_components_available():
             raise BVBRCDataError("Enhanced BV-BRC functionality not available.")
-            
+
         cache_stats = await self.cache_manager.get_cache_stats()
-        
+
         # Add our statistics
         cache_stats.cache_hits = self.cache_hit_count
-        
+
         return cache_stats
 
     async def clear_cache(self, expired_only: bool = False) -> int:
         """
         Clear cache entries.
-        
+
         Args:
             expired_only: If True, only clear expired entries
-            
+
         Returns:
             Number of entries removed
         """
         if not self._enhanced_components_available():
             raise BVBRCDataError("Enhanced BV-BRC functionality not available.")
-            
+
         if expired_only:
             # For virus-specific cache manager, clear cache manually by checking expiration
             # This is a simple implementation - in production might need more sophisticated logic
@@ -1902,19 +1970,19 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
     async def get_working_files(self, taxon_id: str):
         """
         Get working files for a specific taxon from cache.
-        
+
         Args:
             taxon_id: Taxon ID to look up
-            
+
         Returns:
             Cache result with file paths if found in cache, None otherwise
         """
         if not self._enhanced_components_available():
             raise BVBRCDataError("Enhanced BV-BRC functionality not available.")
-            
+
         cached_result = await self.cache_manager.get_cached_bvbrc_result(taxon_id)
-        
+
         if cached_result and cached_result.get('file_paths'):
             return cached_result.get('file_paths')
-        
-        return None 
+
+        return None

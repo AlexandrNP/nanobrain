@@ -11,6 +11,9 @@ from typing import Any, Dict, Optional, List
 from dataclasses import dataclass, asdict
 from nanobrain.core.data_unit import DataUnitBase
 
+# Async file operations
+import aiofiles
+
 
 @dataclass
 class SessionData:
@@ -277,8 +280,10 @@ class SessionManager(DataUnitBase):
         
     async def import_sessions(self, input_file: str) -> int:
         """Import sessions from file."""
-        with open(input_file, 'r') as f:
-            sessions_data = json.load(f)
+        # NON-BLOCKING file read using aiofiles
+        async with aiofiles.open(input_file, 'r', encoding='utf-8') as f:
+            content = await f.read()
+            sessions_data = json.loads(content)
             
         imported_count = 0
         async with self._lock:

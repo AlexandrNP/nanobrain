@@ -1,0 +1,1 @@
+Machine Learning is a subset of artificial intelligence that enables computers to learn and improve from experience without being explicitly programmed. The process involves data collection, preprocessing, model selection, training, evaluation, and deployment.

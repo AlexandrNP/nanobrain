@@ -1,0 +1,342 @@
+# Default CSV Fuzzy Search Step Configuration
+#
+# This configuration template provides default settings for fuzzy search
+# operations on CSV data indexed in Elasticsearch.
+#
+# Usage:
+#   from nanobrain.library.infrastructure.steps import CSVFuzzySearchStep
+#   step = CSVFuzzySearchStep.from_config('config/csv_processing/default_fuzzy_search.yml')
+
+# Step Identification
+name: "csv_fuzzy_search_step"
+description: "Execute fuzzy search operations on CSV data with confidence scoring"
+
+# Component Configuration
+component_type: "csv_fuzzy_search_step"
+
+# Input Data Units Configuration
+input_data_units:
+  search_query:
+    class: "nanobrain.core.data_unit.DataUnitMemory"
+    config:
+      description: "Search query string or structured query object"
+      schema:
+        query: "string"
+        search_type: "string"  # fuzzy, exact, range
+        parameters: "object"
+      validation:
+        required_fields: ["query"]
+        min_query_length: 2
+        max_query_length: 1000
+  
+  indexed_data:
+    class: "nanobrain.core.data_unit.DataUnitMemory"
+    config:
+      description: "Reference to indexed CSV data from import step"
+      schema:
+        index_name: "string"
+        structure: "object"
+        mapping: "object"
+        rows_imported: "integer"
+      validation:
+        required_fields: ["index_name"]
+  
+  search_config:
+    class: "nanobrain.core.data_unit.DataUnitMemory"
+    config:
+      optional: true
+      description: "Runtime search configuration and parameters"
+      initial_value:
+        fuzzy_threshold: 0.7
+        max_results: 50
+        search_fields: ["all"]
+        include_suggestions: true
+
+# Output Data Units Configuration
+output_data_units:
+  search_results:
+    class: "nanobrain.core.data_unit.DataUnitMemory"
+    config:
+      persistent: true
+      description: "Search results with confidence scores and metadata"
+      schema:
+        results: "array"
+        total_results: "integer"
+        query: "string"
+        suggestions: "array"
+        status: "string"
+  
+  search_metadata:
+    class: "nanobrain.core.data_unit.DataUnitMemory"
+    config:
+      persistent: false
+      description: "Search execution metadata and performance statistics"
+      schema:
+        query: "string"
+        index_name: "string"
+        search_duration: "number"
+        from_cache: "boolean"
+        search_config: "object"
+        timestamp: "number"
+
+# Search Parameters Configuration
+search_parameters:
+  # Core Search Settings
+  fuzzy_threshold: 0.7
+  max_results: 50
+  result_scoring: "confidence"  # confidence, relevance, hybrid
+  
+  # Field Weighting Configuration
+  field_weights:
+    name: 2.0
+    title: 2.0
+    description: 1.5
+    content: 1.5
+    category: 1.0
+    tags: 1.0
+    id: 3.0
+    code: 3.0
+    sku: 3.0
+    default: 1.0
+  
+  # Search Field Selection
+  auto_field_selection: true
+  default_search_fields: ["name", "description", "category"]
+  max_search_fields: 10
+  
+  # Query Processing
+  query_normalization: true
+  case_insensitive: true
+  trim_whitespace: true
+
+# Fuzzy Algorithm Configuration
+fuzzy_algorithms:
+  # Primary Algorithm Selection
+  primary: "elasticsearch_fuzzy"  # elasticsearch_fuzzy, fuzzywuzzy, hybrid
+  fallback: "fuzzywuzzy"
+  
+  # Algorithm-Specific Settings
+  elasticsearch_fuzzy:
+    fuzziness: "AUTO"
+    prefix_length: 0
+    max_expansions: 50
+    transpositions: true
+  
+  fuzzywuzzy:
+    scorer: "token_sort_ratio"  # ratio, partial_ratio, token_sort_ratio, token_set_ratio
+    processor: "default"
+    score_cutoff: 60
+  
+  # Hybrid Mode Configuration
+  hybrid_mode: true
+  algorithm_weights:
+    elasticsearch: 0.6
+    fuzzywuzzy: 0.4
+  
+  # Advanced Features
+  phonetic_matching: true
+  stemming_enabled: true
+  synonym_expansion: false
+
+# Result Formatting Configuration
+result_formatting:
+  # Content Inclusion
+  include_confidence_scores: true
+  include_field_highlights: true
+  include_suggestions: true
+  include_metadata: true
+  include_debug_info: false
+  
+  # Result Enhancement
+  highlight_matched_terms: true
+  max_highlight_length: 200
+  highlight_pre_tag: "<mark>"
+  highlight_post_tag: "</mark>"
+  
+  # Suggestion Configuration
+  max_suggestions: 5
+  suggestion_threshold: 0.6
+  include_spelling_corrections: true
+  include_partial_matches: true
+  
+  # Metadata Configuration
+  include_algorithm_scores: true
+  include_field_scores: true
+  include_processing_time: true
+  include_cache_status: true
+
+# Performance Configuration
+performance_config:
+  # Caching Settings
+  cache_enabled: true
+  cache_ttl: 3600  # 1 hour
+  max_cache_size: 1000
+  cache_hit_threshold: 2
+  
+  # Timeout Settings
+  timeout: 30
+  elasticsearch_timeout: 20
+  fuzzywuzzy_timeout: 10
+  
+  # Concurrency Settings
+  concurrent_searches: 1
+  max_concurrent_requests: 5
+  request_queue_size: 100
+  
+  # Resource Limits
+  max_memory_mb: 1024
+  max_cpu_percentage: 50
+
+# Search Quality Configuration
+quality_config:
+  # Confidence Scoring
+  min_confidence_threshold: 0.1
+  confidence_boost_factors:
+    exact_match: 1.0
+    partial_match: 0.8
+    fuzzy_match: 0.6
+    phonetic_match: 0.4
+  
+  # Result Filtering
+  filter_low_confidence: true
+  deduplicate_results: true
+  max_duplicate_threshold: 0.95
+  
+  # Quality Metrics
+  track_precision: true
+  track_recall: true
+  track_f1_score: true
+
+# Logging Configuration
+logging:
+  level: "INFO"
+  enable_query_logging: true
+  enable_result_logging: false  # Can be verbose
+  enable_performance_logging: true
+  
+  # Log Content
+  log_search_queries: true
+  log_result_counts: true
+  log_cache_hits: true
+  log_processing_times: true
+  
+  # Privacy Settings
+  anonymize_queries: false
+  max_logged_query_length: 100
+
+# Error Handling Configuration
+error_handling:
+  # Retry Configuration
+  max_retries: 3
+  retry_delay: 0.5
+  exponential_backoff: true
+  
+  # Fallback Behavior
+  fallback_to_exact_search: true
+  fallback_to_basic_search: true
+  return_partial_results: true
+  
+  # Error Recovery
+  continue_on_search_errors: true
+  max_error_percentage: 20.0
+  
+  # Timeout Handling
+  timeout_fallback_enabled: true
+  partial_timeout_threshold: 0.8
+
+# Monitoring Configuration
+monitoring:
+  enable_metrics: true
+  enable_health_checks: true
+  performance_tracking: true
+  
+  # Search Metrics
+  track_search_volume: true
+  track_response_times: true
+  track_cache_performance: true
+  track_result_quality: true
+  
+  # Alerting Thresholds
+  slow_search_threshold: 5.0  # seconds
+  low_confidence_threshold: 0.3
+  high_error_rate_threshold: 0.1  # 10%
+  cache_miss_rate_threshold: 0.8  # 80%
+
+# Integration Configuration
+integration:
+  # MCP Server Settings
+  mcp_server_name: "elasticsearch_csv_server"
+  mcp_connection_pool_size: 5
+  mcp_request_timeout: 30
+  
+  # Elasticsearch Integration
+  elasticsearch_connection_pool_size: 10
+  elasticsearch_sniff_on_start: false
+  elasticsearch_sniff_on_connection_fail: true
+  
+  # External Services
+  spell_check_service: null
+  synonym_service: null
+  analytics_service: null
+
+# Workflow Integration
+workflow_integration:
+  # Event Triggers
+  triggers:
+    - trigger_type: "data_updated"
+      data_unit: "search_query"
+      description: "Execute search when query is provided"
+    
+    - trigger_type: "data_updated"
+      data_unit: "search_config"
+      description: "Re-execute search when configuration changes"
+  
+  # Data Flow Links
+  input_links:
+    - source_step: "query_input_step"
+      source_data_unit: "processed_query"
+      target_data_unit: "search_query"
+      description: "Receive processed query from input step"
+    
+    - source_step: "csv_import_step"
+      source_data_unit: "indexed_data"
+      target_data_unit: "indexed_data"
+      description: "Receive indexed data from import step"
+  
+  # Execution Context
+  execution_context:
+    timeout: 60
+    priority: "high"
+    resource_requirements:
+      memory_mb: 1024
+      cpu_cores: 1
+
+# Validation Schema
+validation_schema:
+  required_fields:
+    - "name"
+    - "search_parameters"
+    - "fuzzy_algorithms"
+    - "result_formatting"
+  
+  field_types:
+    name: "string"
+    description: "string"
+    search_parameters: "object"
+    fuzzy_algorithms: "object"
+    result_formatting: "object"
+    performance_config: "object"
+  
+  constraints:
+    search_parameters.fuzzy_threshold:
+      min: 0.0
+      max: 1.0
+    search_parameters.max_results:
+      min: 1
+      max: 1000
+    performance_config.timeout:
+      min: 1
+      max: 300
+    performance_config.cache_ttl:
+      min: 60
+      max: 86400

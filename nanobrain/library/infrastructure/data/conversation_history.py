@@ -11,6 +11,9 @@ from typing import Any, Dict, Optional, List
 from dataclasses import dataclass, asdict
 from nanobrain.core.data_unit import DataUnitBase
 
+# Async database operations
+import aiosqlite
+
 
 @dataclass
 class ConversationMessage:
@@ -43,32 +46,29 @@ class ConversationHistoryUnit(DataUnitBase):
             await self._init_sqlite_db()
             
     async def _init_sqlite_db(self) -> None:
-        """Initialize SQLite database for conversation history."""
+        """Initialize SQLite database for conversation history (NON-BLOCKING)."""
         async with self._db_lock:
-            # Create database and table
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            
-            cursor.execute(f'''
-                CREATE TABLE IF NOT EXISTS {self.table_name} (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    conversation_id TEXT NOT NULL,
-                    message_id INTEGER NOT NULL,
-                    timestamp TEXT NOT NULL,
-                    user_input TEXT NOT NULL,
-                    agent_response TEXT NOT NULL,
-                    response_time_ms REAL NOT NULL,
-                    metadata TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            ''')
-            
-            # Create indexes for better performance
-            cursor.execute(f'CREATE INDEX IF NOT EXISTS idx_conversation_id ON {self.table_name}(conversation_id)')
-            cursor.execute(f'CREATE INDEX IF NOT EXISTS idx_timestamp ON {self.table_name}(timestamp)')
-            
-            conn.commit()
-            conn.close()
+            # Create database and table using async SQLite
+            async with aiosqlite.connect(self.db_path) as conn:
+                await conn.execute(f'''
+                    CREATE TABLE IF NOT EXISTS {self.table_name} (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        conversation_id TEXT NOT NULL,
+                        message_id INTEGER NOT NULL,
+                        timestamp TEXT NOT NULL,
+                        user_input TEXT NOT NULL,
+                        agent_response TEXT NOT NULL,
+                        response_time_ms REAL NOT NULL,
+                        metadata TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                ''')
+
+                # Create indexes for better performance
+                await conn.execute(f'CREATE INDEX IF NOT EXISTS idx_conversation_id ON {self.table_name}(conversation_id)')
+                await conn.execute(f'CREATE INDEX IF NOT EXISTS idx_timestamp ON {self.table_name}(timestamp)')
+
+                await conn.commit()
             
     async def get(self) -> Any:
         """Get recent conversation data."""
@@ -85,16 +85,14 @@ class ConversationHistoryUnit(DataUnitBase):
             raise TypeError("Data must be ConversationMessage or dict")
             
     async def clear(self) -> None:
-        """Clear all conversation history."""
+        """Clear all conversation history (NON-BLOCKING)."""
         async with self._db_lock:
             if self.database_adapter:
                 await self.database_adapter.execute_query(f"DELETE FROM {self.table_name}")
             else:
-                conn = sqlite3.connect(self.db_path)
-                cursor = conn.cursor()
-                cursor.execute(f"DELETE FROM {self.table_name}")
-                conn.commit()
-                conn.close()
+                async with aiosqlite.connect(self.db_path) as conn:
+                    await conn.execute(f"DELETE FROM {self.table_name}")
+                    await conn.commit()
                 
         self.logger.info(f"Cleared all conversation history from {self.table_name}")
         
@@ -117,23 +115,22 @@ class ConversationHistoryUnit(DataUnitBase):
                     }
                 )
             else:
-                conn = sqlite3.connect(self.db_path)
-                cursor = conn.cursor()
-                cursor.execute(f"""
-                    INSERT INTO {self.table_name} 
-                    (conversation_id, message_id, timestamp, user_input, agent_response, response_time_ms, metadata)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    message.conversation_id,
-                    message.message_id,
-                    message.timestamp.isoformat(),
-                    message.user_input,
-                    message.agent_response,
-                    message.response_time_ms,
-                    str(message.metadata) if message.metadata else None
-                ))
-                conn.commit()
-                conn.close()
+                # NON-BLOCKING SQLite insert using aiosqlite
+                async with aiosqlite.connect(self.db_path) as conn:
+                    await conn.execute(f"""
+                        INSERT INTO {self.table_name}
+                        (conversation_id, message_id, timestamp, user_input, agent_response, response_time_ms, metadata)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        message.conversation_id,
+                        message.message_id,
+                        message.timestamp.isoformat(),
+                        message.user_input,
+                        message.agent_response,
+                        message.response_time_ms,
+                        str(message.metadata) if message.metadata else None
+                    ))
+                    await conn.commit()
                 
         self.logger.debug(f"Saved message for conversation {message.conversation_id}")
         
@@ -148,15 +145,14 @@ class ConversationHistoryUnit(DataUnitBase):
                     {'conversation_id': conversation_id, 'limit': limit}
                 )
             else:
-                conn = sqlite3.connect(self.db_path)
-                cursor = conn.cursor()
-                cursor.execute(f"""
-                    SELECT * FROM {self.table_name} 
-                    WHERE conversation_id = ? 
-                    ORDER BY timestamp DESC LIMIT ?
-                """, (conversation_id, limit))
-                result = cursor.fetchall()
-                conn.close()
+                # NON-BLOCKING SQLite query using aiosqlite
+                async with aiosqlite.connect(self.db_path) as conn:
+                    cursor = await conn.execute(f"""
+                        SELECT * FROM {self.table_name}
+                        WHERE conversation_id = ?
+                        ORDER BY timestamp DESC LIMIT ?
+                    """, (conversation_id, limit))
+                    result = await cursor.fetchall()
                 
         messages = []
         for row in result:
@@ -185,15 +181,14 @@ class ConversationHistoryUnit(DataUnitBase):
                     {'cutoff_time': cutoff_time.isoformat()}
                 )
             else:
-                conn = sqlite3.connect(self.db_path)
-                cursor = conn.cursor()
-                cursor.execute(f"""
-                    SELECT DISTINCT conversation_id FROM {self.table_name} 
-                    WHERE timestamp > ? 
-                    ORDER BY timestamp DESC
-                """, (cutoff_time.isoformat(),))
-                result = cursor.fetchall()
-                conn.close()
+                # NON-BLOCKING SQLite query using aiosqlite
+                async with aiosqlite.connect(self.db_path) as conn:
+                    cursor = await conn.execute(f"""
+                        SELECT DISTINCT conversation_id FROM {self.table_name}
+                        WHERE timestamp > ?
+                        ORDER BY timestamp DESC
+                    """, (cutoff_time.isoformat(),))
+                    result = await cursor.fetchall()
                 
         return [row[0] for row in result]
         
@@ -210,15 +205,14 @@ class ConversationHistoryUnit(DataUnitBase):
                     {'query1': search_query, 'query2': search_query, 'limit': limit}
                 )
             else:
-                conn = sqlite3.connect(self.db_path)
-                cursor = conn.cursor()
-                cursor.execute(f"""
-                    SELECT * FROM {self.table_name} 
-                    WHERE user_input LIKE ? OR agent_response LIKE ?
-                    ORDER BY timestamp DESC LIMIT ?
-                """, (search_query, search_query, limit))
-                result = cursor.fetchall()
-                conn.close()
+                # NON-BLOCKING SQLite search using aiosqlite
+                async with aiosqlite.connect(self.db_path) as conn:
+                    cursor = await conn.execute(f"""
+                        SELECT * FROM {self.table_name}
+                        WHERE user_input LIKE ? OR agent_response LIKE ?
+                        ORDER BY timestamp DESC LIMIT ?
+                    """, (search_query, search_query, limit))
+                    result = await cursor.fetchall()
                 
         messages = []
         for row in result:
@@ -249,11 +243,10 @@ class ConversationHistoryUnit(DataUnitBase):
                 if self.database_adapter:
                     result = await self.database_adapter.execute_query(f"SELECT * FROM {self.table_name} ORDER BY timestamp")
                 else:
-                    conn = sqlite3.connect(self.db_path)
-                    cursor = conn.cursor()
-                    cursor.execute(f"SELECT * FROM {self.table_name} ORDER BY timestamp")
-                    result = cursor.fetchall()
-                    conn.close()
+                    # NON-BLOCKING SQLite export query using aiosqlite
+                    async with aiosqlite.connect(self.db_path) as conn:
+                        cursor = await conn.execute(f"SELECT * FROM {self.table_name} ORDER BY timestamp")
+                        result = await cursor.fetchall()
                     
             all_messages = []
             for row in result:
@@ -291,19 +284,18 @@ class ConversationHistoryUnit(DataUnitBase):
                     FROM {self.table_name}
                 """)
             else:
-                conn = sqlite3.connect(self.db_path)
-                cursor = conn.cursor()
-                cursor.execute(f"""
-                    SELECT 
-                        COUNT(*) as total_messages,
-                        COUNT(DISTINCT conversation_id) as total_conversations,
-                        AVG(response_time_ms) as avg_response_time,
-                        MIN(timestamp) as earliest_message,
-                        MAX(timestamp) as latest_message
-                    FROM {self.table_name}
-                """)
-                result = cursor.fetchone()
-                conn.close()
+                # NON-BLOCKING SQLite statistics query using aiosqlite
+                async with aiosqlite.connect(self.db_path) as conn:
+                    cursor = await conn.execute(f"""
+                        SELECT
+                            COUNT(*) as total_messages,
+                            COUNT(DISTINCT conversation_id) as total_conversations,
+                            AVG(response_time_ms) as avg_response_time,
+                            MIN(timestamp) as earliest_message,
+                            MAX(timestamp) as latest_message
+                        FROM {self.table_name}
+                    """)
+                    result = await cursor.fetchone()
                 
         if result:
             return {

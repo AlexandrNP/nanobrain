@@ -10,10 +10,10 @@ config:
   enable_logging: true
   log_data_transfers: true
   
-  # UPDATED: Agent configuration with class+config pattern (was inline)
+  # CORRECTED: Use ViralExpertConversationalAgent for proper viral expertise
   conversational_agent:
-    class: "nanobrain.library.agents.specialized.query_analysis_agent.QueryAnalysisAgent"
-    config: "config/ConversationalResponseStep/ConversationalAgent.yml"
+    class: "nanobrain.library.agents.specialized.viral_expert_agent.ViralExpertConversationalAgent"
+    config: "config/ConversationalResponseStep/ViralExpertAgent.yml"
 
 # Input/Output data unit specifications (updated to dictionary format)
 input_data_units:

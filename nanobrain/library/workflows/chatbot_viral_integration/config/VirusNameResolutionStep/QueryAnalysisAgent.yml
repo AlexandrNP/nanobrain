@@ -1,6 +1,6 @@
 name: query_analysis_agent
 description: "Agent for analyzing extracted query data and preparing virus name resolution"
-class: nanobrain.library.agents.specialized_agents.conversational_specialized_agent.ConversationalSpecializedAgent
+class: nanobrain.library.agents.specialized.viral_expert_agent.ViralExpertConversationalAgent
 
 # Agent configuration
 config:

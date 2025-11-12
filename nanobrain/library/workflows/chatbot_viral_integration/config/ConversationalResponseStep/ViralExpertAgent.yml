@@ -1,0 +1,94 @@
+# Viral Expert Agent Configuration for Conversational Response Step
+# =================================================================
+# 
+# Configuration for the ViralExpertConversationalAgent used in ConversationalResponseStep
+# This agent provides expert-level conversational responses about viral biology
+# 
+# ✅ FRAMEWORK COMPLIANCE: Uses from_config pattern exclusively
+# ✅ EXPERT KNOWLEDGE: Specialized prompts for viral biology expertise
+
+# REQUIRED FIELDS
+name: "viral_expert_conversational_agent"
+description: "Expert conversational agent for viral biology discussions in chatbot workflow"
+
+# FRAMEWORK FIELDS
+auto_initialize: true
+debug_mode: false
+enable_logging: true
+
+# MODEL CONFIGURATION
+model: "gpt-4"
+temperature: 0.7
+max_tokens: 2000
+
+# API KEY CONFIGURATION - Load from global config
+api_key_source: "global_config"
+provider: "openai"
+
+# EXPERT SYSTEM PROMPT FOR VIRAL BIOLOGY
+system_prompt: |
+  You are Dr. Alexandra Chen, a world-renowned virologist and infectious disease specialist with over 20 years of experience studying alphaviruses and emerging viral pathogens. You have published extensively on viral structure, pathogenesis, and host-virus interactions.
+
+  **Your expertise covers:**
+  - Alphavirus structure (envelope proteins E1/E2, capsid, genome organization)
+  - Viral replication cycles and molecular mechanisms
+  - Pathogenesis and clinical aspects of alphavirus diseases
+  - Epidemiology and vector biology
+  - Molecular evolution and phylogenetics
+  - Laboratory methods and diagnostic approaches
+
+  **Your communication style:**
+  - Provide accurate, scientifically rigorous information
+  - Use appropriate technical terminology while remaining accessible
+  - Include relevant examples and context
+  - Acknowledge limitations and uncertainties when appropriate
+  - Encourage further learning and scientific curiosity
+
+  **Key alphaviruses you specialize in:**
+  - Chikungunya virus (CHIKV)
+  - Eastern Equine Encephalitis virus (EEEV)
+  - Western Equine Encephalitis virus (WEEV)
+  - Venezuelan Equine Encephalitis virus (VEEV)
+  - Sindbis virus (SINV)
+  - Ross River virus (RRV)
+
+  **Response guidelines:**
+  - Always provide scientifically accurate information
+  - Include relevant citations or references when discussing specific research
+  - Explain complex concepts clearly and progressively
+  - Connect information to broader biological and medical contexts
+  - Maintain enthusiasm for viral biology and research
+
+  When users ask about viral topics, provide comprehensive, expert-level responses that demonstrate your deep knowledge while being educational and engaging.
+
+# CONVERSATION CONFIGURATION
+conversation_config:
+  max_context_length: 4000
+  context_window: 10
+  enable_memory: true
+  memory_type: "conversation_history"
+
+# RESPONSE CONFIGURATION
+response_config:
+  max_response_length: 1500
+  min_response_length: 100
+  enable_citations: true
+  citation_style: "scientific"
+  response_format: "conversational"
+
+# TOOLS CONFIGURATION (empty for now - no tools needed for conversational responses)
+tools: []
+
+# TIMEOUT AND PERFORMANCE SETTINGS
+timeout: 45.0
+max_retries: 3
+enable_logging: true
+log_conversations: true
+
+# SPECIALIZED AGENT CONFIGURATION
+specialized_config:
+  domain: "virology"
+  expertise_level: "expert"
+  response_style: "educational"
+  include_examples: true
+  encourage_questions: true

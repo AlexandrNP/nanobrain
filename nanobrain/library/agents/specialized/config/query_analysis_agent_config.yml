@@ -20,7 +20,7 @@ llm_config:
   provider: "openai"
   model: "gpt-4"
   temperature: 0.3  # Lower temperature for more consistent analysis
-  max_tokens: 800
+  max_tokens: 4000
   top_p: 0.9
   frequency_penalty: 0.0
   presence_penalty: 0.0
@@ -68,11 +68,42 @@ specialization:
     - "conversational_chat"
     - "help_support"
 
-# ✅ FRAMEWORK COMPLIANCE: Agent Capabilities
+# ✅ FRAMEWORK COMPLIANCE: Query Analysis Agent Specific Configuration
+confidence_threshold: 0.7  # Top-level field for QueryAnalysisAgentConfig
+analysis_depth: "comprehensive"
+biological_context_focus: true
+
+# Domain specialization configuration
+domain_specialization:
+  virology: true
+  genomics: true
+  proteomics: true
+  phylogenetics: true
+  drug_discovery: false
+
+# Intent categories for classification
+intent_categories:
+  - "sequence_analysis"
+  - "structure_prediction"
+  - "phylogenetic_analysis"
+  - "comparative_genomics"
+  - "functional_annotation"
+  - "literature_review"
+  - "data_exploration"
+
+# Parameter types to extract
+parameter_types:
+  species: true
+  genes: true
+  proteins: true
+  pathways: true
+  chemicals: true
+
+# ✅ FRAMEWORK COMPLIANCE: Agent Capabilities (legacy structure for backward compatibility)
 capabilities:
   intent_classification:
     enabled: true
-    confidence_threshold: 0.7
+    confidence_threshold: 0.7  # Kept for backward compatibility
     multi_intent_support: true
     hierarchical_classification: true
   

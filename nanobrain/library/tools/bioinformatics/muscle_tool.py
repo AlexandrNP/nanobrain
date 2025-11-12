@@ -13,6 +13,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 from pydantic import Field
 
+# Async file operations
+import aiofiles
+
 from nanobrain.core.external_tool import (
     ExternalTool,
     ToolResult,
@@ -751,8 +754,9 @@ class MUSCLETool(ProgressiveScalingMixin, ExternalTool):
         aligned_sequences = []
         
         try:
-            with open(output_file, 'r') as f:
-                content = f.read()
+            # NON-BLOCKING file read using aiofiles
+            async with aiofiles.open(output_file, 'r') as f:
+                content = await f.read()
             
             # Parse FASTA format alignment
             sequences_data = await self._parse_fasta_output(content)

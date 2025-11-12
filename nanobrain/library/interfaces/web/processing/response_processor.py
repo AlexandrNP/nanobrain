@@ -577,7 +577,7 @@ class UniversalResponseProcessor(FromConfigBase):
     async def apply_pagination(self, content: Dict[str, Any], response_format: str) -> Dict[str, Any]:
         """Apply pagination to large datasets"""
         try:
-            max_items = self.config.frontend_optimization.get('max_response_items', 1000)
+            max_items = self.config.frontend_optimization.get('max_response_items', 10000)
             
             # Check if content needs pagination
             if response_format == 'structured_data' and 'data' in content:
