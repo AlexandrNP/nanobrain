@@ -22,6 +22,8 @@ from .component_base import FromConfigBase, ComponentConfigurationError, Compone
 from .logging_system import get_logger, get_system_log_manager
 # Import new ConfigBase for constructor prohibition
 from .config.config_base import ConfigBase
+# Import event types for proper enum-based event handling
+from .event_types import DataUnitEventType, validate_event_type, DEFAULT_DATA_UNIT_EVENT
 
 logger = logging.getLogger(__name__)
 
@@ -491,6 +493,79 @@ class DataUnitBase(FromConfigBase, ABC):
                     f"Unregistered change listener for {self.name}")
 
     # ============================================================================
+    # DATA ENCAPSULATION METHODS - PROPER OOP IMPLEMENTATION
+    # ============================================================================
+
+    def _get_internal_data(self) -> Any:
+        """
+        Get internal data with proper encapsulation.
+
+        BRUTAL TRUTH: This replaces direct _data access throughout the framework.
+        """
+        return getattr(self, '_data', None)
+
+    async def _set_internal_data(self, data: Any, operation: DataUnitEventType = DEFAULT_DATA_UNIT_EVENT) -> None:
+        """
+        Set internal data with proper encapsulation and event notification.
+
+        BRUTAL TRUTH: This replaces direct _data manipulation and ensures
+        proper change event notification.
+
+        Args:
+            data: Data to set
+            operation: Type of operation being performed
+        """
+        print(f"🔗 BRUTAL TRUTH: _set_internal_data ENTRY for {self.name}")  # Force print
+        if not self.is_initialized:
+            await self.initialize()
+
+        async with self._lock:
+            old_data = self._get_internal_data()
+            self._data = data
+            self._metadata['last_updated'] = time.time()
+
+            # Increment operation count
+            self._operation_count = getattr(self, '_operation_count', 0) + 1
+
+            # Create change event with proper enum-based operation
+            change_event = {
+                'data_unit_name': self.name,
+                'operation': operation.value,  # Use enum value
+                'old_data': old_data,
+                'new_data': data,
+                'timestamp': time.time(),
+                'operation_count': self._operation_count
+            }
+
+            # Notify change listeners for event-driven execution
+            if self.enable_logging and self.nb_logger:
+                self.nb_logger.info(f"🔗 BRUTAL TRUTH: Notifying {len(self._change_listeners)} change listeners for {self.name}")
+
+            await self._notify_change_listeners(change_event)
+
+    def _validate_data(self, data: Any) -> bool:
+        """
+        Validate data before setting.
+
+        BRUTAL TRUTH: This provides a hook for subclasses to implement
+        data validation without breaking encapsulation.
+        """
+        # Base implementation accepts any data
+        # Subclasses can override for specific validation
+        return True
+
+    def _transform_data_on_set(self, data: Any) -> Any:
+        """
+        Transform data before setting.
+
+        BRUTAL TRUTH: This provides a hook for subclasses to implement
+        data transformation without breaking encapsulation.
+        """
+        # Base implementation returns data unchanged
+        # Subclasses can override for specific transformations
+        return data
+
+    # ============================================================================
     # AUTOMATIC TRIGGER SYSTEM - NEW IMPLEMENTATION
     # ============================================================================
 
@@ -677,12 +752,15 @@ class DataUnitBase(FromConfigBase, ABC):
         try:
             from .trigger import DataUnitChangeTrigger
 
-            # Merge default config with custom config
+            # Merge default config with custom config - FIXED: Use enum-based event types
             trigger_config = {
                 'name': trigger_id,
                 'trigger_type': 'data_updated',
                 'data_unit': self,
-                'event_type': config.get('event_type', 'set'),
+                'event_type': validate_event_type(
+                    config.get('event_type', DEFAULT_DATA_UNIT_EVENT),
+                    DataUnitEventType
+                ).value,  # Convert enum to string for backward compatibility
                 'description': config.get('description',
                     f"Auto-generated trigger for {step.name} when {self.name} receives data")
             }
@@ -694,19 +772,27 @@ class DataUnitBase(FromConfigBase, ABC):
             # Bind trigger to step execution with error handling
             async def safe_step_execution(trigger_event):
                 """Safely execute step when trigger fires."""
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.info(f"🔥 BRUTAL TRUTH: safe_step_execution called for step {step.name}")
                 try:
                     if hasattr(step, '_execute_on_trigger'):
+                        logger.info(f"🔥 BRUTAL TRUTH: Calling step._execute_on_trigger for {step.name}")
                         await step._execute_on_trigger(trigger_event)
+                        logger.info(f"🔥 BRUTAL TRUTH: step._execute_on_trigger completed for {step.name}")
                     elif hasattr(step, 'execute'):
+                        logger.info(f"🔥 BRUTAL TRUTH: Calling step.execute for {step.name}")
                         await step.execute()
+                        logger.info(f"🔥 BRUTAL TRUTH: step.execute completed for {step.name}")
                     else:
-                        if self.enable_logging and self.nb_logger:
-                            self.nb_logger.warning(
-                                f"⚠️ Step {step.name} has no execute method for automatic trigger")
+                        logger.warning(f"⚠️ Step {step.name} has no execute method for automatic trigger")
                 except Exception as e:
-                    if self.enable_logging and self.nb_logger:
-                        self.nb_logger.error(
-                            f"❌ Automatic trigger execution failed for step {step.name}: {e}")
+                    logger.error(f"❌ Automatic trigger execution failed for step {step.name}: {e}")
+                    logger.error(f"🔥 BRUTAL TRUTH: Exception type: {type(e).__name__}")
+                    import traceback
+                    logger.error(f"🔥 BRUTAL TRUTH: Traceback: {traceback.format_exc()}")
+                    # CRITICAL: Re-raise the exception so we can see what's failing
+                    raise
 
             trigger.bind_action(safe_step_execution)
             return trigger
@@ -722,12 +808,15 @@ class DataUnitBase(FromConfigBase, ABC):
         try:
             from .trigger import DataUnitChangeTrigger
 
-            # Merge default config with custom config
+            # Merge default config with custom config - FIXED: Use enum-based event types
             trigger_config = {
                 'name': trigger_id,
                 'trigger_type': 'data_updated',
                 'data_unit': self,
-                'event_type': config.get('event_type', 'set'),
+                'event_type': validate_event_type(
+                    config.get('event_type', DEFAULT_DATA_UNIT_EVENT),
+                    DataUnitEventType
+                ).value,  # Convert enum to string for backward compatibility
                 'description': config.get('description',
                     f"Auto-generated trigger for link {link.name} when {self.name} is updated")
             }
@@ -740,26 +829,37 @@ class DataUnitBase(FromConfigBase, ABC):
             async def safe_link_activation(trigger_event):
                 """Safely activate link when trigger fires."""
                 try:
+                    if self.enable_logging and self.nb_logger:
+                        self.nb_logger.info(f"🔗 BRUTAL TRUTH: Link trigger fired for {self.name} -> {getattr(link, 'name', 'unknown')}")
+                        self.nb_logger.info(f"🔗 Trigger event: {trigger_event}")
+
                     # Check if link should be activated
-                    if not await self._should_activate_link(link):
+                    should_activate = await self._should_activate_link(link)
+                    if self.enable_logging and self.nb_logger:
+                        self.nb_logger.info(f"🔗 Should activate: {should_activate}")
+
+                    if not should_activate:
                         return
 
                     source_data = await self.get()
                     if source_data is not None:
                         if hasattr(link, 'transfer'):
+                            if self.enable_logging and self.nb_logger:
+                                self.nb_logger.info(f"🔗 BRUTAL TRUTH: Transferring data via link {getattr(link, 'name', 'unknown')}")
+
                             await link.transfer(source_data)
 
                             if self.enable_logging and self.nb_logger:
-                                self.nb_logger.debug(
-                                    f"🔗 Auto-activated link {link.name} with data type: {type(source_data).__name__}")
+                                self.nb_logger.info(
+                                    f"🔗 BRUTAL TRUTH: Link {getattr(link, 'name', 'unknown')} activated successfully with {type(source_data).__name__}")
                         else:
                             if self.enable_logging and self.nb_logger:
                                 self.nb_logger.warning(
-                                    f"⚠️ Link {link.name} has no transfer method")
+                                    f"⚠️ Link {getattr(link, 'name', 'unknown')} has no transfer method")
                     else:
                         if self.enable_logging and self.nb_logger:
                             self.nb_logger.warning(
-                                f"⚠️ Link {link.name} not activated - no data available")
+                                f"⚠️ Link {getattr(link, 'name', 'unknown')} not activated - no data available")
 
                 except Exception as e:
                     if self.enable_logging and self.nb_logger:
@@ -777,15 +877,32 @@ class DataUnitBase(FromConfigBase, ABC):
     async def _should_activate_link(self, link: Any) -> bool:
         """Check if link should be activated based on current conditions."""
         try:
+            # BRUTAL TRUTH: Add debug logging to catch link activation issues
+            if self.enable_logging and self.nb_logger:
+                self.nb_logger.debug(f"🔍 Checking link activation for {getattr(link, 'name', 'unknown')}")
+
             # Check if link is active
-            if hasattr(link, 'is_active') and not link.is_active:
-                return False
+            if hasattr(link, 'is_active'):
+                is_active = link.is_active
+                if self.enable_logging and self.nb_logger:
+                    self.nb_logger.debug(f"🔍 Link is_active: {is_active}")
+                if not is_active:
+                    if self.enable_logging and self.nb_logger:
+                        self.nb_logger.warning(f"⚠️ Link {getattr(link, 'name', 'unknown')} not activated - link is not active")
+                    return False
 
             # Check if target is ready
             if hasattr(link, 'target') and hasattr(link.target, 'is_ready'):
-                if not await link.target.is_ready():
+                target_ready = await link.target.is_ready()
+                if self.enable_logging and self.nb_logger:
+                    self.nb_logger.debug(f"🔍 Target ready: {target_ready}")
+                if not target_ready:
+                    if self.enable_logging and self.nb_logger:
+                        self.nb_logger.warning(f"⚠️ Link {getattr(link, 'name', 'unknown')} not activated - target not ready")
                     return False
 
+            if self.enable_logging and self.nb_logger:
+                self.nb_logger.debug(f"✅ Link {getattr(link, 'name', 'unknown')} activation approved")
             return True
         except Exception as e:
             if self.enable_logging and self.nb_logger:
@@ -820,6 +937,11 @@ class DataUnitBase(FromConfigBase, ABC):
 
     async def _notify_change_listeners(self, change_event: Dict[str, Any]) -> None:
         """Notify all registered change listeners of data unit changes using async execution."""
+        print(f"🔗 BRUTAL TRUTH: _notify_change_listeners ENTRY for {self.name}")  # Force print to bypass logging
+
+        if self.enable_logging and self.nb_logger:
+            self.nb_logger.info(f"🔗 BRUTAL TRUTH: _notify_change_listeners called for {self.name} with {len(self._change_listeners)} listeners")
+
         if self._change_listeners:
             # ✅ DEADLOCK FIX: Check for actual data changes to prevent infinite loops
             old_data = change_event.get('old_data')
@@ -834,15 +956,27 @@ class DataUnitBase(FromConfigBase, ABC):
                     )
                 return
 
+            if self.enable_logging and self.nb_logger:
+                self.nb_logger.info(f"🔗 BRUTAL TRUTH: About to notify {len(self._change_listeners)} change listeners for {self.name}")
+
             # Import AsyncTriggerExecutor here to avoid circular imports
             from .trigger import AsyncTriggerExecutor
 
             try:
                 # Get async executor instance
+                if self.enable_logging and self.nb_logger:
+                    self.nb_logger.info(f"🔗 BRUTAL TRUTH: Getting AsyncTriggerExecutor instance for {self.name}")
+
                 async_executor = await AsyncTriggerExecutor.get_instance()
 
-                # Execute all listeners asynchronously without blocking
-                for listener in self._change_listeners:
+                if self.enable_logging and self.nb_logger:
+                    self.nb_logger.info(f"🔗 BRUTAL TRUTH: Got AsyncTriggerExecutor, executing {len(self._change_listeners)} listeners")
+
+                # Execute all listeners asynchronously and AWAIT completion
+                tasks = []
+                for i, listener in enumerate(self._change_listeners):
+                    if self.enable_logging and self.nb_logger:
+                        self.nb_logger.info(f"🔗 BRUTAL TRUTH: Processing listener {i+1}/{len(self._change_listeners)}: {getattr(listener, '__name__', str(listener))}")
                     try:
                         # Create async task for listener execution
                         task = asyncio.create_task(
@@ -855,10 +989,13 @@ class DataUnitBase(FromConfigBase, ABC):
                         task.add_done_callback(
                             async_executor.background_tasks.discard)
 
+                        # BRUTAL TRUTH: Collect tasks to await them
+                        tasks.append(task)
+
                         # Log async listener execution
                         if self.enable_logging and self.nb_logger:
-                            self.nb_logger.debug(
-                                f"🚀 Async listener execution initiated for {self.name}",
+                            self.nb_logger.info(
+                                f"🚀 BRUTAL TRUTH: Async listener execution initiated for {self.name}",
                                 operation="async_listener_start",
                                 listener_name=getattr(
                                     listener, '__name__', str(listener))
@@ -871,6 +1008,16 @@ class DataUnitBase(FromConfigBase, ABC):
                                 operation="async_listener_error",
                                 error=str(e)
                             )
+
+                # BRUTAL TRUTH: Wait for ALL listener tasks to complete
+                if tasks:
+                    if self.enable_logging and self.nb_logger:
+                        self.nb_logger.info(f"🔗 BRUTAL TRUTH: Awaiting {len(tasks)} listener tasks for {self.name}")
+
+                    await asyncio.gather(*tasks, return_exceptions=True)
+
+                    if self.enable_logging and self.nb_logger:
+                        self.nb_logger.info(f"🔗 BRUTAL TRUTH: All {len(tasks)} listener tasks completed for {self.name}")
 
             except Exception as e:
                 if self.enable_logging and self.nb_logger:
@@ -894,8 +1041,8 @@ class DataUnitBase(FromConfigBase, ABC):
 
             # Log successful completion
             if self.enable_logging and self.nb_logger:
-                self.nb_logger.debug(
-                    f"✅ Async listener execution completed for {self.name}",
+                self.nb_logger.info(
+                    f"✅ BRUTAL TRUTH: Async listener execution completed for {self.name}",
                     operation="async_listener_complete",
                     listener_name=getattr(listener, '__name__', str(listener))
                 )
@@ -1223,53 +1370,51 @@ class DataUnitMemory(DataUnitBase):
         self._data = None
 
     async def get(self) -> Any:
-        """Get data from memory."""
+        """
+        Get data from memory with proper encapsulation.
+
+        BRUTAL TRUTH: This now uses proper encapsulation instead of
+        direct _data access.
+        """
         if not self.is_initialized:
             await self.initialize()
-        return self._data
+        return self._get_internal_data()
 
     async def set(self, data: Any) -> None:
-        """Set data in memory."""
-        if not self.is_initialized:
-            await self.initialize()
-        async with self._lock:
-            old_data = self._data
-            self._data = data
-            self._metadata['last_updated'] = time.time()
+        """
+        Set data in memory with proper encapsulation.
 
-            # Notify change listeners for event-driven execution
-            change_event = {
-                'data_unit_name': self.name,
-                'operation': 'set',
-                'old_data': old_data,
-                'new_data': data,
-                'timestamp': time.time(),
-                'operation_count': self._operation_count
-            }
-            await self._notify_change_listeners(change_event)
+        BRUTAL TRUTH: This now uses proper encapsulation methods instead of
+        direct _data manipulation that was causing framework bugs.
+        """
+        print(f"🔗 BRUTAL TRUTH: DataUnitMemory.set() ENTRY for {self.name}")  # Force print
+
+        # Validate data before setting
+        if not self._validate_data(data):
+            raise ValueError(f"Invalid data for {self.name}: {data}")
+
+        print(f"🔗 BRUTAL TRUTH: DataUnitMemory.set() validation passed for {self.name}")  # Force print
+
+        # Transform data if needed
+        transformed_data = self._transform_data_on_set(data)
+
+        print(f"🔗 BRUTAL TRUTH: DataUnitMemory.set() about to call _set_internal_data for {self.name}")  # Force print
+
+        # Use proper encapsulated setter with enum-based event type
+        await self._set_internal_data(transformed_data, DataUnitEventType.SET)
 
     async def clear(self) -> None:
-        """Clear data from memory."""
-        self._access_count["clear"] += 1
-        self._last_operation = "clear"
-        self._operation_count += 1
+        """
+        Clear data from memory with proper encapsulation.
 
-        # Log before clearing
-        if self.enable_logging and self.nb_logger:
-            had_data = self._data is not None
-            self.nb_logger.log_data_unit_operation(
-                operation="clear",
-                data_unit_name=self.name,
-                metadata={
-                    "had_data": had_data,
-                    "previous_data_type": type(self._data).__name__ if self._data is not None else "None",
-                    "metadata_count": len(self._metadata),
-                    "state_before": self._get_internal_state()
-                }
-            )
+        BRUTAL TRUTH: This now uses proper encapsulation instead of
+        direct _data manipulation.
+        """
+        # Use proper encapsulated setter with enum-based event type
+        await self._set_internal_data(None, DataUnitEventType.CLEAR)
 
+        # Clear metadata
         async with self._lock:
-            self._data = None
             self._metadata.clear()
 
         # Log after clearing

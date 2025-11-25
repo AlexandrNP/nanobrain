@@ -293,6 +293,12 @@ from .prompt_template_manager import (
     PromptTemplateManager, PromptTemplate, PromptTemplateConfig
 )
 
+# Import event types for proper enum-based event handling
+from .event_types import (
+    DataUnitEventType, TriggerEventType, LinkEventType,
+    validate_event_type, DEFAULT_DATA_UNIT_EVENT, DEFAULT_TRIGGER_EVENT, DEFAULT_LINK_EVENT
+)
+
 __all__ = [
     # Executors
     'ExecutorBase', 'LocalExecutor', 'ThreadExecutor', 'ProcessExecutor',
@@ -305,6 +311,10 @@ __all__ = [
     # Triggers
     'TriggerBase', 'DataUpdatedTrigger', 'AllDataReceivedTrigger', 'TimerTrigger', 'ManualTrigger',
     'TriggerConfig', 'TriggerType',
+
+    # Event Types (BRUTAL TRUTH: New enum-based event system)
+    'DataUnitEventType', 'TriggerEventType', 'LinkEventType',
+    'validate_event_type', 'DEFAULT_DATA_UNIT_EVENT', 'DEFAULT_TRIGGER_EVENT', 'DEFAULT_LINK_EVENT',
 
     # Links
     'LinkBase', 'DirectLink', 'FileLink', 'QueueLink', 'TransformLink',

@@ -13,7 +13,7 @@ import time
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Union, Set, Tuple, Callable
 from pathlib import Path
-from enum import Enum
+
 from pydantic import BaseModel, Field, ConfigDict, field_validator
 import yaml
 import json
@@ -27,276 +27,13 @@ from .trigger import TriggerBase, TriggerConfig
 from .link import LinkBase, DirectLink, ConditionalLink, TransformLink, LinkConfig, LinkType
 from .executor import ExecutorBase, LocalExecutor, ExecutorConfig
 from .logging_system import get_logger, OperationType
+from .workflow_progress import WorkflowProgress, ProgressReporter, ErrorMode, get_error_mode, handle_error
+from .workflow_graph import WorkflowGraph
 
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class ProgressStep:
-    """Individual step progress information."""
-    step_id: str
-    name: str
-    description: str
-    status: str  # 'pending', 'running', 'completed', 'failed', 'skipped'
-    progress_percentage: int = 0
-    start_time: Optional[float] = None
-    end_time: Optional[float] = None
-    elapsed_time: float = 0.0
-    estimated_time: Optional[float] = None
-    error_message: Optional[str] = None
-    technical_details: Optional[Dict[str, Any]] = None
-    checkpoint_data: Optional[Dict[str, Any]] = None
 
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for serialization."""
-        return asdict(self)
-
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'ProgressStep':
-        """Create from dictionary."""
-        return cls(**data)
-
-
-@dataclass
-class WorkflowProgress:
-    """Complete workflow progress information."""
-    workflow_id: str
-    workflow_name: str
-    session_id: Optional[str] = None
-    overall_progress: int = 0
-    status: str = 'pending'  # 'pending', 'running', 'completed', 'failed', 'paused'
-    start_time: Optional[float] = None
-    end_time: Optional[float] = None
-    estimated_total_time: Optional[float] = None
-    steps: List[ProgressStep] = field(default_factory=list)
-    current_step_index: int = 0
-    error_message: Optional[str] = None
-    last_updated: float = field(default_factory=time.time)
-
-    # Progress reporting configuration
-    batch_interval: float = 3.0  # Batch progress every 3 seconds
-    collapsed_by_default: bool = True
-    show_technical_errors: bool = True
-    preserve_session_history: bool = True
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for serialization."""
-        data = asdict(self)
-        data['steps'] = [step.to_dict() if isinstance(step, ProgressStep)
-                         else step for step in self.steps]
-        return data
-
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'WorkflowProgress':
-        """Create from dictionary."""
-        steps_data = data.pop('steps', [])
-        progress = cls(**data)
-        progress.steps = [ProgressStep.from_dict(step) if isinstance(
-            step, dict) else step for step in steps_data]
-        return progress
-
-    def get_current_step(self) -> Optional[ProgressStep]:
-        """Get currently executing step."""
-        if 0 <= self.current_step_index < len(self.steps):
-            return self.steps[self.current_step_index]
-        return None
-
-    def update_step_progress(self, step_id: str, progress: int, status: str = None,
-                             error: str = None, technical_details: Dict[str, Any] = None) -> None:
-        """Update progress for a specific step."""
-        for step in self.steps:
-            if step.step_id == step_id:
-                step.progress_percentage = progress
-                if status:
-                    step.status = status
-                if error:
-                    step.error_message = error
-                if technical_details:
-                    step.technical_details = technical_details
-
-                # Update timing
-                current_time = time.time()
-                if status == 'running' and not step.start_time:
-                    step.start_time = current_time
-                elif status in ['completed', 'failed'] and step.start_time:
-                    step.end_time = current_time
-                    step.elapsed_time = current_time - step.start_time
-
-                self.last_updated = current_time
-                break
-
-    def calculate_overall_progress(self) -> int:
-        """Calculate overall workflow progress."""
-        if not self.steps:
-            return 0
-
-        total_progress = sum(step.progress_percentage for step in self.steps)
-        return min(100, total_progress // len(self.steps))
-
-
-class ProgressReporter:
-    """Handles progress reporting for workflows."""
-
-    def __init__(self, workflow_id: str, workflow_name: str, session_id: str = None):
-        self.workflow_progress = WorkflowProgress(
-            workflow_id=workflow_id,
-            workflow_name=workflow_name,
-            session_id=session_id
-        )
-        self.progress_callbacks: List[Callable] = []
-        self.last_batch_time = 0.0
-        self.progress_history: List[Dict[str, Any]] = []
-        self.checkpoint_storage: Dict[str, Any] = {}
-
-    def add_progress_callback(self, callback: Callable) -> None:
-        """Add callback for progress updates."""
-        self.progress_callbacks.append(callback)
-
-    def initialize_steps(self, step_configs) -> None:
-        """Initialize progress steps from configuration."""
-        self.workflow_progress.steps = []
-
-        # ✅ CONFIGURATION FORMAT FIX: Handle both dict and list formats
-        if isinstance(step_configs, dict):
-            # New dict-based format: steps = {step_id: step_object}
-            for step_id, step_obj in step_configs.items():
-                # Check if it's an actual step object or a config dict
-                if hasattr(step_obj, 'name') and hasattr(step_obj, 'description'):
-                    # It's an instantiated step object
-                    step = ProgressStep(
-                        step_id=step_id,
-                        name=getattr(step_obj, 'name',
-                                     step_id.replace('_', ' ').title()),
-                        description=getattr(step_obj, 'description', ''),
-                        status='pending',
-                        estimated_time=getattr(
-                            step_obj, 'estimated_time', None)
-                    )
-                else:
-                    # It's a config dictionary
-                    step = ProgressStep(
-                        step_id=step_obj.get('step_id', step_id),
-                        name=step_obj.get(
-                            'name', step_id.replace('_', ' ').title()),
-                        description=step_obj.get('description', ''),
-                        status='pending',
-                        estimated_time=step_obj.get('estimated_time')
-                    )
-                self.workflow_progress.steps.append(step)
-        else:
-            # Legacy list-based format: steps = [step_config, ...]
-            for i, step_config in enumerate(step_configs):
-                step = ProgressStep(
-                    step_id=step_config.get('step_id', f'step_{i}'),
-                    name=step_config.get('name', f'Step {i+1}'),
-                    description=step_config.get('description', ''),
-                    status='pending',
-                    estimated_time=step_config.get('estimated_time')
-                )
-                self.workflow_progress.steps.append(step)
-
-    async def update_progress(self, step_id: str, progress: int, status: str = None,
-                              message: str = None, error: str = None,
-                              technical_details: Dict[str, Any] = None,
-                              force_emit: bool = False) -> None:
-        """Update step progress with batched reporting."""
-
-        # Update step progress
-        self.workflow_progress.update_step_progress(
-            step_id, progress, status, error, technical_details
-        )
-
-        # Update overall progress
-        self.workflow_progress.overall_progress = self.workflow_progress.calculate_overall_progress()
-
-        # Store checkpoint data
-        if status in ['completed', 'failed'] or progress == 100:
-            await self._save_checkpoint(step_id)
-
-        # Emit progress updates (batched)
-        current_time = time.time()
-        should_emit = (
-            force_emit or
-            (current_time - self.last_batch_time) >= self.workflow_progress.batch_interval or
-            status in ['completed', 'failed'] or
-            progress == 100
-        )
-
-        if should_emit:
-            await self._emit_progress_update()
-            self.last_batch_time = current_time
-
-    async def _emit_progress_update(self) -> None:
-        """Emit progress update to all callbacks."""
-        progress_data = self.workflow_progress.to_dict()
-
-        # Add to history if preserving session history
-        if self.workflow_progress.preserve_session_history:
-            self.progress_history.append({
-                'timestamp': time.time(),
-                'progress': progress_data.copy()
-            })
-
-        # Call all registered callbacks
-        for callback in self.progress_callbacks:
-            try:
-                if asyncio.iscoroutinefunction(callback):
-                    await callback(progress_data)
-                else:
-                    callback(progress_data)
-            except Exception as e:
-                logger.error(f"Progress callback failed: {e}", exc_info=True)
-
-    async def _save_checkpoint(self, step_id: str) -> None:
-        """Save checkpoint data for step recovery."""
-        step = next(
-            (s for s in self.workflow_progress.steps if s.step_id == step_id), None)
-        if step and step.checkpoint_data:
-            self.checkpoint_storage[step_id] = {
-                'timestamp': time.time(),
-                'step_data': step.to_dict(),
-                'checkpoint_data': step.checkpoint_data
-            }
-
-    async def restore_from_checkpoint(self, step_id: str) -> Optional[Dict[str, Any]]:
-        """Restore checkpoint data for step recovery."""
-        return self.checkpoint_storage.get(step_id)
-
-    def get_progress_summary(self) -> Dict[str, Any]:
-        """Get condensed progress summary for UI."""
-        current_step = self.workflow_progress.get_current_step()
-
-        return {
-            'workflow_id': self.workflow_progress.workflow_id,
-            'workflow_name': self.workflow_progress.workflow_name,
-            'overall_progress': self.workflow_progress.overall_progress,
-            'status': self.workflow_progress.status,
-            'current_step': {
-                'name': current_step.name if current_step else None,
-                'progress': current_step.progress_percentage if current_step else 0,
-                'status': current_step.status if current_step else 'pending'
-            } if current_step else None,
-            'collapsed': self.workflow_progress.collapsed_by_default,
-            'estimated_time_remaining': self._calculate_estimated_time_remaining(),
-            'last_updated': self.workflow_progress.last_updated
-        }
-
-    def _calculate_estimated_time_remaining(self) -> Optional[float]:
-        """Calculate estimated time remaining."""
-        if not self.workflow_progress.steps:
-            return None
-
-        completed_steps = [
-            s for s in self.workflow_progress.steps if s.status == 'completed']
-        if not completed_steps:
-            return None
-
-        avg_time_per_step = sum(
-            s.elapsed_time for s in completed_steps) / len(completed_steps)
-        remaining_steps = len(
-            [s for s in self.workflow_progress.steps if s.status == 'pending'])
-
-        return avg_time_per_step * remaining_steps
 
 
 class WorkflowConfig(StepConfig):
@@ -366,74 +103,10 @@ class WorkflowConfig(StepConfig):
     )
 
 
-class WorkflowGraph:
-    """
-    Internal graph representation of workflow structure.
+# WorkflowGraph imported from workflow_graph.py
 
-    Manages the graph of steps (nodes) and links (edges) within a workflow.
-    Provides graph analysis capabilities including cycle detection and
-    topological sorting for execution order determination.
-    """
 
-    def __init__(self):
-        """Initialize empty workflow graph."""
-        self.nodes: Dict[str, Step] = {}  # step_id -> Step instance
-        self.edges: Dict[str, LinkBase] = {}  # link_id -> Link instance
-        # step_id -> set of connected step_ids
-        self.adjacency: Dict[str, Set[str]] = {}
-        # step_id -> set of predecessor step_ids
-        self.reverse_adjacency: Dict[str, Set[str]] = {}
 
-        # Graph metadata
-        self._is_valid = False
-        self._execution_order: Optional[List[str]] = None
-        self._strongly_connected_components: Optional[List[List[str]]] = None
-
-        self.logger = get_logger("workflow.graph")
-
-    def add_step(self, step_id: str, step: BaseStep) -> None:
-        """Add a step node to the graph."""
-        if step_id in self.nodes:
-            raise ValueError(
-                f"Step {step_id} already exists in workflow graph")
-
-        self.nodes[step_id] = step
-        self.adjacency[step_id] = set()
-        self.reverse_adjacency[step_id] = set()
-
-        # Invalidate cached computations
-        self._invalidate_cache()
-
-        self.logger.debug(f"Added step to workflow graph: {step_id}")
-
-    def add_link(self, link_id: str, link: LinkBase, source_id: str, target_id: str) -> None:
-        """Add a link edge to the graph."""
-        if link_id in self.edges:
-            raise ValueError(
-                f"Link {link_id} already exists in workflow graph")
-
-        if source_id not in self.nodes:
-            raise ValueError(
-                f"Source step {source_id} not found in workflow graph")
-
-        if target_id not in self.nodes:
-            raise ValueError(
-                f"Target step {target_id} not found in workflow graph")
-
-        # Store link with source/target IDs for validation
-        self.edges[link_id] = {
-            'link': link,
-            'source_id': source_id,
-            'target_id': target_id
-        }
-        self.adjacency[source_id].add(target_id)
-        self.reverse_adjacency[target_id].add(source_id)
-
-        # Invalidate cached computations
-        self._invalidate_cache()
-
-        self.logger.debug(
-            f"Added link to workflow graph: {link_id} ({source_id} -> {target_id})")
 
     def remove_step(self, step_id: str) -> None:
         """Remove a step and all its connections from the graph."""
@@ -1165,7 +838,7 @@ class Workflow(Step):
         'steps': [],
         'links': [],
 
-        'error_handling': 'continue',
+        'error_handling': 'stop',  # FAIL-FAST: Changed from 'continue' to 'stop'
         'enable_monitoring': True,
         'auto_initialize': True,
         'debug_mode': False
@@ -1236,8 +909,9 @@ class Workflow(Step):
 
         # ACADEMY INTEGRATION: Detect and setup Academy manager if needed
         if cls._requires_academy_integration(config_path):
-            academy_manager = cls._setup_academy_manager()
-            context['academy_manager'] = academy_manager
+            # Setup the SINGLETON Academy manager (but don't store it in context!)
+            cls._setup_academy_manager()
+            # Only store a flag indicating Academy integration is enabled
             context['_academy_integration_enabled'] = True
 
         # Use enhanced WorkflowConfig.from_config() method - automatically resolves class+config patterns
@@ -1264,43 +938,8 @@ class Workflow(Step):
         Returns:
             True if Academy integration is required, False otherwise
         """
-        try:
-            import yaml
-            from pathlib import Path
-
-            config_path = Path(config_path)
-            if not config_path.exists():
-                return False
-
-            # Load and parse workflow configuration
-            with open(config_path, 'r') as f:
-                config_data = yaml.safe_load(f)
-
-            # Check for Academy links in the configuration
-            links = config_data.get('links', {})
-
-            for link_name, link_config in links.items():
-                if isinstance(link_config, dict):
-                    link_class = link_config.get('class', '')
-                    # Check if this is an AcademyLink
-                    if 'academy_link' in link_class.lower() or 'academylink' in link_class:
-                        return True
-
-                    # Check for Academy-specific configuration
-                    if isinstance(link_config.get('config'), dict):
-                        config_dict = link_config['config']
-                        if (config_dict.get('link_type') == 'academy' or
-                            'academy_agent_handle' in config_dict):
-                            return True
-
-            return False
-
-        except Exception as e:
-            # If we can't parse the config, assume no Academy integration needed
-            import logging
-            logger = logging.getLogger("Workflow")
-            logger.warning(f"Could not check for Academy integration in {config_path}: {e}")
-            return False
+        from nanobrain.core.academy_integration import AcademyIntegration
+        return AcademyIntegration.requires_academy_integration(config_path)
 
     @classmethod
     def _setup_academy_manager(cls):
@@ -1314,198 +953,8 @@ class Workflow(Step):
             ImportError: If Academy framework is not available
             RuntimeError: If Academy manager setup fails
         """
-        try:
-            # Import REAL Academy framework components
-            from academy.manager import Manager
-            from academy.exchange import LocalExchangeFactory
-            import asyncio
-
-            # Create REAL Academy manager for distributed processing
-            import logging
-            logger = logging.getLogger("Workflow")
-
-            try:
-                # Try to get existing event loop
-                loop = asyncio.get_event_loop()
-                if loop.is_closed():
-                    raise RuntimeError("Event loop is closed")
-            except RuntimeError:
-                # No event loop running, create a new one
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                logger.info("🔄 Created new event loop for Academy manager")
-
-            # Create Academy manager with local exchange
-            exchange_factory = LocalExchangeFactory()
-
-            # Create Academy manager instance
-            # Note: Academy Manager expects to be created in an async context
-            # For now, we'll create a wrapper that handles async initialization
-            class AcademyManagerWrapper:
-                """Wrapper for Academy Manager that handles async initialization"""
-
-                def __init__(self):
-                    self.manager = None
-                    self.exchange_factory = exchange_factory
-                    self.handles = {}
-                    self.logger = logging.getLogger("AcademyManagerWrapper")
-                    self.logger.info("🚀 Real Academy manager wrapper created")
-
-                async def _ensure_manager(self):
-                    """Ensure Academy manager is initialized"""
-                    if self.manager is None:
-                        try:
-                            # Create Academy manager using from_exchange_factory
-                            self.manager = await Manager.from_exchange_factory(self.exchange_factory)
-                            self.logger.info("✅ Real Academy manager started successfully")
-                        except Exception as e:
-                            self.logger.error(f"❌ Failed to start Academy manager: {e}")
-                            # Fall back to mock behavior for testing
-                            self.manager = "mock_fallback"
-
-                def get_handle(self, agent_name: str):
-                    """Get handle for Academy agent"""
-                    if agent_name not in self.handles:
-                        self.handles[agent_name] = AcademyAgentHandle(agent_name, self)
-                        self.logger.info(f"🎯 Created Academy handle for agent: {agent_name}")
-                    return self.handles[agent_name]
-
-                def register_agent(self, agent_name: str, agent_instance):
-                    """Register Academy agent"""
-                    self.handles[agent_name] = AcademyAgentHandle(agent_name, self, agent_instance)
-                    self.logger.info(f"📝 Registered Academy agent: {agent_name}")
-                    return self.handles[agent_name]
-
-            class AcademyAgentHandle:
-                """Real Academy agent handle for distributed communication"""
-
-                def __init__(self, agent_name: str, manager_wrapper, agent_instance=None):
-                    self.agent_name = agent_name
-                    self.manager_wrapper = manager_wrapper
-                    self.agent_instance = agent_instance
-                    self.logger = logging.getLogger(f"AcademyAgentHandle.{agent_name}")
-
-                async def __call__(self, action_name: str, *args, **kwargs):
-                    """Call Academy agent action"""
-                    try:
-                        # Ensure Academy manager is initialized
-                        await self.manager_wrapper._ensure_manager()
-
-                        if self.manager_wrapper.manager == "mock_fallback":
-                            # Fall back to mock behavior
-                            self.logger.warning(f"🎭 Academy manager unavailable, using mock response for {self.agent_name}.{action_name}()")
-                            return {
-                                "status": "mock_fallback",
-                                "agent_name": self.agent_name,
-                                "action_name": action_name,
-                                "message": "Academy manager unavailable - using mock response",
-                                "args": args,
-                                "kwargs": kwargs
-                            }
-
-                        # Make real Academy agent call
-                        self.logger.info(f"🚀 Calling Academy agent {self.agent_name}.{action_name}()")
-
-                        # For now, return a successful mock response since we don't have real agents deployed
-                        # In production, this would launch the agent and call the action
-                        self.logger.info(f"🎭 Using mock response for Academy agent {self.agent_name}.{action_name}() - no agents deployed")
-
-                        # ACTION-SPECIFIC MOCK RESPONSES - FIXED DATA FORMAT HANDLING
-                        input_data = args[0] if args else kwargs
-
-                        if action_name == "execute_aurora_computation":
-                            # First AcademyLink: data_preparation -> aurora_computation
-                            # Extract sequences from prepared_data and return for aurora computation
-                            sequences = []
-                            if isinstance(input_data, dict):
-                                if 'prepared_data' in input_data and isinstance(input_data['prepared_data'], dict):
-                                    sequences = input_data['prepared_data'].get('prepared_sequences', [])
-                                elif 'prepared_sequences' in input_data:
-                                    sequences = input_data['prepared_sequences']
-                                elif 'sequences' in input_data:
-                                    sequences = input_data['sequences']
-
-                            # Return data in the format expected by aurora_computation_step
-                            result = {
-                                "prepared_sequences": sequences
-                            }
-
-                        elif action_name == "transfer_aurora_results":
-                            # Second AcademyLink: aurora_computation -> result_aggregation
-                            # ENHANCED: Pass comprehensive node information to the final step
-                            computed_sequences = []
-                            computation_metadata = {}
-                            node_information = {}
-
-                            if isinstance(input_data, dict):
-                                # The input_data is already the flattened aurora_results content
-                                if 'computed_sequences' in input_data:
-                                    computed_sequences = input_data['computed_sequences']
-                                    self.logger.info(f"✅ Extracted {len(computed_sequences)} computed sequences from aurora results")
-
-                                if 'computation_metadata' in input_data:
-                                    computation_metadata = input_data['computation_metadata']
-                                    self.logger.info(f"✅ Extracted computation metadata from aurora results")
-
-                                if 'node_information' in input_data:
-                                    node_information = input_data['node_information']
-                                    nodes_used = node_information.get('nodes_utilized', [])
-                                    total_nodes = node_information.get('total_nodes', 0)
-                                    self.logger.info(f"✅ Extracted node information: {total_nodes} nodes used ({', '.join(nodes_used)})")
-
-                            # Return comprehensive data in the format expected by result_aggregation_step
-                            result = {
-                                "computed_sequences": computed_sequences,
-                                "computation_metadata": computation_metadata,
-                                "node_information": node_information
-                            }
-
-                        else:
-                            # Generic fallback for unknown actions
-                            result = {
-                                "status": "success",
-                                "message": f"Mock response for {action_name}",
-                                "data": input_data
-                            }
-
-                        self.logger.info(f"✅ Academy agent {self.agent_name}.{action_name}() completed successfully")
-                        return result
-
-                    except Exception as e:
-                        self.logger.error(f"❌ Academy agent call failed: {self.agent_name}.{action_name}() - {e}")
-                        # Return error response
-                        return {
-                            "status": "error",
-                            "agent_name": self.agent_name,
-                            "action_name": action_name,
-                            "error": str(e),
-                            "error_type": type(e).__name__
-                        }
-
-                def __getattr__(self, name):
-                    """Dynamic attribute access for Academy agent actions"""
-                    return lambda *args, **kwargs: self.__call__(name, *args, **kwargs)
-
-            # Create Academy manager wrapper
-            academy_manager = AcademyManagerWrapper()
-
-            logger.info("✅ Real Academy manager wrapper created successfully")
-
-            return academy_manager
-
-        except ImportError as e:
-            raise ImportError(
-                f"❌ ACADEMY FRAMEWORK NOT AVAILABLE: {e}\n"
-                f"   Academy integration is required for this workflow but the Academy framework is not installed.\n"
-                f"   SOLUTION: Install Academy framework with: pip install academy-py\n"
-                f"   ALTERNATIVE: Remove Academy links from workflow configuration"
-            ) from e
-        except Exception as e:
-            raise RuntimeError(
-                f"❌ ACADEMY MANAGER SETUP FAILED: {e}\n"
-                f"   Could not initialize Academy manager for distributed processing.\n"
-                f"   CHECK: Academy framework installation and dependencies"
-            ) from e
+        from nanobrain.core.academy_integration import AcademyIntegration
+        return AcademyIntegration.setup_academy_manager()
 
     @classmethod
     def _extract_resolved_components(cls, workflow_config: WorkflowConfig) -> Dict[str, Any]:
@@ -1983,14 +1432,9 @@ class Workflow(Step):
         for link_id, link_instance in resolved_components['links'].items():
             if hasattr(link_instance, 'source') and hasattr(link_instance, 'target') and link_instance.source and link_instance.target:
                 # ✅ CRITICAL: Check for self-referencing data unit links during configuration validation
-                source_name = getattr(
-                    link_instance.source, 'name', str(link_instance.source))
-                target_name = getattr(
-                    link_instance.target, 'name', str(link_instance.target))
-
-                if (link_instance.source is link_instance.target or
-                    (hasattr(link_instance.source, 'name') and hasattr(link_instance.target, 'name') and
-                     source_name == target_name)):
+                # Only check object identity, not name equality (different objects can have same name)
+                if link_instance.source is link_instance.target:
+                    source_name = getattr(link_instance.source, 'name', str(link_instance.source))
                     error_msg = (
                         f"❌ ILLEGAL SELF-REFERENCING DATA UNIT LINK DETECTED IN CONFIGURATION: "
                         f"Link '{link_id}' connects data unit '{source_name}' to itself. "
@@ -2181,55 +1625,16 @@ class Workflow(Step):
     # Workflow inherits FromConfigBase.__init__ which prevents direct instantiation
     # Use Workflow.from_config() to create instances
 
-    def _legacy_init_workflow_components(self, config: WorkflowConfig, **kwargs):
-        """Legacy initialization method - kept for reference but should use _init_from_config"""
 
-        # Workflow-specific configuration
-        self.workflow_config = config
-
-        # Core workflow components
-        self.workflow_graph = WorkflowGraph()
-
-        # Step and link management
-        self.child_steps: Dict[str, Step] = {}
-        self.step_links: Dict[str, LinkBase] = {}
-
-        # Execution state
-        self.execution_order: List[str] = []
-        self.current_step_index: int = 0
-        self.is_workflow_complete: bool = False
-        self.failed_steps: Set[str] = set()
-        self.completed_steps: Set[str] = set()
-
-        # Performance tracking
-        self.step_execution_times: Dict[str, float] = {}
-        self.workflow_start_time: Optional[float] = None
-        self.workflow_end_time: Optional[float] = None
-
-        # Progress reporting
-        self.progress_reporter: Optional[ProgressReporter] = None
-        if config.enable_progress_reporting:
-            self.progress_reporter = ProgressReporter(
-                workflow_id=f"{self.name}_{int(time.time())}",
-                workflow_name=self.name,
-                session_id=kwargs.get('session_id')
-            )
-            self.progress_reporter.workflow_progress.batch_interval = config.progress_batch_interval
-            self.progress_reporter.workflow_progress.collapsed_by_default = config.progress_collapsed_by_default
-            self.progress_reporter.workflow_progress.show_technical_errors = config.progress_show_technical_errors
-            self.progress_reporter.workflow_progress.preserve_session_history = config.progress_preserve_session_history
-
-        # Workflow-specific logger
-        self.workflow_logger = get_logger(
-            f"workflow.{self.name}", debug_mode=config.debug_mode)
-
-        self.workflow_logger.info(f"Initialized workflow: {self.name}")
 
     async def initialize(self) -> None:
         """Initialize workflow: load steps, create links, build graph."""
+        self.workflow_logger.info(f"🔥 BRUTAL TRUTH: Workflow.initialize() called for {self.name}")
         if self._is_initialized:
+            self.workflow_logger.info(f"🔥 BRUTAL TRUTH: Workflow already initialized, skipping")
             return
 
+        self.workflow_logger.info(f"🔥 BRUTAL TRUTH: Starting workflow initialization")
         async with self.nb_logger.async_execution_context(
             OperationType.STEP_EXECUTE,
             f"{self.name}.initialize_workflow"
@@ -2241,14 +1646,14 @@ class Workflow(Step):
             # Load workflow configuration
             await self._load_workflow_configuration()
 
+            # FAIL-FAST: Validate workflow integrity before initialization
+            self._validate_workflow_integrity()
+
             # Initialize child steps
             await self._initialize_child_steps()
 
             # Create step links
             await self._create_step_links()
-
-            # NEW: Register automatic link triggers
-            await self._register_automatic_link_triggers()
 
             # Build and validate workflow graph
             await self._build_workflow_graph()
@@ -2361,12 +1766,15 @@ class Workflow(Step):
         - Steps already validated through ConfigBase schemas
         - Immediate availability for workflow execution
         """
+        self.workflow_logger.info(f"🔥 BRUTAL TRUTH: _initialize_child_steps() called")
         if not hasattr(self, '_resolved_components'):
             self.workflow_logger.warning(
                 "⚠️ No resolved components found - workflow may not be fully configured")
             return
 
         resolved_steps = self._resolved_components.get('steps', {})
+        self.workflow_logger.info(
+            f"🔥 BRUTAL TRUTH: Found {len(resolved_steps)} resolved steps: {list(resolved_steps.keys())}")
         self.workflow_logger.info(
             f"Initializing {len(resolved_steps)} pre-instantiated child steps")
 
@@ -2376,20 +1784,24 @@ class Workflow(Step):
                 # Initialize the step if not already initialized
                 if hasattr(step_instance, 'initialize') and hasattr(step_instance, '_is_initialized'):
                     if not step_instance._is_initialized:
+                        self.workflow_logger.info(
+                            f"🔥 BRUTAL TRUTH: About to initialize step: {step_id}")
                         await step_instance.initialize()
-                        self.workflow_logger.debug(
-                            f"✅ Initialized resolved step: {step_id}")
+                        self.workflow_logger.info(
+                            f"🔥 BRUTAL TRUTH: Successfully initialized step: {step_id}")
                     else:
-                        self.workflow_logger.debug(
-                            f"✅ Step already initialized: {step_id}")
+                        self.workflow_logger.info(
+                            f"🔥 BRUTAL TRUTH: Step already initialized, skipping: {step_id}")
                 elif hasattr(step_instance, 'initialize'):
                     # Initialize even if _is_initialized attribute is not present
+                    self.workflow_logger.info(
+                        f"🔥 BRUTAL TRUTH: About to initialize step (no _is_initialized): {step_id}")
                     await step_instance.initialize()
-                    self.workflow_logger.debug(
-                        f"✅ Initialized resolved step: {step_id}")
+                    self.workflow_logger.info(
+                        f"🔥 BRUTAL TRUTH: Successfully initialized step (no _is_initialized): {step_id}")
                 else:
-                    self.workflow_logger.debug(
-                        f"✅ Step does not require initialization: {step_id}")
+                    self.workflow_logger.info(
+                        f"🔥 BRUTAL TRUTH: Step does not require initialization: {step_id}")
 
                 # Ensure step has required workflow integration properties
                 if not hasattr(step_instance, 'step_id'):
@@ -2493,9 +1905,8 @@ class Workflow(Step):
                     target_name = getattr(
                         link_instance.target, 'name', str(link_instance.target))
 
-                    if (link_instance.source is link_instance.target or
-                        (hasattr(link_instance.source, 'name') and hasattr(link_instance.target, 'name') and
-                         source_name == target_name)):
+                    # Only check object identity, not name equality (different objects can have same name)
+                    if link_instance.source is link_instance.target:
                         error_msg = (
                             f"❌ ILLEGAL SELF-REFERENCING DATA UNIT LINK: {link_id} connects "
                             f"data unit '{source_name}' to itself. Self-referencing links are "
@@ -2830,203 +2241,313 @@ class Workflow(Step):
             self.workflow_logger.debug(f"Executor does not support distributed execution, using standard execution")
             return await self.process(input_data, **kwargs)
 
-    def get_workflow_stats(self) -> Dict[str, Any]:
-        """Get comprehensive workflow statistics."""
-        stats = {
-            "workflow_name": self.name,
-            "execution_strategy": "data_driven",
-            "num_steps": len(self.child_steps),
-            "num_links": len(self.step_links),
-            "completed_steps": len(self.completed_steps),
-            "failed_steps": len(self.failed_steps),
-            "is_complete": self.is_workflow_complete,
-            "step_execution_times": self.step_execution_times.copy(),
-            "graph_stats": self.workflow_graph.get_stats()
-        }
-
-        if self.workflow_start_time and self.workflow_end_time:
-            stats["total_execution_time"] = self.workflow_end_time - \
-                self.workflow_start_time
-
-        return stats
-
-    def get_step(self, step_id: str) -> Optional[Step]:
-        """Get a child step by ID."""
-        return self.child_steps.get(step_id)
-
-    def get_link(self, link_id: str) -> Optional[LinkBase]:
-        """Get a link by ID."""
-        return self.step_links.get(link_id)
-
-    def list_steps(self) -> List[str]:
-        """Get list of all step IDs."""
-        return list(self.child_steps.keys())
-
-    def list_links(self) -> List[str]:
-        """Get list of all link IDs."""
-        return list(self.step_links.keys())
-
-    @property
-    def workflow_links(self) -> Dict[str, LinkBase]:
+    def _validate_workflow_integrity(self) -> None:
         """
-        Get all workflow links for inspection.
+        FAIL-FAST: Validate workflow integrity before execution.
 
-        Returns:
-            Dictionary of link_id -> LinkBase instances
-
-        Note:
-            Returns all links including workflow-to-step and step-to-workflow links.
-            The workflow_graph.edges only contains step-to-step links, while 
-            step_links contains all links including workflow I/O connections.
-            Named 'workflow_links' to avoid conflict with Step.links attribute.
+        Checks for:
+        - Broken step chains (steps with no data sources)
+        - Circular dependencies
+        - Unreachable steps
+        - Invalid step configurations
         """
-        if hasattr(self, 'step_links'):
-            return dict(self.step_links)
-        return {}
+        from .component_base import ComponentConfigurationError
 
-    def validate_graph(self) -> bool:
-        """
-        Public method to validate workflow graph.
-
-        Returns:
-            bool: True if the workflow graph is valid, False otherwise
-
-        Note:
-            This exposes the internal graph validation for testing purposes.
-            During normal workflow initialization, validation happens automatically.
-        """
-        if not hasattr(self, 'workflow_graph') or not self.workflow_graph:
-            return False
-
-        is_valid, errors = self.workflow_graph.validate_graph(
-            allow_cycles=self.workflow_config.allow_cycles if hasattr(
-                self, 'workflow_config') else False,
-            require_connected=self.workflow_config.require_connected_graph if hasattr(
-                self, 'workflow_config') else True
-        )
-
-        if errors:
-            self.workflow_logger.warning(f"Graph validation issues: {errors}")
-
-        return is_valid
-
-    # Progress reporting methods
-    def add_progress_callback(self, callback: Callable) -> None:
-        """Add callback for progress updates."""
-        if self.progress_reporter:
-            self.progress_reporter.add_progress_callback(callback)
-
-    def get_progress_summary(self) -> Optional[Dict[str, Any]]:
-        """Get current progress summary."""
-        if self.progress_reporter:
-            return self.progress_reporter.get_progress_summary()
-        return None
-
-    def get_progress_history(self) -> List[Dict[str, Any]]:
-        """Get progress history for session."""
-        if self.progress_reporter:
-            return self.progress_reporter.progress_history
-        return []
-
-    async def restore_from_checkpoint(self, step_id: str) -> Optional[Dict[str, Any]]:
-        """Restore step from checkpoint."""
-        if self.progress_reporter:
-            return await self.progress_reporter.restore_from_checkpoint(step_id)
-        return None
-
-    # ============================================================================
-    # AUTOMATIC TRIGGER SYSTEM - NEW IMPLEMENTATION
-    # ============================================================================
-
-    async def _register_automatic_link_triggers(self) -> None:
-        """Register all workflow links with their source and target data units."""
-        if not hasattr(self, 'step_links'):
-            return
-
-        success_count = 0
-        for link_name, link in self.step_links.items():
-            success = await self._register_link_with_data_units(link)
-            if success:
-                success_count += 1
-
-        if self.enable_logging and self.nb_logger:
-            self.nb_logger.info(
-                f"✅ Auto-registered {success_count} workflow links with data units")
-
-    async def _register_link_with_data_units(self, link: LinkBase) -> bool:
-        """Register link with source and target data units for automatic activation."""
         try:
-            success = True
+            self.workflow_logger.info("🔍 FAIL-FAST: Validating workflow integrity...")
 
-            # Register with source data unit
-            if hasattr(link, 'source') and hasattr(link.source, 'register_with_link'):
-                source_success = await link.source.register_with_link(link, "source")
-                success = success and source_success
+            # Check 1: Validate all steps have proper data flow
+            self._validate_step_data_flow()
 
-            # Register with target data unit (for future enhancements)
-            if hasattr(link, 'target') and hasattr(link.target, 'register_with_link'):
-                target_success = await link.target.register_with_link(link, "target")
-                success = success and target_success
+            # Check 2: Detect circular dependencies
+            self._validate_no_circular_dependencies()
 
-            if success and self.enable_logging and self.nb_logger:
-                self.nb_logger.debug(f"✅ Auto-registered link {link.name} with data units")
+            # Check 3: Find unreachable steps
+            self._validate_no_unreachable_steps()
 
-            return success
+            # Check 4: Validate step configurations
+            self._validate_step_configurations()
+
+            self.workflow_logger.info("✅ FAIL-FAST: Workflow integrity validation passed")
 
         except Exception as e:
-            if self.enable_logging and self.nb_logger:
-                self.nb_logger.error(
-                    f"❌ Failed to register link {link.name} with data units: {e}")
+            raise ComponentConfigurationError(
+                f"FAIL-FAST: Workflow integrity validation failed: {e}. "
+                f"Fix the workflow structure before execution."
+            ) from e
+
+    def _validate_step_data_flow(self) -> None:
+        """Validate that all steps have proper data sources and consumers."""
+        issues = []
+
+        for step_name, step_config in self.workflow_config.steps.items():
+            # Check if step has input data units that need sources
+            if hasattr(step_config, 'input_data_units'):
+                for input_name, input_config in step_config.input_data_units.items():
+                    if not self._has_data_source_for_step_input(step_name, input_name):
+                        issues.append(
+                            f"Step '{step_name}' input '{input_name}' has no data source. "
+                            f"Add a link from another step's output or provide initial data."
+                        )
+
+            # Check if step has output data units that are consumed
+            if hasattr(step_config, 'output_data_units'):
+                for output_name, output_config in step_config.output_data_units.items():
+                    if not self._has_data_consumer_for_step_output(step_name, output_name):
+                        issues.append(
+                            f"Step '{step_name}' output '{output_name}' has no consumer. "
+                            f"Add a link to another step's input or mark as final output."
+                        )
+
+        if issues:
+            raise ValueError(f"Data flow issues found:\n" + "\n".join(f"  - {issue}" for issue in issues))
+
+    def _validate_no_circular_dependencies(self) -> None:
+        """Detect circular dependencies in the workflow graph."""
+        # Build dependency graph
+        dependencies = {}
+        for step_name in self.workflow_config.steps.keys():
+            dependencies[step_name] = self._get_step_dependencies(step_name)
+
+        # Detect cycles using DFS
+        visited = set()
+        rec_stack = set()
+
+        def has_cycle(node):
+            if node in rec_stack:
+                return True
+            if node in visited:
+                return False
+
+            visited.add(node)
+            rec_stack.add(node)
+
+            for neighbor in dependencies.get(node, []):
+                if has_cycle(neighbor):
+                    return True
+
+            rec_stack.remove(node)
             return False
 
-    async def get_automatic_trigger_statistics(self) -> Dict[str, Any]:
-        """Get statistics about automatic triggers in the workflow."""
-        stats = {
-            'total_automatic_triggers': 0,
-            'input_triggers': 0,
-            'output_triggers': 0,
-            'link_triggers': 0,
-            'steps_with_auto_triggers': 0,
-            'data_units_with_auto_triggers': 0
-        }
+        for step_name in dependencies:
+            if step_name not in visited:
+                if has_cycle(step_name):
+                    raise ValueError(
+                        f"Circular dependency detected involving step '{step_name}'. "
+                        f"This would cause infinite loops. Review step dependencies."
+                    )
 
-        # Count triggers in steps
-        if hasattr(self, 'child_steps'):
-            for step in self.child_steps.values():
-                step_has_auto_triggers = False
+    def _validate_no_unreachable_steps(self) -> None:
+        """Find steps that can never be executed."""
+        # Find entry points (steps with no dependencies or external inputs)
+        entry_points = []
+        for step_name in self.workflow_config.steps.keys():
+            dependencies = self._get_step_dependencies(step_name)
+            if not dependencies:
+                entry_points.append(step_name)
 
-                # Get step statistics
-                if hasattr(step, 'get_automatic_trigger_statistics'):
-                    step_stats = await step.get_automatic_trigger_statistics()
-                    stats['total_automatic_triggers'] += step_stats.get('total_automatic_triggers', 0)
-                    stats['input_triggers'] += step_stats.get('input_triggers', 0)
-                    stats['output_triggers'] += step_stats.get('output_triggers', 0)
-                    stats['data_units_with_auto_triggers'] += step_stats.get('data_units_with_auto_triggers', 0)
+        if not entry_points:
+            raise ValueError(
+                "No entry points found. At least one step must have external input or no dependencies."
+            )
 
-                    if step_stats.get('total_automatic_triggers', 0) > 0:
-                        step_has_auto_triggers = True
+        # Find reachable steps from entry points
+        reachable = set()
 
-                if step_has_auto_triggers:
-                    stats['steps_with_auto_triggers'] += 1
+        def mark_reachable(step_name):
+            if step_name in reachable:
+                return
+            reachable.add(step_name)
+            for dependent in self._get_step_dependents(step_name):
+                mark_reachable(dependent)
 
-        # Count link triggers
-        if hasattr(self, 'workflow_links'):
-            for link in self.workflow_links.values():
-                if hasattr(link, 'source') and hasattr(link.source, 'automatic_trigger_count'):
-                    link_trigger_count = link.source.automatic_trigger_count
-                    stats['link_triggers'] += link_trigger_count
+        for entry_point in entry_points:
+            mark_reachable(entry_point)
 
-        return stats
+        # Find unreachable steps
+        all_steps = set(self.workflow_config.steps.keys())
+        unreachable = all_steps - reachable
 
-    async def disable_all_automatic_triggers(self) -> None:
-        """Disable all automatic triggers in the workflow."""
-        if hasattr(self, 'child_steps'):
-            for step in self.child_steps.values():
-                if hasattr(step, 'disable_automatic_triggers'):
-                    await step.disable_automatic_triggers()
+        if unreachable:
+            raise ValueError(
+                f"Unreachable steps found: {list(unreachable)}. "
+                f"These steps will never execute. Fix the workflow graph."
+            )
 
-        if self.enable_logging and self.nb_logger:
-            self.nb_logger.info("🚫 Disabled all automatic triggers in workflow")
+    def _validate_step_configurations(self) -> None:
+        """Validate individual step configurations."""
+        for step_name, step_config in self.workflow_config.steps.items():
+            # Check if step class exists
+            if hasattr(step_config, 'class'):
+                try:
+                    from .component_base import import_class_from_path
+                    step_class = import_class_from_path(getattr(step_config, 'class'))
+                except ImportError as e:
+                    raise ValueError(
+                        f"Step '{step_name}' class '{getattr(step_config, 'class')}' not found: {e}"
+                    )
+
+                # Check if step class has required methods
+                if not hasattr(step_class, 'process'):
+                    raise ValueError(
+                        f"Step '{step_name}' class '{getattr(step_config, 'class')}' missing 'process' method"
+                    )
+
+    def _has_data_source_for_step_input(self, step_name: str, input_name: str) -> bool:
+        """Check if a step input has a data source."""
+        target_reference = f"{step_name}.{input_name}"
+
+        # Check resolved links for this input
+        if hasattr(self, '_resolved_components') and 'links' in self._resolved_components:
+            for link_id, link_instance in self._resolved_components['links'].items():
+                if hasattr(link_instance, 'target'):
+                    # Get target name from the link instance
+                    target_name = getattr(link_instance.target, 'name', str(link_instance.target))
+                    if target_name == target_reference:
+                        return True
+
+        # Fallback: Check workflow config links
+        for link_id, link_config in self.workflow_config.links.items():
+            if hasattr(link_config, 'config') and hasattr(link_config.config, 'target'):
+                if link_config.config.target == target_reference:
+                    return True
+
+        return False
+
+    def _has_data_consumer_for_step_output(self, step_name: str, output_name: str) -> bool:
+        """Check if a step output has a consumer."""
+        source_reference = f"{step_name}.{output_name}"
+
+        # Check resolved links for this output
+        if hasattr(self, '_resolved_components') and 'links' in self._resolved_components:
+            for link_id, link_instance in self._resolved_components['links'].items():
+                if hasattr(link_instance, 'source'):
+                    # Get source name from the link instance
+                    source_name = getattr(link_instance.source, 'name', str(link_instance.source))
+                    if source_name == source_reference:
+                        return True
+
+        # Fallback: Check workflow config links
+        for link_id, link_config in self.workflow_config.links.items():
+            if hasattr(link_config, 'config') and hasattr(link_config.config, 'source'):
+                if link_config.config.source == source_reference:
+                    return True
+
+        return False
+
+    def _get_step_dependencies(self, step_name: str) -> List[str]:
+        """Get list of steps that this step depends on."""
+        dependencies = []
+        for link_config in self.workflow_config.links:
+            if (hasattr(link_config, 'target') and
+                link_config.target.startswith(f"{step_name}.")):
+                source_step = link_config.source.split('.')[0]
+                if source_step != step_name:  # Avoid self-dependencies
+                    dependencies.append(source_step)
+        return dependencies
+
+    def _get_step_dependents(self, step_name: str) -> List[str]:
+        """Get list of steps that depend on this step."""
+        dependents = []
+        for link_config in self.workflow_config.links:
+            if (hasattr(link_config, 'source') and
+                link_config.source.startswith(f"{step_name}.")):
+                target_step = link_config.target.split('.')[0]
+                if target_step != step_name:  # Avoid self-dependencies
+                    dependents.append(target_step)
+        return dependents
+
+
+# Utility functions for workflow creation
+
+
+async def create_workflow(config: Union[WorkflowConfig, Dict[str, Any], str], **kwargs) -> Workflow:
+    """
+    Create and initialize a workflow.
+
+    Args:
+        config: Workflow configuration (WorkflowConfig, dict, or path to YAML file)
+        **kwargs: Additional arguments passed to workflow initialization
+
+    Returns:
+        Initialized Workflow instance
+    """
+    if isinstance(config, str):
+        # Load from file path
+        import tempfile
+        import yaml
+
+        with open(config, 'r') as f:
+            config_dict = yaml.safe_load(f)
+
+        # Create temporary config file for from_config
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.yml', delete=False) as f:
+            yaml.dump(config_dict, f)
+            temp_config_path = f.name
+        workflow = Workflow.from_config(temp_config_path)
+        import os
+        os.unlink(temp_config_path)
+    else:
+        workflow = Workflow.from_config(config)
+
+    await workflow.initialize()
+
+    return workflow
+
+
+async def create_workflow_from_config(config: Union[str, Dict, WorkflowConfig]) -> 'Workflow':
+    """
+    Create and initialize a workflow from configuration.
+
+    Args:
+        config: Workflow configuration (WorkflowConfig, dict, or path to YAML file)
+
+    Returns:
+        Initialized Workflow instance
+    """
+    if isinstance(config, str):
+        # Load from file path
+        import tempfile
+        import yaml
+
+        with open(config, 'r') as f:
+            config_dict = yaml.safe_load(f)
+
+        # Create temporary config file for from_config
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.yml', delete=False) as f:
+            yaml.dump(config_dict, f)
+            temp_config_path = f.name
+        workflow = Workflow.from_config(temp_config_path)
+        import os
+        os.unlink(temp_config_path)
+    elif isinstance(config, dict):
+        # Dict config - need to save to file first
+        import tempfile
+        import yaml
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.yml', delete=False) as f:
+            yaml.dump(config, f)
+            temp_config_path = f.name
+        workflow = Workflow.from_config(temp_config_path)
+        import os
+        os.unlink(temp_config_path)
+    elif isinstance(config, WorkflowConfig):
+        # Config object - need to save to file first
+        import tempfile
+        import yaml
+        config_dict = config.to_dict() if hasattr(
+            config, 'to_dict') else config.__dict__
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.yml', delete=False) as f:
+            yaml.dump(config_dict, f)
+            temp_config_path = f.name
+        workflow = Workflow.from_config(temp_config_path)
+        import os
+        os.unlink(temp_config_path)
+    else:
+        workflow = Workflow.from_config(config)
+
+    await workflow.initialize()
+
+    return workflow
 
 
 # Factory function for creating workflows

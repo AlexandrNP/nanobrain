@@ -545,9 +545,12 @@ class BaseStep(FromConfigBase, ABC):
         # StepBase-specific initialization (parent already sets self.config, self.name, self.description)
         # Override with step-specific logger that includes debug_mode
         self.nb_logger = get_logger(
-            f"step.{self.name}", debug_mode=component_config['debug_mode'])
+            f"step.{self.name}", category="steps", debug_mode=component_config['debug_mode'])
         self.nb_logger.info(
             f"Initializing step: {self.name}", step_name=self.name, config=config.model_dump())
+
+        # FAIL-FAST: Validate step implementation for common errors
+        self._validate_step_implementation()
 
         # Executor for running the step
         self.executor = dependencies['executor']
@@ -620,6 +623,101 @@ class BaseStep(FromConfigBase, ABC):
         self._total_processing_time = 0.0
 
     # BaseStep inherits FromConfigBase.__init__ which prevents direct instantiation
+
+    def _validate_step_implementation(self) -> None:
+        """
+        FAIL-FAST: Validate step implementation for common errors.
+
+        This catches implementation bugs at initialization time instead of
+        runtime, providing immediate feedback to developers.
+        """
+        import inspect
+        from .component_base import ComponentConfigurationError
+
+        try:
+            # Get step source code for analysis
+            step_source = inspect.getsource(self.__class__)
+
+            # Check for logger attribute misuse (the bug that caused 3 hours of debugging)
+            if 'self.logger' in step_source:
+                # Find line numbers where self.logger is used
+                lines_with_logger = []
+                for i, line in enumerate(step_source.split('\n'), 1):
+                    if 'self.logger' in line and 'self.nb_logger' not in line:
+                        lines_with_logger.append(i)
+
+                if lines_with_logger:
+                    raise ComponentConfigurationError(
+                        f"FAIL-FAST: Step {self.name} ({self.__class__.__name__}) uses 'self.logger' "
+                        f"on lines {lines_with_logger}. Use 'self.nb_logger' instead for framework compliance. "
+                        f"This error prevents workflow execution to avoid AttributeError at runtime."
+                    )
+
+            # Check for required process method
+            if not hasattr(self, 'process'):
+                raise ComponentConfigurationError(
+                    f"FAIL-FAST: Step {self.name} ({self.__class__.__name__}) missing required 'process' method. "
+                    f"Add 'async def process(self, input_data, **kwargs)' to your step class."
+                )
+
+            # Check if process method is async
+            if hasattr(self, 'process') and not inspect.iscoroutinefunction(self.process):
+                raise ComponentConfigurationError(
+                    f"FAIL-FAST: Step {self.name} ({self.__class__.__name__}).process() must be async. "
+                    f"Change 'def process' to 'async def process'."
+                )
+
+            # ADDITIONAL VALIDATION RULES
+
+            # Check for missing _init_from_config method
+            if not hasattr(self.__class__, '_init_from_config'):
+                raise ComponentConfigurationError(
+                    f"FAIL-FAST: Step {self.name} ({self.__class__.__name__}) missing '_init_from_config' method. "
+                    f"Add 'def _init_from_config(self, config, component_config, dependencies)' method."
+                )
+
+            # Check for proper inheritance
+            if not hasattr(self, 'nb_logger'):
+                raise ComponentConfigurationError(
+                    f"FAIL-FAST: Step {self.name} ({self.__class__.__name__}) missing 'nb_logger' attribute. "
+                    f"Ensure step inherits from Step or BaseStep and calls super()._init_from_config()."
+                )
+
+            # Check if nb_logger has required methods (framework compatibility)
+            if not hasattr(self.nb_logger, 'info'):
+                raise ComponentConfigurationError(
+                    f"FAIL-FAST: Step {self.name} nb_logger is not a proper NanoBrainLogger. "
+                    f"Use get_logger() with category='steps' parameter."
+                )
+
+            # Check for common async/await issues in process method
+            if hasattr(self, 'process'):
+                process_source = inspect.getsource(self.process)
+                if 'await ' not in process_source and 'async def' in process_source:
+                    self.nb_logger.warning(
+                        f"VALIDATION WARNING: Step {self.name}.process() is async but contains no 'await' statements. "
+                        f"This might indicate missing async calls or unnecessary async declaration."
+                    )
+
+        except ComponentConfigurationError:
+            # Re-raise configuration errors
+            raise
+        except Exception as e:
+            # If validation itself fails, log but don't block initialization
+            self.nb_logger.warning(f"Step validation failed for {self.name}: {e}")
+            # Don't raise - validation failure shouldn't block valid steps
+
+
+
+
+
+
+
+
+
+
+
+
 
     def _create_step_data_units(self, config: StepConfig) -> None:
         """
@@ -711,37 +809,41 @@ class BaseStep(FromConfigBase, ABC):
             self.nb_logger.debug(f"Step {self.name} already initialized")
             return
 
-        async with self.nb_logger.async_execution_context(
-            OperationType.STEP_EXECUTE,
-            f"{self.name}.initialize"
-        ) as context:
+        # FAIL-FAST: Check if logger has async_execution_context method
+        if hasattr(self.nb_logger, 'async_execution_context'):
+            async with self.nb_logger.async_execution_context(
+                OperationType.STEP_EXECUTE,
+                f"{self.name}.initialize"
+            ) as context:
+                await self._initialize_step_internal()
+        else:
+            # Fallback for loggers without async context support
+            self.nb_logger.info(f"Initializing step {self.name} (fallback mode)")
+            await self._initialize_step_internal()
 
-            # Phase 2: Initialize data units (make them ready for binding)
-            await self._initialize_step_data_units()
+    async def _initialize_step_internal(self) -> None:
+        """Internal step initialization logic"""
+        # Phase 2: Initialize data units (make them ready for binding)
+        await self._initialize_step_data_units()
 
-            # Phase 3: Resolve and bind triggers to data units
-            await self._resolve_and_bind_step_triggers()
+        # Phase 3: Resolve and bind triggers to data units
+        await self._resolve_and_bind_step_triggers()
 
-            # Initialize other components (executor, legacy components)
-            await self._initialize_other_components()
+        # Initialize other components (executor, legacy components)
+        await self._initialize_other_components()
 
-            self._is_initialized = True
-            context.metadata['input_count'] = len(self.input_data_units)
-            context.metadata['step_input_count'] = len(
-                self.step_input_data_units)
-            context.metadata['step_output_count'] = len(
-                self.step_output_data_units)
-            context.metadata['step_trigger_count'] = len(self.step_triggers)
-            context.metadata['has_output'] = self.output_data_unit is not None
-            context.metadata['has_trigger'] = self.trigger is not None
+        self._is_initialized = True
 
-        self.nb_logger.info(f"Step {self.name} initialized successfully",
-                            input_count=len(self.input_data_units),
-                            step_input_count=len(self.step_input_data_units),
-                            step_output_count=len(self.step_output_data_units),
-                            step_trigger_count=len(self.step_triggers),
-                            has_output=self.output_data_unit is not None,
-                            has_trigger=self.trigger is not None)
+        # Log initialization completion
+        self.nb_logger.info(
+            f"Step {self.name} initialized successfully - "
+            f"inputs: {len(self.input_data_units)}, "
+            f"step_inputs: {len(self.step_input_data_units)}, "
+            f"step_outputs: {len(self.step_output_data_units)}, "
+            f"triggers: {len(self.step_triggers)}, "
+            f"has_output: {self.output_data_unit is not None}, "
+            f"has_trigger: {self.trigger is not None}"
+        )
 
     async def _initialize_step_data_units(self) -> None:
         """
@@ -1094,14 +1196,19 @@ class BaseStep(FromConfigBase, ABC):
 
     async def _execute_on_trigger(self, trigger_event: Dict[str, Any]) -> None:
         """Execute step when triggered by data unit change (EVENT-DRIVEN EXECUTION)"""
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"🔥 BRUTAL TRUTH: _execute_on_trigger called for step {self.name}")
         try:
-            self.nb_logger.info(
-                f"🔥 Step {self.name} triggered by {trigger_event['trigger_id']}")
+            logger.info(f"🔥 Step {self.name} triggered by {trigger_event['trigger_id']}")
 
             # Get input data from triggered data unit
+            logger.info(f"🔥 BRUTAL TRUTH: About to collect input data for step {self.name}")
             input_data = {}
             for unit_name, data_unit in self.step_input_data_units.items():
+                logger.info(f"🔥 BRUTAL TRUTH: Getting data from unit {unit_name}")
                 input_data[unit_name] = await data_unit.get()
+                logger.info(f"🔥 BRUTAL TRUTH: Got data from unit {unit_name}, type: {type(input_data[unit_name])}")
 
             # ✅ CRITICAL DEBUG: Add logging before calling executor
             self.nb_logger.info(f"🚀 ABOUT TO CALL EXECUTOR for step {self.name}")
@@ -1111,45 +1218,39 @@ class BaseStep(FromConfigBase, ABC):
             # Execute step business logic through executor (not direct process call)
             async def execute_wrapper():
                 self.nb_logger.info(f"🔥 BRUTAL TRUTH: Inside triggered execute_wrapper, calling _execute_process")
-                return await self._execute_process(input_data)
 
+                # FAIL-FAST: Add execution timeout protection
+                timeout_seconds = getattr(self.config, 'execution_timeout', 300)  # 5 minutes default
+
+                try:
+                    result = await asyncio.wait_for(
+                        self._execute_process(input_data),
+                        timeout=timeout_seconds
+                    )
+                    return result
+                except asyncio.TimeoutError:
+                    from .component_base import ComponentConfigurationError
+                    raise ComponentConfigurationError(
+                        f"FAIL-FAST: Step {self.name} exceeded {timeout_seconds}s timeout. "
+                        f"This indicates a hanging step. Check for infinite loops, blocking operations, "
+                        f"or increase execution_timeout in step configuration."
+                    )
+
+            logger.info(f"🔥 BRUTAL TRUTH: About to call executor.execute() for step {self.name}")
             self.nb_logger.info(f"🔥 BRUTAL TRUTH: Calling {type(self.executor).__name__}.execute() from trigger")
             result = await self.executor.execute(execute_wrapper)
-
-            # ✅ CRITICAL DEBUG: Add logging after calling executor
-            self.nb_logger.info(f"🚀 EXECUTOR COMPLETED for step {self.name}")
-            self.nb_logger.info(f"🚀 Result keys: {list(result.keys()) if isinstance(result, dict) else 'Not a dict'}")
+            logger.info(f"🔥 BRUTAL TRUTH: MIRACLE! Executor returned result: {type(result)}")
+            self.nb_logger.info(f"🔥 BRUTAL TRUTH: Executor returned result: {type(result)}")
 
             # ✅ CRITICAL DEADLOCK FIX: Update output data units with proper data validation
-            for unit_name, data_unit in self.step_output_data_units.items():
-                if unit_name in result:
-                    result_data = result[unit_name]
+            logger.info(f"🔥 BRUTAL TRUTH: About to update output data units for step {self.name}")
+            logger.info(f"🔥 BRUTAL TRUTH: Step output data units: {list(self.step_output_data_units.keys())}")
+            logger.info(f"🔥 BRUTAL TRUTH: Result keys: {list(result.keys()) if isinstance(result, dict) else 'Not a dict'}")
 
-                    # ✅ CRITICAL FIX: Prevent storing DataUnit objects as data
-                    if hasattr(result_data, '__class__') and 'DataUnit' in result_data.__class__.__name__:
-                        self.nb_logger.warning(
-                            f"⚠️ Preventing DataUnit object storage in {unit_name} - extracting actual data")
-                        # Extract the actual data from the DataUnit object
-                        if hasattr(result_data, '_data'):
-                            result_data = result_data._data
-                        elif hasattr(result_data, 'get'):
-                            try:
-                                result_data = await result_data.get()
-                            except Exception as e:
-                                self.nb_logger.error(f"Failed to extract data from DataUnit: {e}")
-                                result_data = None
-                        else:
-                            self.nb_logger.error(f"Cannot extract data from DataUnit object: {type(result_data)}")
-                            result_data = None
+            # Framework only ensures result exists - business logic validation is step responsibility
 
-                    # Only set if we have valid data
-                    if result_data is not None:
-                        await data_unit.set(result_data)
-                        self.nb_logger.info(
-                            f"📤 Updated output data unit: {unit_name} with {type(result_data).__name__}")
-                    else:
-                        self.nb_logger.warning(
-                            f"⚠️ Skipping output data unit update for {unit_name} - no valid data")
+            # ✅ BRUTAL TRUTH: Call the unified output data unit update method
+            await self._update_output_data_units(result)
 
             # Update execution statistics
             self._execution_count += 1
@@ -1297,8 +1398,15 @@ class BaseStep(FromConfigBase, ABC):
                     return await self._execute_process(input_data, **kwargs)
 
                 self.nb_logger.info(f"🔥 BRUTAL TRUTH: Calling {type(self.executor).__name__}.execute(execute_wrapper)")
-                result = await self.executor.execute(execute_wrapper)
-                self.nb_logger.info(f"🔥 BRUTAL TRUTH: Executor returned result: {type(result)}")
+                self.nb_logger.info(f"🔥 BRUTAL TRUTH: About to await executor.execute() - THIS IS WHERE IT HANGS")
+
+                # CRITICAL DEBUG: Try to identify the exact hang point
+                try:
+                    result = await self.executor.execute(execute_wrapper)
+                    self.nb_logger.info(f"🔥 BRUTAL TRUTH: MIRACLE! Executor returned result: {type(result)}")
+                except Exception as e:
+                    self.nb_logger.error(f"🔥 BRUTAL TRUTH: Executor await failed with exception: {e}")
+                    raise
                 processing_time = time.time() - start_time
 
                 self._execution_count += 1
@@ -1306,7 +1414,7 @@ class BaseStep(FromConfigBase, ABC):
                 self._total_processing_time += processing_time
                 self._last_result = result
 
-                # Store result in output data unit
+                # Store result in output data unit (legacy single output)
                 if self.output_data_unit and result is not None:
                     await self.output_data_unit.write(result)
 
@@ -1317,6 +1425,10 @@ class BaseStep(FromConfigBase, ABC):
                             data_type=type(result).__name__,
                             size_bytes=len(str(result)) if result else 0
                         )
+
+                # ✅ BRUTAL TRUTH: Update step output data units (modern multiple outputs)
+                if self.step_output_data_units and result is not None:
+                    await self._update_output_data_units(result)
 
                 # Propagate data through links
                 if self.links and result is not None:
@@ -1366,6 +1478,62 @@ class BaseStep(FromConfigBase, ABC):
     async def _execute_process(self, input_data: Dict[str, Any], **kwargs) -> Any:
         """Wrapper for process method to be executed by executor."""
         return await self.process(input_data, **kwargs)
+
+    async def _update_output_data_units(self, result: Any) -> None:
+        """
+        Unified method to update output data units from step execution result.
+
+        BRUTAL TRUTH: This method consolidates the output data unit update logic
+        that was duplicated across _execute_on_trigger and execute methods.
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+
+        print(f"🔥 BRUTAL TRUTH: _update_output_data_units ENTRY for step {self.name}")  # Force print
+
+        logger.info(f"🔥 BRUTAL TRUTH: About to update output data units for step {self.name}")
+        logger.info(f"🔥 BRUTAL TRUTH: Step output data units: {list(self.step_output_data_units.keys())}")
+        logger.info(f"🔥 BRUTAL TRUTH: Result keys: {list(result.keys()) if isinstance(result, dict) else 'Not a dict'}")
+
+        for unit_name, data_unit in self.step_output_data_units.items():
+            logger.info(f"🔥 BRUTAL TRUTH: Processing output data unit: {unit_name}")
+            if unit_name in result:
+                logger.info(f"🔥 BRUTAL TRUTH: Found {unit_name} in result, extracting data")
+                result_data = result[unit_name]
+
+                # ✅ CRITICAL FIX: Prevent storing DataUnit objects as data
+                if hasattr(result_data, '__class__') and 'DataUnit' in result_data.__class__.__name__:
+                    self.nb_logger.warning(
+                        f"⚠️ Preventing DataUnit object storage in {unit_name} - extracting actual data")
+                    # Extract the actual data from the DataUnit object
+                    if hasattr(result_data, '_data'):
+                        result_data = result_data._data
+                    elif hasattr(result_data, 'get'):
+                        try:
+                            result_data = await result_data.get()
+                        except Exception as e:
+                            self.nb_logger.error(f"Failed to extract data from DataUnit: {e}")
+                            result_data = None
+                    else:
+                        self.nb_logger.error(f"Cannot extract data from DataUnit object: {type(result_data)}")
+                        result_data = None
+
+                # Only set if we have valid data
+                logger.info(f"🔥 BRUTAL TRUTH: About to check if result_data is not None: {result_data is not None}")
+                if result_data is not None:
+                    logger.info(f"🔥 BRUTAL TRUTH: About to call data_unit.set() for {unit_name}")
+                    try:
+                        await data_unit.set(result_data)
+                        logger.info(f"🔥 BRUTAL TRUTH: data_unit.set() completed for {unit_name}")
+                        self.nb_logger.info(
+                            f"📤 Updated output data unit: {unit_name} with {type(result_data).__name__}")
+                    except Exception as e:
+                        logger.error(f"🔥 BRUTAL TRUTH: data_unit.set() FAILED for {unit_name}: {e}")
+                        raise
+                else:
+                    logger.warning(f"🔥 BRUTAL TRUTH: Skipping data unit update - result_data is None")
+                    self.nb_logger.warning(
+                        f"⚠️ Skipping output data unit update for {unit_name} - no valid data")
 
     async def _propagate_through_links(self, data: Any) -> None:
         """Propagate data through all links."""
@@ -2532,3 +2700,45 @@ class AgentStep(BaseStep):
             'conversation_tracking_enabled': self.enable_conversation_tracking,
             'max_conversation_length': self.max_conversation_length
         }
+
+    async def _execute_process(self, input_data: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        """
+        Override BaseStep._execute_process to properly map AgentResponse keys to output data unit names.
+
+        BRUTAL TRUTH: This fixes the core AgentStep output data unit mapping issue where
+        AgentResponse.to_dict() returns {'response': '...'} but BaseStep expects keys
+        that match the configured output data unit names (e.g., {'output': '...'}).
+        """
+        # Call the parent process method to get the AgentResponse dictionary
+        agent_result = await self.process(input_data, **kwargs)
+
+        # Map AgentResponse keys to configured output data unit names
+        mapped_result = {}
+
+        # Get the configured output data unit names
+        output_unit_names = list(self.step_output_data_units.keys())
+
+        if output_unit_names:
+            # Map the 'response' key from AgentResponse to the first output data unit
+            primary_output_unit = output_unit_names[0]
+            if 'response' in agent_result:
+                mapped_result[primary_output_unit] = agent_result['response']
+                self.nb_logger.info(f"🔥 BRUTAL TRUTH: Mapped 'response' -> '{primary_output_unit}' for AgentStep output data unit")
+
+            # Preserve other fields for additional output data units or metadata
+            for key, value in agent_result.items():
+                if key != 'response':  # Don't duplicate the main response
+                    # Check if there's a matching output data unit for this key
+                    if key in output_unit_names:
+                        mapped_result[key] = value
+                        self.nb_logger.info(f"🔥 BRUTAL TRUTH: Mapped '{key}' -> '{key}' for AgentStep output data unit")
+        else:
+            # No output data units configured, return original result
+            mapped_result = agent_result
+            self.nb_logger.warning("⚠️ No output data units configured for AgentStep, returning original result")
+
+        self.nb_logger.info(f"🔥 BRUTAL TRUTH: AgentStep result mapping complete")
+        self.nb_logger.info(f"   Original keys: {list(agent_result.keys())}")
+        self.nb_logger.info(f"   Mapped keys: {list(mapped_result.keys())}")
+
+        return mapped_result

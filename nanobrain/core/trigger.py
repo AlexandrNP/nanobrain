@@ -20,6 +20,8 @@ from .component_base import FromConfigBase, ComponentConfigurationError, Compone
 from .logging_system import get_logger, get_system_log_manager
 # Import new ConfigBase for constructor prohibition
 from .config.config_base import ConfigBase
+# Import event types for proper enum-based event handling
+from .event_types import DataUnitEventType, validate_event_type, DEFAULT_DATA_UNIT_EVENT
 
 logger = logging.getLogger(__name__)
 
@@ -1000,7 +1002,11 @@ class DataUnitChangeTrigger(TriggerBase):
         """Initialize DataUnitChangeTrigger with resolved dependencies"""
         super()._init_from_config(config, component_config, dependencies)
         self.data_unit = dependencies.get('data_unit')
-        self.event_type = dependencies.get('event_type', 'data_unit_updated')
+        # BRUTAL TRUTH: Fixed inconsistent default - now matches data unit event types
+        self.event_type = validate_event_type(
+            dependencies.get('event_type', DEFAULT_DATA_UNIT_EVENT),
+            DataUnitEventType
+        ).value
         self.bound_actions = []
 
         if not self.data_unit:
@@ -1030,7 +1036,17 @@ class DataUnitChangeTrigger(TriggerBase):
         self._is_active = True
 
         # Register with data unit's change listener system
+        if self.enable_logging and self.nb_logger:
+            self.nb_logger.info(f"🔗 BRUTAL TRUTH: About to register trigger {self.name} with data unit {getattr(self.data_unit, 'name', 'unknown')}")
+            self.nb_logger.info(f"🔗 Data unit type: {type(self.data_unit)}")
+            self.nb_logger.info(f"🔗 Data unit ID: {id(self.data_unit)}")
+
         self.data_unit.register_change_listener(self._on_data_unit_changed)
+
+        # BRUTAL TRUTH: Add debugging for change listener registration
+        if self.enable_logging and self.nb_logger:
+            self.nb_logger.info(f"🔗 BRUTAL TRUTH: Trigger {self.name} registered as change listener on {getattr(self.data_unit, 'name', 'unknown')}")
+            self.nb_logger.info(f"🔗 Data unit has {len(self.data_unit._change_listeners)} change listeners")
 
         if self.enable_logging and self.nb_logger:
             self.nb_logger.info(
@@ -1053,9 +1069,22 @@ class DataUnitChangeTrigger(TriggerBase):
     async def _on_data_unit_changed(self, change_event: Dict[str, Any]) -> None:
         """Handle data unit change event"""
         try:
-            # Check if event type matches (if specified)
+            # BRUTAL TRUTH: Add debugging for all change events
+            if self.enable_logging and self.nb_logger:
+                self.nb_logger.info(f"🔗 BRUTAL TRUTH: Trigger {self.name} received change event: {change_event}")
+
+            # Check if event type matches (if specified) - FIXED: Add debug logging
             if hasattr(self, 'event_type') and self.event_type != 'all':
-                if change_event.get('operation') != self.event_type:
+                operation = change_event.get('operation')
+                if self.enable_logging and self.nb_logger:
+                    self.nb_logger.info(f"🔗 Checking event type: expected '{self.event_type}', got '{operation}'")
+
+                if operation != self.event_type:
+                    # BRUTAL TRUTH: Log when triggers are ignored due to event type mismatch
+                    if self.enable_logging and self.nb_logger:
+                        self.nb_logger.warning(
+                            f"🚫 Trigger {self.name} ignored event - expected '{self.event_type}', got '{operation}'"
+                        )
                     return
 
             # Create trigger event
@@ -1068,8 +1097,18 @@ class DataUnitChangeTrigger(TriggerBase):
             }
 
             # Execute bound actions immediately (no polling delay)
+            logger.info(f"🔥 BRUTAL TRUTH: Trigger {self.name} executing {len(self.bound_actions)} bound actions")
             for action in self.bound_actions:
-                await action(trigger_event)
+                logger.info(f"🔥 BRUTAL TRUTH: About to call bound action: {action}")
+                try:
+                    await action(trigger_event)
+                    logger.info(f"🔥 BRUTAL TRUTH: Bound action completed successfully: {action}")
+                except Exception as e:
+                    logger.error(f"🔥 BRUTAL TRUTH: Bound action failed with exception: {e}")
+                    logger.error(f"🔥 BRUTAL TRUTH: Exception type: {type(e).__name__}")
+                    import traceback
+                    logger.error(f"🔥 BRUTAL TRUTH: Traceback: {traceback.format_exc()}")
+                    raise
 
             # Also execute callbacks for compatibility
             await self._execute_callbacks(change_event)

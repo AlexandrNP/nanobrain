@@ -8,7 +8,7 @@
 # Basic trigger settings
 name: "DefaultTrigger"
 description: "Default trigger configuration"
-trigger_type: "manual"  # manual, data_updated, all_data_received, timer
+trigger_type: "manual"  # BRUTAL TRUTH: Updated to use enum values - manual, data_updated, all_data_received, timer
 
 # Common trigger settings
 enabled: true

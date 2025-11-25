@@ -113,12 +113,13 @@ class AcademyLink(LinkBase):
     def resolve_dependencies(cls, component_config: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """Resolve Academy agent handle and connection dependencies"""
 
-        # Get Academy manager and agent handle
-        academy_manager = kwargs.get('academy_manager')
+        # Get Academy manager from SINGLETON (never from kwargs to avoid serialization issues)
+        from nanobrain.core.academy_integration import AcademyIntegration
+        academy_manager = AcademyIntegration.get_academy_manager()
         proxystore_enabled = component_config.get('proxystore_enabled', False)
 
         if not academy_manager and not proxystore_enabled:
-            raise ValueError("AcademyLink requires academy_manager in dependencies or proxystore_enabled=True")
+            raise ValueError("AcademyLink requires Academy manager singleton to be initialized or proxystore_enabled=True")
 
         agent_handle_name = component_config.get('academy_agent_handle')
         if not agent_handle_name:
@@ -220,7 +221,7 @@ class AcademyLink(LinkBase):
         if self.enable_logging:
             self.logger.info(f"AcademyLink {link_name} stopped")
 
-    async def transfer(self, data: Any) -> Any:
+    async def transfer(self, data: Any) -> None:
         """Transfer data to remote Academy agent via action call and forward result to target"""
         link_name = getattr(self, 'name', 'academy_link')
         if not self._is_active or not self._is_connected:
@@ -251,7 +252,8 @@ class AcademyLink(LinkBase):
                 if self.enable_logging:
                     self.logger.debug(f"AcademyLink {link_name} transfer successful (attempt {attempt + 1})")
 
-                return result
+                # Return None for interface consistency with other links
+                return None
 
             except asyncio.TimeoutError:
                 self.logger.warning(f"AcademyLink {link_name} timeout on attempt {attempt + 1}")

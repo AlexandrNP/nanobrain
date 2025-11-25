@@ -570,10 +570,10 @@ class LocalExecutor(ExecutorBase):
             logger.info(f"LocalExecutor initialized with {self.config.max_workers} workers")
     
     async def execute(self, task: Any, **kwargs) -> Any:
-        """Execute a task locally."""
+        """Execute a task locally with proper async deadlock prevention."""
         if not self.is_initialized:
             await self.initialize()
-            
+
         async with self._semaphore:
             try:
                 # If task is a coroutine, await it
@@ -581,15 +581,31 @@ class LocalExecutor(ExecutorBase):
                     result = await task
                 # If task is callable, call it
                 elif callable(task):
-                    result = task(**kwargs)
-                    # If the result is a coroutine, await it
-                    if asyncio.iscoroutine(result):
-                        result = await result
+                    # CRITICAL BUG FIX: Handle async functions properly to prevent deadlock
+                    logger.info(f"🔥 BRUTAL TRUTH: LocalExecutor handling callable task: {task}")
+                    if asyncio.iscoroutinefunction(task):
+                        # For async functions, create a new task to avoid deadlock
+                        logger.info(f"🔥 BRUTAL TRUTH: LocalExecutor creating new task for async function {task}")
+                        async_task = asyncio.create_task(task(**kwargs))
+                        result = await async_task
+                        logger.info(f"🔥 BRUTAL TRUTH: LocalExecutor async task completed with result type: {type(result)}")
+                    else:
+                        # For regular functions, call directly
+                        logger.info(f"🔥 BRUTAL TRUTH: LocalExecutor calling regular function {task}")
+                        result = task(**kwargs)
+                        # If the result is a coroutine, handle it properly
+                        if asyncio.iscoroutine(result):
+                            logger.info(f"🔥 BRUTAL TRUTH: LocalExecutor function returned coroutine, creating task")
+                            async_task = asyncio.create_task(result)
+                            result = await async_task
+                            logger.info(f"🔥 BRUTAL TRUTH: LocalExecutor coroutine task completed with result type: {type(result)}")
+                        else:
+                            logger.info(f"🔥 BRUTAL TRUTH: LocalExecutor regular function completed with result type: {type(result)}")
                 else:
                     result = task
-                    
+
                 return result
-                
+
             except Exception as e:
                 logger.error(f"Task execution failed: {e}")
                 raise
