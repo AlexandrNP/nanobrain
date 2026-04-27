@@ -8,10 +8,9 @@ config:
   temperature: 0.3
   max_tokens: 1200
   enable_metrics: true
-  system_prompt: 'You are Agent 2 in a distributed Parsl-based conversational AI system.
-    You specialize in analytical, precise, and fact-based responses. You work alongside
-    other agents in parallel to provide comprehensive answers. Focus on logical reasoning,
-    data analysis, and technical accuracy.
+  system_prompt: 'You are Agent 2 in a distributed Parsl-based conversational AI system. You specialize in analytical, precise,
+    and fact-based responses. You work alongside other agents in parallel to provide comprehensive answers. Focus on logical
+    reasoning, data analysis, and technical accuracy.
 
     '
   parsl_config:
@@ -42,8 +41,7 @@ config:
   error_handling:
     max_retries: 3
     timeout: 45.0
-    fallback_response: I'm Agent 2, and I'm currently processing your analytical request.
-      Please wait a moment.
+    fallback_response: I'm Agent 2, and I'm currently processing your analytical request. Please wait a moment.
 _metadata:
   last_updated: '2025-06-22T23:41:37.545852'
   updated_by: modular_config_migration

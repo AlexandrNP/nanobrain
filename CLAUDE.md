@@ -1,0 +1,425 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Overview
+
+Nanobrain is an event-driven AI agent framework for distributed workflows. It's currently in research preview and has dependencies on HPC systems and external frameworks. The framework uses a mandatory configuration-driven architecture where ALL components are created through the `from_config()` pattern.
+
+## Core Architecture Principles
+
+### The `from_config()` Pattern (MANDATORY)
+
+**ALL components in Nanobrain MUST be created using `from_config()` - direct instantiation is explicitly forbidden.**
+
+```python
+# ✅ REQUIRED - Configuration-based creation
+agent = ConversationalAgent.from_config('config/agent.yml')
+step = MyStep.from_config('config/step.yml')
+workflow = Workflow.from_config('config/workflow.yml')
+
+# ❌ FORBIDDEN - Direct instantiation (will raise runtime errors)
+agent = ConversationalAgent(name="test")  # NEVER DO THIS
+step = MyStep()  # NEVER DO THIS
+```
+
+All components inherit from `FromConfigBase` (`nanobrain/core/component_base.py`), which enforces this pattern through:
+- Constructor prohibition using `__new__` override
+- YAML-first configuration loading
+- Recursive dependency resolution
+- Schema validation via Pydantic
+
+### Component Ownership Rules
+
+**Both workflows and steps can define their own data units. Steps own their data units and triggers. Workflows manage links between steps and can define workflow-level data units.**
+
+```yaml
+# Step configuration (config/data_preparation_step.yml)
+# Real example from demos/academylink_aurora_demo/
+name: data_preparation_step
+description: "Local data preparation step"
+
+# Step OWNS these data units
+input_data_units:
+  raw_input:
+    class: "nanobrain.core.data_unit.DataUnitMemory"
+    name: "raw_input"
+    description: "Raw input data for preparation"
+    persistent: false
+
+output_data_units:
+  prepared_data:
+    class: "nanobrain.core.data_unit.DataUnitMemory"
+    name: "prepared_data"
+    description: "Prepared data for heavy computation"
+    persistent: false
+
+# Executor configuration
+executor:
+  class: nanobrain.core.executor.LocalExecutor
+  config: local_step_executor.yml
+```
+
+```yaml
+# Workflow configuration (config/mixed_execution_workflow_aurora.yml)
+# Real example from demos/academylink_aurora_demo/
+name: academylink_aurora_workflow
+version: "2.0"
+
+# Workflow-level input/output data units
+input_data_units:
+  raw_input:
+    class: "nanobrain.core.data_unit.DataUnitMemory"
+    name: "raw_input"
+    description: "Raw input data for the workflow"
+    persistent: false
+
+output_data_units:
+  final_results:
+    class: "nanobrain.core.data_unit.DataUnitMemory"
+    name: "final_results"
+    description: "Final aggregated results from the workflow"
+    persistent: false
+
+# Workflow defines executors for different steps
+executors:
+  local_executor:
+    executor_type: local
+    name: local_executor
+    max_workers: 2
+    timeout: 60
+
+  aurora_executor:
+    executor_type: parsl
+    name: aurora_executor
+    parsl_config_file: ../aurora_parsl_executor.yml
+    timeout: 600
+
+# Steps reference their own configs and specify which executor to use
+steps:
+  data_preparation:
+    class: demos.academylink_aurora_demo.steps.DataPreparationStep
+    config: config/data_preparation_step.yml
+    executor: local_executor
+
+  aurora_computation:
+    class: demos.academylink_aurora_demo.steps.AuroraComputationStep
+    config: config/aurora_computation_step.yml
+    executor: aurora_executor
+
+  result_aggregation:
+    class: demos.academylink_aurora_demo.steps.ResultAggregationStep
+    config: config/result_aggregation_step.yml
+    executor: local_executor
+
+# Workflow's responsibility: LINKS between steps
+links:
+  # Academy computation link (for distributed execution)
+  aurora_computation_link:
+    class: "nanobrain.academy_integration.academy_link.AcademyLink"
+    config: "config/aurora_computation_link.yml"
+
+  aurora_results_link:
+    class: "nanobrain.academy_integration.academy_link.AcademyLink"
+    config: "config/aurora_results_link.yml"
+
+execution:
+  timeout: 600
+  retry_attempts: 2
+  parallel_execution: false
+```
+
+### Academy Link Configuration (for Distributed Execution)
+
+**Academy links enable data transfer between local and distributed (HPC) components:**
+
+```yaml
+# Link configuration (config/aurora_computation_link.yml)
+# Real example from demos/academylink_aurora_demo/
+class: "nanobrain.academy_integration.academy_link.AcademyLink"
+name: aurora_computation_link
+link_type: academy
+academy_agent_handle: aurora_computation_agent
+action_name: process
+source: "data_preparation.prepared_data"  # From local step
+target: "aurora_computation.aurora_input"  # To HPC step
+timeout_seconds: 300
+retry_attempts: 3
+auto_transfer: true
+proxystore_enabled: true
+proxystore_store_dir: "/home/onarykov/proxystore_academylink_aurora"
+proxystore_store_name: "academylink-aurora-workflow"
+proxystore_connector_type: "file"
+```
+
+### Event-Driven Data Flow
+
+Data flows through the system via this mandatory pattern:
+
+```
+1. Data deposited → Input DataUnit
+2. Trigger activates → Step executes
+3. Step processes → Output DataUnit
+4. Link transfers → Next Input DataUnit
+5. Repeat until workflow complete
+```
+
+Steps never call each other directly - all communication happens through DataUnits, Triggers, and Links.
+
+### Method Responsibility Matrix
+
+**Steps must implement `process()` with business logic and should NOT override `execute()`:**
+
+| Method | Responsibility | Subclass Should |
+|--------|---------------|-----------------|
+| `execute()` | Infrastructure (environment setup, data collection, executor delegation) | ❌ NOT override (except extraordinary circumstances) |
+| `process()` | Business logic (processing, algorithms, transformations) | ✅ ALWAYS implement |
+| `_execute_process()` | Internal bridge (delegates to process) | ❌ NEVER override |
+
+```python
+# ✅ CORRECT
+class MyStep(BaseStep):
+    async def process(self, input_data: Dict[str, Any], **kwargs) -> Any:
+        """ALL business logic goes here"""
+        # Process data, apply transformations, etc.
+        return processed_result
+
+# ❌ WRONG
+class BadStep(BaseStep):
+    async def execute(self, input_data):  # DON'T override execute()
+        return self._do_processing(input_data)
+```
+
+## Key Architectural Components
+
+### Core Abstractions
+- **Agents** (`core/agent.py`): AI entities with LLM integration and tool calling
+- **Steps** (`core/step.py`): Data processing units, base class for workflows
+- **Workflows** (`core/workflow.py`): Specialized steps that orchestrate multiple steps via DAG
+- **Data Units** (`core/data_unit.py`): Type-safe, event-driven data containers
+- **Triggers** (`core/trigger.py`): Event activation mechanisms (data changes, conditions, timers)
+- **Links** (`core/link.py`): Define data flow between components
+- **Tools** (`core/tool.py`): Capability extensions for agents/steps
+- **Executors** (`core/executor.py`): Execution backends (local, thread, process, Parsl)
+
+### Framework Integration
+- **WorkflowGraph** (`core/workflow_graph.py`): DAG management, cycle detection, topological sort
+- **WorkflowValidator** (`core/workflow_validation.py`): Structural validation
+- **AsyncTriggerExecutor** (`core/trigger.py`): Non-blocking trigger execution, deadlock prevention
+- **A2A Protocol** (`core/a2a_support.py`): Agent-to-Agent collaboration (Google spec)
+- **MCP Support** (`core/mcp_support.py`): Model Context Protocol integration
+- **Academy Integration** (`academy_integration/`): Integration with Academy distributed framework
+- **Parsl Support** (`core/distributed/workflow_execution.py`): HPC distributed execution
+
+### Directory Structure
+- `nanobrain/core/` - Core framework abstractions (mandatory from_config pattern)
+- `nanobrain/library/` - Reusable implementations (agents, workflows, tools, steps)
+- `nanobrain/academy_integration/` - Academy distributed computing integration
+- `nanobrain/config/` - Configuration system and templates
+- `nanobrain/lightweight/` - Minimal framework for constrained environments
+- `config/` - Configuration files (YAML)
+- `demos/` - Demo implementations and examples
+- `tests/` - Test suite (unit, integration, performance, playwright)
+
+## Development Commands
+
+### Installation
+```bash
+# Development installation
+pip install -e .[dev]
+
+# With LLM support (requires API keys)
+pip install -e .[llm]
+
+# With distributed computing (requires HPC)
+pip install -e .[distributed]
+
+# Everything
+pip install -e .[all]
+```
+
+### Testing
+```bash
+# Run all tests
+pytest tests/
+
+# Run specific test categories
+pytest tests/unit/          # Unit tests
+pytest tests/integration/   # Integration tests
+pytest tests/core/          # Core framework tests
+pytest tests/performance/   # Performance tests
+
+# Run with markers
+pytest -m "not slow"        # Skip slow tests
+pytest -m integration       # Only integration tests
+pytest -m unit              # Only unit tests
+```
+
+### Code Quality
+```bash
+# Format code
+black nanobrain/
+
+# Lint code
+flake8 nanobrain/
+
+# Type checking
+mypy nanobrain/
+
+# Alternative (using ruff)
+ruff check nanobrain/
+ruff format nanobrain/
+```
+
+### Building Documentation
+```bash
+cd docs
+sphinx-build -b html source build/html
+```
+
+## Critical Rules for Code Generation
+
+When working with this codebase, you MUST follow these rules (see `docs/LLM_CODE_GENERATION_RULES.md` for complete details):
+
+1. **ALL objects from YAML configuration files ONLY** - No direct instantiation
+2. **Steps own their data units and triggers** - Workflows only manage links
+3. **Workflows are steps with links** - They inherit from Step
+4. **Store all prompts in configuration files** - No hardcoded prompts in code
+5. **Minimize complexity while following framework rules** - Reuse existing components
+6. **Everything is configurable** - No hardcoded values
+
+### Forbidden Patterns
+```python
+# ❌ NEVER create objects directly
+config = DataUnitConfig(name="test")
+data_unit = DataUnitMemory()
+agent = Agent(model="gpt-4")
+
+# ❌ NEVER use ComponentFactory (it was removed)
+create_component(...)  # This no longer exists
+
+# ❌ NEVER hardcode configurations
+step = Step.from_config({'name': 'processor'})  # Should be YAML file
+
+# ❌ NEVER mix responsibilities
+# Workflow managing step's data units - WRONG
+# Step managing its own data units - CORRECT
+```
+
+### Required Patterns
+```python
+# ✅ ALWAYS use from_config with YAML files
+component = ComponentClass.from_config('config/component.yml')
+
+# ✅ ALWAYS implement process() in steps, not execute()
+class MyStep(BaseStep):
+    async def process(self, input_data, **kwargs):
+        # Business logic here
+        return result
+
+# ✅ ALWAYS define triggers for event-driven execution
+triggers:
+  - trigger_type: "data_updated"
+    data_unit: "input_data"
+```
+
+## Configuration System
+
+### Configuration File Path Resolution
+Paths are resolved in this order:
+1. Absolute paths
+2. Relative to calling class's directory
+3. Relative to class parent directory
+4. Relative to current working directory
+5. Relative to workflow base directory
+
+### Recursive Component References
+```yaml
+# Use class + config pattern for nested components
+agent:
+  class: "nanobrain.core.agent.ConversationalAgent"
+  config: "config/agent.yml"
+
+tools:
+  - class: "nanobrain.library.tools.WebSearchTool"
+    config: "config/web_search.yml"
+```
+
+### Environment Variable Interpolation
+```yaml
+model: "${MODEL_NAME:-gpt-3.5-turbo}"
+api_key: "${OPENAI_API_KEY}"
+debug: "${DEBUG_MODE:-false}"
+```
+
+## Important Context
+
+### Research Framework Status
+This is a research framework in active development with:
+- Hardcoded paths and environment-specific configurations
+- External dependencies on HPC systems (Parsl, Academy)
+- Mock implementations for many distributed features
+- Breaking changes expected in future versions
+
+### Known Issues
+- Hardcoded paths throughout codebase
+- Missing `__init__.py` files in some directories
+- Circular imports in some modules
+- No proper error handling for missing dependencies
+- Configuration files not packaged properly
+
+### HPC and Distributed Execution
+Many features require:
+- Aurora supercomputer access (for some demos)
+- Academy framework installation (proprietary)
+- Parsl configuration for distributed execution
+- Specific conda environment setup
+
+When working on distributed features, be aware these may not work in all environments.
+
+## Testing Philosophy
+
+- Unit tests in `tests/unit/`
+- Integration tests in `tests/integration/`
+- Core framework tests in `tests/core/`
+- Performance tests in `tests/performance/`
+- Web interface tests using Playwright in `tests/playwright/`
+
+Tests should follow pytest conventions and use async where appropriate (`pytest-asyncio`).
+
+## Key Files to Understand
+
+- `nanobrain/core/component_base.py` (867 lines) - FromConfigBase, mandatory pattern enforcement
+- `nanobrain/core/workflow.py` (~600 lines) - Workflow orchestration
+- `nanobrain/core/agent.py` (~500 lines) - Agent with LLM integration
+- `nanobrain/core/step.py` (~400 lines) - Step processing
+- `nanobrain/core/data_unit.py` (~500 lines) - Data unit system
+- `nanobrain/core/trigger.py` (~400 lines) - Event-driven triggers
+- `nanobrain/core/config/config_base.py` (~400 lines) - Configuration loading
+- `docs/LLM_CODE_GENERATION_RULES.md` (570 lines) - Mandatory code generation rules
+
+## Working with the Codebase
+
+1. **Study the functioning example** - See `demos/academylink_aurora_demo/config/mixed_execution_workflow_aurora.yml` for a complete, working workflow configuration
+2. **Read `docs/LLM_CODE_GENERATION_RULES.md` first** - Contains mandatory patterns
+3. **Always create YAML configs** - Never hardcode configurations
+4. **Follow the from_config pattern** - No exceptions
+5. **Respect component ownership** - Both workflows and steps can define data units; steps own their triggers, workflows manage links
+6. **Implement process(), not execute()** - Keep business logic separate from infrastructure
+7. **Use event-driven data flow** - No direct step-to-step calls
+8. **Test with pytest** - Write tests following existing patterns
+9. **Consider HPC context** - Some features only work in specific environments
+
+## Reference Implementation
+
+The most complete and functioning workflow example is located at:
+- **Workflow**: `demos/academylink_aurora_demo/config/mixed_execution_workflow_aurora.yml`
+- **Step configs**: `demos/academylink_aurora_demo/config/data_preparation_step.yml` and related files
+- **Link configs**: `demos/academylink_aurora_demo/config/aurora_computation_link.yml` and related files
+
+This demonstrates:
+- Mixed execution (local + distributed HPC via Parsl)
+- Workflow-level and step-level data units
+- Multiple executors (local and Aurora HPC)
+- Academy links for distributed data transfer
+- ProxyStore integration for large data handling

@@ -1,29 +1,18 @@
-# Fallback Executor Configuration for Chat Workflow
-# CRITICAL FIX: Provides missing executor_type configuration for fallback
-
-name: "fallback_chat_executor"
-description: "Fallback local executor for chat workflows"
-version: "1.0.0"
-
-# CRITICAL: executor_type field that was missing
-executor_type: "local"
-
-# Executor configuration
-class: "nanobrain.core.executor.LocalExecutor"
+name: fallback_chat_executor
+description: Fallback local executor for chat workflows
+version: 1.0.0
+executor_type: local
+class: nanobrain.core.executor.LocalExecutor
 max_workers: 2
 timeout: 120.0
 enable_monitoring: false
 debug_mode: true
-
-# Performance settings
 performance:
   max_concurrent_tasks: 5
   task_timeout: 30.0
   retry_attempts: 2
   retry_delay: 0.5
-
-# Logging configuration
 logging:
   enable_task_logging: true
-  log_level: "DEBUG"
+  log_level: DEBUG
   log_performance_metrics: false

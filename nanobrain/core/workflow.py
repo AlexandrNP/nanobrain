@@ -925,6 +925,14 @@ class Workflow(Step):
         workflow = cls._create_from_resolved_config(
             workflow_config, resolved_components, **context)
 
+        # CRITICAL: Store config path on workflow instance for ParslExecutor integration
+        # This enables steps to access their parent workflow's config path for sub-workflow creation
+        if hasattr(workflow_config, 'source_path'):
+            workflow._config_path = workflow_config.source_path
+        else:
+            # Fallback - use the original config_path parameter
+            workflow._config_path = str(config_path)
+
         return workflow
 
     @classmethod
@@ -1647,7 +1655,12 @@ class Workflow(Step):
             await self._load_workflow_configuration()
 
             # FAIL-FAST: Validate workflow integrity before initialization
-            self._validate_workflow_integrity()
+            # SKIP for divergence-enabled workflows (imperative execution doesn't use links)
+            divergence_enabled = getattr(self.workflow_config, 'divergence_enabled', False)
+            if divergence_enabled:
+                self.workflow_logger.info("🔥 DIVERGENCE MODE: Skipping link-based validation")
+            else:
+                self._validate_workflow_integrity()
 
             # Initialize child steps
             await self._initialize_child_steps()
@@ -1657,7 +1670,12 @@ class Workflow(Step):
 
             # Build and validate workflow graph
             await self._build_workflow_graph()
-            await self._validate_workflow()
+
+            # Skip graph validation for divergence-enabled workflows
+            if not divergence_enabled:
+                await self._validate_workflow()
+            else:
+                self.workflow_logger.info("🔥 DIVERGENCE MODE: Skipping graph validation")
 
             # Data-driven workflows don't need predetermined execution order
 
@@ -1683,45 +1701,376 @@ class Workflow(Step):
 
     async def process(self, input_data: Dict[str, Any], **kwargs) -> Any:
         """
-        Data-driven workflow processing.
+        Workflow processing with support for both data-driven and divergence-aware execution.
 
-        In data-driven architecture, workflows don't execute steps.
-        They only populate input data units of the FIRST STEP to initiate data flow.
-        Steps execute automatically via triggers when data is available.
+        Two execution modes:
+        1. Data-driven (default): Populate first step, let triggers handle flow
+        2. Imperative (divergence_enabled=True): Execute steps sequentially, check for divergence
         """
-        if hasattr(self, 'nb_logger') and self.nb_logger:
-            self.nb_logger.info(
-                f"🚀 Initiating data flow for workflow: {self.name}")
+        # Check if divergence is enabled
+        divergence_enabled = getattr(self.config, 'divergence_enabled', False)
 
-        # Find the first step in the workflow
-        first_step = self._get_first_step()
-        if not first_step:
+        if divergence_enabled:
+            # IMPERATIVE MODE: Execute steps and check for divergence
             if hasattr(self, 'nb_logger') and self.nb_logger:
-                self.nb_logger.warning(
-                    "⚠️ No first step found - no data flow initiated")
-            return {"status": "no_first_step", "workflow": self.name}
+                self.nb_logger.info(
+                    f"🔥 DIVERGENCE MODE: Executing workflow {self.name} with divergence support")
+            return await self._process_with_divergence(input_data, **kwargs)
+        else:
+            # DATA-DRIVEN MODE: Original behavior
+            if hasattr(self, 'nb_logger') and self.nb_logger:
+                self.nb_logger.info(
+                    f"🚀 Initiating data flow for workflow: {self.name}")
 
-        # Populate input data units of the FIRST STEP only
-        populated_units = 0
-        if hasattr(first_step, 'step_input_data_units'):
-            for unit_name, data_unit in first_step.step_input_data_units.items():
+            # Find the first step in the workflow
+            first_step = self._get_first_step()
+            if not first_step:
+                if hasattr(self, 'nb_logger') and self.nb_logger:
+                    self.nb_logger.warning(
+                        "⚠️ No first step found - no data flow initiated")
+                return {"status": "no_first_step", "workflow": self.name}
+
+            # Populate input data units of the FIRST STEP only
+            populated_units = 0
+            if hasattr(first_step, 'step_input_data_units'):
+                for unit_name, data_unit in first_step.step_input_data_units.items():
+                    if unit_name in input_data:
+                        await data_unit.set(input_data[unit_name])
+                        populated_units += 1
+                        if hasattr(self, 'nb_logger') and self.nb_logger:
+                            self.nb_logger.info(
+                                f"📥 Populated {unit_name} in first step: {first_step.name}")
+
+            if hasattr(self, 'nb_logger') and self.nb_logger:
+                self.nb_logger.info(
+                    f"✅ Data flow initiated - populated {populated_units} data units in first step")
+
+            return {
+                "status": "data_flow_initiated",
+                "workflow": self.name,
+                "first_step": first_step.name,
+                "populated_units": populated_units
+            }
+
+    async def _process_with_divergence(self, input_data: Dict[str, Any], **kwargs) -> Any:
+        """
+        Imperative workflow execution with divergence support.
+
+        Executes steps sequentially, checks for divergence_spec in results,
+        and spawns parallel subworkflows as needed.
+        """
+        # Get execution order (topologically sorted steps)
+        execution_order = self._get_execution_order()
+
+        if not execution_order:
+            self.nb_logger.warning("⚠️ No execution order found")
+            return {"status": "no_steps", "workflow": self.name}
+
+        self.nb_logger.info(f"🔥 Execution order: {execution_order}")
+
+        current_data = input_data
+
+        for i, step_name in enumerate(execution_order):
+            step = self.child_steps.get(step_name)
+            if not step:
+                raise RuntimeError(f"Step '{step_name}' not found in child_steps")
+
+            self.nb_logger.info(f"🔥 Executing step {i+1}/{len(execution_order)}: {step_name}")
+
+            # Execute step and wait for result
+            step_result = await self._execute_step_imperative(step, current_data)
+
+            # CHECK FOR DIVERGENCE
+            if isinstance(step_result, dict) and 'divergence_spec' in step_result:
+                self.nb_logger.info(f"🔥 DIVERGENCE DETECTED at step {step_name}")
+
+                # Get remaining steps after this one
+                remaining_steps = execution_order[i + 1:]
+
+                if remaining_steps:
+                    # Spawn parallel subworkflows with remaining steps
+                    self.nb_logger.info(f"🔥 Spawning subworkflows with remaining steps: {remaining_steps}")
+
+                    diverged_results = await self._spawn_diverged_subworkflows(
+                        step_result['divergence_spec'],
+                        remaining_steps,
+                        step_result.get('result', {})
+                    )
+
+                    # NEW: Check for local aggregation (per-level aggregation before continuing)
+                    local_agg_config = step_result['divergence_spec'].get('local_aggregation', {})
+
+                    if local_agg_config.get('enabled', False):
+                        # Local aggregation: aggregate N children → 1 result at THIS level
+                        self.nb_logger.info(f"🔄 Local aggregation enabled: aggregating {len(diverged_results)} results at this level")
+
+                        aggregated_result = self._aggregate_diverged_results(
+                            diverged_results,
+                            method=local_agg_config.get('method', 'reduce')
+                        )
+
+                        self.nb_logger.info(f"✅ Local aggregation complete: {len(diverged_results)} → 1 result")
+
+                        # IMPORTANT: Return aggregated result immediately
+                        # The subworkflows already completed ALL remaining steps
+                        # Don't re-execute those steps at this level
+                        return aggregated_result
+                        # Don't re-execute those steps at this level
+                        return aggregated_result
+                        # IMPORTANT: Return aggregated result immediately
+                        # The subworkflows already completed ALL remaining steps
+                        # Don't re-execute those steps at this level
+                        return aggregated_result
+                        # IMPORTANT: Return aggregated result immediately
+                        # The subworkflows already completed ALL remaining steps
+                        # Don't re-execute those steps at this level
+                        return aggregated_result
+                        # IMPORTANT: Return aggregated result immediately
+                        # The subworkflows already completed ALL remaining steps
+                        # Don't re-execute those steps at this level
+                        return aggregated_result
+                        # IMPORTANT: Return aggregated result immediately
+                        # The subworkflows already completed ALL remaining steps
+                        # Don't re-execute those steps at this level
+                        return aggregated_result
+                        # IMPORTANT: Return aggregated result immediately
+                        # The subworkflows already completed ALL remaining steps
+                        # Don't re-execute those steps at this level
+                        return aggregated_result
+                        # IMPORTANT: Return aggregated result immediately
+                        # The subworkflows already completed ALL remaining steps
+                        # Don't re-execute those steps at this level
+                        return aggregated_result
+                        # IMPORTANT: Return aggregated result immediately
+                        # The subworkflows already completed ALL remaining steps
+                        # Don't re-execute those steps at this level
+                        return aggregated_result
+                        # IMPORTANT: Return aggregated result immediately
+                        # The subworkflows already completed ALL remaining steps
+                        # Don't re-execute those steps at this level
+                        return aggregated_result
+                        # IMPORTANT: Return aggregated result immediately
+                        # The subworkflows already completed ALL remaining steps
+                        # Don't re-execute those steps at this level
+                        return aggregated_result
+                        # IMPORTANT: Return aggregated result immediately
+                        # The subworkflows already completed ALL remaining steps
+                        # Don't re-execute those steps at this level
+                        return aggregated_result
+                        # IMPORTANT: Return aggregated result immediately
+                        # The subworkflows already completed ALL remaining steps
+                        # Don't re-execute those steps at this level
+                        return aggregated_result
+                        # IMPORTANT: Return aggregated result immediately
+                        # The subworkflows already completed ALL remaining steps
+                        # Don't re-execute those steps at this level
+                        return aggregated_result
+                        # IMPORTANT: Return aggregated result immediately
+                        # The subworkflows already completed ALL remaining steps
+                        # Don't re-execute those steps at this level
+                        return aggregated_result
+                        # IMPORTANT: Return aggregated result immediately
+                        # The subworkflows already completed ALL remaining steps
+                        # Don't re-execute those steps at this level
+                        return aggregated_result
+                        # IMPORTANT: Return aggregated result immediately
+                        # The subworkflows already completed ALL remaining steps
+                        # Don't re-execute those steps at this level
+                        return aggregated_result
+                        # IMPORTANT: Return aggregated result immediately
+                        # The subworkflows already completed ALL remaining steps
+                        # Don't re-execute those steps at this level
+                        return aggregated_result
+                        # IMPORTANT: Return aggregated result immediately
+                        # The subworkflows already completed ALL remaining steps
+                        # Don't re-execute those steps at this level
+                        return aggregated_result
+                        # IMPORTANT: Return aggregated result immediately
+                        # The subworkflows already completed ALL remaining steps
+                        # Don't re-execute those steps at this level
+                        return aggregated_result
+                        # IMPORTANT: Return aggregated result immediately
+                        # The subworkflows already completed ALL remaining steps
+                        # Don't re-execute those steps at this level
+                        return aggregated_result
+                        # IMPORTANT: Return aggregated result immediately
+                        # The subworkflows already completed ALL remaining steps
+                        # Don't re-execute those steps at this level
+                        return aggregated_result
+                        # IMPORTANT: Return aggregated result immediately
+                        # The subworkflows already completed ALL remaining steps
+                        # Don't re-execute those steps at this level
+                        return aggregated_result
+                        # IMPORTANT: Return aggregated result immediately
+                        # The subworkflows already completed ALL remaining steps
+                        # Don't re-execute those steps at this level
+                        return aggregated_result
+                        # IMPORTANT: Return aggregated result immediately
+                        # The subworkflows already completed ALL remaining steps
+                        # Don't re-execute those steps at this level
+                        return aggregated_result
+                        # IMPORTANT: Return aggregated result immediately
+                        # The subworkflows already completed ALL remaining steps
+                        # Don't re-execute those steps at this level
+                        return aggregated_result
+                        # IMPORTANT: Return aggregated result immediately
+                        # The subworkflows already completed ALL remaining steps
+                        # Don't re-execute those steps at this level
+                        return aggregated_result
+                        # IMPORTANT: Return aggregated result immediately
+                        # The subworkflows already completed ALL remaining steps
+                        # Don't re-execute those steps at this level
+                        return aggregated_result
+                        # IMPORTANT: Return aggregated result immediately
+                        # The subworkflows already completed ALL remaining steps
+                        # Don't re-execute those steps at this level
+                        return aggregated_result
+                        # IMPORTANT: Return aggregated result immediately
+                        # The subworkflows already completed ALL remaining steps
+                        # Don't re-execute those steps at this level
+                        return aggregated_result
+                        # IMPORTANT: Return aggregated result immediately
+                        # The subworkflows already completed ALL remaining steps
+                        # Don't re-execute those steps at this level
+                        return aggregated_result
+                        # IMPORTANT: Return aggregated result immediately
+                        # The subworkflows already completed ALL remaining steps
+                        # Don't re-execute those steps at this level
+                        return aggregated_result
+                        # IMPORTANT: Return aggregated result immediately
+                        # The subworkflows already completed ALL remaining steps
+                        # Don't re-execute those steps at this level
+                        return aggregated_result
+                        # IMPORTANT: Return aggregated result immediately
+                        # The subworkflows already completed ALL remaining steps
+                        # Don't re-execute those steps at this level
+                        return aggregated_result
+                        # IMPORTANT: Return aggregated result immediately
+                        # The subworkflows already completed ALL remaining steps
+                        # Don't re-execute those steps at this level
+                        return aggregated_result
+                        # IMPORTANT: Return aggregated result immediately
+                        # The subworkflows already completed ALL remaining steps
+                        # Don't re-execute those steps at this level
+                        return aggregated_result
+                        # IMPORTANT: Return aggregated result immediately
+                        # The subworkflows already completed ALL remaining steps
+                        # Don't re-execute those steps at this level
+                        return aggregated_result
+                        # IMPORTANT: Return aggregated result immediately
+                        # The subworkflows already completed ALL remaining steps
+                        # Don't re-execute those steps at this level
+                        return aggregated_result
+                        # IMPORTANT: Return aggregated result immediately
+                        # The subworkflows already completed ALL remaining steps
+                        # Don't re-execute those steps at this level
+                        return aggregated_result
+                        # IMPORTANT: Return aggregated result immediately
+                        # The subworkflows already completed ALL remaining steps
+                        # Don't re-execute those steps at this level
+                        return aggregated_result
+                        # IMPORTANT: Return aggregated result immediately
+                        # The subworkflows already completed ALL remaining steps
+                        # Don't re-execute those steps at this level
+                        return aggregated_result
+                        # IMPORTANT: Return aggregated result immediately
+                        # The subworkflows already completed ALL remaining steps
+                        # Don't re-execute those steps at this level
+                        return aggregated_result
+
+                    # Original: Check if global aggregation is needed
+                    aggregation_config = step_result['divergence_spec'].get('aggregation', {})
+
+                    if aggregation_config.get('enabled', True):
+                        # Aggregate results
+                        return self._aggregate_diverged_results(
+                            diverged_results,
+                            method=aggregation_config.get('method', 'list')
+                        )
+                    else:
+                        # Flow through without aggregation
+                        self.nb_logger.info(f"🔥 Skipping aggregation - flowing results through")
+                        return {
+                            'diverged_results': diverged_results,
+                            'flow_through': True
+                        }
+                else:
+                    # Last step diverged - just return results
+                    self.nb_logger.info(f"🔥 Last step diverged - no remaining steps")
+                    return step_result.get('result', step_result)
+            else:
+                # No divergence - continue with next step
+                current_data = step_result
+
+        # All steps completed without divergence
+        return current_data
+
+    def _get_execution_order(self) -> List[str]:
+        """Get topologically sorted list of steps for execution."""
+        # Simple implementation - just return child_steps keys in order
+        # TODO: Use workflow graph for proper topological sort
+        return list(self.child_steps.keys())
+
+    async def _execute_step_imperative(self, step, input_data: Dict[str, Any]) -> Any:
+        """
+        Execute step imperatively while respecting data-driven architecture.
+
+        CRITICAL: Steps expect data in their DATA UNITS, not as direct parameters.
+        This method bridges imperative execution with data-driven architecture by:
+        1. Populating step's input data units with current_data
+        2. Reading from data units to build process() input dict
+        3. Calling step.process() with properly formatted input
+        4. Writing result to step's output data units
+        """
+        self.nb_logger.info(f"🔥 Imperatively executing step: {step.name}")
+
+        # 1. Populate step's input data units with current_data
+        # Map input_data to step's expected input data unit keys
+        if not hasattr(step, 'step_input_data_units'):
+            self.nb_logger.warning(f"Step {step.name} has no input data units")
+            step.step_input_data_units = {}
+
+        for unit_name, data_unit in step.step_input_data_units.items():
+            # For single input data unit, pass entire input_data
+            if len(step.step_input_data_units) == 1:
+                self.nb_logger.info(f"🔥 Writing entire input_data to single data unit '{unit_name}'")
+                await data_unit.set(input_data)
+                break
+            else:
+                # For multiple inputs, try to match keys
                 if unit_name in input_data:
+                    self.nb_logger.info(f"🔥 Writing input_data['{unit_name}'] to data unit")
                     await data_unit.set(input_data[unit_name])
-                    populated_units += 1
-                    if hasattr(self, 'nb_logger') and self.nb_logger:
-                        self.nb_logger.info(
-                            f"📥 Populated {unit_name} in first step: {first_step.name}")
 
-        if hasattr(self, 'nb_logger') and self.nb_logger:
-            self.nb_logger.info(
-                f"✅ Data flow initiated - populated {populated_units} data units in first step")
+        # 2. Prepare input_data dict for process() with correct keys
+        # Read from populated data units to build process() input
+        process_input = {}
+        for unit_name, data_unit in step.step_input_data_units.items():
+            data = await data_unit.get()
+            process_input[unit_name] = data
+            self.nb_logger.info(f"🔥 Read data from unit '{unit_name}': {type(data)}")
 
-        return {
-            "status": "data_flow_initiated",
-            "workflow": self.name,
-            "first_step": first_step.name,
-            "populated_units": populated_units
-        }
+        # 3. Call step.process() with properly formatted input
+        self.nb_logger.info(f"🔥 Calling {step.name}.process() with keys: {list(process_input.keys())}")
+        result = await step.process(process_input)
+        self.nb_logger.info(f"🔥 Step {step.name} returned result type: {type(result)}")
+
+        # 4. Write result to step's output data units
+        if not hasattr(step, 'step_output_data_units'):
+            step.step_output_data_units = {}
+
+        if isinstance(result, dict):
+            for unit_name, data_unit in step.step_output_data_units.items():
+                if unit_name in result:
+                    self.nb_logger.info(f"🔥 Writing result['{unit_name}'] to output data unit")
+                    await data_unit.set(result[unit_name])
+                elif len(step.step_output_data_units) == 1:
+                    # Single output - write entire result
+                    self.nb_logger.info(f"🔥 Writing entire result to single output data unit '{unit_name}'")
+                    await data_unit.set(result)
+                    break
+
+        return result
 
     def _get_first_step(self):
         """
@@ -1743,6 +2092,382 @@ class Workflow(Step):
                 return next(iter(resolved_steps.values()))
 
         return None
+
+    # ==================== DIVERGENCE SUPPORT ====================
+
+    async def _spawn_diverged_subworkflows(
+        self,
+        divergence_spec: Dict[str, Any],
+        remaining_steps: List[str],
+        base_result: Any
+    ) -> List[Any]:
+        """
+        Spawn parallel subworkflows with strictness control.
+
+        Args:
+            divergence_spec: Specification for divergence (parallel_tasks, task_params, etc.)
+            remaining_steps: List of step names to include in subworkflows
+            base_result: Base result to merge with task-specific parameters
+
+        Returns:
+            List of results from parallel subworkflows
+        """
+        import uuid
+        from pathlib import Path
+
+        parallel_tasks = divergence_spec['parallel_tasks']
+        task_params = divergence_spec['task_params']
+        resource_spec = divergence_spec.get('resource_spec', {})
+
+        # Extract strictness configuration
+        strictness = divergence_spec.get('strictness', {
+            'fail_fast': True,  # DEFAULT: Fail on first error
+            'required_success_count': None,
+            'continue_on_error': False
+        })
+
+        self.nb_logger.info(f"🔥 Spawning {parallel_tasks} subworkflows")
+        self.nb_logger.info(f"🔥 Strictness: fail_fast={strictness['fail_fast']}")
+        self.nb_logger.info(f"🔥 Remaining steps: {remaining_steps}")
+
+        futures = []
+
+        for i, params in enumerate(task_params):
+            # Generate subworkflow config
+            subworkflow_config_path = await self._generate_subworkflow_config(
+                remaining_steps=remaining_steps,
+                task_index=i,
+                divergence_id=str(uuid.uuid4().hex[:8])
+            )
+
+            # Prepare input data for this subworkflow
+            subworkflow_input = {
+                **base_result,  # Include result from diverged step
+                **params        # Add task-specific parameters
+            }
+
+            self.nb_logger.info(f"🔥 Creating task for subworkflow {i}")
+
+            # Create async task for subworkflow execution
+            # CRITICAL: ParslExecutor will detect subworkflow context and use WorkQueue
+            async def create_subworkflow_task(config_path, input_data):
+                return await self._execute_subworkflow_from_config(
+                    config_path=config_path,
+                    input_data=input_data
+                )
+
+            # Store task coroutine for parallel execution
+            task = create_subworkflow_task(subworkflow_config_path, subworkflow_input)
+            futures.append((i, task))
+
+        # Collect results with strictness enforcement
+        import asyncio
+
+        results = []
+        errors = []
+
+        # Execute all tasks in parallel
+        self.nb_logger.info(f"🔥 Executing {len(futures)} subworkflows in parallel")
+
+        # Execute with proper error handling based on strictness
+        if strictness['fail_fast']:
+            # Fail on first error
+            try:
+                task_coroutines = [task for _, task in futures]
+                completed_results = await asyncio.gather(*task_coroutines, return_exceptions=False)
+
+                # All succeeded
+                for i, result in enumerate(completed_results):
+                    results.append({
+                        'task_index': i,
+                        'status': 'success',
+                        'result': result
+                    })
+            except Exception as e:
+                self.nb_logger.error(f"🔥 FAIL FAST: Task failed: {e}")
+                raise RuntimeError(f"Subworkflow failed (fail_fast=True): {e}") from e
+        else:
+            # Collect all results, including errors
+            task_coroutines = [task for _, task in futures]
+            completed_results = await asyncio.gather(*task_coroutines, return_exceptions=True)
+
+            for i, result in enumerate(completed_results):
+                if isinstance(result, Exception):
+                    self.nb_logger.error(f"❌ Task {i} failed: {result}")
+                    errors.append({
+                        'task_index': i,
+                        'error': str(result)
+                    })
+
+                    if strictness['continue_on_error']:
+                        results.append({
+                            'task_index': i,
+                            'status': 'failed',
+                            'error': str(result)
+                        })
+                else:
+                    results.append({
+                        'task_index': i,
+                        'status': 'success',
+                        'result': result
+                    })
+
+        # Check if we met required success count
+        if strictness['required_success_count'] is not None:
+            success_count = sum(1 for r in results if r['status'] == 'success')
+            if success_count < strictness['required_success_count']:
+                raise RuntimeError(
+                    f"Only {success_count}/{strictness['required_success_count']} "
+                    f"tasks succeeded (required minimum not met)"
+                )
+
+        # If we have errors and not continuing on error, fail now
+        if errors and not strictness['continue_on_error']:
+            raise RuntimeError(
+                f"{len(errors)}/{len(results)} tasks failed: {errors}"
+            )
+
+        self.nb_logger.info(f"🔥 All subworkflows completed: {len(results)} total, {len([r for r in results if r['status'] == 'success'])} succeeded")
+
+        return results
+
+    def _get_subworkflow_executor_config(self) -> Dict[str, Any]:
+        """
+        Get executor config for subworkflows by reading parent workflow's YAML.
+
+        This is the CORRECT configuration-based approach:
+        - Load parent workflow's YAML file
+        - Extract executor section as-is
+        - Return it for subworkflow config generation
+
+        Subworkflows inherit the parent executor. For ParslExecutor, this allows
+        task distribution across nodes while maintaining ONE PBS job (Parsl submits
+        one PBS job and distributes tasks, not multiple independent jobs).
+
+        Returns:
+            Dict with executor class and config path (e.g., {'class': '...', 'config': '...'})
+        """
+        import yaml
+        from pathlib import Path
+
+        # Read parent workflow's config file to get executor section
+        if hasattr(self, '_config_path') and self._config_path:
+            try:
+                with open(self._config_path, 'r') as f:
+                    parent_config = yaml.safe_load(f)
+
+                if 'executor' in parent_config and isinstance(parent_config['executor'], dict):
+                    executor_config = parent_config['executor']
+                    self.nb_logger.info(
+                        f"🔄 Subworkflow inheriting executor from parent config: "
+                        f"{executor_config.get('class', 'unknown')} with config {executor_config.get('config', 'unknown')}"
+                    )
+                    return executor_config
+                else:
+                    self.nb_logger.warning(
+                        f"⚠️ Parent config {self._config_path} has no 'executor' section, using fallback"
+                    )
+            except Exception as e:
+                self.nb_logger.error(f"❌ Failed to read parent config {self._config_path}: {e}")
+        else:
+            self.nb_logger.warning("⚠️ Workflow has no _config_path, cannot read parent executor config")
+
+        # Fallback: construct from runtime executor instance
+        self.nb_logger.info(f"🔄 Fallback: constructing executor config from runtime instance {self.executor.__class__.__name__}")
+        return {
+            'class': f"{self.executor.__class__.__module__}.{self.executor.__class__.__name__}",
+            'config': 'test_divergence/local_executor.yml'  # Last resort default
+        }
+
+    async def _generate_subworkflow_config(
+        self,
+        remaining_steps: List[str],
+        task_index: int,
+        divergence_id: str
+    ) -> str:
+        """
+        Generate config file for subworkflow - KEEP for accountability.
+
+        Args:
+            remaining_steps: Steps to include in subworkflow
+            task_index: Index of this parallel task
+            divergence_id: Unique ID for this divergence
+
+        Returns:
+            Path to generated config file
+        """
+        from pathlib import Path
+        from datetime import datetime
+        import yaml
+        import json
+
+        # Store in persistent location for accountability
+        config_base_dir = Path("executed_workflows") / "diverged_subworkflows"
+
+        # Create timestamped directory
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        workflow_name_clean = self.config.name.replace('/', '_').replace(' ', '_')
+        divergence_dir = config_base_dir / f"{workflow_name_clean}_{timestamp}_{divergence_id}"
+
+        config_dir = divergence_dir / f"task_{task_index}"
+        config_dir.mkdir(parents=True, exist_ok=True)
+
+        self.nb_logger.info(f"📝 Creating subworkflow config in: {config_dir}")
+
+        # Build subworkflow config with ONLY remaining steps
+        subworkflow_config = {
+            'name': f"{self.config.name}_subworkflow_{task_index}",
+            'description': f"Subworkflow for parallel task {task_index}",
+            'class': 'nanobrain.core.workflow.Workflow',
+            'divergence_enabled': True,  # Enable recursive divergence
+
+            # CRITICAL: Include ONLY remaining steps
+            'steps': {},
+
+            # CRITICAL: Use LocalExecutor for subworkflows when parent uses ParslExecutor
+            # This prevents submitting multiple PBS jobs (only ONE job allowed!)
+            'executor': self._get_subworkflow_executor_config(),
+
+            # Input/output data units (simplified)
+            'input_data_units': {},
+            'output_data_units': {}
+        }
+
+        # Add remaining steps to config
+        # CRITICAL: Each step entry must specify executor to override step config's executor
+        executor_config = subworkflow_config['executor']  # Use workflow-level executor config
+
+        for step_name in remaining_steps:
+            if step_name in self.child_steps:
+                step = self.child_steps[step_name]
+                # Reference to original step config
+                if hasattr(step, '_config_path'):
+                    subworkflow_config['steps'][step_name] = {
+                        'class': f"{step.__class__.__module__}.{step.__class__.__name__}",
+                        'config': str(step._config_path),
+                        # Add executor config to override step config's executor
+                        # This ensures steps inherit subworkflow's executor (e.g., ParslExecutor)
+                        'executor': executor_config
+                    }
+
+        # Write config to YAML file
+        config_path = config_dir / "subworkflow_config.yml"
+        with open(config_path, 'w') as f:
+            # CRITICAL: sort_keys=False to preserve execution order!
+            yaml.dump(subworkflow_config, f, default_flow_style=False, sort_keys=False)
+
+        # ALSO write metadata for accountability
+        metadata = {
+            'parent_workflow': self.config.name,
+            'parent_config': str(self._config_path) if hasattr(self, '_config_path') else None,
+            'divergence_point': remaining_steps[0] if remaining_steps else 'final',
+            'task_index': task_index,
+            'divergence_id': divergence_id,
+            'created_at': timestamp,
+            'remaining_steps': remaining_steps
+        }
+
+        metadata_path = config_dir / "metadata.json"
+        with open(metadata_path, 'w') as f:
+            json.dump(metadata, f, indent=2)
+
+        self.nb_logger.info(f"📝 Generated subworkflow config (KEPT): {config_path}")
+
+        return str(config_path)
+
+    async def _execute_subworkflow_from_config(
+        self,
+        config_path: str,
+        input_data: Dict[str, Any],
+        resource_specification: Optional[Dict[str, Any]] = None
+    ) -> Any:
+        """
+        Execute a subworkflow from config file.
+
+        This is called via executor.submit(), so it needs to be a simple function.
+        """
+        self.nb_logger.info(f"🔥 Loading subworkflow from: {config_path}")
+
+        # Load and execute subworkflow
+        subworkflow = Workflow.from_config(config_path)
+
+        # CRITICAL: Reuse parent's executor instance to avoid submitting multiple PBS jobs
+        # All subworkflows share the same executor (e.g., same ParslExecutor = same PBS job)
+        subworkflow.executor = self.executor
+        self.nb_logger.info(f"🔄 Subworkflow inherits parent's executor: {type(self.executor).__name__}")
+
+        await subworkflow.initialize()
+
+        self.nb_logger.info(f"🔥 Executing subworkflow: {subworkflow.name}")
+        result = await subworkflow.process(input_data)
+
+        self.nb_logger.info(f"🔥 Subworkflow completed: {subworkflow.name}")
+
+        return result
+
+    def _aggregate_diverged_results(
+        self,
+        results: List[Dict[str, Any]],
+        method: str = 'list'
+    ) -> Any:
+        """
+        Aggregate results from parallel subworkflows.
+
+        Args:
+            results: List of result dictionaries with status and result
+            method: Aggregation method ('list', 'merge', 'reduce', 'custom')
+
+        Returns:
+            Aggregated result
+        """
+        if method == 'list':
+            # Simple list aggregation
+            return {
+                'parallel_results': [r['result'] for r in results if r['status'] == 'success'],
+                'result_count': len(results),
+                'success_count': sum(1 for r in results if r['status'] == 'success'),
+                'failure_count': sum(1 for r in results if r['status'] == 'failed'),
+                'aggregation_method': 'list'
+            }
+        elif method == 'merge':
+            # Merge dictionaries
+            merged = {}
+            for r in results:
+                if r['status'] == 'success' and isinstance(r['result'], dict):
+                    merged.update(r['result'])
+            return merged
+        elif method == 'reduce':
+            # Reduce N results → 1 aggregated result (for local aggregation)
+            # Extract all successful results
+            successful_results = [r['result'] for r in results if r['status'] == 'success']
+
+            # If results contain 'final_numbers', aggregate them
+            all_numbers = []
+            for result in successful_results:
+                if isinstance(result, dict):
+                    if 'final_numbers' in result:
+                        all_numbers.extend(result['final_numbers'])
+                    elif 'output_numbers' in result:
+                        all_numbers.extend(result['output_numbers'])
+
+            if all_numbers:
+                # Return aggregated numbers
+                return {
+                    'final_numbers': all_numbers,
+                    'aggregated_from': len(successful_results),
+                    'total_numbers': len(all_numbers)
+                }
+            else:
+                # Generic reduction: just collect all results
+                return {
+                    'aggregated_results': successful_results,
+                    'aggregated_from': len(successful_results)
+                }
+        else:
+            # Default: just return list
+            return [r['result'] for r in results if r['status'] == 'success']
+
+    # ==================== END DIVERGENCE SUPPORT ====================
 
     async def _load_workflow_configuration(self) -> None:
         """Load step configurations from workflow configuration."""
@@ -1814,6 +2539,14 @@ class Workflow(Step):
                 # Set workflow directory context
                 if hasattr(step_instance, 'workflow_directory') and not step_instance.workflow_directory:
                     step_instance.workflow_directory = self.workflow_config.workflow_directory
+
+                # CRITICAL: Add parent workflow reference for ParslExecutor integration
+                # This enables steps to access their parent workflow for divergence point creation
+                step_instance.parent_workflow = self
+
+                # Store the workflow config path for sub-workflow creation
+                if hasattr(self, '_config_path'):
+                    step_instance.parent_workflow_config_path = self._config_path
 
             except Exception as e:
                 self.workflow_logger.error(

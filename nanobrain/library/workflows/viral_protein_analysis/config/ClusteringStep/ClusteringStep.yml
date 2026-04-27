@@ -5,37 +5,28 @@ estimated_time: 60.0
 timeout: 60.0
 debug_mode: false
 enable_logging: true
-
-# STANDARDIZED CONFIG: Tool configuration via local standardized file reference
 tools:
   mmseqs2_tool:
     enabled: true
-    config_file: "config/ClusteringStep/MMseqs2Tool.yml"
-
-# STEP-LEVEL DATA UNITS: Step owns its data units
+    config_file: config/ClusteringStep/MMseqs2Tool.yml
 input_data_units:
   clustering_input_sequences:
     class: nanobrain.core.data_unit.DataUnitMemory
     name: clustering_input_sequences
-    description: "Aligned protein sequences from alignment step"
+    description: Aligned protein sequences from alignment step
     persistent: false
-
 output_data_units:
   sequence_clusters:
     class: nanobrain.core.data_unit.DataUnitMemory
     name: sequence_clusters
-    description: "Protein sequence clusters with analysis summary"
+    description: Protein sequence clusters with analysis summary
     persistent: false
-
-# STEP-LEVEL TRIGGER: Execute when aligned sequences received
 triggers:
-  - trigger_id: input_data_received
-    class: nanobrain.core.trigger.DataUnitChangeTrigger
-    data_unit: clustering_input_sequences
-    event_type: "set"
-    description: "Execute step when aligned sequences are received"
-
-# Clustering configuration
+- trigger_id: input_data_received
+  class: nanobrain.core.trigger.DataUnitChangeTrigger
+  data_unit: clustering_input_sequences
+  event_type: set
+  description: Execute step when aligned sequences are received
 clustering_config:
   min_seq_id: 0.3
   coverage: 0.8
@@ -43,15 +34,11 @@ clustering_config:
   sensitivity: 7.5
   min_cluster_size: 2
   max_cluster_size: 1000
-
-# Cache configuration
 cache_config:
   enable_caching: true
-  cache_directory: "data/mmseqs2_cache"
-  cache_ttl_hours: 168  # 1 week
+  cache_directory: data/mmseqs2_cache
+  cache_ttl_hours: 168
   virus_specific: true
-
-# Analysis configuration
 analysis_config:
   generate_summary: true
   include_statistics: true

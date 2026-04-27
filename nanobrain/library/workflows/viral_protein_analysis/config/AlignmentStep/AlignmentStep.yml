@@ -5,55 +5,42 @@ class: nanobrain.library.workflows.viral_protein_analysis.steps.alignment_step.A
 step_type: simple
 debug_mode: false
 enable_logging: true
-
-# Step-specific configuration (optimized for viral proteins)
 max_iterations: 16
 min_alignment_length: 100
 max_gap_percentage: 50.0
 validate_alignment_quality: true
 conservation_threshold: 0.7
-
-# Input data units
 input_data_units:
   alignment_input_sequences:
     class: nanobrain.core.data_unit.DataUnitMemory
     name: alignment_input_sequences
-    description: "Curated sequences from sequence curation step"
+    description: Curated sequences from sequence curation step
     persistent: false
-
-# Output data units
 output_data_units:
   alignment_output_sequences:
     class: nanobrain.core.data_unit.DataUnitMemory
     name: alignment_output_sequences
-    description: "Multiple sequence alignments from MUSCLE"
+    description: Multiple sequence alignments from MUSCLE
     persistent: false
-
-# Trigger configuration
 triggers:
-  - trigger_id: "input_data_received"
-    class: "nanobrain.core.trigger.DataUnitChangeTrigger"
-    data_unit: "alignment_input_sequences"
-    event_type: "set"
-    description: "Execute alignment when alignment input sequences are received"
-
-# Tool reference (not embedded config) - Phase 3 enhancement
+- trigger_id: input_data_received
+  class: nanobrain.core.trigger.DataUnitChangeTrigger
+  data_unit: alignment_input_sequences
+  event_type: set
+  description: Execute alignment when alignment input sequences are received
 tool_dependencies:
   muscle_tool: config/tools/muscle_tool.yml
-
 logical_steps_covered:
 - 13
 step_description_detailed: 'This step performs sequence alignment:
 
   13. Generate multiple sequence alignments using MUSCLE for viral protein analysis'
-
-# Framework metadata - Phase 3 updated
 _metadata:
   last_updated: '2025-06-23T22:30:00.000000'
   updated_by: Phase3_tool_integration_enhancement
   migration_version: 1.0.0
   uses_modular_config: true
-  config_type: "step"
-  framework_version: "1.0.0"
-  compliance_level: "full"
-  tool_integration: "from_config"
+  config_type: step
+  framework_version: 1.0.0
+  compliance_level: full
+  tool_integration: from_config

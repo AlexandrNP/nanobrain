@@ -1,0 +1,272 @@
+name: enhanced_viral_protein_analysis
+description: Complete viral protein analysis using enhanced from_config patterns
+steps:
+  genome_data_acquisition:
+    class: nanobrain.library.steps.bv_brc_data_acquisition_step.BVBRCDataAcquisitionStep
+    config: config/steps/BVBRCDataAcquisitionStep.yml
+    description: Acquire viral genome data from BV-BRC database
+  virus_name_resolution:
+    class: nanobrain.library.steps.virus_name_resolution_step.VirusNameResolutionStep
+    config:
+      name: virus_name_resolution
+      description: Resolve virus names using multiple specialized agents
+      agents:
+        query_analysis_agent:
+          class: nanobrain.library.agents.specialized.query_analysis_agent.QueryAnalysisAgent
+          config: config/agents/QueryAnalysisAgent.yml
+        synonym_detection_agent:
+          class: nanobrain.library.agents.specialized.protein_synonym_agent.ProteinSynonymAgent
+          config:
+            name: virus_synonym_detector
+            model: ${LLM_MODEL:-gpt-4}
+            ictv_compliance: true
+            tools:
+              ictv_database:
+                class: nanobrain.library.tools.databases.ictv_client.ICTVClient
+                config: config/tools/ICTVClient.yml
+              virus_taxonomy_tool:
+                class: nanobrain.library.tools.taxonomy.virus_taxonomy_tool.VirusTaxonomyTool
+                config:
+                  taxonomy_database: ictv
+                  enable_lineage_expansion: true
+                  cache_taxonomy_data: true
+  protein_sequence_analysis:
+    class: nanobrain.library.steps.protein_analysis_step.ProteinAnalysisStep
+    config:
+      name: comprehensive_protein_analysis
+      analysis_modes:
+      - structure
+      - function
+      - evolution
+      enable_parallel_analysis: true
+      tools:
+        mmseqs2_clustering:
+          class: nanobrain.library.tools.bioinformatics.mmseqs2_tool.MMseqs2Tool
+          config: config/tools/MMseqs2Tool.yml
+          description: Protein sequence clustering and search
+        muscle_alignment:
+          class: nanobrain.library.tools.bioinformatics.muscle_tool.MUSCLETool
+          config:
+            alignment_mode: super5
+            max_iterations: 16
+            enable_refinement: true
+            output_format: fasta
+        structure_predictor:
+          class: nanobrain.library.tools.structure.alphafold_tool.AlphaFoldTool
+          config: config/tools/AlphaFoldTool.yml
+          description: Protein structure prediction
+        functional_analyzer:
+          class: nanobrain.library.tools.function.interpro_tool.InterProTool
+          config:
+            analysis_types:
+            - domain
+            - family
+            - motif
+            enable_go_annotation: true
+            include_pathway_analysis: true
+  results_compilation:
+    class: nanobrain.library.steps.results_compilation_step.ResultsCompilationStep
+    config:
+      name: analysis_results_compilation
+      compilation_strategy: comprehensive_synthesis
+      compilation_agent:
+        class: nanobrain.library.agents.enhanced.collaborative_agent.CollaborativeAgent
+        config:
+          name: results_compiler_agent
+          model: ${LLM_MODEL:-gpt-4}
+          system_prompt: 'You are a scientific results compiler specializing in viral protein analysis.
+
+            Analyze protein analysis results and create comprehensive, structured reports
+
+            with evidence-based conclusions. Always cite data sources and provide
+
+            confidence assessments for your interpretations.
+
+            '
+          tools:
+            literature_search:
+              class: nanobrain.library.tools.literature.pubmed_client.PubMedClient
+              config: config/tools/PubMedClient.yml
+              description: Scientific literature search for contextual information
+            data_formatter:
+              class: nanobrain.library.tools.formatting.scientific_formatter.ScientificFormatter
+              config:
+                output_format: structured_report
+                include_citations: true
+                include_methodology: true
+                enable_figure_generation: true
+            statistical_analyzer:
+              class: nanobrain.library.tools.statistics.bio_statistics_tool.BioStatisticsTool
+              config:
+                statistical_tests:
+                - t_test
+                - anova
+                - correlation
+                significance_threshold: 0.05
+                enable_visualization: true
+links:
+  data_to_resolution:
+    class: nanobrain.core.link.DirectLink
+    config:
+      name: genome_to_resolution_link
+      source_output: genome_sequences
+      target_input: sequence_data
+      enable_data_validation: true
+      validation_schema: config/schemas/genome_data_schema.yml
+  resolution_to_analysis:
+    class: nanobrain.core.link.TransformLink
+    config:
+      name: resolution_transformation_link
+      transform_function: virus_name_to_protein_query
+      transformation_config:
+        include_variants: true
+        expand_synonyms: true
+        enable_lineage_context: true
+      transformer:
+        class: nanobrain.library.tools.transformation.sequence_transformer.SequenceTransformer
+        config:
+          transformation_modes:
+          - format_conversion
+          - data_enrichment
+          enable_metadata_preservation: true
+  analysis_to_compilation:
+    class: nanobrain.core.link.ConditionalLink
+    config:
+      name: quality_filtered_results
+      condition_type: quality_threshold
+      threshold_config:
+        minimum_confidence: 0.85
+        required_coverage: 0.9
+        quality_metrics:
+        - completeness
+        - accuracy
+        - consistency
+triggers:
+  data_quality_gate:
+    class: nanobrain.core.trigger.DataQualityTrigger
+    config:
+      name: genome_data_quality_trigger
+      quality_metrics:
+      - sequence_completeness
+      - annotation_quality
+      - metadata_completeness
+      - format_validation
+      minimum_score: 0.8
+      enable_quality_reporting: true
+  analysis_completion:
+    class: nanobrain.core.trigger.CompletionTrigger
+    config:
+      name: analysis_completion_trigger
+      completion_criteria:
+        all_tools_completed: true
+        minimum_results_count: 10
+        maximum_wait_time: 3600
+        required_quality_threshold: 0.85
+  error_escalation:
+    class: nanobrain.core.trigger.ErrorEscalationTrigger
+    config:
+      name: analysis_error_escalation
+      escalation_criteria:
+        consecutive_failures: 3
+        error_rate_threshold: 0.3
+        critical_tool_failure: true
+execution_strategy: graph_based
+error_handling: adaptive_retry
+max_parallel_steps: 3
+step_timeout: ${STEP_TIMEOUT:-1800.0}
+retry_attempts: 2
+enable_distributed_execution: false
+enable_monitoring: true
+monitoring_config:
+  performance_tracking: true
+  resource_utilization: true
+  tool_effectiveness: true
+  agent_behavior: true
+progress_reporting:
+  enable_progress_reporting: true
+  batch_interval: ${PROGRESS_INTERVAL:-5.0}
+  show_technical_errors: true
+  preserve_session_history: true
+  enable_real_time_updates: true
+workflow_data_units:
+  shared_cache:
+    class: nanobrain.core.data_unit.DataUnitMemory
+    config:
+      name: workflow_cache
+      persistent: true
+      max_size: ${CACHE_SIZE:-10000}
+      enable_compression: true
+      cache_policy: lru
+  intermediate_storage:
+    class: nanobrain.core.data_unit.DataUnitFile
+    config:
+      name: intermediate_results
+      file_path: ${TEMP_RESULTS_PATH}/intermediate_analysis.json
+      format: json
+      enable_versioning: true
+      compression: gzip
+  results_store:
+    class: nanobrain.core.data_unit.DataUnitFile
+    config:
+      name: analysis_results
+      file_path: ${RESULTS_PATH}/viral_protein_analysis_results.json
+      format: json
+      enable_compression: true
+      backup_enabled: true
+      retention_policy: ${RETENTION_DAYS:-90} days
+resource_management:
+  memory_limits:
+    max_workflow_memory: ${MAX_WORKFLOW_MEMORY:-8GB}
+    max_step_memory: ${MAX_STEP_MEMORY:-2GB}
+    enable_memory_monitoring: true
+  cpu_allocation:
+    max_cpu_cores: ${MAX_CPU_CORES:-4}
+    cpu_allocation_strategy: dynamic
+    enable_cpu_scaling: true
+  storage_management:
+    temp_directory: ${TEMP_DIR:-/tmp/nanobrain_workflow}
+    max_temp_storage: ${MAX_TEMP_STORAGE:-10GB}
+    cleanup_policy: workflow_completion
+mcp_support:
+  server_config:
+    name: viral_analysis_mcp_server
+    url: ${MCP_SERVER_URL:-ws://localhost:8080/mcp}
+    timeout: 30
+    capabilities:
+    - streaming
+    - batch_processing
+    - progress_reporting
+  client_config:
+    default_timeout: 15
+    max_retries: 3
+    enable_result_streaming: true
+a2a_support:
+  workflow_card:
+    version: 1.0.0
+    purpose: Comprehensive viral protein analysis workflow
+    capabilities:
+    - multi_step_processing
+    - agent_coordination
+    - tool_integration
+    - adaptive_execution
+    - quality_assessment
+  protocol_config:
+    communication_mode: workflow_orchestration
+    message_format: structured_json
+    enable_progress_streaming: true
+    enable_result_aggregation: true
+security_config:
+  enable_audit_logging: true
+  log_level: ${LOG_LEVEL:-INFO}
+  sensitive_data_handling: encrypted
+  access_control: role_based
+framework_metadata:
+  config_type: workflow
+  framework_version: 2.0.0
+  uses_enhanced_from_config: true
+  supports_class_config_patterns: true
+  supports_universal_tool_loading: true
+  supports_distributed_execution: true
+  created_with: enhanced_bioinformatics_template
+  workflow_complexity: advanced
+  estimated_execution_time: 30-60 minutes

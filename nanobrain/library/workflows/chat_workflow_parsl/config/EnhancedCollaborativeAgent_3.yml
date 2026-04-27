@@ -8,9 +8,8 @@ config:
   temperature: 0.7
   max_tokens: 1000
   enable_metrics: true
-  system_prompt: 'You are Agent 3 in a distributed Parsl-based conversational AI system.
-    You provide balanced, helpful, and comprehensive responses. You work alongside
-    other agents in parallel to provide well-rounded answers. Focus on being practical,
+  system_prompt: 'You are Agent 3 in a distributed Parsl-based conversational AI system. You provide balanced, helpful, and
+    comprehensive responses. You work alongside other agents in parallel to provide well-rounded answers. Focus on being practical,
     helpful, and maintaining good conversational flow.
 
     '
@@ -41,8 +40,7 @@ config:
   error_handling:
     max_retries: 2
     timeout: 35.0
-    fallback_response: I'm Agent 3, and I'm here to help. Let me try to assist you
-      in a different way.
+    fallback_response: I'm Agent 3, and I'm here to help. Let me try to assist you in a different way.
 _metadata:
   last_updated: '2025-06-22T23:41:37.543025'
   updated_by: modular_config_migration

@@ -1,116 +1,88 @@
-name: "ViralAnalysisWebWorkflow"
-description: "Web-optimized viral protein analysis workflow with progress tracking and client/server optimization"
-version: "1.0.0"
-execution_strategy: "event_driven"
-error_handling: "continue"
-enable_monitoring: true
-workflow_directory: "nanobrain/library/workflows/viral_protein_analysis/web"
-
-# Web-specific configuration
-web_optimization:
-  enable_progress_tracking: true
-  enable_real_time_updates: true
-  enable_result_formatting: true
-  enable_session_management: true
-  max_concurrent_sessions: 10
-  session_timeout: 3600  # 1 hour
-
-# Core workflow configuration
-core_workflow_config:
-  workflow_class: "nanobrain.library.workflows.viral_protein_analysis.alphavirus_workflow.AlphavirusWorkflow"
-  config_path: "nanobrain/library/workflows/viral_protein_analysis/config/AlphavirusWorkflow.yml"
-
-# ✅ FRAMEWORK COMPLIANCE: Add existing VirusExtractionAgent for entity extraction
-agents:
-  virus_extraction_agent:
-    class: "nanobrain.library.agents.specialized.virus_extraction_agent.VirusExtractionAgent"
-    config: "nanobrain/library/agents/specialized/config/virus_extraction_agent_config.yml"
-
-# Progress tracking configuration - Enhanced for detailed monitoring
-progress_tracking:
-  enable_step_level_tracking: true
-  enable_substep_tracking: true  # Enable detailed substep tracking
-  update_interval_seconds: 0.5  # More frequent updates for monitoring
-  persistence_enabled: true  # Enable persistence for debugging
-  enable_detailed_logging: true  # Detailed step execution logging
-  
-  # Step weights for overall progress calculation
-  step_weights:
-    data_acquisition: 0.20
-    annotation_mapping: 0.10
-    sequence_curation: 0.15
-    clustering_analysis: 0.20
-    alignment: 0.15
-    pssm_analysis: 0.15
-    data_aggregation: 0.03
-    result_collection: 0.02
-
-# Result formatting configuration
-result_formatting:
-  enable_web_formatting: true
-  enable_visualizations: true
-  enable_downloadable_files: true
-  enable_summary_generation: true
-  
-  # Visualization types to generate
-  visualization_types:
-    - "histogram"
-    - "dendrogram" 
-    - "heatmap"
-    - "scatter_plot"
-  
-  # Download formats to prepare
-  download_formats:
-    - "fasta"
-    - "csv"
-    - "json"
-    - "pdf_report"
-
-# Input/Output data units for web workflow
-input_data_units:
-  web_analysis_request:
-    class: "nanobrain.core.data_unit.DataUnitMemory"
-    name: "web_analysis_request"
-    description: "Web-formatted analysis request with virus species and parameters"
-    persistent: false
-
-output_data_units:
-  web_analysis_response:
-    class: "nanobrain.core.data_unit.DataUnitMemory"
-    name: "web_analysis_response" 
-    description: "Web-formatted analysis response with progress and results"
-    persistent: false
-
-# Performance and resource configuration
-performance:
-  expected_processing_time: 120.0  # 2 minutes
-  max_processing_time: 300.0       # 5 minutes
-  memory_limit_mb: 2048
-  enable_parallel_processing: true
-  max_parallel_steps: 2
-
-# Error handling and recovery
+name: ViralAnalysisWebWorkflow
+description: Web-optimized viral protein analysis workflow with progress tracking and client/server optimization
+version: 1.0.0
+execution_strategy: event_driven
 error_handling:
   enable_graceful_degradation: true
   enable_partial_results: true
   enable_error_recovery: true
   max_retry_attempts: 2
   retry_delay_seconds: 5.0
-
-# Logging and monitoring
+enable_monitoring: true
+workflow_directory: nanobrain/library/workflows/viral_protein_analysis/web
+web_optimization:
+  enable_progress_tracking: true
+  enable_real_time_updates: true
+  enable_result_formatting: true
+  enable_session_management: true
+  max_concurrent_sessions: 10
+  session_timeout: 3600
+core_workflow_config:
+  workflow_class: nanobrain.library.workflows.viral_protein_analysis.alphavirus_workflow.AlphavirusWorkflow
+  config_path: nanobrain/library/workflows/viral_protein_analysis/config/AlphavirusWorkflow.yml
+agents:
+  virus_extraction_agent:
+    class: nanobrain.library.agents.specialized.virus_extraction_agent.VirusExtractionAgent
+    config: nanobrain/library/agents/specialized/config/virus_extraction_agent_config.yml
+progress_tracking:
+  enable_step_level_tracking: true
+  enable_substep_tracking: true
+  update_interval_seconds: 0.5
+  persistence_enabled: true
+  enable_detailed_logging: true
+  step_weights:
+    data_acquisition: 0.2
+    annotation_mapping: 0.1
+    sequence_curation: 0.15
+    clustering_analysis: 0.2
+    alignment: 0.15
+    pssm_analysis: 0.15
+    data_aggregation: 0.03
+    result_collection: 0.02
+result_formatting:
+  enable_web_formatting: true
+  enable_visualizations: true
+  enable_downloadable_files: true
+  enable_summary_generation: true
+  visualization_types:
+  - histogram
+  - dendrogram
+  - heatmap
+  - scatter_plot
+  download_formats:
+  - fasta
+  - csv
+  - json
+  - pdf_report
+input_data_units:
+  web_analysis_request:
+    class: nanobrain.core.data_unit.DataUnitMemory
+    name: web_analysis_request
+    description: Web-formatted analysis request with virus species and parameters
+    persistent: false
+output_data_units:
+  web_analysis_response:
+    class: nanobrain.core.data_unit.DataUnitMemory
+    name: web_analysis_response
+    description: Web-formatted analysis response with progress and results
+    persistent: false
+performance:
+  expected_processing_time: 120.0
+  max_processing_time: 300.0
+  memory_limit_mb: 2048
+  enable_parallel_processing: true
+  max_parallel_steps: 2
 logging:
   log_progress_updates: true
   log_result_formatting: true
   log_session_management: true
   enable_performance_metrics: true
   enable_detailed_timing: true
-
-# ✅ FRAMEWORK COMPLIANCE: Workflow-level triggers using proper YAML format
 triggers:
-  - trigger_id: "web_analysis_request_received"
-    class: "nanobrain.core.trigger.DataUnitChangeTrigger"
-    config:
-      data_unit: "web_analysis_request"
-      event_type: "set"
-      description: "Execute viral analysis workflow when request data arrives"
-      enable_logging: true
+- trigger_id: web_analysis_request_received
+  class: nanobrain.core.trigger.DataUnitChangeTrigger
+  config:
+    data_unit: web_analysis_request
+    event_type: set
+    description: Execute viral analysis workflow when request data arrives
+    enable_logging: true

@@ -1,0 +1,336 @@
+name: enhanced_multi_agent_research
+description: Multi-agent collaborative research with universal tool loading
+steps:
+  research_coordination:
+    class: nanobrain.library.steps.research_coordination_step.ResearchCoordinationStep
+    config:
+      name: multi_agent_research_coordinator
+      coordination_strategy: intelligent_delegation
+      enable_agent_communication: true
+      research_agents:
+        literature_specialist:
+          class: nanobrain.library.agents.specialized.literature_agent.LiteratureAgent
+          config:
+            name: literature_research_specialist
+            specialization: scientific_literature
+            model: ${LLM_MODEL:-gpt-4}
+            system_prompt: 'You are a literature research specialist with expertise in scientific
+
+              paper analysis and evidence synthesis. Use your tools to find relevant
+
+              research, analyze methodologies, and synthesize findings across studies.
+
+              '
+            tools:
+              pubmed_search:
+                class: nanobrain.library.tools.literature.pubmed_client.PubMedClient
+                config: config/tools/PubMedClient.yml
+                description: Primary biomedical literature database
+              arxiv_search:
+                class: nanobrain.library.tools.literature.arxiv_client.ArxivClient
+                config:
+                  search_categories:
+                  - q-bio
+                  - cs.AI
+                  - stat.ML
+                  max_results: ${ARXIV_MAX_RESULTS:-100}
+                  enable_full_text: true
+              citation_analyzer:
+                class: nanobrain.library.tools.analysis.citation_analyzer.CitationAnalyzer
+                config: config/tools/CitationAnalyzer.yml
+                description: Citation network analysis and impact assessment
+              semantic_search:
+                class: nanobrain.library.tools.search.semantic_search_tool.SemanticSearchTool
+                config:
+                  embedding_model: ${EMBEDDING_MODEL:-text-embedding-ada-002}
+                  similarity_threshold: 0.7
+                  enable_reranking: true
+        data_analyst:
+          class: nanobrain.library.agents.specialized.data_analysis_agent.DataAnalysisAgent
+          config:
+            name: bioinformatics_data_analyst
+            specialization: bioinformatics_analysis
+            model: ${LLM_MODEL:-gpt-4}
+            system_prompt: 'You are a bioinformatics data analyst specializing in sequence analysis,
+
+              structural biology, and computational genomics. Use your analytical tools
+
+              to process biological data and extract meaningful insights.
+
+              '
+            tools:
+              sequence_analyzer:
+                class: nanobrain.library.tools.bioinformatics.sequence_analyzer.SequenceAnalyzer
+                config: config/tools/SequenceAnalyzer.yml
+                description: Comprehensive sequence analysis toolkit
+              statistical_analyzer:
+                class: nanobrain.library.tools.statistics.statistical_analyzer.StatisticalAnalyzer
+                config:
+                  analysis_methods:
+                  - regression
+                  - clustering
+                  - classification
+                  - pca
+                  enable_visualization: true
+                  visualization_formats:
+                  - png
+                  - svg
+                  - pdf
+              database_client:
+                class: nanobrain.library.tools.databases.unified_bio_client.UnifiedBioClient
+                config: config/tools/UnifiedBioClient.yml
+                description: Unified access to biological databases
+              phylogenetic_tool:
+                class: nanobrain.library.tools.phylogenetics.phylo_tool.PhylogeneticTool
+                config:
+                  tree_methods:
+                  - neighbor_joining
+                  - maximum_likelihood
+                  - bayesian
+                  bootstrap_replicates: ${BOOTSTRAP_REPS:-1000}
+                  enable_visualization: true
+        synthesis_specialist:
+          class: nanobrain.library.agents.enhanced.collaborative_agent.CollaborativeAgent
+          config:
+            name: research_synthesis_specialist
+            specialization: knowledge_synthesis
+            model: ${LLM_MODEL:-gpt-4}
+            system_prompt: 'You are a research synthesis specialist responsible for integrating
+
+              findings from literature analysis and data analysis. Create comprehensive
+
+              reports that combine evidence from multiple sources and provide
+
+              actionable insights.
+
+              '
+            tools:
+              knowledge_graph:
+                class: nanobrain.library.tools.knowledge.knowledge_graph_tool.KnowledgeGraphTool
+                config:
+                  graph_database: ${GRAPH_DB:-neo4j}
+                  enable_reasoning: true
+                  reasoning_algorithms:
+                  - path_finding
+                  - pattern_matching
+                  - inference
+              report_generator:
+                class: nanobrain.library.tools.reporting.scientific_report_generator.ScientificReportGenerator
+                config: config/tools/ScientificReportGenerator.yml
+                description: Comprehensive scientific report generation
+              collaboration_workspace:
+                class: nanobrain.library.tools.collaboration.shared_workspace.SharedWorkspace
+                config:
+                  enable_real_time_sync: true
+                  version_control: true
+                  workspace_type: scientific_collaboration
+                  max_concurrent_users: ${MAX_USERS:-10}
+              evidence_integrator:
+                class: nanobrain.library.tools.integration.evidence_integrator.EvidenceIntegrator
+                config:
+                  integration_strategies:
+                  - weighted_consensus
+                  - meta_analysis
+                  - systematic_review
+                  confidence_modeling: true
+                  bias_detection: true
+  collaborative_validation:
+    class: nanobrain.library.steps.collaborative_validation_step.CollaborativeValidationStep
+    config:
+      name: multi_agent_validation
+      validation_strategy: peer_review
+      validation_agents:
+        methodology_reviewer:
+          class: nanobrain.library.agents.specialized.methodology_review_agent.MethodologyReviewAgent
+          config:
+            name: methodology_validation_specialist
+            review_criteria:
+            - statistical_validity
+            - experimental_design
+            - bias_assessment
+            tools:
+              methodology_validator:
+                class: nanobrain.library.tools.validation.methodology_validator.MethodologyValidator
+                config:
+                  validation_frameworks:
+                  - consort
+                  - prisma
+                  - strobe
+                  enable_checklist_generation: true
+        reproducibility_checker:
+          class: nanobrain.library.agents.specialized.reproducibility_agent.ReproducibilityAgent
+          config:
+            name: reproducibility_assessment_specialist
+            assessment_criteria:
+            - data_availability
+            - code_availability
+            - methodology_clarity
+            tools:
+              reproducibility_scanner:
+                class: nanobrain.library.tools.assessment.reproducibility_scanner.ReproducibilityScanner
+                config:
+                  scanning_criteria: config/assessment/ReproducibilityCriteria.yml
+                  enable_automated_scoring: true
+links:
+  literature_to_analysis:
+    class: nanobrain.core.link.CollaborationLink
+    config:
+      name: literature_analysis_collaboration
+      communication_protocol: agent_to_agent
+      data_sharing_mode: structured_exchange
+      collaboration_features:
+      - real_time_updates
+      - shared_workspace
+      - cross_validation
+      mediator:
+        class: nanobrain.library.tools.communication.collaboration_mediator.CollaborationMediator
+        config:
+          mediation_strategy: semantic_routing
+          enable_conflict_resolution: true
+          priority_scheduling: true
+  analysis_to_synthesis:
+    class: nanobrain.core.link.KnowledgeLink
+    config:
+      name: analysis_synthesis_knowledge_transfer
+      knowledge_format: semantic_annotations
+      include_confidence_scores: true
+      enable_provenance_tracking: true
+      transformer:
+        class: nanobrain.library.tools.transformation.knowledge_transformer.KnowledgeTransformer
+        config:
+          transformation_modes:
+          - semantic_enrichment
+          - format_standardization
+          enable_metadata_preservation: true
+  synthesis_to_validation:
+    class: nanobrain.core.link.ValidationLink
+    config:
+      name: synthesis_validation_pipeline
+      validation_mode: comprehensive
+      quality_gates:
+      - completeness
+      - consistency
+      - credibility
+      assessor:
+        class: nanobrain.library.tools.assessment.quality_assessor.QualityAssessor
+        config:
+          assessment_criteria: config/quality/ResearchQualityCriteria.yml
+          enable_automated_scoring: true
+triggers:
+  consensus_reached:
+    class: nanobrain.core.trigger.ConsensusReachedTrigger
+    config:
+      name: multi_agent_consensus
+      consensus_threshold: 0.8
+      minimum_participants: 2
+      consensus_algorithm: weighted_agreement
+      enable_confidence_tracking: true
+  knowledge_gap_detected:
+    class: nanobrain.core.trigger.KnowledgeGapTrigger
+    config:
+      name: research_gap_trigger
+      gap_detection_criteria:
+      - insufficient_evidence
+      - conflicting_results
+      - missing_methodology
+      - outdated_references
+      gap_analysis_depth: comprehensive
+  quality_threshold:
+    class: nanobrain.core.trigger.QualityThresholdTrigger
+    config:
+      name: research_quality_gate
+      quality_dimensions:
+        evidence_strength: 0.8
+        methodology_rigor: 0.85
+        reproducibility_score: 0.75
+        citation_quality: 0.8
+execution_strategy: collaborative
+enable_agent_communication: true
+communication_protocol: a2a
+coordination_mode: intelligent_orchestration
+agent_interaction:
+  max_parallel_agents: ${MAX_PARALLEL_AGENTS:-3}
+  communication_timeout: ${COMM_TIMEOUT:-60}
+  enable_agent_learning: true
+  learning_retention: session
+collaborative_data_management:
+  shared_knowledge_base:
+    class: nanobrain.core.data_unit.SharedKnowledgeUnit
+    config:
+      name: collaborative_knowledge_base
+      enable_real_time_sync: true
+      conflict_resolution: version_merge
+      access_control: role_based
+  agent_communication_log:
+    class: nanobrain.core.data_unit.DataUnitFile
+    config:
+      name: agent_interactions
+      file_path: ${LOG_PATH}/agent_communications.jsonl
+      format: jsonlines
+      enable_real_time_write: true
+  research_workspace:
+    class: nanobrain.core.data_unit.CollaborativeWorkspaceUnit
+    config:
+      name: shared_research_workspace
+      workspace_type: scientific_research
+      enable_version_control: true
+      max_concurrent_users: ${MAX_WORKSPACE_USERS:-5}
+collaborative_monitoring:
+  agent_performance_tracking: true
+  communication_efficiency: true
+  consensus_formation_speed: true
+  knowledge_integration_quality: true
+progress_reporting:
+  enable_progress_reporting: true
+  batch_interval: ${PROGRESS_INTERVAL:-3.0}
+  agent_activity_reporting: true
+  collaboration_metrics: true
+  consensus_tracking: true
+resource_allocation:
+  per_agent_memory: ${AGENT_MEMORY:-1GB}
+  shared_memory_pool: ${SHARED_MEMORY:-2GB}
+  communication_bandwidth: ${COMM_BANDWIDTH:-100MB/s}
+  coordination_overhead: ${COORD_OVERHEAD:-10%}
+mcp_support:
+  server_config:
+    name: multi_agent_research_mcp
+    url: ${MCP_SERVER_URL:-ws://localhost:8080/mcp}
+    timeout: 45
+    capabilities:
+    - multi_agent_coordination
+    - streaming
+    - consensus_tracking
+  client_config:
+    agent_registration: true
+    capability_discovery: true
+    load_balancing: true
+a2a_support:
+  collaboration_card:
+    version: 1.0.0
+    purpose: Multi-agent collaborative research system
+    capabilities:
+    - agent_to_agent_communication
+    - knowledge_sharing
+    - consensus_formation
+    - quality_validation
+    - collaborative_synthesis
+  protocol_config:
+    communication_mode: advanced_multi_agent
+    message_format: semantic_json
+    enable_agent_discovery: true
+    enable_capability_negotiation: true
+    enable_dynamic_coalition: true
+security_config:
+  inter_agent_encryption: true
+  workspace_access_control: fine_grained
+  data_privacy_level: research_confidential
+  audit_all_interactions: true
+framework_metadata:
+  config_type: collaborative_workflow
+  framework_version: 2.0.0
+  uses_enhanced_from_config: true
+  supports_multi_agent_coordination: true
+  supports_collaborative_learning: true
+  collaboration_complexity: advanced
+  estimated_agents: 3-6
+  estimated_coordination_time: 15-45 minutes

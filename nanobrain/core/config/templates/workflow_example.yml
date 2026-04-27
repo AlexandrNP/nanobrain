@@ -44,8 +44,8 @@ agents:
       model: gpt-4-turbo
       temperature: 0.2
       max_tokens: 4000
-      system_prompt: 'You are a specialized code generation agent. Generate clean,
-        well-documented code based on natural language descriptions.
+      system_prompt: 'You are a specialized code generation agent. Generate clean, well-documented code based on natural language
+        descriptions.
 
 
         Guidelines:
@@ -152,8 +152,7 @@ examples:
   class_generation:
     description: Generate a Python class
     input:
-      code_input: Create a User class with methods for authentication and profile
-        management
+      code_input: Create a User class with methods for authentication and profile management
     expected_output:
       file_output: output/generated_code.py
 _metadata:

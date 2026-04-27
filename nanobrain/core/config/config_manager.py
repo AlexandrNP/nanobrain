@@ -854,7 +854,11 @@ class ConfigManager:
                 'log_missing_keys': True
             },
             'development': {
-                'use_mock_clients': True,
+                # DEFAULT FLIPPED 2026-04-23 (T14 mocks-policy): was True.
+                # See workspace 2026-04-21 mocks policy + audit at
+                # apecx-mcp-integration/docs/nanobrain_mock_audit.md §2-D1.
+                # Operators who want mock clients set it explicitly.
+                'use_mock_clients': False,
                 'validate_schema': True,
                 'allow_env_override': True
             }
@@ -1083,12 +1087,32 @@ class ConfigManager:
         """
         Check if framework is running in development mode.
 
+        **Since 2026-04-23 (T14 mocks-policy)**: this flag
+        defaults to ``False``. When ``True``, the framework logs a
+        ⚠️ warning at the first call so operators see that mock
+        clients are active in their deployment.
+
         Returns:
             True if development mode is enabled.
         """
         if not self._loaded:
             self.load_config()
-        return self._config.get('development', {}).get('use_mock_clients', False)
+        is_dev = self._config.get('development', {}).get('use_mock_clients', False)
+
+        # One-shot warning so operators can't miss dev-mode being on
+        # in a deployment that was supposed to be production. Emits
+        # only once per ConfigManager instance to avoid log spam.
+        if is_dev and not getattr(self, '_dev_mode_warning_emitted', False):
+            import logging
+            logging.getLogger(__name__).warning(
+                "⚠️  nanobrain running in dev-mode (use_mock_clients=True). "
+                "Real LLM / A2A / Academy clients may be replaced with mock "
+                "responses. Unset `development.use_mock_clients` in your "
+                "config file for production. See T14 audit at "
+                "apecx-mcp-integration/docs/nanobrain_mock_audit.md §2-D1."
+            )
+            self._dev_mode_warning_emitted = True
+        return is_dev
 
     def reload_config(self) -> None:
         """Reload configuration from file."""

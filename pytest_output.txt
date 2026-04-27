@@ -1,0 +1,36 @@
+....................F.F......FF......................................... [ 27%]
+.................................................F...................... [ 54%]
+........................................................................ [ 81%]
+..................................................                       [100%]
+=================================== FAILURES ===================================
+/lus/flare/projects/FoundEpidem/onarykov/nanobrain/tests/unit/test_cleanup_manager.py:120: AssertionError: assert 'python_cache' in {'build_artifact', 'log', 'pbs_output'}
+/lus/flare/projects/FoundEpidem/onarykov/nanobrain/tests/unit/test_cleanup_manager.py:165: AssertionError: assert 0 > 0
+/lus/flare/projects/FoundEpidem/onarykov/nanobrain/tests/unit/test_cleanup_manager.py:316: AssertionError: assert not True
+/lus/flare/projects/FoundEpidem/onarykov/nanobrain/tests/unit/test_cleanup_properties.py:170: AssertionError: Temporary file /tmp/tmpfvqfz63_/pattern_test_repo/__pycache__ should be identified for cleanup
+/lus/flare/projects/FoundEpidem/onarykov/nanobrain/tests/unit/test_dependency_manager_properties.py:304: AssertionError: Core dependency 00~=0.0.0 missing from requirements.txt
+=============================== warnings summary ===============================
+tests/unit/test_dependency_manager.py::TestDependencyManager::test_validate_installation_core_imports
+  /lus/flare/projects/FoundEpidem/onarykov/nanobrain/nanobrain/core/optional_deps.py:36: UserWarning: Optional dependency 'anthropic' not found. Some features may not be available. Install with: pip install anthropic
+    warnings.warn(
+
+tests/unit/test_dependency_manager.py::TestDependencyManager::test_validate_installation_core_imports
+  <frozen importlib._bootstrap>:488: DeprecationWarning: builtin type SwigPyPacked has no __module__ attribute
+
+tests/unit/test_dependency_manager.py::TestDependencyManager::test_validate_installation_core_imports
+  <frozen importlib._bootstrap>:488: DeprecationWarning: builtin type SwigPyObject has no __module__ attribute
+
+tests/unit/test_dependency_manager.py::TestDependencyManager::test_validate_installation_core_imports
+  <frozen importlib._bootstrap>:488: DeprecationWarning: builtin type swigvarlink has no __module__ attribute
+
+tests/unit/test_dependency_manager.py::TestDependencyManager::test_validate_installation_core_imports
+  /lus/flare/projects/FoundEpidem/onarykov/nanobrain/nanobrain/core/optional_deps.py:36: UserWarning: Optional dependency 'chromadb' not found. Some features may not be available. Install with: pip install chromadb
+    warnings.warn(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/unit/test_cleanup_manager.py::TestCleanupManager::test_scan_temporary_files
+FAILED tests/unit/test_cleanup_manager.py::TestCleanupManager::test_remove_python_cache
+FAILED tests/unit/test_cleanup_manager.py::TestCleanupManager::test_comprehensive_cleanup
+FAILED tests/unit/test_cleanup_properties.py::TestCleanupProperties::test_temporary_file_pattern_matching_property
+FAILED tests/unit/test_dependency_manager_properties.py::TestDependencyManagerProperties::test_requirements_synchronization_completeness
+5 failed, 261 passed, 5 warnings in 52.51s

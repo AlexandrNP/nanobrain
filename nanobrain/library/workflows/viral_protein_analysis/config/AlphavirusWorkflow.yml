@@ -1,44 +1,33 @@
-name: "AlphavirusWorkflow"
-description: "Comprehensive viral protein analysis workflow with enhanced ultra-precision data acquisition"
-version: "5.1.0"  # Compliance update version
-execution_strategy: "event_driven"
-error_handling: "continue"
+name: AlphavirusWorkflow
+description: Comprehensive viral protein analysis workflow with enhanced ultra-precision data acquisition
+version: 5.1.0
+execution_strategy: event_driven
+error_handling: continue
 enable_monitoring: true
-
-# Configurable timeout for workflow execution (in seconds) - Extended for PSSM processing
-execution_timeout_seconds: 600  # 10 minutes per step
-workflow_directory: "nanobrain/library/workflows/viral_protein_analysis"
-
-# Enhanced monitoring configuration for step-by-step tracking
+execution_timeout_seconds: 600
+workflow_directory: nanobrain/library/workflows/viral_protein_analysis
 monitoring_config:
   enable_step_monitoring: true
   enable_substep_monitoring: true
   enable_performance_tracking: true
   enable_error_tracking: true
-  log_level: "DEBUG"
+  log_level: DEBUG
   step_timeout_monitoring: true
-  progress_update_interval: 5  # seconds
+  progress_update_interval: 5
   detailed_step_logging: true
-
-# Workflow-level data units
 input_data_units:
   workflow_input:
-    class: "nanobrain.core.data_unit.DataUnitMemory"
-    name: "workflow_input"
-    description: "Enhanced workflow input with ultra-high-confidence synonyms and validation criteria"
+    class: nanobrain.core.data_unit.DataUnitMemory
+    name: workflow_input
+    description: Enhanced workflow input with ultra-high-confidence synonyms and validation criteria
     persistent: false
-    cache_size: 1000
-
 output_data_units:
   workflow_output:
-    class: "nanobrain.core.data_unit.DataUnitFile"
-    name: "workflow_output"
-    description: "Complete workflow results with enhanced precision validation"
+    class: nanobrain.core.data_unit.DataUnitFile
+    name: workflow_output
+    description: Complete workflow results with enhanced precision validation
     persistent: true
-    cache_size: 1000
-    file_path: "results/enhanced_viral_protein_analysis.json"
-
-# Existing configuration preserved
+    file_path: results/enhanced_viral_protein_analysis.json
 enable_progress_reporting: true
 progress_batch_interval: 3.0
 progress_collapsed_by_default: true
@@ -51,206 +40,165 @@ retry_delay: 5.0
 validate_graph: true
 allow_cycles: true
 require_connected_graph: true
-
-# Data directory configuration (existing)
-data_directory: "data"
-bvbrc_cache_directory: "data/bvbrc_cache"
-mmseqs2_cache_directory: "data/mmseqs2_cache"
-cache_directory: "data/cache"
-csv_file_path: "data/viral_analysis/BVBRC_genome_viral.csv"
-
-# UPDATED: Dict-based steps format (was list-based)
+data_directory: data
+bvbrc_cache_directory: data/bvbrc_cache
+mmseqs2_cache_directory: data/mmseqs2_cache
+cache_directory: data/cache
+csv_file_path: data/viral_analysis/BVBRC_genome_viral.csv
 steps:
   data_acquisition:
-    class: "nanobrain.library.workflows.viral_protein_analysis.steps.data_acquisition_step.BVBRCDataAcquisitionStep"
-    config: "nanobrain/library/workflows/viral_protein_analysis/config/DataAcquisitionStep/DataAcquisitionStep.yml"
-    step_id: "data_acquisition"
-  
+    class: nanobrain.library.workflows.viral_protein_analysis.steps.data_acquisition_step.BVBRCDataAcquisitionStep
+    config: nanobrain/library/workflows/viral_protein_analysis/config/DataAcquisitionStep/DataAcquisitionStep.yml
+    step_id: data_acquisition
   annotation_mapping:
-    class: "nanobrain.library.workflows.viral_protein_analysis.steps.annotation_mapping_step.AnnotationMappingStep"
-    config: "config/AnnotationMappingStep/AnnotationMappingStep.yml"
-    step_id: "annotation_mapping"
-  
+    class: nanobrain.library.workflows.viral_protein_analysis.steps.annotation_mapping_step.AnnotationMappingStep
+    config: config/AnnotationMappingStep/AnnotationMappingStep.yml
+    step_id: annotation_mapping
   sequence_curation:
-    class: "nanobrain.library.workflows.viral_protein_analysis.steps.sequence_curation_step.SequenceCurationStep"
-    config: "config/SequenceCurationStep/SequenceCurationStep.yml"
-    step_id: "sequence_curation"
-  
+    class: nanobrain.library.workflows.viral_protein_analysis.steps.sequence_curation_step.SequenceCurationStep
+    config: config/SequenceCurationStep/SequenceCurationStep.yml
+    step_id: sequence_curation
   clustering_analysis:
-    class: "nanobrain.library.workflows.viral_protein_analysis.steps.clustering_step.ClusteringStep"
-    config: "config/ClusteringStep/ClusteringStep.yml"
-    step_id: "clustering_analysis"
-  
+    class: nanobrain.library.workflows.viral_protein_analysis.steps.clustering_step.ClusteringStep
+    config: config/ClusteringStep/ClusteringStep.yml
+    step_id: clustering_analysis
   alignment:
-    class: "nanobrain.library.workflows.viral_protein_analysis.steps.alignment_step.AlignmentStep"
-    config: "config/AlignmentStep/AlignmentStep.yml"
-    step_id: "alignment"
-  
+    class: nanobrain.library.workflows.viral_protein_analysis.steps.alignment_step.AlignmentStep
+    config: config/AlignmentStep/AlignmentStep.yml
+    step_id: alignment
   pssm_analysis:
-    class: "nanobrain.library.workflows.viral_protein_analysis.steps.pssm_analysis_step.PSSMAnalysisStep"
-    config: "config/PSSMAnalysisStep/PSSMAnalysisStep.yml"
-    step_id: "pssm_analysis"
-  
+    class: nanobrain.library.workflows.viral_protein_analysis.steps.pssm_analysis_step.PSSMAnalysisStep
+    config: config/PSSMAnalysisStep/PSSMAnalysisStep.yml
+    step_id: pssm_analysis
   data_aggregation:
-    class: "nanobrain.library.workflows.viral_protein_analysis.steps.data_aggregation_step.DataAggregationStep"
-    config: "config/DataAggregationStep/DataAggregationStep.yml"
-    step_id: "data_aggregation"
-  
+    class: nanobrain.library.workflows.viral_protein_analysis.steps.data_aggregation_step.DataAggregationStep
+    config: config/DataAggregationStep/DataAggregationStep.yml
+    step_id: data_aggregation
   result_collection:
-    class: "nanobrain.library.workflows.viral_protein_analysis.steps.result_collection_step.ResultCollectionStep"
-    config: "config/ResultCollectionStep/ResultCollectionStep.yml"
-    step_id: "result_collection"
-
-# FRAMEWORK COMPLIANT: Links with class+config format for proper resolution
+    class: nanobrain.library.workflows.viral_protein_analysis.steps.result_collection_step.ResultCollectionStep
+    config: config/ResultCollectionStep/ResultCollectionStep.yml
+    step_id: result_collection
 links:
   workflow_to_acquisition:
-    class: "nanobrain.core.link.DirectLink"
+    class: nanobrain.core.link.DirectLink
     config:
-      name: "workflow_to_acquisition"
-      link_type: "direct"
-      source: "workflow_input"
-      target: "data_acquisition.synonyms_input"
-      description: "Route enhanced virus resolution output to enhanced data acquisition"
+      name: workflow_to_acquisition
+      link_type: direct
+      source: workflow_input
+      target: data_acquisition.synonyms_input
+      description: Route enhanced virus resolution output to enhanced data acquisition
       enable_logging: true
       auto_transfer: true
-      transfer_on: "data_updated"
+      transfer_on: data_updated
       enable_monitoring: true
-  
   acquisition_to_annotation:
-    class: "nanobrain.core.link.DirectLink"
+    class: nanobrain.core.link.DirectLink
     config:
-      name: "acquisition_to_annotation"
-      link_type: "direct"
-      source: "data_acquisition.validated_genomes"
-      target: "annotation_mapping.fasta_and_annotations"
-      description: "Route validated genomes to annotation mapping"
+      name: acquisition_to_annotation
+      link_type: direct
+      source: data_acquisition.validated_genomes
+      target: annotation_mapping.fasta_and_annotations
+      description: Route validated genomes to annotation mapping
       enable_logging: true
       auto_transfer: true
-      transfer_on: "data_updated"
+      transfer_on: data_updated
       enable_monitoring: true
-  
   annotation_to_curation:
-    class: "nanobrain.core.link.DirectLink"
+    class: nanobrain.core.link.DirectLink
     config:
-      name: "annotation_to_curation"
-      link_type: "direct"
-      source: "annotation_mapping.standardized_annotations"
-      target: "sequence_curation.curation_input_annotations"
-      description: "Route standardized annotations to sequence curation"
+      name: annotation_to_curation
+      link_type: direct
+      source: annotation_mapping.standardized_annotations
+      target: sequence_curation.curation_input_annotations
+      description: Route standardized annotations to sequence curation
       enable_logging: true
       auto_transfer: true
-      transfer_on: "data_updated"
+      transfer_on: data_updated
       enable_monitoring: true
-  
   curation_to_alignment:
-    class: "nanobrain.core.link.DirectLink"
+    class: nanobrain.core.link.DirectLink
     config:
-      name: "curation_to_alignment"
-      link_type: "direct"
-      source: "sequence_curation.curated_sequences"
-      target: "alignment.alignment_input_sequences"
-      description: "Route curated sequences to alignment step"
+      name: curation_to_alignment
+      link_type: direct
+      source: sequence_curation.curated_sequences
+      target: alignment.alignment_input_sequences
+      description: Route curated sequences to alignment step
       enable_logging: true
       auto_transfer: true
-      transfer_on: "data_updated"
+      transfer_on: data_updated
       enable_monitoring: true
-  
   alignment_to_clustering:
-    class: "nanobrain.core.link.DirectLink"
+    class: nanobrain.core.link.DirectLink
     config:
-      name: "alignment_to_clustering"
-      link_type: "direct"
-      source: "alignment.alignment_output_sequences"
-      target: "clustering_analysis.clustering_input_sequences"
-      description: "Route aligned sequences to clustering analysis"
+      name: alignment_to_clustering
+      link_type: direct
+      source: alignment.alignment_output_sequences
+      target: clustering_analysis.clustering_input_sequences
+      description: Route aligned sequences to clustering analysis
       enable_logging: true
       auto_transfer: true
-      transfer_on: "data_updated"
+      transfer_on: data_updated
       enable_monitoring: true
-  
   clustering_to_pssm:
-    class: "nanobrain.core.link.DirectLink"
+    class: nanobrain.core.link.DirectLink
     config:
-      name: "clustering_to_pssm"
-      link_type: "direct"
-      source: "clustering_analysis.sequence_clusters"
-      target: "pssm_analysis.pssm_input_clusters"
-      description: "Route sequence clusters to PSSM analysis"
+      name: clustering_to_pssm
+      link_type: direct
+      source: clustering_analysis.sequence_clusters
+      target: pssm_analysis.pssm_input_clusters
+      description: Route sequence clusters to PSSM analysis
       enable_logging: true
       auto_transfer: true
-      transfer_on: "data_updated"
+      transfer_on: data_updated
       enable_monitoring: true
-  
   pssm_to_aggregation:
-    class: "nanobrain.core.link.DirectLink"
+    class: nanobrain.core.link.DirectLink
     config:
-      name: "pssm_to_aggregation"
-      link_type: "direct"
-      source: "pssm_analysis.pssm_matrices"
-      target: "data_aggregation.pssm_data"
-      description: "Route PSSM matrices to data aggregation"
+      name: pssm_to_aggregation
+      link_type: direct
+      source: pssm_analysis.pssm_matrices
+      target: data_aggregation.pssm_data
+      description: Route PSSM matrices to data aggregation
       enable_logging: true
       auto_transfer: true
-      transfer_on: "data_updated"
+      transfer_on: data_updated
       enable_monitoring: true
-  
   aggregation_to_results:
-    class: "nanobrain.core.link.DirectLink"
+    class: nanobrain.core.link.DirectLink
     config:
-      name: "aggregation_to_results"
-      link_type: "direct"
-      source: "data_aggregation.aggregated_data"
-      target: "result_collection.analysis_data"
-      description: "Route aggregated data to result collection"
+      name: aggregation_to_results
+      link_type: direct
+      source: data_aggregation.aggregated_data
+      target: result_collection.analysis_data
+      description: Route aggregated data to result collection
       enable_logging: true
       auto_transfer: true
-      transfer_on: "data_updated"
+      transfer_on: data_updated
       enable_monitoring: true
-  
   results_to_workflow:
-    class: "nanobrain.core.link.DirectLink"
+    class: nanobrain.core.link.DirectLink
     config:
-      name: "results_to_workflow"
-      link_type: "direct"
-      source: "result_collection.final_results"
-      target: "workflow_output"
-      description: "Route final results to workflow output"
+      name: results_to_workflow
+      link_type: direct
+      source: result_collection.final_results
+      target: workflow_output
+      description: Route final results to workflow output
       enable_logging: true
       auto_transfer: true
-      transfer_on: "data_updated"
+      transfer_on: data_updated
       enable_monitoring: true
-
-# Existing input/output data units (preserved)
-input_data_units:
-  workflow_input:
-    class: "nanobrain.core.data_unit.DataUnitMemory"
-    name: "workflow_input"
-    description: "Enhanced workflow input with ultra-high-confidence synonyms and validation criteria"
-    persistent: false
-
-output_data_units:
-  workflow_output:
-    class: "nanobrain.core.data_unit.DataUnitFile"
-    name: "workflow_output"
-    description: "Complete workflow results with enhanced precision validation"
-    persistent: true
-    file_path: "results/enhanced_viral_protein_analysis.json"
-
-# ✅ SCOPE CORRECTED: Workflow-level trigger referencing workflow-level data unit
 triggers:
-  - trigger_id: "enhanced_viral_analysis_completed"
-    class: "nanobrain.core.trigger.DataUnitChangeTrigger"
-    config:
-      data_unit: "workflow_output"  # ✅ WORKFLOW-LEVEL REFERENCE: References workflow's output data unit
-      event_type: "set"
-      description: "Trigger when enhanced viral protein analysis completed"
-      enable_logging: true
-
-# Existing metadata (preserved)
+- trigger_id: enhanced_viral_analysis_completed
+  class: nanobrain.core.trigger.DataUnitChangeTrigger
+  config:
+    data_unit: workflow_output
+    event_type: set
+    description: Trigger when enhanced viral protein analysis completed
+    enable_logging: true
 workflow_metadata:
-  framework_compliance: "event_driven_architecture"
-  migration_status: "enhanced_precision_complete"
-  last_updated: "2025-01-28"
-  configuration_status: "ultra_precision_event_driven"
-  enhanced_features: "ultra_high_confidence_validation_pipeline"
-  notes: "Updated for framework compliance - Dict-based configuration format"
+  framework_compliance: event_driven_architecture
+  migration_status: enhanced_precision_complete
+  last_updated: '2025-01-28'
+  configuration_status: ultra_precision_event_driven
+  enhanced_features: ultra_high_confidence_validation_pipeline
+  notes: Updated for framework compliance - Dict-based configuration format

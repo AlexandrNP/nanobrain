@@ -1,53 +1,36 @@
-# Expert Conversation Step Configuration
-# ✅ FRAMEWORK COMPLIANCE: Complete step configuration for conversational processing
-# ✅ REUSED COMPONENT: Uses ConversationalAgent from chatbot_viral_integration
-
-name: "ExpertConversationStep"
-description: "Step for generating expert conversational responses about viral biology"
-version: "1.0.0"
-step_type: "conversational_processing"
-
-# Step input/output data units
+name: ExpertConversationStep
+description: Step for generating expert conversational responses about viral biology
+version: 1.0.0
+step_type: conversational_processing
 input_data_units:
   conversation_input:
-    class: "nanobrain.core.data_unit.DataUnitMemory"
-    name: "conversation_input"
-    description: "Input for conversational processing including user query and context"
+    class: nanobrain.core.data_unit.DataUnitMemory
+    name: conversation_input
+    description: Input for conversational processing including user query and context
     persistent: false
-
 output_data_units:
   conversation_output:
-    class: "nanobrain.core.data_unit.DataUnitMemory"
-    name: "conversation_output"
-    description: "Output containing expert response and metadata"
+    class: nanobrain.core.data_unit.DataUnitMemory
+    name: conversation_output
+    description: Output containing expert response and metadata
     persistent: false
-
-# Conversational agent configuration - use the viral expert agent
 conversational_agent:
-  class: "nanobrain.library.agents.specialized.viral_expert_agent.ViralExpertConversationalAgent"
-  config: "/Users/onarykov/git/nanobrain-upd-Jun/nanobrain/Chatbot/config/components/viral_expert_agent_config.yml"
-
-# CRITICAL FIX: Add agent_config_file for ConversationalResponseStep compatibility
-agent_config_file: "/Users/onarykov/git/nanobrain-upd-Jun/nanobrain/Chatbot/config/components/viral_expert_agent_config.yml"
-
-# Step-level triggers
+  class: nanobrain.library.agents.specialized.viral_expert_agent.ViralExpertConversationalAgent
+  config: /Users/onarykov/git/nanobrain-upd-Jun/nanobrain/Chatbot/config/components/viral_expert_agent_config.yml
+agent_config_file: /Users/onarykov/git/nanobrain-upd-Jun/nanobrain/Chatbot/config/components/viral_expert_agent_config.yml
 triggers:
-  - trigger_id: "conversation_input_received"
-    class: "nanobrain.core.trigger.DataUnitChangeTrigger"
-    config:
-      data_unit: "conversation_input"
-      event_type: "set"
-      description: "Execute conversation when input is received"
-
-# Step execution configuration
+- trigger_id: conversation_input_received
+  class: nanobrain.core.trigger.DataUnitChangeTrigger
+  config:
+    data_unit: conversation_input
+    event_type: set
+    description: Execute conversation when input is received
 execution_config:
   timeout: 30.0
   retry_attempts: 2
   retry_delay: 1.0
   enable_monitoring: true
-
-# Performance configuration
 performance:
   expected_processing_time: 10.0
   max_processing_time: 30.0
-  enable_caching: false  # Conversational responses should be fresh 
+  enable_caching: false

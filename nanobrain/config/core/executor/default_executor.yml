@@ -1,36 +1,21 @@
-# Default Executor Configuration for NanoBrain Framework
-# Framework-compliant executor configuration to resolve ExecutorConfig instantiation issues
-
-name: "default_local_executor"
-description: "Default local executor for NanoBrain agents"
-class: "nanobrain.core.executor.LocalExecutor"
-
-# Executor configuration
+name: default_local_executor
+description: Default local executor for NanoBrain agents
+class: nanobrain.core.executor.LocalExecutor
 config:
-  executor_type: "local"
+  executor_type: local
   max_workers: 2
   timeout: 300.0
-  
-  # Resource management
   memory_limit: null
   cpu_limit: null
-  
-  # Error handling
   retry_on_failure: false
   max_retries: 2
   retry_delay: 1.0
-  
-  # Monitoring and logging
   enable_monitoring: true
   log_execution: true
   performance_tracking: false
-  
-  # Advanced settings
   cleanup_on_exit: true
   resource_monitoring_interval: 5.0
   heartbeat_interval: 30.0
-
-# Performance settings
 timeout: 300.0
 max_retries: 3
 enable_logging: true

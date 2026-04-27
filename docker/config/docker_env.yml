@@ -1,0 +1,25 @@
+environment: docker
+deployment_mode: lightweight
+containers:
+  postgres:
+    host: nanobrain-postgres
+    port: 5432
+  redis:
+    host: nanobrain-redis
+    port: 6379
+  chatbot:
+    host: nanobrain-chatbot
+    port: 5000
+  viral_annotation:
+    host: nanobrain-viral-annotation
+    port: 8001
+network:
+  name: nanobrain_network
+  subnet: 172.20.0.0/16
+volumes:
+  data_path: /app/data
+  logs_path: /app/logs
+  cache_path: /app/cache
+resources:
+  memory_optimized: true
+  cpu_optimized: true

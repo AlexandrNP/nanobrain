@@ -196,72 +196,266 @@ Always prioritize ICTV standard nomenclature when available.'''),
             if hasattr(self, 'nb_logger') and self.nb_logger:
                 self.nb_logger.error(f"❌ Failed to create cache manager: {e}")
             raise
-    
+
+    async def _load_from_species_cache(self, cache_directory: str, species_name: str) -> Dict[str, Any]:
+        """
+        Load data from AlphavirusSpeciesDataAcquisitionStep cache
+
+        Args:
+            cache_directory: Path to cache directory from acquisition step
+            species_name: Species name for data lookup
+
+        Returns:
+            Dict with virus_species, annotated_fasta, and protein_annotations
+        """
+        from pathlib import Path
+        import json
+
+        cache_dir = Path(cache_directory)
+
+        if not cache_dir.exists():
+            raise FileNotFoundError(f"Cache directory not found: {cache_directory}")
+
+        self.nb_logger.info(f"📂 Loading data from species cache: {cache_directory}")
+
+        # Sanitize species name (same as acquisition step)
+        import re
+        sanitized_name = species_name.lower().replace(' ', '_').replace('-', '_')
+        sanitized_name = re.sub(r'[^\w_]', '', sanitized_name)
+
+        # Load metadata file
+        metadata_file = cache_dir / f"{sanitized_name}_metadata.json"
+        if not metadata_file.exists():
+            raise FileNotFoundError(f"Metadata file not found: {metadata_file}")
+
+        with open(metadata_file, 'r') as f:
+            metadata = json.load(f)
+
+        self.nb_logger.info(f"✅ Loaded metadata: {metadata['data_counts']}")
+
+        # Load genome data (TSV format)
+        genomes_file = cache_dir / f"{sanitized_name}_genomes.tsv"
+        proteins_file = cache_dir / f"{sanitized_name}_proteins.tsv"
+        sequences_file = cache_dir / f"{sanitized_name}_sequences.tsv"
+
+        # Build FASTA content from sequences file
+        annotated_fasta_lines = []
+        protein_annotations = []
+
+        if sequences_file.exists():
+            import pandas as pd
+
+            # Load sequences
+            sequences_df = pd.read_csv(sequences_file, sep='\t')
+            self.nb_logger.info(f"📊 Loaded {len(sequences_df)} sequences from cache")
+
+            # Load protein annotations if available
+            if proteins_file.exists():
+                proteins_df = pd.read_csv(proteins_file, sep='\t')
+                self.nb_logger.info(f"📊 Loaded {len(proteins_df)} protein annotations from cache")
+
+                # Merge to get product names
+                merged = sequences_df.merge(proteins_df, on='feature.aa_sequence_md5', how='left')
+
+                for _, row in merged.iterrows():
+                    md5 = row['feature.aa_sequence_md5']
+                    product = row.get('feature.product', 'unknown protein')
+                    sequence = row['feature.aa_sequence']
+                    patric_id = row.get('feature.patric_id', f'unknown_{md5}')
+
+                    # Build FASTA header
+                    header = f">{patric_id}|{product}|{md5}"
+                    annotated_fasta_lines.append(header)
+                    annotated_fasta_lines.append(sequence)
+
+                    # Build annotation entry
+                    protein_annotations.append({
+                        'patric_id': patric_id,
+                        'product': product,
+                        'aa_sequence_md5': md5,
+                        'aa_sequence': sequence
+                    })
+            else:
+                # No protein annotations, just use sequences
+                for _, row in sequences_df.iterrows():
+                    md5 = row['feature.aa_sequence_md5']
+                    sequence = row['feature.aa_sequence']
+                    header = f">unknown_{md5}|unknown protein|{md5}"
+                    annotated_fasta_lines.append(header)
+                    annotated_fasta_lines.append(sequence)
+
+        annotated_fasta = '\n'.join(annotated_fasta_lines)
+
+        self.nb_logger.info(f"✅ Built FASTA with {len(protein_annotations)} annotated proteins")
+
+        return {
+            'virus_species': species_name,
+            'annotated_fasta': annotated_fasta,
+            'protein_annotations': protein_annotations,
+            'unique_protein_products': list(set(p['product'] for p in protein_annotations))
+        }
+
+    def _execute_task(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Task to be executed on WorkQueue worker (compute node).
+        This function gets serialized and sent to the worker.
+
+        Args:
+            input_data: Input data for annotation mapping
+
+        Returns:
+            Dict with annotation mapping results
+        """
+        import asyncio
+        import socket
+
+        hostname = socket.gethostname()
+
+        # Run the async business logic in a new event loop
+        # (Workers don't have the main event loop)
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            result = loop.run_until_complete(self._execute_business_logic(input_data))
+            result['worker_hostname'] = hostname
+            return result
+        finally:
+            loop.close()
+
     async def process(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Process method implementing cache-based synonym resolution
-        
+
         Args:
-            input_data: Must contain virus_species, annotated_fasta, and protein_annotations
-            
+            input_data: Must contain either:
+                - virus_species, annotated_fasta, protein_annotations (direct data)
+                OR
+                - cache_directory, species_name (from AlphavirusSpeciesDataAcquisitionStep)
+
         Returns:
             Dict with standardized annotations and synonym resolution results
         """
         if hasattr(self, 'nb_logger') and self.nb_logger:
             self.nb_logger.info("🔄 Processing annotation mapping step with cache-based synonym resolution")
-        
+
+        # T02r (Round 3 executor-decoupling refactor): the distributed path
+        # uses ``self.executor.submit()`` to dispatch the task to a worker
+        # (WorkQueue / Parsl / Globus-compute). LocalExecutor is not a
+        # distributed executor — it has no ``.submit()`` method, only an
+        # ``execute()`` coroutine — so we branch at runtime. Both paths
+        # end up calling the same ``_execute_business_logic`` sync helper
+        # (via ``_execute_task`` for the distributed path); the only
+        # difference is whether a separate worker receives it.
+        if hasattr(self.executor, "submit"):
+            self.nb_logger.info(
+                "🚀 Submitting annotation mapping task to distributed executor "
+                f"({type(self.executor).__name__})"
+            )
+            future = self.executor.submit(self._execute_task, input_data)
+            self.nb_logger.info("⏳ Waiting for annotation mapping task to complete...")
+            result = await future.result()
+            worker = result.get("worker_hostname", "unknown")
+            self.nb_logger.info(f"✅ Annotation mapping completed on worker: {worker}")
+            return result
+
+        self.nb_logger.info(
+            "🖥️  Running annotation mapping inline (LocalExecutor — no .submit())"
+        )
+        result = await self._execute_business_logic(input_data)
+        # Preserve the shape the distributed path produced: mark the
+        # "worker" as localhost so downstream consumers that read
+        # ``worker_hostname`` still see a value.
+        if isinstance(result, dict) and "worker_hostname" not in result:
+            import socket as _socket
+            result["worker_hostname"] = _socket.gethostname()
+        self.nb_logger.info(
+            f"✅ Annotation mapping completed inline on host: "
+            f"{result.get('worker_hostname', 'unknown') if isinstance(result, dict) else 'unknown'}"
+        )
+        return result
+
+    async def _execute_business_logic(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Execute annotation mapping business logic
+
+        Args:
+            input_data: Must contain either:
+                - virus_species, annotated_fasta, protein_annotations (direct data)
+                OR
+                - cache_directory, species_name (from AlphavirusSpeciesDataAcquisitionStep)
+
+        Returns:
+            Dict with standardized annotations and synonym resolution results
+        """
+        # Check if we need to load from species cache first
+        cache_directory = input_data.get('cache_directory')
+        if cache_directory:
+            species_name = input_data.get('species_name')
+            if not species_name:
+                raise ValueError("species_name required when loading from cache_directory")
+
+            self.nb_logger.info(f"📂 Loading data from AlphavirusSpeciesDataAcquisitionStep cache")
+
+            # Load and transform cached data
+            loaded_data = await self._load_from_species_cache(cache_directory, species_name)
+
+            # Merge with input_data (cache data takes precedence)
+            input_data = {**input_data, **loaded_data}
+
+            self.nb_logger.info(f"✅ Successfully loaded data from cache for {species_name}")
+
         virus_species = input_data.get('virus_species')
         annotated_fasta = input_data.get('annotated_fasta')
         protein_annotations = input_data.get('protein_annotations', [])
         unique_protein_products = input_data.get('unique_protein_products', [])
-        
+
         if not virus_species:
             raise ValueError("No virus species provided")
         if not annotated_fasta:
             raise ValueError("No FASTA content provided")
-        
+
         # Check cache for ICTV standards (NO hardcoded cache keys, NO session ID)
         ictv_cache_key = self._generate_ictv_cache_key(virus_species)
         ictv_standards = await self.cache_manager.get(ictv_cache_key)
-        
+
         # Check cache for existing synonym mappings
         synonym_cache_key = self._generate_synonym_cache_key(virus_species)
         synonym_groups = await self.cache_manager.get(synonym_cache_key)
-        
+
         if not ictv_standards or not synonym_groups:
             # Cache miss - use LLM for synonym resolution
             if hasattr(self, 'nb_logger') and self.nb_logger:
                 self.nb_logger.info(f"💾 Cache miss for {virus_species}, using LLM for synonym resolution")
-            
+
             ictv_standards, synonym_groups = await self._llm_based_synonym_resolution(
                 virus_species=virus_species,
                 protein_products=unique_protein_products
             )
-            
+
             # Cache the results
             await self.cache_manager.set(ictv_cache_key, ictv_standards)
             await self.cache_manager.set(synonym_cache_key, synonym_groups)
-            
+
             if hasattr(self, 'nb_logger') and self.nb_logger:
                 self.nb_logger.info(f"💾 Cached ICTV standards and synonym groups for: {virus_species}")
         else:
             if hasattr(self, 'nb_logger') and self.nb_logger:
                 self.nb_logger.info(f"💾 Cache hit for {virus_species} synonym resolution")
-        
+
         # Apply synonym resolution to annotations
         processed_annotations = self._apply_synonym_resolution(
             annotations=protein_annotations,
             synonym_groups=synonym_groups,
             virus_species=virus_species
         )
-        
+
         # Save FASTA content to file and update with canonical names
         fasta_file_path = await self._save_fasta_content(annotated_fasta, virus_species)
         updated_fasta_path = await self._update_fasta_with_canonical_names(
             fasta_file_path=fasta_file_path,
             synonym_groups=synonym_groups
         )
-        
+
         return {
             'virus_species': virus_species,
             'standardized_annotations': processed_annotations,

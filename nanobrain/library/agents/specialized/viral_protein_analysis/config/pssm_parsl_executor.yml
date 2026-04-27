@@ -1,0 +1,42 @@
+name: pssm_generation_parsl_executor
+description: Parsl executor for PSSM generation with automated Perl environment setup on Aurora
+executor_type: parsl
+max_workers: 12
+timeout: 3600
+parsl_config:
+  strategy: null
+  app_cache: true
+  checkpoint_mode: task_exit
+  checkpoint_period: 00:10:00
+  retries: 1
+  executors:
+  - label: aurora_pssm_htex
+    class: parsl.executors.HighThroughputExecutor
+    max_workers_per_node: 4
+    cores_per_worker: 1
+    worker_debug: true
+    heartbeat_period: 30
+    heartbeat_threshold: 120
+    provider_config:
+      class: parsl.providers.PBSProProvider
+      queue: debug
+      account: FoundEpidem
+      nodes_per_block: 1
+      cpus_per_node: 4
+      walltime: 00:25:00
+      scheduler_options: '#PBS -l filesystems=home:flare'
+      worker_init: "#!/bin/bash\nset -e\n\necho \"==========================================\"\necho \"\U0001F525 PSSM Worker\
+        \ Init on $(hostname)\"\necho \"\U0001F4CB PBS_JOBID: ${PBS_JOBID}\"\necho \"\U0001F550 $(date)\"\necho \"==========================================\"\
+        \n\n# Source the tested worker init script\nWORKER_INIT_SCRIPT=\"/lus/flare/projects/FoundEpidem/onarykov/nanobrain/scripts/worker_init_pssm.sh\"\
+        \n\nif [ ! -f \"$WORKER_INIT_SCRIPT\" ]; then\n    echo \"\u274C FATAL: Worker init script not found: $WORKER_INIT_SCRIPT\"\
+        \n    exit 1\nfi\n\n# Execute worker init (unpacks env, sets variables, verifies)\nsource \"$WORKER_INIT_SCRIPT\"\n\
+        \n# Verification complete message from worker_init\necho \"\U0001F525 Worker ready for PSSM generation tasks\"\necho\
+        \ \"==========================================\"\n"
+      parallelism: 1.0
+fallback:
+  enable_fallback: false
+  executor_type: local
+  max_workers: 4
+thread_fallback:
+  executor_type: thread
+  max_workers: 4

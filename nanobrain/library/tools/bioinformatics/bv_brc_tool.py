@@ -72,6 +72,14 @@ class BVBRCConfig(ExternalToolConfig):
         "/Applications/BV-BRC.app/Contents/Resources/deployment/bin"
     ])
 
+    # Container execution support
+    use_container: bool = False
+    container_path: Optional[str] = None
+    container_type: str = "singularity"  # or "apptainer", "docker"
+    executable_prefix: Optional[str] = None
+    container_bind_paths: List[str] = Field(default_factory=list)
+    execution_wrapper: Optional[Dict[str, Any]] = None
+
     # BV-BRC specific data processing
     genome_batch_size: int = 50
     md5_batch_size: int = 25
@@ -819,11 +827,17 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
         if timeout is None:
             timeout = self.bv_brc_config.timeout_seconds
 
-        # Build full command path
-        full_command = [str(Path(self.bv_brc_config.executable_path) / command)] + args
+        # Build command based on container configuration
+        if self.bv_brc_config.use_container and self.bv_brc_config.container_path:
+            full_command = self._build_container_command(command, args)
+        else:
+            # Traditional local execution
+            full_command = [str(Path(self.bv_brc_config.executable_path) / command)] + args
 
         # Log detailed progress for long operations
         self.logger.info(f"🔄 Executing BV-BRC command: {command} {' '.join(args[:3])}{'...' if len(args) > 3 else ''}")
+        if self.bv_brc_config.use_container:
+            self.logger.info(f"📦 Using container: {self.bv_brc_config.container_path}")
         self.logger.info(f"⏱️  Timeout set to {timeout} seconds ({timeout/60:.1f} minutes)")
 
         # For potentially long operations, add progress indicators
@@ -849,6 +863,46 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
         except ToolExecutionError as e:
             self.logger.error(f"❌ BV-BRC command failed after {timeout} seconds: {e}")
             raise
+
+    def _build_container_command(self, command: str, args: List[str]) -> List[str]:
+        """Build container execution command for BV-BRC tools"""
+        container_path = self.bv_brc_config.container_path
+        container_type = self.bv_brc_config.container_type
+
+        # Build the command inside the container
+        container_command = command
+        if self.bv_brc_config.installation_path:
+            # Use the installation path inside the container
+            container_command = str(Path(self.bv_brc_config.installation_path) / command)
+
+        # Build the full container execution command
+        if container_type in ["apptainer", "singularity"]:
+            full_command = [container_type, "exec", "--fakeroot"]
+
+            # Add bind paths if specified
+            if self.bv_brc_config.container_bind_paths:
+                for bind_path in self.bv_brc_config.container_bind_paths:
+                    full_command.extend(["--bind", bind_path])
+
+            # Add container path and command
+            full_command.extend([container_path, container_command] + args)
+
+        elif container_type == "docker":
+            full_command = ["docker", "run", "--rm"]
+
+            # Add bind mounts if specified
+            for bind_path in self.bv_brc_config.container_bind_paths:
+                if ":" in bind_path:
+                    full_command.extend(["-v", bind_path])
+
+            # Add container path and command
+            full_command.extend([container_path, container_command] + args)
+
+        else:
+            raise ValueError(f"Unsupported container type: {container_type}")
+
+        self.logger.debug(f"🐳 Container command: {' '.join(full_command)}")
+        return full_command
 
     async def download_alphavirus_genomes(self, limit: Optional[int] = None) -> List[GenomeData]:
         """
@@ -1321,8 +1375,12 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
         import time
         start_time = time.time()
 
-        # Build full command
-        full_command = [str(Path(self.bv_brc_config.executable_path) / tool_name)] + args
+        # Build command based on container configuration
+        if self.bv_brc_config.use_container and self.bv_brc_config.container_path:
+            full_command = self._build_container_command(tool_name, args)
+        else:
+            # Traditional local execution
+            full_command = [str(Path(self.bv_brc_config.executable_path) / tool_name)] + args
 
         try:
             # Create process with stdin pipe

@@ -616,24 +616,25 @@ class PubMedClient(ExternalTool):
             return self.search_cache[cache_key]
         
         self.logger.info(f"🔍 Searching PubMed for Alphavirus {protein_type} literature")
-        
-        try:
-            # Phase 4A implementation: Return placeholder for infrastructure testing
-            # TODO: Implement actual PubMed API calls in Phase 4B
-            placeholder_references = []
-            
-            # For infrastructure testing, return empty list
-            if self.pubmed_config.cache_results:
-                self.search_cache[cache_key] = placeholder_references
-            
-            return placeholder_references
-            
-        except Exception as e:
-            if self.fail_fast:
-                raise PubMedError(f"PubMed search failed for {protein_type}: {e}")
-            else:
-                self.logger.warning(f"⚠️ PubMed search failed for {protein_type}: {e}")
-                return []
+
+        # T14 mocks-policy (2026-04-23): this method previously returned an
+        # empty ``placeholder_references = []`` list + cached it, labeled
+        # "Phase 4A implementation: Return placeholder for infrastructure
+        # testing." That's the exact failure mode workspace CLAUDE.md
+        # forbids — caller got a successful-looking empty result and had
+        # no signal that PubMed search wasn't really implemented.
+        #
+        # Until Phase 4B lands the real NCBI API call, this method raises
+        # NotImplementedError loudly. Operators who want to run the
+        # surrounding infrastructure without a working PubMed backend
+        # should construct a test fixture that skips this call, not rely
+        # on it silently returning nothing.
+        raise NotImplementedError(
+            f"search_alphavirus_literature({protein_type!r}): PubMed API "
+            "integration is Phase 4B work; not implemented. Previously "
+            "this method returned an empty list silently — that was a "
+            "mocks-policy violation flagged in the 2026-04-23 T14 audit."
+        )
     
     async def _enforce_rate_limit(self):
         """Enforce NCBI rate limiting"""

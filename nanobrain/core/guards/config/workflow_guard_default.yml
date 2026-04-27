@@ -1,13 +1,11 @@
-name: "workflow_guard_default"
-description: "Default workflow-level trigger guard configuration"
-
-# ✅ FRAMEWORK COMPLIANCE: ConfigBase-compliant configuration
+name: workflow_guard_default
+description: Default workflow-level trigger guard configuration
 enabled: true
-scope: "workflow"
+scope: workflow
 protected_methods:
-  - "execute"
+- execute
 auto_apply: true
-enforcement_level: "strict"
+enforcement_level: strict
 debug_mode: false
 log_guard_events: true
-error_message_template: "{method} may only be invoked via {scope}-level trigger" 
+error_message_template: '{method} may only be invoked via {scope}-level trigger'

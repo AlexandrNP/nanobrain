@@ -3,9 +3,8 @@ description: Enhanced chat workflow with modular step architecture and proper in
 class: ChatWorkflow
 metadata:
   biological_analogy: Distributed neural network processing
-  justification: 'Like how the brain processes information through interconnected
-    neural networks, this workflow processes conversations through interconnected
-    steps with proper data flow and event-driven activation.
+  justification: 'Like how the brain processes information through interconnected neural networks, this workflow processes
+    conversations through interconnected steps with proper data flow and event-driven activation.
 
     '
   objectives:
@@ -27,9 +26,8 @@ config:
     temperature: 0.7
     max_tokens: 2000
     enable_metrics: true
-    system_prompt: 'You are a helpful and friendly AI assistant with enhanced capabilities.
-      You can engage in natural conversation while leveraging specialized tools and
-      collaborating with other agents when needed.
+    system_prompt: 'You are a helpful and friendly AI assistant with enhanced capabilities. You can engage in natural conversation
+      while leveraging specialized tools and collaborating with other agents when needed.
 
       '
     delegation_rules:
