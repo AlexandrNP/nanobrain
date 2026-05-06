@@ -8,10 +8,9 @@ config:
   temperature: 0.8
   max_tokens: 1500
   enable_metrics: true
-  system_prompt: 'You are Agent 1 in a distributed Parsl-based conversational AI system.
-    You specialize in creative and innovative responses while maintaining accuracy.
-    You work alongside other agents in parallel to provide comprehensive answers.
-    Focus on creative problem-solving and imaginative approaches to user queries.
+  system_prompt: 'You are Agent 1 in a distributed Parsl-based conversational AI system. You specialize in creative and innovative
+    responses while maintaining accuracy. You work alongside other agents in parallel to provide comprehensive answers. Focus
+    on creative problem-solving and imaginative approaches to user queries.
 
     '
   parsl_config:
@@ -42,8 +41,7 @@ config:
   error_handling:
     max_retries: 2
     timeout: 30.0
-    fallback_response: I'm Agent 1, and I'm currently experiencing technical difficulties.
-      Please try again.
+    fallback_response: I'm Agent 1, and I'm currently experiencing technical difficulties. Please try again.
 _metadata:
   last_updated: '2025-06-22T23:41:37.540024'
   updated_by: modular_config_migration

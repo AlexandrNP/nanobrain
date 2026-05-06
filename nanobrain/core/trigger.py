@@ -153,21 +153,73 @@ class AsyncTriggerExecutor:
             # ✅ DEADLOCK FIX: Always remove from execution stack to prevent permanent blocking
             self.execution_stack.discard(trigger_id)
 
-    async def wait_for_all_tasks(self, timeout: float = 30.0) -> bool:
-        """Wait for all background tasks to complete (useful for testing/shutdown)."""
-        if not self.background_tasks:
-            return True
+    async def wait_for_all_tasks(
+        self,
+        timeout: float = 30.0,
+        settle_ms: int = 50,
+    ) -> bool:
+        """Wait for all background tasks to complete.
 
-        try:
-            await asyncio.wait_for(
-                asyncio.gather(*self.background_tasks, return_exceptions=True),
-                timeout=timeout
-            )
-            return True
-        except asyncio.TimeoutError:
-            self.logger.warning(
-                f"Timeout waiting for {len(self.background_tasks)} background tasks")
-            return False
+        Handles **cascading** task creation: when an in-flight task
+        spawns another task (e.g. a DataUnitChangeTrigger fires step A,
+        which writes to a DataUnit that triggers step B, which spawns
+        a fresh background task), this method keeps draining until the
+        ``background_tasks`` set stays empty for ``settle_ms``.
+
+        This is the entry point that test code (and graceful shutdown
+        paths) use to await the full trigger cascade synchronously
+        after a data-driven ``Workflow.process(input)`` call.
+
+        Args:
+            timeout: Total wall-clock budget. Returns ``False`` if the
+                cascade hasn't drained within this many seconds.
+            settle_ms: Quiet-period in milliseconds. After
+                ``background_tasks`` is observed empty, wait this long
+                and re-check; only return ``True`` if it's still empty.
+                Catches the case where one trigger's done callback
+                spawns another trigger's task asynchronously.
+
+        Returns:
+            ``True`` if the cascade fully drained; ``False`` on timeout.
+        """
+        import time as _time
+
+        deadline = _time.monotonic() + timeout
+
+        while True:
+            remaining = deadline - _time.monotonic()
+            if remaining <= 0:
+                if self.background_tasks:
+                    self.logger.warning(
+                        "Timeout waiting for %d background tasks",
+                        len(self.background_tasks),
+                    )
+                    return False
+                return True
+
+            if not self.background_tasks:
+                # Quiet — but a task may be about to fire from a
+                # done-callback chain. Sleep briefly and re-check;
+                # only return success if the set stays empty.
+                await asyncio.sleep(min(settle_ms / 1000.0, remaining))
+                if not self.background_tasks:
+                    return True
+                continue
+
+            # Snapshot the current task set and await it. Tasks added
+            # AFTER this snapshot are picked up on the next iteration.
+            snapshot = list(self.background_tasks)
+            try:
+                await asyncio.wait_for(
+                    asyncio.gather(*snapshot, return_exceptions=True),
+                    timeout=remaining,
+                )
+            except asyncio.TimeoutError:
+                self.logger.warning(
+                    "Timeout waiting for %d background tasks (cascading drain)",
+                    len(self.background_tasks),
+                )
+                return False
 
     def get_stats(self) -> Dict[str, Any]:
         """Get execution statistics."""

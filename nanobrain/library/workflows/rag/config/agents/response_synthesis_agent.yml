@@ -1,279 +1,152 @@
-# Response Synthesis Agent Configuration
-# Intelligent information synthesis using multi-turn LLM capabilities
-
-name: "response_synthesis_agent"
-class: "nanobrain.library.workflows.rag.agents.response_synthesis_agent.ResponseSynthesisAgent"
-description: "Intelligent response synthesis specialist for RAG systems"
-
-# LLM Configuration
-model: "gpt-4"
+name: response_synthesis_agent
+class: nanobrain.library.workflows.rag.agents.response_synthesis_agent.ResponseSynthesisAgent
+description: Intelligent response synthesis specialist for RAG systems
+model: gpt-4
 temperature: 0.4
 max_tokens: 8000
 timeout: 120
-
-# Synthesis Configuration
 max_response_length: 50000
 max_chunks_per_turn: 20
 enable_multi_turn: true
 enable_contradiction_resolution: true
 enable_theme_analysis: true
+synthesis_template: "You are a Response Synthesis Specialist for RAG systems. Your task is to intelligently synthesize information\
+  \ from retrieved document chunks into a comprehensive, coherent response.\n\nQuery: \"{{ query }}\"\n\nRetrieved Information\
+  \ ({{ chunk_count }} sources):\n{% for chunk in retrieved_chunks %}\n---\nSource {{ loop.index }}: {{ chunk.get('source',\
+  \ 'Unknown') }}\nContent: {{ chunk.get('content', '') }}\nRelevance Score: {{ chunk.get('relevance_score', 'N/A') }}\n{%\
+  \ endfor %}\n\nSynthesis Configuration:\n- Max response length: {{ max_response_length }} characters\n- Enable contradiction\
+  \ resolution: {{ enable_contradiction_resolution }}\n- Enable theme analysis: {{ enable_theme_analysis }}\n\n{% if conversation_history\
+  \ %}\nPrevious Conversation Context:\n{% for message in conversation_history[-3:] %}\n- {{ message.role }}: {{ message.content[:100]\
+  \ }}...\n{% endfor %}\n{% endif %}\n\nInstructions:\n1. **Analyze Relationships**: Identify connections and relationships\
+  \ between the retrieved chunks\n2. **Identify Key Themes**: Extract main themes and concepts from the information\n3. **Resolve\
+  \ Contradictions**: Address any conflicting information found in the sources\n4. **Create Coherent Flow**: Organize information\
+  \ into a logical, coherent narrative\n5. **Synthesize Intelligently**: Don't just concatenate - create new insights from\
+  \ the combination of sources\n6. **Maintain Accuracy**: Ensure all claims are supported by the retrieved information\n7.\
+  \ **Cite Sources**: Reference specific sources when making claims\n\n{% if enable_contradiction_resolution %}\nContradiction\
+  \ Resolution:\n- Identify conflicting information between sources\n- Explain discrepancies when found\n- Provide balanced\
+  \ perspective when sources disagree\n- Indicate confidence levels for disputed claims\n{% endif %}\n\n{% if enable_theme_analysis\
+  \ %}\nTheme Analysis:\n- Extract overarching themes from all sources\n- Group related information by theme\n- Show how themes\
+  \ interconnect\n- Highlight emerging patterns or insights\n{% endif %}\n\nOutput Format (JSON):\n{\n    \"synthesized_response\"\
+  : \"comprehensive, coherent response that intelligently synthesizes the information\",\n    \"key_themes\": [\"theme1\"\
+  , \"theme2\", \"theme3\"],\n    \"source_integration\": {\n        \"sources_used\": [\"source1\", \"source2\"],\n     \
+  \   \"contradictions_resolved\": [\"description of any contradictions addressed\"],\n        \"synthesis_insights\": [\"\
+  new insights derived from combining sources\"]\n    },\n    \"confidence_score\": 0.95,\n    \"synthesis_metadata\": {\n\
+  \        \"method\": \"single_turn\",\n        \"themes_identified\": 3,\n        \"sources_integrated\": {{ chunk_count\
+  \ }}\n    }\n}\n\nEnsure the response is comprehensive, accurate, and detailed. Provide complete information without length\
+  \ restrictions.\n"
+analysis_template: "You are analyzing retrieved document chunks to identify themes, relationships, and structure for intelligent\
+  \ synthesis.\n\nQuery: \"{{ query }}\"\n\nRetrieved Chunks ({{ chunk_count }} total):\n{% for chunk in retrieved_chunks\
+  \ %}\n---\nChunk {{ loop.index }}:\nSource: {{ chunk.get('source', 'Unknown') }}\nContent: {{ chunk.get('content', '')[:500]\
+  \ }}...\n{% endfor %}\n\nAnalysis Tasks:\n1. **Theme Identification**: Identify 3-5 main themes across all chunks\n2. **Relationship\
+  \ Mapping**: Find connections and relationships between chunks\n3. **Contradiction Detection**: Identify any conflicting\
+  \ information\n4. **Content Grouping**: Suggest how to group chunks by theme for synthesis\n\n{% if enable_theme_analysis\
+  \ %}\nTheme Analysis Instructions:\n- Look for overarching concepts that span multiple chunks\n- Identify subtopics within\
+  \ broader themes\n- Note which chunks belong to which themes\n- Consider thematic hierarchy and relationships\n{% endif\
+  \ %}\n\n{% if enable_contradiction_resolution %}\nContradiction Analysis:\n- Compare claims across different sources\n-\
+  \ Identify factual disagreements\n- Note different perspectives on the same topic\n- Assess reliability indicators where\
+  \ available\n{% endif %}\n\nOutput Format (JSON):\n{\n    \"themes\": [\"theme1\", \"theme2\", \"theme3\"],\n    \"relationships\"\
+  : [\n        {\"type\": \"supports\", \"source1\": \"chunk1\", \"source2\": \"chunk2\"},\n        {\"type\": \"contradicts\"\
+  , \"source1\": \"chunk3\", \"source2\": \"chunk4\"}\n    ],\n    \"contradictions\": [\n        {\"description\": \"conflict\
+  \ description\", \"sources\": [\"chunk1\", \"chunk2\"]}\n    ],\n    \"key_concepts\": [\"concept1\", \"concept2\"],\n \
+  \   \"grouping_strategy\": {\n        \"theme1\": [\"chunk1\", \"chunk2\"],\n        \"theme2\": [\"chunk3\", \"chunk4\"\
+  ]\n    }\n}\n"
+continuation_template: "You are synthesizing a specific thematic section as part of a multi-turn response synthesis process.\n\
+  \nQuery: \"{{ query }}\"\nCurrent Theme: \"{{ theme }}\"\nSection Number: {{ section_number }}\n\nTheme-Specific Chunks\
+  \ ({{ chunk_count }} chunks):\n{% for chunk in theme_chunks %}\n---\nChunk {{ loop.index }}:\nSource: {{ chunk.get('source',\
+  \ 'Unknown') }}\nContent: {{ chunk.get('content', '') }}\n{% endfor %}\n\n{% if previous_sections %}\nPrevious Sections\
+  \ Completed:\n{% for section in previous_sections %}\n- {{ section.theme }}: {{ section.content[:100] }}...\n{% endfor %}\n\
+  {% endif %}\n\nInstructions:\n1. Focus specifically on the \"{{ theme }}\" theme\n2. Synthesize information from the provided\
+  \ chunks for this theme\n3. Ensure coherence with previous sections\n4. Create smooth transitions and logical flow\n5. Maintain\
+  \ consistency in tone and style\n\nOutput Format (JSON):\n{\n    \"content\": \"synthesized content for this thematic section\"\
+  ,\n    \"key_points\": [\"point1\", \"point2\", \"point3\"],\n    \"sources_used\": [\"source1\", \"source2\"],\n    \"\
+  transition_notes\": \"how this section connects to others\"\n}\n"
+finalization_template: "You are finalizing a multi-turn response synthesis by combining all thematic sections into a coherent,\
+  \ comprehensive response.\n\nQuery: \"{{ query }}\"\n\nSynthesized Sections ({{ section_count }} sections):\n{% for section\
+  \ in synthesis_sections %}\n---\nTheme: {{ section.theme }}\nContent: {{ section.content }}\nKey Points: {{ section.key_points|join(',\
+  \ ') }}\n{% endfor %}\n\nAnalysis Context:\n{{ analysis_result }}\n\nInstructions:\n1. **Combine Sections**: Merge all sections\
+  \ into a single, coherent response\n2. **Create Transitions**: Add smooth transitions between different themes\n3. **Ensure\
+  \ Flow**: Organize content for optimal logical progression\n4. **Add Introduction/Conclusion**: Frame the response appropriately\n\
+  5. **Maintain Coherence**: Ensure the final response reads as a unified whole\n6. **Provide Complete Information**: Include\
+  \ all relevant details without length restrictions\n\nOutput Format (JSON):\n{\n    \"final_response\": \"complete, coherent\
+  \ synthesized response\",\n    \"source_integration\": {\n        \"themes_covered\": [\"theme1\", \"theme2\"],\n      \
+  \  \"sections_merged\": {{ section_count }},\n        \"synthesis_approach\": \"description of how sections were combined\"\
+  \n    },\n    \"confidence_score\": 0.95,\n    \"metadata\": {\n        \"total_sections\": {{ section_count }},\n     \
+  \   \"synthesis_method\": \"multi_turn_finalization\"\n    }\n}\n"
+fallback_synthesis_template: 'Response Synthesis Task
 
-# All templates defined directly in configuration (no external files)
-synthesis_template: |
-  You are a Response Synthesis Specialist for RAG systems. Your task is to intelligently synthesize information from retrieved document chunks into a comprehensive, coherent response.
-
-  Query: "{{ query }}"
-
-  Retrieved Information ({{ chunk_count }} sources):
-  {% for chunk in retrieved_chunks %}
-  ---
-  Source {{ loop.index }}: {{ chunk.get('source', 'Unknown') }}
-  Content: {{ chunk.get('content', '') }}
-  Relevance Score: {{ chunk.get('relevance_score', 'N/A') }}
-  {% endfor %}
-
-  Synthesis Configuration:
-  - Max response length: {{ max_response_length }} characters
-  - Enable contradiction resolution: {{ enable_contradiction_resolution }}
-  - Enable theme analysis: {{ enable_theme_analysis }}
-
-  {% if conversation_history %}
-  Previous Conversation Context:
-  {% for message in conversation_history[-3:] %}
-  - {{ message.role }}: {{ message.content[:100] }}...
-  {% endfor %}
-  {% endif %}
-
-  Instructions:
-  1. **Analyze Relationships**: Identify connections and relationships between the retrieved chunks
-  2. **Identify Key Themes**: Extract main themes and concepts from the information
-  3. **Resolve Contradictions**: Address any conflicting information found in the sources
-  4. **Create Coherent Flow**: Organize information into a logical, coherent narrative
-  5. **Synthesize Intelligently**: Don't just concatenate - create new insights from the combination of sources
-  6. **Maintain Accuracy**: Ensure all claims are supported by the retrieved information
-  7. **Cite Sources**: Reference specific sources when making claims
-
-  {% if enable_contradiction_resolution %}
-  Contradiction Resolution:
-  - Identify conflicting information between sources
-  - Explain discrepancies when found
-  - Provide balanced perspective when sources disagree
-  - Indicate confidence levels for disputed claims
-  {% endif %}
-
-  {% if enable_theme_analysis %}
-  Theme Analysis:
-  - Extract overarching themes from all sources
-  - Group related information by theme
-  - Show how themes interconnect
-  - Highlight emerging patterns or insights
-  {% endif %}
-
-  Output Format (JSON):
-  {
-      "synthesized_response": "comprehensive, coherent response that intelligently synthesizes the information",
-      "key_themes": ["theme1", "theme2", "theme3"],
-      "source_integration": {
-          "sources_used": ["source1", "source2"],
-          "contradictions_resolved": ["description of any contradictions addressed"],
-          "synthesis_insights": ["new insights derived from combining sources"]
-      },
-      "confidence_score": 0.95,
-      "synthesis_metadata": {
-          "method": "single_turn",
-          "themes_identified": 3,
-          "sources_integrated": {{ chunk_count }}
-      }
-  }
-
-  Ensure the response is comprehensive, accurate, and detailed. Provide complete information without length restrictions.
-
-# Analysis template for multi-turn synthesis
-analysis_template: |
-  You are analyzing retrieved document chunks to identify themes, relationships, and structure for intelligent synthesis.
-
-  Query: "{{ query }}"
-  
-  Retrieved Chunks ({{ chunk_count }} total):
-  {% for chunk in retrieved_chunks %}
-  ---
-  Chunk {{ loop.index }}:
-  Source: {{ chunk.get('source', 'Unknown') }}
-  Content: {{ chunk.get('content', '')[:500] }}...
-  {% endfor %}
-
-  Analysis Tasks:
-  1. **Theme Identification**: Identify 3-5 main themes across all chunks
-  2. **Relationship Mapping**: Find connections and relationships between chunks
-  3. **Contradiction Detection**: Identify any conflicting information
-  4. **Content Grouping**: Suggest how to group chunks by theme for synthesis
-
-  {% if enable_theme_analysis %}
-  Theme Analysis Instructions:
-  - Look for overarching concepts that span multiple chunks
-  - Identify subtopics within broader themes
-  - Note which chunks belong to which themes
-  - Consider thematic hierarchy and relationships
-  {% endif %}
-
-  {% if enable_contradiction_resolution %}
-  Contradiction Analysis:
-  - Compare claims across different sources
-  - Identify factual disagreements
-  - Note different perspectives on the same topic
-  - Assess reliability indicators where available
-  {% endif %}
-
-  Output Format (JSON):
-  {
-      "themes": ["theme1", "theme2", "theme3"],
-      "relationships": [
-          {"type": "supports", "source1": "chunk1", "source2": "chunk2"},
-          {"type": "contradicts", "source1": "chunk3", "source2": "chunk4"}
-      ],
-      "contradictions": [
-          {"description": "conflict description", "sources": ["chunk1", "chunk2"]}
-      ],
-      "key_concepts": ["concept1", "concept2"],
-      "grouping_strategy": {
-          "theme1": ["chunk1", "chunk2"],
-          "theme2": ["chunk3", "chunk4"]
-      }
-  }
-
-# Continuation template for section synthesis
-continuation_template: |
-  You are synthesizing a specific thematic section as part of a multi-turn response synthesis process.
-
-  Query: "{{ query }}"
-  Current Theme: "{{ theme }}"
-  Section Number: {{ section_number }}
-
-  Theme-Specific Chunks ({{ chunk_count }} chunks):
-  {% for chunk in theme_chunks %}
-  ---
-  Chunk {{ loop.index }}:
-  Source: {{ chunk.get('source', 'Unknown') }}
-  Content: {{ chunk.get('content', '') }}
-  {% endfor %}
-
-  {% if previous_sections %}
-  Previous Sections Completed:
-  {% for section in previous_sections %}
-  - {{ section.theme }}: {{ section.content[:100] }}...
-  {% endfor %}
-  {% endif %}
-
-  Instructions:
-  1. Focus specifically on the "{{ theme }}" theme
-  2. Synthesize information from the provided chunks for this theme
-  3. Ensure coherence with previous sections
-  4. Create smooth transitions and logical flow
-  5. Maintain consistency in tone and style
-
-  Output Format (JSON):
-  {
-      "content": "synthesized content for this thematic section",
-      "key_points": ["point1", "point2", "point3"],
-      "sources_used": ["source1", "source2"],
-      "transition_notes": "how this section connects to others"
-  }
-
-# Finalization template for multi-turn synthesis
-finalization_template: |
-  You are finalizing a multi-turn response synthesis by combining all thematic sections into a coherent, comprehensive response.
 
   Query: "{{ query }}"
 
-  Synthesized Sections ({{ section_count }} sections):
-  {% for section in synthesis_sections %}
-  ---
-  Theme: {{ section.theme }}
-  Content: {{ section.content }}
-  Key Points: {{ section.key_points|join(', ') }}
-  {% endfor %}
-
-  Analysis Context:
-  {{ analysis_result }}
-
-  Instructions:
-  1. **Combine Sections**: Merge all sections into a single, coherent response
-  2. **Create Transitions**: Add smooth transitions between different themes
-  3. **Ensure Flow**: Organize content for optimal logical progression
-  4. **Add Introduction/Conclusion**: Frame the response appropriately
-  5. **Maintain Coherence**: Ensure the final response reads as a unified whole
-  6. **Provide Complete Information**: Include all relevant details without length restrictions
-
-  Output Format (JSON):
-  {
-      "final_response": "complete, coherent synthesized response",
-      "source_integration": {
-          "themes_covered": ["theme1", "theme2"],
-          "sections_merged": {{ section_count }},
-          "synthesis_approach": "description of how sections were combined"
-      },
-      "confidence_score": 0.95,
-      "metadata": {
-          "total_sections": {{ section_count }},
-          "synthesis_method": "multi_turn_finalization"
-      }
-  }
-
-# Fallback templates (used when main templates fail)
-fallback_synthesis_template: |
-  Response Synthesis Task
-
-  Query: "{{ query }}"
   Sources: {{ chunk_count }} retrieved chunks
+
   Provide comprehensive response without length limitations
 
+
   Instructions:
+
   - Synthesize information from retrieved sources
+
   - Create coherent response addressing the query
+
   - Maintain accuracy and cite sources appropriately
+
   - Output as JSON with synthesized_response and confidence_score fields
 
-fallback_analysis_template: |
-  Content Analysis Task
+  '
+fallback_analysis_template: 'Content Analysis Task
+
 
   Query: "{{ query }}"
+
   Chunks: {{ chunk_count }} total
 
+
   Instructions:
+
   - Identify main themes across chunks
+
   - Find relationships between sources
+
   - Output as JSON with themes and relationships fields
 
-fallback_continuation_template: |
-  Section Synthesis Task
+  '
+fallback_continuation_template: 'Section Synthesis Task
+
 
   Theme: "{{ theme }}"
+
   Query: "{{ query }}"
 
+
   Instructions:
+
   - Synthesize content for the specified theme
+
   - Output as JSON with content and key_points fields
 
-fallback_finalization_template: |
-  Response Finalization Task
+  '
+fallback_finalization_template: 'Response Finalization Task
+
 
   Query: "{{ query }}"
+
   Sections: {{ section_count }} to combine
 
+
   Instructions:
+
   - Combine sections into coherent final response
+
   - Output as JSON with final_response field
 
-# Template variables
+  '
 template_variables:
   max_response_length: 50000
   max_chunks_per_turn: 20
   enable_multi_turn: true
   enable_contradiction_resolution: true
   enable_theme_analysis: true
-
-# Emergency fallback instructions (used when all templates fail)
-emergency_synthesis_instruction: "Synthesize a response from the provided information for this query"
-emergency_analysis_instruction: "Analyze the provided content and identify main themes"
-emergency_section_instruction: "Create a synthesized section for the specified theme"
-emergency_finalization_instruction: "Combine the provided sections into a final response"
+emergency_synthesis_instruction: Synthesize a response from the provided information for this query
+emergency_analysis_instruction: Analyze the provided content and identify main themes
+emergency_section_instruction: Create a synthesized section for the specified theme
+emergency_finalization_instruction: Combine the provided sections into a final response

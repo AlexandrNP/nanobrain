@@ -1,170 +1,124 @@
-# RAG Workflow Configuration
-# General-purpose Retrieval-Augmented Generation workflow
-
-name: "RAGWorkflow"
-description: "General-purpose Retrieval-Augmented Generation workflow with single LLM component"
-class: "nanobrain.library.workflows.rag.rag_workflow.RAGWorkflow"
-
-# Workflow execution settings
-execution_strategy: "event_driven"
+name: RAGWorkflow
+description: General-purpose Retrieval-Augmented Generation workflow with single LLM component
+class: nanobrain.library.workflows.rag.rag_workflow.RAGWorkflow
+execution_strategy: event_driven
 enable_monitoring: true
 execution_timeout_seconds: 600
 max_processing_time: 300
-
-# Workflow features
 enable_query_enhancement: true
 enable_document_processing: true
 enable_incremental_processing: true
 enable_parallel_processing: true
-error_handling_strategy: "graceful_degradation"
-
-# Input data units
+error_handling_strategy: graceful_degradation
 input_data_units:
   workflow_user_query:
-    class: "nanobrain.core.data_unit.DataUnitMemory"
-    name: "workflow_user_query"
-    description: "User query input for RAG processing"
-  
+    class: nanobrain.core.data_unit.DataUnitMemory
+    name: workflow_user_query
+    description: User query input for RAG processing
   workflow_document_paths:
-    class: "nanobrain.core.data_unit.DataUnitMemory"
-    name: "workflow_document_paths"
-    description: "Optional document file paths for processing"
+    class: nanobrain.core.data_unit.DataUnitMemory
+    name: workflow_document_paths
+    description: Optional document file paths for processing
     required: false
-
-# Output data units
 output_data_units:
   rag_response:
-    class: "nanobrain.core.data_unit.DataUnitMemory"
-    name: "rag_response"
-    description: "Enhanced RAG response with citations and metadata"
-
-# Workflow steps configuration with class references
+    class: nanobrain.core.data_unit.DataUnitMemory
+    name: rag_response
+    description: Enhanced RAG response with citations and metadata
 steps:
-  # Step 1: Query Enhancement (ONLY LLM component)
   query_enhancement_step:
-    class: "nanobrain.library.workflows.rag.steps.QueryEnhancementStep"
-    config: "nanobrain/library/workflows/rag/config/steps/query_enhancement_step.yml"
-
-  # Step 2: Document Processing (Deterministic)
+    class: nanobrain.library.workflows.rag.steps.QueryEnhancementStep
+    config: nanobrain/library/workflows/rag/config/steps/query_enhancement_step.yml
   document_processor_step:
-    class: "nanobrain.library.workflows.rag.steps.DocumentProcessorStep"
-    config: "nanobrain/library/workflows/rag/config/steps/document_processor_step.yml"
-
-  # Step 3: Embedding Generation (API-based with sentence-transformers)
+    class: nanobrain.library.workflows.rag.steps.DocumentProcessorStep
+    config: nanobrain/library/workflows/rag/config/steps/document_processor_step.yml
   embedding_generator_step:
-    class: "nanobrain.library.workflows.rag.steps.EmbeddingGeneratorStep"
-    config: "nanobrain/library/workflows/rag/config/steps/embedding_generator_step.yml"
-
-  # Step 4: Vector Storage (Database operations)
+    class: nanobrain.library.workflows.rag.steps.EmbeddingGeneratorStep
+    config: nanobrain/library/workflows/rag/config/steps/embedding_generator_step.yml
   vector_storage_step:
-    class: "nanobrain.library.workflows.rag.steps.VectorStorageStep"
-    config: "nanobrain/library/workflows/rag/config/steps/vector_storage_step.yml"
-
-  # Step 5: Semantic Retrieval (Similarity search)
+    class: nanobrain.library.workflows.rag.steps.VectorStorageStep
+    config: nanobrain/library/workflows/rag/config/steps/vector_storage_step.yml
   semantic_retrieval_step:
-    class: "nanobrain.library.workflows.rag.steps.SemanticRetrievalStep"
-    config: "nanobrain/library/workflows/rag/config/steps/semantic_retrieval_step.yml"
-
-  # Step 6: Response Enhancement (AgentStep with ResponseSynthesisAgent)
+    class: nanobrain.library.workflows.rag.steps.SemanticRetrievalStep
+    config: nanobrain/library/workflows/rag/config/steps/semantic_retrieval_step.yml
   response_enhancement_step:
-    class: "nanobrain.library.workflows.rag.steps.ResponseEnhancementStep"
-    config: "nanobrain/library/workflows/rag/config/steps/response_enhancement_step.yml"
-
-# Data flow links between steps
+    class: nanobrain.library.workflows.rag.steps.ResponseEnhancementStep
+    config: nanobrain/library/workflows/rag/config/steps/response_enhancement_step.yml
 links:
-  # Query enhancement
   query_to_enhancement:
-    class: "nanobrain.core.link.DirectLink"
+    class: nanobrain.core.link.DirectLink
     config:
-      source: "workflow_user_query"
-      target: "query_enhancement_step.user_query"
-      description: "User query to enhancement processing"
+      source: workflow_user_query
+      target: query_enhancement_step.user_query
+      description: User query to enhancement processing
       auto_transfer: true
-      transfer_on: "data_updated"
-
-  # Document processing (optional)
+      transfer_on: data_updated
   documents_to_processing:
-    class: "nanobrain.core.link.DirectLink"
+    class: nanobrain.core.link.DirectLink
     config:
-      source: "workflow_document_paths"
-      target: "document_processor_step.document_paths"
-      description: "Document paths to processing step"
+      source: workflow_document_paths
+      target: document_processor_step.document_paths
+      description: Document paths to processing step
       auto_transfer: true
-      transfer_on: "data_updated"
+      transfer_on: data_updated
       required: false
-
-  # Embedding generation
   chunks_to_embeddings:
-    class: "nanobrain.core.link.DirectLink"
+    class: nanobrain.core.link.DirectLink
     config:
-      source: "document_processor_step.processed_chunks"
-      target: "embedding_generator_step.chunks"
-      description: "Document chunks to embedding generation"
+      source: document_processor_step.processed_chunks
+      target: embedding_generator_step.chunks
+      description: Document chunks to embedding generation
       auto_transfer: true
-      transfer_on: "data_updated"
-
-  # Vector storage
+      transfer_on: data_updated
   embeddings_to_storage:
-    class: "nanobrain.core.link.DirectLink"
+    class: nanobrain.core.link.DirectLink
     config:
-      source: "embedding_generator_step.embeddings"
-      target: "vector_storage_step.input_embeddings"
-      description: "Embeddings to vector storage"
+      source: embedding_generator_step.embeddings
+      target: vector_storage_step.input_embeddings
+      description: Embeddings to vector storage
       auto_transfer: true
-      transfer_on: "data_updated"
-
-  # Semantic retrieval - Enhanced query
+      transfer_on: data_updated
   query_to_retrieval:
-    class: "nanobrain.core.link.DirectLink"
+    class: nanobrain.core.link.DirectLink
     config:
-      source: "query_enhancement_step.enhanced_query"
-      target: "semantic_retrieval_step.input_enhanced_query"
-      description: "Enhanced query to semantic retrieval"
+      source: query_enhancement_step.enhanced_query
+      target: semantic_retrieval_step.input_enhanced_query
+      description: Enhanced query to semantic retrieval
       auto_transfer: true
-      transfer_on: "data_updated"
-
-  # Semantic retrieval - Vector database
+      transfer_on: data_updated
   storage_to_retrieval:
-    class: "nanobrain.core.link.DirectLink"
+    class: nanobrain.core.link.DirectLink
     config:
-      source: "vector_storage_step.vector_index"
-      target: "semantic_retrieval_step.input_vector_index"
-      description: "Vector database to retrieval step"
+      source: vector_storage_step.vector_index
+      target: semantic_retrieval_step.input_vector_index
+      description: Vector database to retrieval step
       auto_transfer: true
-      transfer_on: "data_updated"
-
-  # Response enhancement
+      transfer_on: data_updated
   retrieval_to_response:
-    class: "nanobrain.core.link.DirectLink"
+    class: nanobrain.core.link.DirectLink
     config:
-      source: "semantic_retrieval_step.retrieved_chunks"
-      target: "response_enhancement_step.retrieved_chunks"
-      description: "Retrieved chunks to intelligent response synthesis"
+      source: semantic_retrieval_step.retrieved_chunks
+      target: response_enhancement_step.retrieved_chunks
+      description: Retrieved chunks to intelligent response synthesis
       auto_transfer: true
-      transfer_on: "data_updated"
-
-  # Final output
+      transfer_on: data_updated
   response_to_output:
-    class: "nanobrain.core.link.DirectLink"
+    class: nanobrain.core.link.DirectLink
     config:
-      source: "response_enhancement_step.synthesized_response"
-      target: "rag_response"
-      description: "Synthesized response to output"
+      source: response_enhancement_step.synthesized_response
+      target: rag_response
+      description: Synthesized response to output
       auto_transfer: true
-      transfer_on: "data_updated"
-
-# Monitoring and logging
+      transfer_on: data_updated
 monitoring:
   enable_step_timing: true
   enable_memory_tracking: true
   enable_error_tracking: true
-  log_level: "INFO"
-  
+  log_level: INFO
   performance_thresholds:
-    max_total_time: 300  # seconds
-    max_step_time: 60    # seconds
-    max_memory_usage: 2048  # MB
-  
+    max_total_time: 300
+    max_step_time: 60
+    max_memory_usage: 2048
   alert_thresholds:
-    response_time: 5.0  # seconds
-    accuracy_drop: 0.1  # 10% decrease
+    response_time: 5.0
+    accuracy_drop: 0.1

@@ -1,45 +1,22 @@
 name: virus_extraction_agent
-description: "LLM agent specialized in extracting virus species from user queries"
+description: LLM agent specialized in extracting virus species from user queries
 class: nanobrain.library.agents.specialized.virus_extraction_agent.VirusExtractionAgent
-
-# Agent configuration
 config:
-  model: "gpt-4"
+  model: gpt-4
   temperature: 0.1
   max_tokens: 500
-  
-  # Specialized system prompt for virus extraction
-  system_prompt: |
-    You are a specialized bioinformatics assistant that extracts virus species names from user queries.
-    
-    TASK: Analyze user queries and extract virus species mentioned.
-    
-    REQUIREMENTS:
-    - Identify virus species names (common names, scientific names, abbreviations)
-    - Classify query type (analysis request, information request, etc.)
-    - Determine analysis type if applicable (protein analysis, sequence analysis, etc.)
-    - Provide confidence score (0.0-1.0)
-    
-    OUTPUT FORMAT:
-    {
-      "query_type": "analysis|information|general",
-      "virus_names": ["list", "of", "extracted", "viruses"],
-      "analysis_type": "protein|sequence|phylogenetic|structural|null",
-      "confidence": 0.95
-    }
-    
-    EXAMPLES:
-    Query: "Create PSSM matrix for Chikungunya virus"
-    Output: {"query_type": "analysis", "virus_names": ["Chikungunya virus", "CHIKV"], "analysis_type": "protein", "confidence": 0.98}
-    
-    Query: "Tell me about Zika virus symptoms"
-    Output: {"query_type": "information", "virus_names": ["Zika virus"], "analysis_type": null, "confidence": 0.95}
-
-# Tools configuration (empty for now - no tools needed for virus extraction)
+  system_prompt: "You are a specialized bioinformatics assistant that extracts virus species names from user queries.\n\n\
+    TASK: Analyze user queries and extract virus species mentioned.\n\nREQUIREMENTS:\n- Identify virus species names (common\
+    \ names, scientific names, abbreviations)\n- Classify query type (analysis request, information request, etc.)\n- Determine\
+    \ analysis type if applicable (protein analysis, sequence analysis, etc.)\n- Provide confidence score (0.0-1.0)\n\nOUTPUT\
+    \ FORMAT:\n{\n  \"query_type\": \"analysis|information|general\",\n  \"virus_names\": [\"list\", \"of\", \"extracted\"\
+    , \"viruses\"],\n  \"analysis_type\": \"protein|sequence|phylogenetic|structural|null\",\n  \"confidence\": 0.95\n}\n\n\
+    EXAMPLES:\nQuery: \"Create PSSM matrix for Chikungunya virus\"\nOutput: {\"query_type\": \"analysis\", \"virus_names\"\
+    : [\"Chikungunya virus\", \"CHIKV\"], \"analysis_type\": \"protein\", \"confidence\": 0.98}\n\nQuery: \"Tell me about\
+    \ Zika virus symptoms\"\nOutput: {\"query_type\": \"information\", \"virus_names\": [\"Zika virus\"], \"analysis_type\"\
+    : null, \"confidence\": 0.95}\n"
 tools: []
-
-# Timeout and performance settings
 timeout: 30.0
 max_retries: 3
 enable_logging: true
-log_conversations: true 
+log_conversations: true

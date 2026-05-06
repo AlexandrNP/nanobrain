@@ -315,6 +315,18 @@ class A2AConfigurationError(A2AError):
     pass
 
 
+class A2ANotAvailableError(A2AError):
+    """Raised when an A2A call can't be made because the real transport
+    is unavailable (aiohttp missing, or the agent session isn't up).
+
+    Added 2026-04-23 as part of T14 mocks-policy enforcement. Previous
+    behavior was to silently fall back to ``_mock_*`` methods, which
+    returned fake success data to the caller. See the T14 audit at
+    ``apecx-mcp-integration/docs/nanobrain_mock_audit.md`` §2-C1.
+    """
+    pass
+
+
 # Utility Functions
 def load_a2a_config_from_yaml(config_path: str) -> Dict[str, Any]:
     """
@@ -510,27 +522,34 @@ class A2AClient:
                 headers = {}
                 if agent_config.auth_type == "bearer" and agent_config.auth_token:
                     headers["Authorization"] = f"Bearer {agent_config.auth_token}"
-                
+
                 timeout = aiohttp.ClientTimeout(total=agent_config.timeout)
                 session = aiohttp.ClientSession(
                     headers=headers,
                     timeout=timeout,
                     connector=aiohttp.TCPConnector(limit=self.config.connection_pool_size)
                 )
-                
+
                 self.agent_sessions[agent_name] = session
-                
+
                 # Test connection by fetching agent card
                 await self.discover_agent_capabilities(agent_name)
-                
+
                 self.logger.info(f"Connected to A2A agent: {agent_name}")
                 return True
             else:
-                # Mock connection for testing
-                self.agent_sessions[agent_name] = MockA2ASession(agent_config)
-                await self._create_mock_agent_card(agent_name)
-                self.logger.info(f"Mock connected to A2A agent: {agent_name}")
-                return True
+                # T14 mocks-policy (2026-04-23): previously this branch
+                # installed a MockA2ASession + mock agent card and returned
+                # True — i.e. an operator whose deployment was missing
+                # aiohttp got a successful-looking "connection" to a mock.
+                # Now: fail loudly. Install aiohttp or don't use the A2A
+                # transport.
+                raise A2ANotAvailableError(
+                    f"Cannot connect to A2A agent {agent_name!r}: aiohttp is "
+                    "not installed. Install the 'a2a' extra "
+                    "(`pip install nanobrain[a2a]`) or remove A2A agents from "
+                    "your configuration."
+                )
                 
         except Exception as e:
             self.logger.error(f"Failed to connect to agent {agent_name}: {e}")
@@ -548,26 +567,34 @@ class A2AClient:
         try:
             if AIOHTTP_AVAILABLE and agent_name in self.agent_sessions:
                 session = self.agent_sessions[agent_name]
-                
+
                 # Fetch agent card from well-known URL
                 agent_card_url = urljoin(agent_config.url, "/.well-known/agent.json")
-                
+
                 async with session.get(agent_card_url) as response:
                     if response.status == 200:
                         card_data = await response.json()
                         agent_card = A2AAgentCard.from_dict(card_data)
                         self.agent_cards[agent_name] = agent_card
-                        
+
                         self.logger.info(f"Discovered capabilities for agent {agent_name}",
                                        skills_count=len(agent_card.skills),
                                        capabilities=agent_card.capabilities.to_dict() if hasattr(agent_card.capabilities, 'to_dict') else str(agent_card.capabilities))
-                        
+
                         return agent_card
                     else:
                         raise A2AError(f"Failed to fetch agent card: HTTP {response.status}")
             else:
-                # Return mock agent card
-                return await self._create_mock_agent_card(agent_name)
+                # T14 mocks-policy (2026-04-23): raise instead of returning
+                # a mock agent card. Diagnostics cover both failure modes.
+                reason = (
+                    "aiohttp is not installed"
+                    if not AIOHTTP_AVAILABLE
+                    else f"agent session not established (call connect_to_agent({agent_name!r}) first)"
+                )
+                raise A2ANotAvailableError(
+                    f"Cannot discover capabilities for agent {agent_name!r}: {reason}"
+                )
                 
         except Exception as e:
             self.logger.error(f"Failed to discover capabilities for agent {agent_name}: {e}")
@@ -622,9 +649,16 @@ class A2AClient:
                     else:
                         raise A2ATaskExecutionError(f"HTTP {response.status}: {await response.text()}")
             else:
-                # Mock execution
-                return await self._mock_send_task(agent_name, task_id, message, session_id, metadata)
-                
+                # T14 mocks-policy (2026-04-23): raise instead of returning mock.
+                reason = (
+                    "aiohttp is not installed"
+                    if not AIOHTTP_AVAILABLE
+                    else f"agent session not established for {agent_name!r}"
+                )
+                raise A2ANotAvailableError(
+                    f"Cannot send task {task_id!r} to agent {agent_name!r}: {reason}"
+                )
+
         except Exception as e:
             self.logger.error(f"Failed to send task to agent {agent_name}: {e}")
             raise A2ATaskExecutionError(f"Task execution failed for {agent_name}: {e}")
@@ -668,9 +702,16 @@ class A2AClient:
                     else:
                         raise A2ATaskExecutionError(f"HTTP {response.status}: {await response.text()}")
             else:
-                # Mock execution
-                return await self._mock_get_task(agent_name, task_id)
-                
+                # T14 mocks-policy (2026-04-23): raise instead of returning mock.
+                reason = (
+                    "aiohttp is not installed"
+                    if not AIOHTTP_AVAILABLE
+                    else f"agent session not established for {agent_name!r}"
+                )
+                raise A2ANotAvailableError(
+                    f"Cannot get task {task_id!r} from agent {agent_name!r}: {reason}"
+                )
+
         except Exception as e:
             self.logger.error(f"Failed to get task from agent {agent_name}: {e}")
             raise A2ATaskExecutionError(f"Task query failed for {agent_name}: {e}")
@@ -714,9 +755,16 @@ class A2AClient:
                     else:
                         raise A2ATaskExecutionError(f"HTTP {response.status}: {await response.text()}")
             else:
-                # Mock execution
-                return await self._mock_cancel_task(agent_name, task_id)
-                
+                # T14 mocks-policy (2026-04-23): raise instead of returning mock.
+                reason = (
+                    "aiohttp is not installed"
+                    if not AIOHTTP_AVAILABLE
+                    else f"agent session not established for {agent_name!r}"
+                )
+                raise A2ANotAvailableError(
+                    f"Cannot cancel task {task_id!r} on agent {agent_name!r}: {reason}"
+                )
+
         except Exception as e:
             self.logger.error(f"Failed to cancel task on agent {agent_name}: {e}")
             raise A2ATaskExecutionError(f"Task cancellation failed for {agent_name}: {e}")

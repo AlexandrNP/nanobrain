@@ -2,8 +2,7 @@ standalone_interface:
   server_host: 0.0.0.0
   server_port: 8001
   title: EEEV Protein Boundary Analysis - Phase 3
-  description: Enhanced standalone interface for viral protein boundary identification
-    with literature support
+  description: Enhanced standalone interface for viral protein boundary identification with literature support
   environment: production
   enable_logging: true
   enable_resource_monitoring: true

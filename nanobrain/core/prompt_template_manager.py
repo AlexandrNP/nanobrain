@@ -9,6 +9,7 @@ import yaml
 import logging
 from typing import Dict, Any, Optional, List, Union
 from pathlib import Path
+from string import Template
 from pydantic import BaseModel, Field, ConfigDict
 
 from .logging_system import get_logger
@@ -21,8 +22,8 @@ logger = logging.getLogger(__name__)
 class PromptTemplate(BaseModel):
     """A single prompt template."""
     model_config = ConfigDict(extra="allow")
-    
-    content: str
+
+    template: str
     description: Optional[str] = None
     required_params: List[str] = Field(default_factory=list)
     optional_params: List[str] = Field(default_factory=list)
@@ -60,69 +61,37 @@ class PromptTemplateManager:
                  enable_validation: bool = True):
         """
         Initialize the prompt template manager.
-        
+
         Args:
             template_source: Path to YAML file, dict, or None
             enable_validation: Whether to validate templates on load
         """
-        self.templates: PromptTemplateConfig = PromptTemplateConfig()
+        # FIXED: Don't instantiate empty PromptTemplateConfig - violates framework rules
+        self.templates: Optional[PromptTemplateConfig] = None
         self.enable_validation = enable_validation
         self._template_cache: Dict[str, Template] = {}
-        
+
         if template_source:
             self.load_templates(template_source)
     
     def load_templates(self, source: Union[str, Path, Dict[str, Any]]) -> None:
         """
         Load templates from various sources.
-        
+
         Args:
             source: YAML file path, dictionary, or YAML string
         """
         if isinstance(source, dict):
-            # Load from dictionary
-            self.templates = PromptTemplateConfig.from_config(source)
+            # Load from dictionary - store directly as we can't use from_config with dict
+            self.templates = PromptTemplateConfig.model_validate(source)
         elif isinstance(source, (str, Path)):
-            # First try to parse as YAML string (if it's a string and contains newlines or colons)
-            if isinstance(source, str) and ('\n' in source or (': ' in source and not source.endswith('.yml') and not source.endswith('.yaml'))):
-                try:
-                    data = yaml.safe_load(source)
-                    if isinstance(data, dict):
-                        self.templates = PromptTemplateConfig.from_config(data)
-                    else:
-                        raise ValueError(f"Invalid YAML content: expected dict, got {type(data)}")
-                except yaml.YAMLError as e:
-                    raise ValueError(f"Invalid template source - not valid YAML: {e}")
+            path = Path(source)
+            if path.exists() and path.is_file():
+                # Load from file path using from_config (framework requirement)
+                self.templates = PromptTemplateConfig.from_config(str(path))
+                logger.info(f"Loaded prompt templates from {path}")
             else:
-                # Try as file path
-                try:
-                    path = Path(source)
-                    if path.exists() and path.is_file():
-                        # Load from file
-                        with open(path, 'r') as f:
-                            data = yaml.safe_load(f)
-                            self.templates = PromptTemplateConfig.from_config(data)
-                        logger.info(f"Loaded prompt templates from {path}")
-                    else:
-                        # Last attempt: parse as YAML string
-                        try:
-                            data = yaml.safe_load(str(source))
-                            if isinstance(data, dict):
-                                self.templates = PromptTemplateConfig.from_config(data)
-                            else:
-                                raise ValueError(f"Invalid YAML content: expected dict, got {type(data)}")
-                        except yaml.YAMLError:
-                            raise ValueError(f"Template source not found as file and not valid YAML: {source}")
-                except (OSError, ValueError) as e:
-                    # If path operations fail, try as YAML string
-                    try:
-                        data = yaml.safe_load(str(source))
-                        if isinstance(data, dict):
-                            self.templates = PromptTemplateConfig.from_config(data)
-                        else:
-                            raise ValueError(f"Invalid YAML content: expected dict, got {type(data)}")
-                    except yaml.YAMLError:
-                        raise ValueError(f"Invalid template source: {source}")
+                raise ValueError(f"Template file not found: {source}")
         else:
             raise ValueError(f"Invalid template source type: {type(source)}")
         

@@ -103,6 +103,90 @@ def parse_condition_from_config(condition_config: Union[str, Dict[str, Any]]) ->
         return default_condition_func
 
 
+def parse_transform_from_config(transform_spec: str) -> Callable:
+    """Resolve a YAML-configured ``transform_function`` string to a
+    Python callable.
+
+    Grammar: ``"package.module.callable"`` — a fully-qualified dotted
+    path. The final segment is looked up as an attribute on the module
+    named by the leading segments. Submodule attributes (e.g.
+    ``"pkg.mod.Class.staticmethod"``) work because ``getattr`` walks the
+    remaining dots after the module resolves.
+
+    Sync callables (``def f(data) -> Any``) and async callables
+    (``async def f(data) -> Any``) are both accepted. ``TransformLink``
+    dispatches on ``asyncio.iscoroutinefunction`` at transfer time.
+
+    Raises ``ComponentConfigurationError`` when:
+      - ``transform_spec`` is not a string (e.g. mis-typed as a dict).
+      - The spec has no dots (ambiguous between "top-level module" and
+        "top-level callable"; reject so the message is clearer).
+      - The leading module path doesn't import (wrong package).
+      - The trailing attribute doesn't exist on the resolved object.
+      - The resolved attribute isn't callable.
+
+    Design note: we deliberately do NOT use a global registry or
+    string-eval — module-path lookup is the same pattern APScheduler /
+    Celery / pytest plugins use, and it has no startup-order pitfalls.
+    """
+    if not isinstance(transform_spec, str):
+        raise ComponentConfigurationError(
+            "transform_function must be a string 'package.module.callable', "
+            f"got {type(transform_spec).__name__}: {transform_spec!r}"
+        )
+    if "." not in transform_spec:
+        raise ComponentConfigurationError(
+            f"transform_function {transform_spec!r} has no '.' — must be a "
+            "fully-qualified dotted path like 'my_pkg.my_mod.my_func'"
+        )
+
+    import importlib
+
+    # Walk dots backward until one prefix is an importable module; the
+    # remaining tail is getattr-walked. This lets ``pkg.mod.Class.method``
+    # resolve even though ``pkg.mod.Class`` is not itself a module.
+    segments = transform_spec.split(".")
+    module_obj: Any = None
+    split_at = -1
+    for i in range(len(segments) - 1, 0, -1):
+        candidate = ".".join(segments[:i])
+        try:
+            module_obj = importlib.import_module(candidate)
+            split_at = i
+            break
+        except ImportError:
+            continue
+
+    if module_obj is None:
+        # The leading segment isn't even an importable top-level module.
+        # Emit the clearest-possible diagnostic naming the top-level name.
+        raise ComponentConfigurationError(
+            f"transform_function {transform_spec!r} — could not import module "
+            f"{segments[0]!r} (tried progressively shorter prefixes down to "
+            f"{segments[0]!r})"
+        )
+
+    obj: Any = module_obj
+    walked: list[str] = []
+    for attr in segments[split_at:]:
+        try:
+            obj = getattr(obj, attr)
+        except AttributeError as exc:
+            walked_str = ".".join(segments[:split_at] + walked)
+            raise ComponentConfigurationError(
+                f"transform_function {transform_spec!r} — {walked_str!r} "
+                f"has no attribute {attr!r}"
+            ) from exc
+        walked.append(attr)
+
+    if not callable(obj):
+        raise ComponentConfigurationError(
+            f"transform_function {transform_spec!r} resolved to "
+            f"{type(obj).__name__}, which is not callable"
+        )
+    return obj
+
+
 class LinkType(Enum):
     """Types of links."""
     DIRECT = "direct"
@@ -658,11 +742,17 @@ class LinkBase(FromConfigBase, ABC):
     def _setup_callback_registration(self) -> None:
         """Setup callback registration for automatic data transfer.
 
-        DISABLED: Legacy change listener mechanism removed to prevent duplicate transfers.
-        The new event-driven architecture handles link activation via DataUnit automatic
-        triggers (created in DataUnit.register_with_link()), making this redundant.
-
-        Keeping this method for backward compatibility but disabling the actual registration.
+        RE-ENABLED 2026-05-04 (apecx-mcp-integration): the previous comment
+        claimed this was disabled because ``DataUnit.register_with_link()``
+        was the new mechanism. That method is defined on DataUnit but never
+        called anywhere in the framework — i.e., the supposed replacement
+        does not exist, so there is no duplicate-transfer risk to guard
+        against. Without this registration, inter-step DirectLinks never
+        propagate data and multi-step workflows silently produce no output
+        past the first step. See
+        ``apecx-mcp-integration/src/apecx_integration/synonym_dictionary/workflow/workflow.py``
+        for the durable integration test that catches a re-disable
+        regression.
         """
         if not self.source or not self.target:
             if self.enable_logging and self.nb_logger:
@@ -671,18 +761,20 @@ class LinkBase(FromConfigBase, ABC):
             return
 
         try:
-            # DISABLED: Using automatic trigger system instead
-            # The DataUnit.register_with_link() method creates automatic triggers
-            # that handle link activation, making this legacy mechanism redundant.
-            # Keeping both active caused duplicate transfers (100% overhead).
-
-            # if hasattr(self.source, 'register_change_listener'):
-            #     # Register with source data unit for automatic transfer
-            #     self.source.register_change_listener(self._on_source_data_changed)
-
-            if self.enable_logging and self.nb_logger:
-                self.nb_logger.info(
-                    f"🔗 DirectLink {self.name} using automatic trigger system (legacy callback disabled)")
+            if hasattr(self.source, 'register_change_listener'):
+                # Register with source data unit for automatic transfer.
+                # When the source's _notify_change_listeners fires, our
+                # _on_source_data_changed handler reads new_data from the
+                # event and calls self.transfer(...) → writes to target.
+                self.source.register_change_listener(self._on_source_data_changed)
+                if self.enable_logging and self.nb_logger:
+                    self.nb_logger.info(
+                        f"🔗 DirectLink {self.name}: registered change listener on source")
+            else:
+                if self.enable_logging and self.nb_logger:
+                    self.nb_logger.warning(
+                        f"⚠️ DirectLink {self.name}: source has no register_change_listener; "
+                        "data will not propagate automatically")
         except Exception as e:
             if self.enable_logging and self.nb_logger:
                 self.nb_logger.error(
@@ -1383,13 +1475,140 @@ class QueueLink(LinkBase):
 class TransformLink(LinkBase):
     """
     Link that transforms data before transferring to target.
+
+    Enhanced 2026-04-23 with mandatory from_config pattern support:
+    YAML loaders now resolve ``transform_function`` (a dotted string
+    like ``"my_pkg.my_mod.my_func"``) via ``parse_transform_from_config``
+    into a Python callable at link-construction time. Sync and async
+    callables are both accepted; the transfer path dispatches on
+    ``asyncio.iscoroutinefunction``.
+
+    Example YAML::
+
+        links:
+          rename_step1_to_step3a:
+            class: "nanobrain.core.link.TransformLink"
+            config:
+              link_type: "transform"
+              source: "entity_extraction.entity_candidates_output"
+              target: "synonym_cache_lookup.query_terms_input"
+              transform_function: "apecx_integration.composition.transforms.entities_to_query_terms"
     """
 
-    def __init__(self, source: Any, target: Any, transform_func: Callable,
-                 config: Optional[LinkConfig] = None, **kwargs):
-        config = config or LinkConfig(link_type=LinkType.TRANSFORM)
-        super().__init__(source, target, config, **kwargs)
-        self.transform_func = transform_func
+    COMPONENT_TYPE = "transform_link"
+    REQUIRED_CONFIG_FIELDS = ['link_type', 'transform_function']
+    OPTIONAL_CONFIG_FIELDS = {
+        'buffer_size': 100,
+        'data_mapping': None,
+    }
+
+    def __init__(self, *args, **kwargs):
+        """Prevent direct instantiation — use from_config instead.
+
+        Matches the framework's mandatory-from_config policy; same shape
+        as DirectLink / ConditionalLink. Pre-2026-04-23 code that called
+        ``TransformLink(source, target, transform_func)`` directly must
+        migrate to ``TransformLink.from_config({...})``.
+        """
+        raise RuntimeError(
+            "Direct instantiation of TransformLink is prohibited. "
+            "ALL framework components must use TransformLink.from_config() "
+            "as per mandatory framework requirements."
+        )
+
+    @classmethod
+    def from_config(cls, config: Union[str, Path, LinkConfig, Dict[str, Any]], **kwargs) -> 'TransformLink':
+        """Mandatory from_config implementation for TransformLink."""
+        nb_logger = get_logger(f"{cls.__name__}.from_config")
+        nb_logger.info(f"Creating {cls.__name__} from configuration")
+
+        # Step 1: Normalize input to LinkConfig object (mirrors ConditionalLink).
+        if isinstance(config, (str, Path)):
+            config_object = LinkConfig.from_config(config, **kwargs)
+        elif isinstance(config, dict):
+            try:
+                LinkConfig._allow_direct_instantiation = True
+                config_object = LinkConfig(**config)
+            finally:
+                LinkConfig._allow_direct_instantiation = False
+        elif isinstance(config, LinkConfig):
+            config_object = config
+        else:
+            if hasattr(config, 'model_dump'):
+                config_dict = config.model_dump()
+            elif hasattr(config, 'dict'):
+                config_dict = config.dict()
+            else:
+                raise ValueError(f"Unsupported config type: {type(config)}")
+            try:
+                LinkConfig._allow_direct_instantiation = True
+                config_object = LinkConfig(**config_dict)
+            finally:
+                LinkConfig._allow_direct_instantiation = False
+
+        # Step 2: Validate configuration schema.
+        cls.validate_config_schema(config_object)
+
+        # Step 3: Extract component-specific configuration.
+        component_config = cls.extract_component_config(config_object)
+
+        # Step 4: Resolve dependencies (string → callable happens here).
+        dependencies = cls.resolve_dependencies(component_config, **kwargs)
+
+        # Step 5: Create instance.
+        instance = cls.create_instance(
+            config_object, component_config, dependencies)
+
+        # Step 6: Post-creation initialization.
+        instance._post_config_initialization()
+
+        nb_logger.info(f"Successfully created {cls.__name__}")
+        return instance
+
+    @classmethod
+    def extract_component_config(cls, config: LinkConfig) -> Dict[str, Any]:
+        """Extract TransformLink configuration."""
+        return {
+            'source': config.source,
+            'target': config.target,
+            'link_type': config.link_type,
+            'transform_function': getattr(config, 'transform_function', None),
+            'buffer_size': getattr(config, 'buffer_size', 100),
+            'data_mapping': getattr(config, 'data_mapping', None),
+            'auto_transfer': getattr(config, 'auto_transfer', False),
+        }
+
+    @classmethod
+    def resolve_dependencies(cls, component_config: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        """Resolve TransformLink dependencies: string → Python callable."""
+        transform_spec = component_config.get('transform_function')
+        if not transform_spec:
+            raise ComponentConfigurationError(
+                "TransformLink requires 'transform_function' in its config — "
+                "a fully-qualified dotted path like 'my_pkg.my_mod.my_func'"
+            )
+
+        # Accept a callable directly for tests / in-process callers that
+        # skip the YAML loader. (Not reachable from a YAML file — that
+        # pins ``transform_function`` to a string via LinkConfig.)
+        if callable(transform_spec):
+            transform_func = transform_spec
+        else:
+            transform_func = parse_transform_from_config(transform_spec)
+
+        return {
+            'source': component_config.get('source'),
+            'target': component_config.get('target'),
+            'transform_func': transform_func,
+            'enable_logging': kwargs.get('enable_logging', True),
+            'debug_mode': kwargs.get('debug_mode', False),
+        }
+
+    def _init_from_config(self, config: LinkConfig, component_config: Dict[str, Any],
+                          dependencies: Dict[str, Any]) -> None:
+        """Initialize TransformLink with resolved dependencies."""
+        super()._init_from_config(config, component_config, dependencies)
+        self.transform_func = dependencies['transform_func']
 
     async def start(self) -> None:
         """Start the transform link."""
@@ -1408,13 +1627,13 @@ class TransformLink(LinkBase):
             return
 
         try:
-            # Apply transformation
+            # Apply transformation — supports both sync and async callables.
             if asyncio.iscoroutinefunction(self.transform_func):
                 transformed_data = await self.transform_func(data)
             else:
                 transformed_data = self.transform_func(data)
 
-            # Transfer transformed data
+            # Transfer transformed data.
             if hasattr(self.target, 'input_data_units') and self.target.input_data_units:
                 input_unit = self.target.input_data_units[0]
                 await input_unit.set(transformed_data)

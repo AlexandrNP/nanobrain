@@ -1,67 +1,45 @@
-# Response Enhancement Step Configuration
-# AgentStep wrapper for ResponseSynthesisAgent - intelligent information synthesis
-
-name: "response_enhancement_step"
-description: "Intelligent response synthesis using agentic LLM capabilities for comprehensive information synthesis"
-
-# Agent configuration
-agent_class: "nanobrain.library.workflows.rag.agents.response_synthesis_agent.ResponseSynthesisAgent"
-agent_config: "nanobrain/library/workflows/rag/config/agents/response_synthesis_agent.yml"
-
-# AgentStep data bridging configuration
-input_extraction_strategy: "auto_detect"
-output_formatting_strategy: "conversational_response"
-input_field_name: "retrieved_chunks"
-input_template: "{{ retrieved_chunks }}"
-output_template: "{{ response }}"
-
-# AgentStep conversation management
+name: response_enhancement_step
+description: Intelligent response synthesis using agentic LLM capabilities for comprehensive information synthesis
+agent_class: nanobrain.library.workflows.rag.agents.response_synthesis_agent.ResponseSynthesisAgent
+agent_config: nanobrain/library/workflows/rag/config/agents/response_synthesis_agent.yml
+input_extraction_strategy: auto_detect
+output_formatting_strategy: conversational_response
+input_field_name: retrieved_chunks
+input_template: '{{ retrieved_chunks }}'
+output_template: '{{ response }}'
 enable_conversation_tracking: true
 max_conversation_length: 10
 conversation_timeout: 3600
-conversation_id_field: "conversation_id"
-input_extraction_strategy: "auto_detect"
-output_formatting_strategy: "conversational_response"
+conversation_id_field: conversation_id
 auto_initialize_agent: true
 conversation_management:
   enable_conversation_history: true
   max_history_length: 10
   conversation_timeout: 3600
-
-# AgentStep execution configuration
 execution_config:
   timeout: 120
   retry_attempts: 2
   enable_streaming: false
-
-# Data transformation configuration
 data_transformation:
-  input_format: "json"  # Expected format from previous step
-  output_format: "json"  # Format for next step
-
-  # Input data structure expected from semantic retrieval step
+  input_format: json
+  output_format: json
   expected_input_structure:
-    query: "string"
-    retrieved_chunks: "array"
-    retrieval_metadata: "object"
-
-  # Output data structure for workflow
+    query: string
+    retrieved_chunks: array
+    retrieval_metadata: object
   output_structure:
-    synthesized_response: "string"
-    synthesis_metadata: "object"
-    confidence_score: "number"
-
-# Input/Output data units for AgentStep
+    synthesized_response: string
+    synthesis_metadata: object
+    confidence_score: number
 input_data_units:
   retrieved_chunks:
-    class: "nanobrain.core.data_unit.DataUnitMemory"
-    name: "retrieved_chunks"
-    description: "Retrieved document chunks with metadata for intelligent synthesis"
+    class: nanobrain.core.data_unit.DataUnitMemory
+    name: retrieved_chunks
+    description: Retrieved document chunks with metadata for intelligent synthesis
     persistent: false
-
 output_data_units:
   synthesized_response:
-    class: "nanobrain.core.data_unit.DataUnitMemory"
-    name: "synthesized_response"
-    description: "Intelligently synthesized response with metadata"
+    class: nanobrain.core.data_unit.DataUnitMemory
+    name: synthesized_response
+    description: Intelligently synthesized response with metadata
     persistent: false

@@ -417,6 +417,38 @@ class AgentConfig(ConfigBase):
     model: str = "gpt-3.5-turbo"
     temperature: float = Field(default=0.7, ge=0.0, le=2.0)
     max_tokens: Optional[int] = None
+
+    # --- Local / OpenAI-compatible endpoint support (scope memo 07) ---
+    # Leave ``provider`` at "openai" and ``base_url`` unset to preserve the
+    # existing AsyncOpenAI-against-api.openai.com behavior. Setting
+    # ``provider: openai_compatible`` and/or ``base_url`` routes the Agent
+    # at an OpenAI-protocol-speaking server (Ollama, vLLM, llama.cpp server)
+    # and relaxes the OPENAI_API_KEY gate — local endpoints don't check the
+    # key so "EMPTY" is used if none is supplied.
+    provider: str = Field(
+        default="openai",
+        description=(
+            "LLM provider: 'openai' (default, api.openai.com) or "
+            "'openai_compatible' (any endpoint speaking the OpenAI chat-"
+            "completions protocol: Ollama, vLLM, llama.cpp server, etc)."
+        ),
+    )
+    base_url: Optional[str] = Field(
+        default=None,
+        description=(
+            "OpenAI-compatible endpoint URL (e.g., 'http://localhost:11434/v1' "
+            "for Ollama). If set, the Agent treats the provider as local "
+            "regardless of the ``provider`` field."
+        ),
+    )
+    api_key: Optional[str] = Field(
+        default=None,
+        description=(
+            "Explicit API key. If set, bypasses the ConfigManager/env-var "
+            "lookup. For local backends that don't validate keys, omit this "
+            "(defaults to 'EMPTY') or set it to any placeholder."
+        ),
+    )
     system_prompt: str = ""
     prompt_templates: Optional[Dict[str, Any]] = Field(
         default=None, description="Inline prompt templates")
@@ -1043,72 +1075,97 @@ class Agent(FromConfigBase, ABC):
         self.agent_logger.shutdown()
 
     async def _initialize_llm_client(self) -> None:
-        """Initialize the LLM client using ConfigManager and environment variables."""
+        """Initialize the LLM client using ConfigManager, env vars, or
+        explicit AgentConfig fields. Supports OpenAI (default) and any
+        OpenAI-compatible endpoint (Ollama, vLLM, llama.cpp server) via
+        ``provider: openai_compatible`` / ``base_url`` (see scope memo 07).
+        """
+        # Defined at the top of the method so the fallback ``except``
+        # branches can reach it even if the imports below raise — prior
+        # versions nested ``def safe_log`` inside the try, which made the
+        # ``except ImportError`` handler fail with UnboundLocalError when
+        # ``from openai import AsyncOpenAI`` was actually missing.
+        def safe_log(level, message, **kwargs):
+            if hasattr(self, 'agent_logger') and self.agent_logger:
+                getattr(self.agent_logger, f'log_{level}')(
+                    message, **kwargs)
+            elif hasattr(self, 'logger') and self.logger:
+                getattr(self.logger, level)(message, **kwargs)
+            else:
+                print(
+                    f"[{level.upper()}] Agent {getattr(self, 'name', 'unknown')}: {message}")
+
         try:
             # Try to import OpenAI client
             from openai import AsyncOpenAI
             import os
 
-            # Helper function to log safely
-            def safe_log(level, message, **kwargs):
-                if hasattr(self, 'agent_logger') and self.agent_logger:
-                    # Use the correct method names for AgentLogger
-                    getattr(self.agent_logger, f'log_{level}')(
-                        message, **kwargs)
-                elif hasattr(self, 'logger') and self.logger:
-                    # Use the correct method names for NanoBrainLogger
-                    getattr(self.logger, level)(message, **kwargs)
-                else:
-                    print(
-                        f"[{level.upper()}] Agent {getattr(self, 'name', 'unknown')}: {message}")
+            provider = getattr(self.config, 'provider', 'openai') or 'openai'
+            base_url = getattr(self.config, 'base_url', None)
+            configured_api_key = getattr(self.config, 'api_key', None)
+            is_local = provider == 'openai_compatible' or base_url is not None
 
-            # Get API key from ConfigManager first, then fall back to environment variables
-            api_key = None
-            try:
-                from nanobrain.core.config.config_manager import get_api_key
-                api_key = get_api_key('openai')
-                if api_key:
+            # Resolve API key: explicit AgentConfig field wins, then
+            # ConfigManager, then env var. For local endpoints, fall back
+            # to "EMPTY" so the OpenAI client library has a non-empty value.
+            api_key = configured_api_key
+            if not api_key:
+                try:
+                    from nanobrain.core.config.config_manager import get_api_key
+                    api_key = get_api_key('openai')
+                    if api_key:
+                        safe_log(
+                            'debug', f"Agent {getattr(self, 'name', 'unknown')} using OpenAI API key from ConfigManager")
+                except ImportError:
                     safe_log(
-                        'debug', f"Agent {getattr(self, 'name', 'unknown')} using OpenAI API key from ConfigManager")
-            except ImportError:
-                safe_log(
-                    'debug', "ConfigManager not available, falling back to environment variables")
+                        'debug', "ConfigManager not available, falling back to environment variables")
 
-            # Fall back to environment variable if ConfigManager didn't provide key
             if not api_key:
                 api_key = os.getenv('OPENAI_API_KEY')
                 if api_key:
                     safe_log(
                         'debug', f"Agent {getattr(self, 'name', 'unknown')} using OpenAI API key from environment variable")
 
-            safe_log(
-                'debug', f"Agent {getattr(self, 'name', 'unknown')} API key check: found={bool(api_key)}, length={len(api_key) if api_key else 0}")
+            if is_local and not api_key:
+                api_key = 'EMPTY'
+                safe_log(
+                    'debug', f"Agent {getattr(self, 'name', 'unknown')} using placeholder api_key 'EMPTY' for local endpoint {base_url}")
 
             if not api_key:
                 safe_log(
-                    'error', f"No OpenAI API key found for agent {getattr(self, 'name', 'unknown')}. Set OPENAI_API_KEY environment variable.")
+                    'error', f"No OpenAI API key found for agent {getattr(self, 'name', 'unknown')}. Set OPENAI_API_KEY, or configure AgentConfig.provider='openai_compatible' with a base_url for a local backend.")
                 self.llm_client = None
                 return
 
-            # Create OpenAI client with API key
-            self.llm_client = AsyncOpenAI(api_key=api_key)
-            safe_log(
-                'debug', f"Agent {getattr(self, 'name', 'unknown')} initialized with OpenAI client")
+            # Build client kwargs — base_url is the only extra field vs. the
+            # prior behavior, keeping this change backward-compatible for
+            # existing OpenAI-against-api.openai.com configs.
+            client_kwargs: Dict[str, Any] = {'api_key': api_key}
+            if base_url:
+                client_kwargs['base_url'] = base_url
 
-            # Test the client with a simple call to verify it works
+            self.llm_client = AsyncOpenAI(**client_kwargs)
+            safe_log(
+                'debug', f"Agent {getattr(self, 'name', 'unknown')} initialized with OpenAI client "
+                         f"({'local endpoint ' + base_url if is_local else 'openai'}, model={self.config.model})")
+
+            # Verify client with a minimal test call. For local endpoints,
+            # probe with the configured model (Ollama won't have gpt-3.5-
+            # turbo); for OpenAI, keep the original hardcoded probe to avoid
+            # changing the init cost on existing remote agents.
+            test_model = self.config.model if is_local else 'gpt-3.5-turbo'
             try:
-                # Make a minimal test call to verify the client works
                 test_response = await self.llm_client.chat.completions.create(
-                    model="gpt-3.5-turbo",
+                    model=test_model,
                     messages=[{"role": "user", "content": "test"}],
                     max_tokens=1
                 )
                 safe_log(
-                    'debug', f"Agent {getattr(self, 'name', 'unknown')} OpenAI client test successful")
+                    'debug', f"Agent {getattr(self, 'name', 'unknown')} LLM client test successful (model={test_model})")
                 safe_log('info', "✅ LLM client initialized successfully")
             except Exception as e:
                 safe_log(
-                    'error', f"OpenAI client test failed for agent {getattr(self, 'name', 'unknown')}: {e}")
+                    'error', f"LLM client test failed for agent {getattr(self, 'name', 'unknown')}: {e}")
                 self.llm_client = None
 
         except ImportError:

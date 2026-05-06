@@ -5,59 +5,46 @@ class: nanobrain.library.workflows.viral_protein_analysis.steps.result_collectio
 step_type: simple
 debug_mode: false
 enable_logging: true
-
-# Input data units (proper plural format)
 input_data_units:
   analysis_data:
     class: nanobrain.core.data_unit.DataUnitMemory
     name: analysis_data
-    description: "Aggregated analysis data from data aggregation step"
+    description: Aggregated analysis data from data aggregation step
     persistent: false
-
-# Output data units (proper plural format)
 output_data_units:
   final_results:
     class: nanobrain.core.data_unit.DataUnitFile
     name: final_results
-    description: "Final workflow results with complete analysis report"
+    description: Final workflow results with complete analysis report
     persistent: true
-    file_path: "results/viral_protein_analysis_results.json"
-
-# Step-level triggers
+    file_path: results/viral_protein_analysis_results.json
 triggers:
-  - trigger_id: input_data_received
-    class: nanobrain.core.trigger.DataUnitChangeTrigger
-    data_unit: analysis_data
-    event_type: "set"
-    description: "Execute result collection when analysis data is received"
-
-# Collection configuration
+- trigger_id: input_data_received
+  class: nanobrain.core.trigger.DataUnitChangeTrigger
+  data_unit: analysis_data
+  event_type: set
+  description: Execute result collection when analysis data is received
 collection_config:
   include_raw_data: false
   include_processed_data: true
   include_analysis_results: true
   include_metadata: true
   create_summary: true
-  # Moved output format options here
-  output_format: "structured"
+  output_format: structured
   create_report: true
   include_visualizations: true
   include_statistics: true
   save_to_file: true
-  output_directory: "results"
-
-# Validation configuration
+  output_directory: results
 validation_config:
   validate_completeness: true
   validate_consistency: true
   check_data_quality: true
-
-# Metadata
-logical_steps_covered: [14]
-step_description_detailed: 'Collect and finalize workflow results for presentation'
-
+logical_steps_covered:
+- 14
+step_description_detailed: Collect and finalize workflow results for presentation
 _metadata:
   last_updated: '2025-01-28'
-  updated_by: 'config_alignment'
+  updated_by: config_alignment
   migration_version: 2.0.0
-  uses_modular_config: true 
+  uses_modular_config: true

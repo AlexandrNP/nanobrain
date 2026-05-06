@@ -1,0 +1,42 @@
+# Example ApprovalStep configuration: synonym-approval-gate.
+#
+# Pauses a harvesting workflow for human review of LLM-proposed synonyms.
+# Hard gate by default — no timeout; the workflow waits indefinitely for a
+# human decision. Swap gate_policy.kind to "soft" with a finite
+# timeout_seconds to auto-resolve on timeout (see docstring of ApprovalStep).
+#
+# The ``class:`` field enables nanobrain's auto-delegation trick — you can
+# load this YAML via ``BaseStep.from_config('approval_step.yml')`` and the
+# framework will delegate to ApprovalStep.from_config under the hood.
+
+class: "nanobrain.library.steps.approval_step.ApprovalStep"
+name: synonym_approval_gate
+description: "Pause the workflow for human review of LLM-proposed synonyms."
+
+input_data_units:
+  proposals_input:
+    class: "nanobrain.core.data_unit.DataUnitMemory"
+    name: proposals_input
+    description: "LLM-proposed synonym candidates awaiting human approval."
+    persistent: false
+
+output_data_units:
+  approved_output:
+    class: "nanobrain.core.data_unit.DataUnitMemory"
+    name: approved_output
+    description: "Approved (and possibly modified) synonym set."
+    persistent: false
+
+triggers:
+  - class: "nanobrain.core.trigger.DataUnitChangeTrigger"
+    data_unit: "proposals_input"
+
+gate_policy:
+  kind: hard                # hard | soft | silent | allocation
+  timeout_seconds: null     # null for hard; positive number for soft
+  on_timeout: reject        # auto_approve | reject (soft gates only)
+
+control_plane:
+  base_url: "${CONTROL_PLANE_URL}"
+  poll_interval_seconds: 2.0
+  request_timeout_seconds: 10.0

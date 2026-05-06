@@ -1,8 +1,6 @@
-name: "Data Generator Configuration"
-description: "Configuration for DataGeneratorStep"
-version: "1.0.0"
-
-# Simple configuration for data generator step
+name: Data Generator Configuration
+description: Configuration for DataGeneratorStep
+version: 1.0.0
 processing_delay: 1.0
-default_seed: "default"
-output_prefix: "Generated data based on"
+default_seed: default
+output_prefix: Generated data based on

@@ -1,87 +1,33 @@
 name: synonym_detection_agent
-description: "Agent specialized in detecting and resolving virus name synonyms using data-driven approach"
+description: Agent specialized in detecting and resolving virus name synonyms using data-driven approach
 class: nanobrain.library.agents.specialized.protein_synonym_agent.ProteinSynonymAgent
-
-# Agent configuration
 config:
-  name: synonym_detection_agent  
-  description: "Agent specialized in detecting and resolving virus name synonyms using data-driven approach"
-  model: "gpt-4"
-  temperature: 0.0  # Very low temperature for consistent synonym detection
+  name: synonym_detection_agent
+  description: Agent specialized in detecting and resolving virus name synonyms using data-driven approach
+  model: gpt-4
+  temperature: 0.0
   max_tokens: 1000
-  
-  # Specialized system prompt for synonym detection
-  system_prompt: |
-    You are an expert virus taxonomy and synonym detection agent.
-    
-    TASK: Detect and resolve virus name synonyms using comprehensive biological databases.
-    
-    REQUIREMENTS:
-    - NO hardcoded virus lists - MUST be data-driven
-    - Use taxonomic databases, literature, and biological naming conventions
-    - Identify common synonyms, abbreviations, and alternative names
-    - Provide standardized scientific nomenclature
-    - Include confidence scores for each synonym mapping
-    
-    DATA SOURCES TO CONSIDER:
-    - NCBI Taxonomy
-    - ICTV (International Committee on Taxonomy of Viruses)
-    - UniProt virus taxonomy
-    - Published literature and databases
-    - Common abbreviations and strain designations
-    
-    OUTPUT FORMAT:
-    {
-      "standardized_names": ["Primary", "Scientific", "Names"],
-      "synonym_mappings": {
-        "common_name": "standardized_name",
-        "abbreviation": "standardized_name"
-      },
-      "confidence_scores": {
-        "mapping_name": 0.95
-      },
-      "taxonomy_validation": {
-        "virus_name": {
-          "family": "Togaviridae",
-          "genus": "Alphavirus",
-          "species": "Chikungunya virus"
-        }
-      },
-      "detected_synonyms": ["all", "synonyms", "found"]
-    }
-    
-    EXAMPLE:
-    Input: ["CHIKV", "Chikungunya", "CHIK virus"]
-    Output: {
-      "standardized_names": ["Chikungunya virus"],
-      "synonym_mappings": {
-        "CHIKV": "Chikungunya virus",
-        "CHIK virus": "Chikungunya virus",
-        "Chikungunya": "Chikungunya virus"
-      },
-      "confidence_scores": {
-        "CHIKV": 0.98,
-        "CHIK virus": 0.95,
-        "Chikungunya": 0.99
-      },
-      "taxonomy_validation": {
-        "Chikungunya virus": {
-          "family": "Togaviridae",
-          "genus": "Alphavirus",
-          "species": "Chikungunya virus"
-        }
-      }
-    }
-
-  # Timeout and performance settings
+  system_prompt: "You are an expert virus taxonomy and synonym detection agent.\n\nTASK: Detect and resolve virus name synonyms\
+    \ using comprehensive biological databases.\n\nREQUIREMENTS:\n- NO hardcoded virus lists - MUST be data-driven\n- Use\
+    \ taxonomic databases, literature, and biological naming conventions\n- Identify common synonyms, abbreviations, and alternative\
+    \ names\n- Provide standardized scientific nomenclature\n- Include confidence scores for each synonym mapping\n\nDATA\
+    \ SOURCES TO CONSIDER:\n- NCBI Taxonomy\n- ICTV (International Committee on Taxonomy of Viruses)\n- UniProt virus taxonomy\n\
+    - Published literature and databases\n- Common abbreviations and strain designations\n\nOUTPUT FORMAT:\n{\n  \"standardized_names\"\
+    : [\"Primary\", \"Scientific\", \"Names\"],\n  \"synonym_mappings\": {\n    \"common_name\": \"standardized_name\",\n\
+    \    \"abbreviation\": \"standardized_name\"\n  },\n  \"confidence_scores\": {\n    \"mapping_name\": 0.95\n  },\n  \"\
+    taxonomy_validation\": {\n    \"virus_name\": {\n      \"family\": \"Togaviridae\",\n      \"genus\": \"Alphavirus\",\n\
+    \      \"species\": \"Chikungunya virus\"\n    }\n  },\n  \"detected_synonyms\": [\"all\", \"synonyms\", \"found\"]\n\
+    }\n\nEXAMPLE:\nInput: [\"CHIKV\", \"Chikungunya\", \"CHIK virus\"]\nOutput: {\n  \"standardized_names\": [\"Chikungunya\
+    \ virus\"],\n  \"synonym_mappings\": {\n    \"CHIKV\": \"Chikungunya virus\",\n    \"CHIK virus\": \"Chikungunya virus\"\
+    ,\n    \"Chikungunya\": \"Chikungunya virus\"\n  },\n  \"confidence_scores\": {\n    \"CHIKV\": 0.98,\n    \"CHIK virus\"\
+    : 0.95,\n    \"Chikungunya\": 0.99\n  },\n  \"taxonomy_validation\": {\n    \"Chikungunya virus\": {\n      \"family\"\
+    : \"Togaviridae\",\n      \"genus\": \"Alphavirus\",\n      \"species\": \"Chikungunya virus\"\n    }\n  }\n}\n"
   timeout: 60.0
   max_retries: 3
   enable_logging: true
   log_conversations: true
-
-  # Synonym detection specific settings
   synonym_config:
     min_confidence_threshold: 0.7
     max_synonyms_per_virus: 15
     enable_fuzzy_matching: true
-    include_strain_variants: true 
+    include_strain_variants: true

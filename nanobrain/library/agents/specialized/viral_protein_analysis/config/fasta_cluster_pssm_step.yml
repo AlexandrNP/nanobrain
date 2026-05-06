@@ -1,0 +1,31 @@
+name: fasta_cluster_pssm_step
+description: Generate PSSMs from clustered FASTA sequences via Parsl distributed execution
+input_data_units:
+  annotation_input:
+    class: nanobrain.core.data_unit.DataUnitMemory
+    name: annotation_input
+    description: Annotated proteins with FASTA sequences
+    persistent: false
+output_data_units:
+  pssm_output:
+    class: nanobrain.core.data_unit.DataUnitMemory
+    name: pssm_output
+    description: Generated PSSM matrices and curation data
+    persistent: false
+executor_config_path: nanobrain/library/agents/specialized/viral_protein_analysis/config/pssm_parsl_executor.yml
+default_threads: 4
+timeout: 3600
+output_dir: /tmp/pssm_output
+keep_intermediate: false
+enable_logging: true
+debug_mode: false
+metadata:
+  step_type: FastaClusterPSSMStep
+  framework: NanoBrain
+  version: 1.0.0
+  validated_infrastructure:
+    environment: 421 MB conda-packed (Perl 5.32.1, psiblast 2.13.0+, mmseqs, mafft)
+    executor: ParslExecutor with PBSProProvider (Aurora)
+    validated_job: '8180824'
+    validation_date: '2025-12-02'
+    validation_status: FULLY VALIDATED

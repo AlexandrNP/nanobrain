@@ -1,43 +1,41 @@
-# Default Configuration for Agents
-# Classes:
-# - nanobrain.library.agents.specialized.base.SimpleSpecializedAgent
-# - nanobrain.library.agents.specialized.base.ConversationalSpecializedAgent
-# - nanobrain.library.agents.enhanced.collaborative_agent.CollaborativeAgent
-# - nanobrain.library.agents.conversational.enhanced_collaborative_agent.EnhancedCollaborativeAgent
-
-# MANDATORY: Agent card section for A2A protocol compliance
 agent_card:
-  version: "1.0.0"
-  purpose: "Default agent configuration template for general-purpose AI assistance"
-  detailed_description: "A configurable agent template supporting multiple agent types (simple, conversational, collaborative, enhanced) with comprehensive customization options."
-  domain: "general"
-  expertise_level: "intermediate"
-  
+  version: 1.0.0
+  purpose: Default agent configuration template for general-purpose AI assistance
+  detailed_description: A configurable agent template supporting multiple agent types (simple, conversational, collaborative,
+    enhanced) with comprehensive customization options.
+  domain: general
+  expertise_level: intermediate
   input_format:
-    primary_mode: "json"
-    supported_modes: ["text", "json"]
-    content_types: ["application/json", "text/plain"]
+    primary_mode: json
+    supported_modes:
+    - text
+    - json
+    content_types:
+    - application/json
+    - text/plain
     format_schema:
       class: nanobrain.core.data_unit.DataUnit
       required_fields:
         message:
           class: nanobrain.core.data_unit.DataUnitString
-          description: "Natural language instruction or query"
-  
+          description: Natural language instruction or query
   output_format:
-    primary_mode: "json"
-    supported_modes: ["json", "text"]
-    content_types: ["application/json", "text/plain"]
+    primary_mode: json
+    supported_modes:
+    - json
+    - text
+    content_types:
+    - application/json
+    - text/plain
     format_schema:
       class: nanobrain.core.data_unit.DataUnit
       guaranteed_fields:
         response:
           class: nanobrain.core.data_unit.DataUnitString
-          description: "Natural language response"
+          description: Natural language response
         metadata:
           class: nanobrain.core.data_unit.DataUnit
-          description: "Execution metadata"
-  
+          description: Execution metadata
   capabilities:
     streaming: false
     push_notifications: false
@@ -47,117 +45,94 @@ agent_card:
     tool_usage: false
     delegation: false
     collaboration: false
-  
   skills:
-    - id: "natural_language_processing"
-      name: "Natural Language Processing"
-      description: "Basic natural language understanding and generation"
-      complexity: "intermediate"
-      input_modes: ["text", "json"]
-      output_modes: ["text", "json"]
-      examples:
-        - "Process natural language queries"
-        - "Generate coherent responses"
-        - "Handle multi-turn conversations"
-  
+  - id: natural_language_processing
+    name: Natural Language Processing
+    description: Basic natural language understanding and generation
+    complexity: intermediate
+    input_modes:
+    - text
+    - json
+    output_modes:
+    - text
+    - json
+    examples:
+    - Process natural language queries
+    - Generate coherent responses
+    - Handle multi-turn conversations
   performance:
-    typical_response_time: "1-5 seconds"
-    memory_usage: "50-200 MB"
-    cpu_requirements: "Low to Medium"
+    typical_response_time: 1-5 seconds
+    memory_usage: 50-200 MB
+    cpu_requirements: Low to Medium
     concurrency_support: true
     max_concurrent_sessions: 50
-  
   usage_examples:
-    - name: "General Query Processing"
-      description: "Basic question-answering and task assistance"
-      input_example:
-        message: "Explain the concept of machine learning"
-      expected_output:
-        response: "Machine learning is a subset of artificial intelligence..."
-        metadata:
-          processing_time: 2.3
-          confidence: 0.95
-
-# Basic agent settings
-name: "DefaultAgent"
-description: "Default agent configuration"
-agent_type: "simple"  # simple, conversational, collaborative, enhanced
-
-# Core agent properties
+  - name: General Query Processing
+    description: Basic question-answering and task assistance
+    input_example:
+      message: Explain the concept of machine learning
+    expected_output:
+      response: Machine learning is a subset of artificial intelligence...
+      metadata:
+        processing_time: 2.3
+        confidence: 0.95
+name: DefaultAgent
+description: Default agent configuration
+agent_type: simple
 max_iterations: 100
-timeout: 300.0  # 5 minutes
+timeout: 300.0
 enable_logging: true
 debug_mode: false
-
-# LLM Configuration
 llm_config:
-  provider: "openai"
-  model: "gpt-3.5-turbo"
+  provider: openai
+  model: gpt-3.5-turbo
   temperature: 0.7
   max_tokens: 1000
   top_p: 1.0
   frequency_penalty: 0.0
   presence_penalty: 0.0
-
-# Memory settings
 memory_config:
   enabled: true
   max_memory_size: 1000
   persistence: false
-  memory_type: "simple"
-
-# Tool configuration
+  memory_type: simple
 tools_config:
   enabled: true
   max_tools: 10
   tool_timeout: 60.0
   allow_dangerous_tools: false
-
-# Collaboration settings (for collaborative agents)
 collaboration_config:
   enabled: false
   max_collaborators: 5
   collaboration_timeout: 120.0
   consensus_threshold: 0.6
-
-# Conversation settings (for conversational agents)
 conversation_config:
   max_context_length: 4000
   context_compression: true
   maintain_history: true
   response_streaming: false
-
-# Specialized settings (for specialized agents)
 specialization_config:
-  domain: "general"
-  expertise_level: "intermediate"
+  domain: general
+  expertise_level: intermediate
   specialized_tools: []
   domain_knowledge_base: null
-
-# Performance and monitoring
 performance_config:
   track_metrics: true
   cache_responses: false
   parallel_processing: false
   rate_limiting: false
-
-# Safety and ethics
 safety_config:
   content_filtering: true
   ethical_guidelines: true
   harm_prevention: true
   privacy_protection: true
-
-# Error handling
 error_handling:
   retry_failed_requests: true
   max_retries: 3
-  backoff_strategy: "exponential"
+  backoff_strategy: exponential
   fallback_model: null
-
-# Framework metadata
 _metadata:
-  config_type: "agent"
-  framework_version: "1.0.0"
-  created_by: "nanobrain_framework"
-  description: "Default configuration for all agent types" 
+  config_type: agent
+  framework_version: 1.0.0
+  created_by: nanobrain_framework
+  description: Default configuration for all agent types

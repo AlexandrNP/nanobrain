@@ -1,0 +1,113 @@
+version: '3.8'
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: nanobrain-elasticsearch
+    hostname: elasticsearch
+    environment:
+    - cluster.name=nanobrain-cluster
+    - node.name=nanobrain-node-1
+    - discovery.type=single-node
+    - xpack.security.enabled=false
+    - xpack.security.enrollment.enabled=false
+    - xpack.license.self_generated.type=basic
+    - ES_JAVA_OPTS=-Xms1g -Xmx1g
+    - bootstrap.memory_lock=true
+    - network.host=0.0.0.0
+    - http.port=9200
+    - transport.port=9300
+    - indices.query.bool.max_clause_count=10000
+    - search.max_buckets=100000
+    ports:
+    - 9200:9200
+    - 9300:9300
+    volumes:
+    - elasticsearch_data:/usr/share/elasticsearch/data
+    - elasticsearch_logs:/usr/share/elasticsearch/logs
+    networks:
+    - nanobrain-network
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - curl -f http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=5s || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    restart: unless-stopped
+    labels:
+    - nanobrain.component=search_service
+    - nanobrain.version=8.11.0
+    - nanobrain.category=external_tool
+  elasticsearch-mcp-server:
+    build:
+      context: ../
+      dockerfile: nanobrain/library/tools/search/Dockerfile.elasticsearch-mcp
+      args:
+      - PYTHON_VERSION=3.9
+    container_name: nanobrain-elasticsearch-mcp
+    hostname: elasticsearch-mcp
+    environment:
+    - ELASTICSEARCH_HOST=elasticsearch
+    - ELASTICSEARCH_PORT=9200
+    - ELASTICSEARCH_SCHEME=http
+    - MCP_HOST=0.0.0.0
+    - MCP_PORT=9202
+    - MCP_MAX_CONNECTIONS=10
+    - MCP_CONNECTION_TIMEOUT=30
+    - MCP_REQUEST_TIMEOUT=60
+    - NANOBRAIN_ENV=docker
+    - NANOBRAIN_LOG_LEVEL=INFO
+    - PYTHONPATH=/app
+    - PYTHONUNBUFFERED=1
+    - WORKERS=2
+    ports:
+    - 9202:9202
+    volumes:
+    - ../nanobrain:/app/nanobrain:ro
+    - elasticsearch_mcp_logs:/app/logs
+    networks:
+    - nanobrain-network
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - curl -f http://localhost:9202/health || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+    labels:
+    - nanobrain.component=mcp_server
+    - nanobrain.service=elasticsearch
+    - nanobrain.version=1.0.0
+volumes:
+  elasticsearch_data:
+    driver: local
+    labels:
+    - nanobrain.volume=elasticsearch_data
+    - nanobrain.backup=true
+  elasticsearch_logs:
+    driver: local
+    labels:
+    - nanobrain.volume=elasticsearch_logs
+    - nanobrain.cleanup=size_based
+  elasticsearch_mcp_logs:
+    driver: local
+    labels:
+    - nanobrain.volume=mcp_logs
+    - nanobrain.cleanup=time_based
+networks:
+  nanobrain-network:
+    external: true
+    name: nanobrain-network

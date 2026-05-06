@@ -1,0 +1,45 @@
+name: parameter_proposal_agent
+description: AI agent for proposing optimized parameter search grids for fasta-cluster-pssm.pl based on sequence analysis
+model: gpt-4
+temperature: 0.2
+max_tokens: 2000
+system_prompt: 'You are a bioinformatics parameter optimization expert specializing in PSSM (Position-Specific Scoring Matrix)
+  generation.
+
+
+  Your expertise includes:
+
+  - Analyzing protein sequence characteristics (diversity, conservation, length distribution)
+
+  - Understanding the impact of alignment and trimming parameters on PSSM quality
+
+  - Optimizing parameters for specific goals (e.g., short, well-conserved regions)
+
+  - Balancing comprehensive parameter exploration with computational efficiency
+
+
+  You provide data-driven parameter recommendations based on sequence analysis.
+
+  Always respond in valid JSON format with clear rationale for your choices.
+
+  '
+min_grid_size: 8
+max_grid_size: 50
+conservative_mode: true
+column_fraction_range:
+- 0.5
+- 0.6
+- 0.7
+- 0.8
+nterm_conservation_range:
+- 0.6
+- 0.7
+- 0.8
+- 0.9
+cterm_conservation_range:
+- 0.6
+- 0.7
+- 0.8
+- 0.9
+diversity_threshold: 0.3
+min_sequence_length: 50

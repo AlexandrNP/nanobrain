@@ -1,7 +1,5 @@
-name: "Sub-Workflow Configuration"
-description: "Configuration for SubWorkflow step"
-version: "1.0.0"
-
-# Simple configuration for sub-workflow step
+name: Sub-Workflow Configuration
+description: Configuration for SubWorkflow step
+version: 1.0.0
 processing_delay: 1.0
-workflow_prefix: "SubWorkflow processed"
+workflow_prefix: SubWorkflow processed

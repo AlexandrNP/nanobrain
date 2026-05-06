@@ -1,53 +1,57 @@
-name: "StepFileWriterEnhanced"
-description: "Advanced tool for performing file operations based on natural language descriptions"
-class: "FileWriterAgent"  # Use specialized FileWriterAgent
-
-# MANDATORY: Agent card section for A2A protocol compliance
+name: StepFileWriterEnhanced
+description: Advanced tool for performing file operations based on natural language descriptions
+class: FileWriterAgent
 agent_card:
-  version: "2.0.0"
-  purpose: "Advanced file operations agent with comprehensive natural language processing capabilities"
-  detailed_description: "StepFileWriterEnhanced is an advanced file operations agent that provides comprehensive file management capabilities through natural language processing, including batch operations, templates, and advanced safety features."
-  domain: "file_management"
-  expertise_level: "expert"
-  
+  version: 2.0.0
+  purpose: Advanced file operations agent with comprehensive natural language processing capabilities
+  detailed_description: StepFileWriterEnhanced is an advanced file operations agent that provides comprehensive file management
+    capabilities through natural language processing, including batch operations, templates, and advanced safety features.
+  domain: file_management
+  expertise_level: expert
   input_format:
-    primary_mode: "json"
-    supported_modes: ["json", "text"]
-    content_types: ["application/json", "text/plain"]
+    primary_mode: json
+    supported_modes:
+    - json
+    - text
+    content_types:
+    - application/json
+    - text/plain
     format_schema:
       class: nanobrain.core.data_unit.DataUnit
       required_fields:
         input:
           class: nanobrain.core.data_unit.DataUnitString
-          description: "Natural language description of file operation (supports complex and batch operations)"
+          description: Natural language description of file operation (supports complex and batch operations)
       optional_fields:
         operation:
           class: nanobrain.core.data_unit.DataUnitString
-          description: "Specific operation type (write, read, append, modify, delete, backup, move, copy, search, replace)"
+          description: Specific operation type (write, read, append, modify, delete, backup, move, copy, search, replace)
         template:
           class: nanobrain.core.data_unit.DataUnitString
-          description: "Template for file generation (python_module, config_file, etc.)"
+          description: Template for file generation (python_module, config_file, etc.)
         encoding:
           class: nanobrain.core.data_unit.DataUnitString
-          description: "File encoding (utf-8, ascii, latin-1, cp1252)"
-  
+          description: File encoding (utf-8, ascii, latin-1, cp1252)
   output_format:
-    primary_mode: "json"
-    supported_modes: ["json", "text"]
-    content_types: ["application/json", "text/plain"]
+    primary_mode: json
+    supported_modes:
+    - json
+    - text
+    content_types:
+    - application/json
+    - text/plain
     format_schema:
       class: nanobrain.core.data_unit.DataUnit
       guaranteed_fields:
         result:
           class: nanobrain.core.data_unit.DataUnit
-          description: "Comprehensive operation result with status, files affected, and metadata"
+          description: Comprehensive operation result with status, files affected, and metadata
         operations_performed:
-          type: "array"
-          description: "List of all operations performed for batch processes"
+          type: array
+          description: List of all operations performed for batch processes
         backup_info:
           class: nanobrain.core.data_unit.DataUnit
-          description: "Information about backups created during operations"
-  
+          description: Information about backups created during operations
   capabilities:
     streaming: false
     push_notifications: false
@@ -57,609 +61,579 @@ agent_card:
     tool_usage: true
     delegation: false
     collaboration: false
-  
   skills:
-    - id: "advanced_file_operations"
-      name: "Advanced File Operations"
-      description: "Comprehensive file operations including batch processing, templates, and complex manipulations"
-      complexity: "expert"
-      input_modes: ["text", "json"]
-      output_modes: ["json"]
-      examples:
-        - "Batch operations on multiple files with pattern matching"
-        - "Template-based file generation with customizable parameters"
-        - "Search and replace operations across file sets"
-        - "Safe file operations with automatic backup and rollback"
-    
-    - id: "natural_language_understanding"
-      name: "Advanced Natural Language Processing"
-      description: "Parse complex natural language descriptions to extract detailed operation parameters"
-      complexity: "expert"
-      input_modes: ["text"]
-      output_modes: ["json"]
-      examples:
-        - "Extract multiple operations from complex descriptions"
-        - "Understand context and implicit parameters in natural language"
-        - "Handle ambiguous requests with intelligent interpretation"
-  
+  - id: advanced_file_operations
+    name: Advanced File Operations
+    description: Comprehensive file operations including batch processing, templates, and complex manipulations
+    complexity: expert
+    input_modes:
+    - text
+    - json
+    output_modes:
+    - json
+    examples:
+    - Batch operations on multiple files with pattern matching
+    - Template-based file generation with customizable parameters
+    - Search and replace operations across file sets
+    - Safe file operations with automatic backup and rollback
+  - id: natural_language_understanding
+    name: Advanced Natural Language Processing
+    description: Parse complex natural language descriptions to extract detailed operation parameters
+    complexity: expert
+    input_modes:
+    - text
+    output_modes:
+    - json
+    examples:
+    - Extract multiple operations from complex descriptions
+    - Understand context and implicit parameters in natural language
+    - Handle ambiguous requests with intelligent interpretation
   performance:
-    typical_response_time: "2-10 seconds"
-    max_response_time: "120 seconds"
-    memory_usage: "100-500 MB"
-    cpu_requirements: "Medium"
+    typical_response_time: 2-10 seconds
+    max_response_time: 120 seconds
+    memory_usage: 100-500 MB
+    cpu_requirements: Medium
     concurrency_support: true
     max_concurrent_sessions: 8
-    rate_limit: "50 operations/minute"
-    scaling_characteristics: "I/O and CPU bound for complex batch operations"
-  
+    rate_limit: 50 operations/minute
+    scaling_characteristics: I/O and CPU bound for complex batch operations
   usage_examples:
-    - name: "Batch File Processing"
-      description: "Process multiple files with pattern-based operations"
-      input_example:
-        input: "Create backup copies of all Python files in the src directory and move them to backups/"
-        operation: "batch"
-      expected_output:
-        result:
-          status: "success"
-          files_processed: 15
-          operations_count: 30
-        operations_performed:
-          - {operation: "backup", source: "src/module1.py", destination: "src/module1.py.bak"}
-          - {operation: "copy", source: "src/module1.py.bak", destination: "backups/module1.py.bak"}
-        backup_info:
-          backups_created: 15
-          total_size: "245KB"
-    
-    - name: "Template-based File Generation"
-      description: "Generate files from templates with custom parameters"
-      input_example:
-        input: "Create a Python module for data processing with class DataProcessor"
-        template: "python_module"
-      expected_output:
-        result:
-          status: "success"
-          file_created: "data_processing.py"
-          template_used: "python_module"
-        operations_performed:
-          - {operation: "write", file: "data_processing.py", template: "python_module", customizations: ["DataProcessor class"]}
-
+  - name: Batch File Processing
+    description: Process multiple files with pattern-based operations
+    input_example:
+      input: Create backup copies of all Python files in the src directory and move them to backups/
+      operation: batch
+    expected_output:
+      result:
+        status: success
+        files_processed: 15
+        operations_count: 30
+      operations_performed:
+      - operation: backup
+        source: src/module1.py
+        destination: src/module1.py.bak
+      - operation: copy
+        source: src/module1.py.bak
+        destination: backups/module1.py.bak
+      backup_info:
+        backups_created: 15
+        total_size: 245KB
+  - name: Template-based File Generation
+    description: Generate files from templates with custom parameters
+    input_example:
+      input: Create a Python module for data processing with class DataProcessor
+      template: python_module
+    expected_output:
+      result:
+        status: success
+        file_created: data_processing.py
+        template_used: python_module
+      operations_performed:
+      - operation: write
+        file: data_processing.py
+        template: python_module
+        customizations:
+        - DataProcessor class
 defaults:
   backup_enabled: true
-  backup_extension: ".bak"
+  backup_extension: .bak
   create_directories: true
-  model: "gpt-3.5-turbo"
+  model: gpt-3.5-turbo
   temperature: 0.1
   max_tokens: 2000
   debug_mode: false
-
 metadata:
-  biological_analogy: "Fine motor control for writing"
-  justification: >
-    Like how fine motor control allows for precise writing movements,
-    this tool allows for precise file writing operations.
-  objectives:
-    - Parse natural language instructions to extract file operations
-    - Create new files with specified content
-    - Read existing files with natural instructions
-    - Intelligently determine file paths and content from text input
-    - Create backups of files before modifying them
-    - Handle complex file operations with validation and error recovery
-  version: "2.0.0"
-  author: "NanoBrain Framework"
+  biological_analogy: Fine motor control for writing
+  justification: 'Like how fine motor control allows for precise writing movements, this tool allows for precise file writing
+    operations.
 
+    '
+  objectives:
+  - Parse natural language instructions to extract file operations
+  - Create new files with specified content
+  - Read existing files with natural instructions
+  - Intelligently determine file paths and content from text input
+  - Create backups of files before modifying them
+  - Handle complex file operations with validation and error recovery
+  version: 2.0.0
+  author: NanoBrain Framework
 config:
-  name: "StepFileWriterEnhanced"
-  description: "Advanced tool for performing file operations based on natural language descriptions"
-  model: "gpt-3.5-turbo"
+  name: StepFileWriterEnhanced
+  description: Advanced tool for performing file operations based on natural language descriptions
+  model: gpt-3.5-turbo
   temperature: 0.1
   max_tokens: 2000
-  system_prompt: |
-    You are an advanced file operations agent for the NanoBrain framework.
+  system_prompt: 'You are an advanced file operations agent for the NanoBrain framework.
+
 
     Your enhanced responsibilities:
+
     1. Parse natural language instructions to identify file operations
+
     2. Extract file paths, content, and operation types from text
+
     3. Perform safe file operations with backup and validation
+
     4. Handle complex file manipulations and transformations
+
     5. Provide detailed feedback and error handling
 
+
     Supported operations:
+
     - write: Create new files or overwrite existing ones
+
     - read: Read file contents and return them
+
     - append: Add content to the end of existing files
+
     - modify: Update specific parts of files
+
     - delete: Remove files (with optional backup)
+
     - backup: Create backup copies of files
+
     - move: Move or rename files
+
     - copy: Create copies of files
+
     - search: Search for content within files
+
     - replace: Find and replace content in files
 
+
     Advanced features:
+
     - Automatic backup creation before destructive operations
+
     - Directory creation for new file paths
+
     - Content validation and format checking
+
     - Batch operations on multiple files
+
     - Template-based file generation
+
     - File permission and metadata handling
 
+
     Safety features:
+
     - Validation of file paths and operations
+
     - Backup creation before modifications
+
     - Error recovery and rollback capabilities
+
     - Permission checking and security validation
 
+
     Input format: Natural language descriptions of file operations
+
     Output format: Structured operation results with status and details
 
-# Advanced validation schema
+    '
 validation:
   required:
-    - model
-    - name
-    - description
+  - model
+  - name
+  - description
   optional:
-    - backup_enabled
-    - backup_extension
-    - create_directories
-    - debug_mode
-    - operation
-    - path
-    - content
+  - backup_enabled
+  - backup_extension
+  - create_directories
+  - debug_mode
+  - operation
+  - path
+  - content
   constraints:
     model:
       class: nanobrain.core.data_unit.DataUnitString
-      pattern: "^(gpt-|claude-|llama-)"
-      message: "Model must be a supported LLM"
+      pattern: ^(gpt-|claude-|llama-)
+      message: Model must be a supported LLM
     backup_extension:
       class: nanobrain.core.data_unit.DataUnitString
-      pattern: "^\\.[a-zA-Z0-9]+$"
-      message: "Backup extension must start with a dot and contain only alphanumeric characters"
+      pattern: ^\.[a-zA-Z0-9]+$
+      message: Backup extension must start with a dot and contain only alphanumeric characters
     operation:
       class: nanobrain.core.data_unit.DataUnitString
-      enum: ["write", "read", "append", "modify", "delete", "backup", "move", "copy", "search", "replace"]
-      message: "Operation must be one of the supported file operations"
+      enum:
+      - write
+      - read
+      - append
+      - modify
+      - delete
+      - backup
+      - move
+      - copy
+      - search
+      - replace
+      message: Operation must be one of the supported file operations
     path:
       class: nanobrain.core.data_unit.DataUnitString
-      pattern: "^[^<>:\"|?*]+$"
-      message: "Path must not contain invalid characters: < > : \" | ? *"
-
-# Input schema with comprehensive validation
+      pattern: ^[^<>:"|?*]+$
+      message: 'Path must not contain invalid characters: < > : " | ? *'
 input_schema:
   class: nanobrain.core.data_unit.DataUnit
   properties:
     input:
       class: nanobrain.core.data_unit.DataUnitString
-      description: >
-        Natural language description of the file operation to perform. The enhanced agent can handle:
-        
-        1. Basic Operations:
-           - "Write 'Hello World' to file.txt"
-           - "Read the contents of config.json"
-           - "Append a new line to log.txt"
-           - "Delete the temporary file temp.dat"
-        
-        2. Advanced Operations:
-           - "Create a Python script that processes CSV files"
-           - "Update the configuration file to change the database URL"
-           - "Search for all TODO comments in Python files"
-           - "Replace all occurrences of 'old_name' with 'new_name' in source files"
-        
-        3. Batch Operations:
-           - "Create backup copies of all .py files in the src directory"
-           - "Move all .log files to the logs directory"
-           - "Copy all configuration files to the backup folder"
-        
-        4. Template Operations:
-           - "Generate a new Python module with class template"
-           - "Create a configuration file from template with custom values"
+      description: "Natural language description of the file operation to perform. The enhanced agent can handle:\n1. Basic\
+        \ Operations:\n   - \"Write 'Hello World' to file.txt\"\n   - \"Read the contents of config.json\"\n   - \"Append\
+        \ a new line to log.txt\"\n   - \"Delete the temporary file temp.dat\"\n\n2. Advanced Operations:\n   - \"Create a\
+        \ Python script that processes CSV files\"\n   - \"Update the configuration file to change the database URL\"\n  \
+        \ - \"Search for all TODO comments in Python files\"\n   - \"Replace all occurrences of 'old_name' with 'new_name'\
+        \ in source files\"\n\n3. Batch Operations:\n   - \"Create backup copies of all .py files in the src directory\"\n\
+        \   - \"Move all .log files to the logs directory\"\n   - \"Copy all configuration files to the backup folder\"\n\n\
+        4. Template Operations:\n   - \"Generate a new Python module with class template\"\n   - \"Create a configuration\
+        \ file from template with custom values\"\n"
       required: true
       min_length: 5
       max_length: 2000
-    
     operation:
       class: nanobrain.core.data_unit.DataUnitString
-      description: "Specific operation to perform (optional, will be inferred from input if not provided)"
+      description: Specific operation to perform (optional, will be inferred from input if not provided)
       required: false
-      enum: ["write", "read", "append", "modify", "delete", "backup", "move", "copy", "search", "replace"]
-    
+      enum:
+      - write
+      - read
+      - append
+      - modify
+      - delete
+      - backup
+      - move
+      - copy
+      - search
+      - replace
     path:
       class: nanobrain.core.data_unit.DataUnitString
-      description: "Path to the file to operate on (optional, will be extracted from input if not provided)"
+      description: Path to the file to operate on (optional, will be extracted from input if not provided)
       required: false
       max_length: 500
-    
     content:
       class: nanobrain.core.data_unit.DataUnitString
-      description: "Content to write/append/modify (optional, will be extracted from input if not provided)"
+      description: Content to write/append/modify (optional, will be extracted from input if not provided)
       required: false
       max_length: 50000
-    
     backup:
-      type: "boolean"
-      description: "Whether to create a backup before modifying/deleting a file"
+      type: boolean
+      description: Whether to create a backup before modifying/deleting a file
       required: false
       default: true
-    
     create_dirs:
-      type: "boolean"
-      description: "Whether to create parent directories when writing files"
+      type: boolean
+      description: Whether to create parent directories when writing files
       required: false
       default: true
-    
     encoding:
       class: nanobrain.core.data_unit.DataUnitString
-      description: "File encoding to use"
+      description: File encoding to use
       required: false
-      default: "utf-8"
-      enum: ["utf-8", "ascii", "latin-1", "cp1252"]
-    
+      default: utf-8
+      enum:
+      - utf-8
+      - ascii
+      - latin-1
+      - cp1252
     template:
       class: nanobrain.core.data_unit.DataUnitString
-      description: "Template to use for file generation"
+      description: Template to use for file generation
       required: false
-      enum: ["python_module", "python_class", "python_function", "config_file", "readme", "dockerfile"]
-
-# Operation-specific parameter schemas
+      enum:
+      - python_module
+      - python_class
+      - python_function
+      - config_file
+      - readme
+      - dockerfile
 parameters:
   write:
-    description: "Parameters for writing a file"
+    description: Parameters for writing a file
     fields:
       path:
         class: nanobrain.core.data_unit.DataUnitString
-        description: "Path to the file to write"
+        description: Path to the file to write
         required: true
         max_length: 500
       content:
         class: nanobrain.core.data_unit.DataUnitString
-        description: "Content to write to the file"
+        description: Content to write to the file
         required: true
         max_length: 50000
       create_dirs:
-        type: "boolean"
-        description: "Whether to create parent directories if they don't exist"
+        type: boolean
+        description: Whether to create parent directories if they don't exist
         default: true
         required: false
       encoding:
         class: nanobrain.core.data_unit.DataUnitString
-        description: "File encoding to use"
-        default: "utf-8"
+        description: File encoding to use
+        default: utf-8
         required: false
       overwrite:
-        type: "boolean"
-        description: "Whether to overwrite existing files"
+        type: boolean
+        description: Whether to overwrite existing files
         default: true
         required: false
-  
   read:
-    description: "Parameters for reading a file"
+    description: Parameters for reading a file
     fields:
       path:
         class: nanobrain.core.data_unit.DataUnitString
-        description: "Path to the file to read"
+        description: Path to the file to read
         required: true
         max_length: 500
       encoding:
         class: nanobrain.core.data_unit.DataUnitString
-        description: "File encoding to use"
-        default: "utf-8"
+        description: File encoding to use
+        default: utf-8
         required: false
       max_size:
-        type: "integer"
-        description: "Maximum file size to read (in bytes)"
-        default: 10485760  # 10MB
+        type: integer
+        description: Maximum file size to read (in bytes)
+        default: 10485760
         required: false
-  
   append:
-    description: "Parameters for appending to a file"
+    description: Parameters for appending to a file
     fields:
       path:
         class: nanobrain.core.data_unit.DataUnitString
-        description: "Path to the file to append to"
+        description: Path to the file to append to
         required: true
         max_length: 500
       content:
         class: nanobrain.core.data_unit.DataUnitString
-        description: "Content to append to the file"
+        description: Content to append to the file
         required: true
         max_length: 50000
       create_dirs:
-        type: "boolean"
-        description: "Whether to create parent directories if they don't exist"
+        type: boolean
+        description: Whether to create parent directories if they don't exist
         default: true
         required: false
       encoding:
         class: nanobrain.core.data_unit.DataUnitString
-        description: "File encoding to use"
-        default: "utf-8"
+        description: File encoding to use
+        default: utf-8
         required: false
       newline:
-        type: "boolean"
-        description: "Whether to add a newline before appending"
+        type: boolean
+        description: Whether to add a newline before appending
         default: true
         required: false
-  
   modify:
-    description: "Parameters for modifying a file"
+    description: Parameters for modifying a file
     fields:
       path:
         class: nanobrain.core.data_unit.DataUnitString
-        description: "Path to the file to modify"
+        description: Path to the file to modify
         required: true
         max_length: 500
       content:
         class: nanobrain.core.data_unit.DataUnitString
-        description: "New content for the file or modification instructions"
+        description: New content for the file or modification instructions
         required: true
         max_length: 50000
       backup:
-        type: "boolean"
-        description: "Whether to create a backup of the original file"
+        type: boolean
+        description: Whether to create a backup of the original file
         default: true
         required: false
       backup_ext:
         class: nanobrain.core.data_unit.DataUnitString
-        description: "Extension to use for the backup file"
-        default: ".bak"
+        description: Extension to use for the backup file
+        default: .bak
         required: false
       encoding:
         class: nanobrain.core.data_unit.DataUnitString
-        description: "File encoding to use"
-        default: "utf-8"
+        description: File encoding to use
+        default: utf-8
         required: false
-  
   delete:
-    description: "Parameters for deleting a file"
+    description: Parameters for deleting a file
     fields:
       path:
         class: nanobrain.core.data_unit.DataUnitString
-        description: "Path to the file to delete"
+        description: Path to the file to delete
         required: true
         max_length: 500
       backup:
-        type: "boolean"
-        description: "Whether to create a backup before deletion"
+        type: boolean
+        description: Whether to create a backup before deletion
         default: true
         required: false
       backup_ext:
         class: nanobrain.core.data_unit.DataUnitString
-        description: "Extension to use for the backup file"
-        default: ".bak"
+        description: Extension to use for the backup file
+        default: .bak
         required: false
       confirm:
-        type: "boolean"
-        description: "Whether to require confirmation for deletion"
+        type: boolean
+        description: Whether to require confirmation for deletion
         default: false
         required: false
-  
   search:
-    description: "Parameters for searching within files"
+    description: Parameters for searching within files
     fields:
       path:
         class: nanobrain.core.data_unit.DataUnitString
-        description: "Path to the file or directory to search in"
+        description: Path to the file or directory to search in
         required: true
         max_length: 500
       pattern:
         class: nanobrain.core.data_unit.DataUnitString
-        description: "Search pattern or text to find"
+        description: Search pattern or text to find
         required: true
         max_length: 1000
       regex:
-        type: "boolean"
-        description: "Whether the pattern is a regular expression"
+        type: boolean
+        description: Whether the pattern is a regular expression
         default: false
         required: false
       case_sensitive:
-        type: "boolean"
-        description: "Whether the search should be case sensitive"
+        type: boolean
+        description: Whether the search should be case sensitive
         default: false
         required: false
       recursive:
-        type: "boolean"
-        description: "Whether to search recursively in subdirectories"
+        type: boolean
+        description: Whether to search recursively in subdirectories
         default: false
         required: false
-  
   replace:
-    description: "Parameters for find and replace operations"
+    description: Parameters for find and replace operations
     fields:
       path:
         class: nanobrain.core.data_unit.DataUnitString
-        description: "Path to the file to perform replacement in"
+        description: Path to the file to perform replacement in
         required: true
         max_length: 500
       find:
         class: nanobrain.core.data_unit.DataUnitString
-        description: "Text or pattern to find"
+        description: Text or pattern to find
         required: true
         max_length: 1000
       replace:
         class: nanobrain.core.data_unit.DataUnitString
-        description: "Text to replace with"
+        description: Text to replace with
         required: true
         max_length: 1000
       regex:
-        type: "boolean"
-        description: "Whether the find pattern is a regular expression"
+        type: boolean
+        description: Whether the find pattern is a regular expression
         default: false
         required: false
       case_sensitive:
-        type: "boolean"
-        description: "Whether the search should be case sensitive"
+        type: boolean
+        description: Whether the search should be case sensitive
         default: false
         required: false
       backup:
-        type: "boolean"
-        description: "Whether to create a backup before replacement"
+        type: boolean
+        description: Whether to create a backup before replacement
         default: true
         required: false
-
-# Custom validators
 validators:
   validate_path_when_needed:
-    fields: ["operation", "path", "input"]
+    fields:
+    - operation
+    - path
+    - input
     pre: true
-    description: "Validate that path is provided when operation requires it"
-    code: |
-      operation = values.get('operation')
-      path = values.get('path')
-      input_text = values.get('input', '')
-      
-      # Operations that require a path
-      path_required_ops = ['write', 'read', 'append', 'modify', 'delete', 'backup', 'move', 'copy', 'search', 'replace']
-      
-      if operation and operation in path_required_ops and not path:
-          # Try to extract path from input
-          import re
-          path_patterns = [
-              r'(?:to|in|from|file)\s+["\']?([^"\'\\s]+)["\']?',
-              r'["\']([^"\']+\.[a-zA-Z0-9]+)["\']',
-              r'(\S+\.[a-zA-Z0-9]+)'
-          ]
-          
-          for pattern in path_patterns:
-              match = re.search(pattern, input_text)
-              if match:
-                  values['path'] = match.group(1)
-                  break
-          
-          if not values.get('path'):
-              raise ValueError(f"Path must be specified for operation: {operation}")
-      
-      return values
-  
+    description: Validate that path is provided when operation requires it
+    code: "operation = values.get('operation')\npath = values.get('path')\ninput_text = values.get('input', '')\n\n# Operations\
+      \ that require a path\npath_required_ops = ['write', 'read', 'append', 'modify', 'delete', 'backup', 'move', 'copy',\
+      \ 'search', 'replace']\n\nif operation and operation in path_required_ops and not path:\n    # Try to extract path from\
+      \ input\n    import re\n    path_patterns = [\n        r'(?:to|in|from|file)\\s+[\"\\']?([^\"\\'\\\\s]+)[\"\\']?',\n\
+      \        r'[\"\\']([^\"\\']+\\.[a-zA-Z0-9]+)[\"\\']',\n        r'(\\S+\\.[a-zA-Z0-9]+)'\n    ]\n    \n    for pattern\
+      \ in path_patterns:\n        match = re.search(pattern, input_text)\n        if match:\n            values['path'] =\
+      \ match.group(1)\n            break\n    \n    if not values.get('path'):\n        raise ValueError(f\"Path must be\
+      \ specified for operation: {operation}\")\n\nreturn values\n"
   validate_content_for_write_operations:
-    fields: ["operation", "content", "input"]
+    fields:
+    - operation
+    - content
+    - input
     pre: true
-    description: "Validate that content is provided for write operations"
-    code: |
-      operation = values.get('operation')
-      content = values.get('content')
-      input_text = values.get('input', '')
-      
-      # Operations that require content
-      content_required_ops = ['write', 'append', 'modify', 'replace']
-      
-      if operation and operation in content_required_ops and not content:
-          # Try to extract content from input
-          import re
-          
-          # Look for quoted content
-          content_patterns = [
-              r'["\']([^"\']+)["\']',
-              r'content[:\s]+["\']?([^"\'\\n]+)["\']?',
-              r'write[:\s]+["\']?([^"\'\\n]+)["\']?'
-          ]
-          
-          for pattern in content_patterns:
-              match = re.search(pattern, input_text)
-              if match:
-                  values['content'] = match.group(1)
-                  break
-          
-          # For write operations, content is required
-          if operation in ['write', 'append'] and not values.get('content'):
-              values['content'] = ""  # Set default empty string
-      
-      return values
-  
+    description: Validate that content is provided for write operations
+    code: "operation = values.get('operation')\ncontent = values.get('content')\ninput_text = values.get('input', '')\n\n\
+      # Operations that require content\ncontent_required_ops = ['write', 'append', 'modify', 'replace']\n\nif operation and\
+      \ operation in content_required_ops and not content:\n    # Try to extract content from input\n    import re\n    \n\
+      \    # Look for quoted content\n    content_patterns = [\n        r'[\"\\']([^\"\\']+)[\"\\']',\n        r'content[:\\\
+      s]+[\"\\']?([^\"\\'\\\\n]+)[\"\\']?',\n        r'write[:\\s]+[\"\\']?([^\"\\'\\\\n]+)[\"\\']?'\n    ]\n    \n    for\
+      \ pattern in content_patterns:\n        match = re.search(pattern, input_text)\n        if match:\n            values['content']\
+      \ = match.group(1)\n            break\n    \n    # For write operations, content is required\n    if operation in ['write',\
+      \ 'append'] and not values.get('content'):\n        values['content'] = \"\"  # Set default empty string\n\nreturn values\n"
   validate_backup_extension:
-    fields: ["backup_ext", "backup_extension"]
+    fields:
+    - backup_ext
+    - backup_extension
     pre: true
-    description: "Validate backup extension format"
-    code: |
-      backup_ext = values.get('backup_ext') or values.get('backup_extension')
-      
-      if backup_ext:
-          if not backup_ext.startswith('.'):
-              backup_ext = '.' + backup_ext
-          
-          # Validate extension format
-          import re
-          if not re.match(r'^\.[a-zA-Z0-9]+$', backup_ext):
-              raise ValueError("Backup extension must contain only alphanumeric characters")
-          
-          values['backup_ext'] = backup_ext
-          if 'backup_extension' in values:
-              values['backup_extension'] = backup_ext
-      
-      return values
-  
+    description: Validate backup extension format
+    code: "backup_ext = values.get('backup_ext') or values.get('backup_extension')\n\nif backup_ext:\n    if not backup_ext.startswith('.'):\n\
+      \        backup_ext = '.' + backup_ext\n    \n    # Validate extension format\n    import re\n    if not re.match(r'^\\\
+      .[a-zA-Z0-9]+$', backup_ext):\n        raise ValueError(\"Backup extension must contain only alphanumeric characters\"\
+      )\n    \n    values['backup_ext'] = backup_ext\n    if 'backup_extension' in values:\n        values['backup_extension']\
+      \ = backup_ext\n\nreturn values\n"
   validate_file_size_limits:
-    fields: ["content", "operation"]
+    fields:
+    - content
+    - operation
     pre: true
-    description: "Validate file size limits for content operations"
-    code: |
-      content = values.get('content', '')
-      operation = values.get('operation')
-      
-      if content and operation in ['write', 'append', 'modify']:
-          content_size = len(content.encode('utf-8'))
-          max_size = 50 * 1024 * 1024  # 50MB limit
-          
-          if content_size > max_size:
-              raise ValueError(f"Content size ({content_size} bytes) exceeds maximum limit ({max_size} bytes)")
-      
-      return values
-
-# Usage examples with different operations
+    description: Validate file size limits for content operations
+    code: "content = values.get('content', '')\noperation = values.get('operation')\n\nif content and operation in ['write',\
+      \ 'append', 'modify']:\n    content_size = len(content.encode('utf-8'))\n    max_size = 50 * 1024 * 1024  # 50MB limit\n\
+      \    \n    if content_size > max_size:\n        raise ValueError(f\"Content size ({content_size} bytes) exceeds maximum\
+      \ limit ({max_size} bytes)\")\n\nreturn values\n"
 examples:
   simple_write:
-    description: "Write content to a file"
-    input: "Write 'Hello, World!' to hello.txt"
+    description: Write content to a file
+    input: Write 'Hello, World!' to hello.txt
     config:
-      operation: "write"
+      operation: write
       backup: false
-    
   read_config:
-    description: "Read a configuration file"
-    input: "Read the contents of config.json and show me the database settings"
+    description: Read a configuration file
+    input: Read the contents of config.json and show me the database settings
     config:
-      operation: "read"
-    
+      operation: read
   append_log:
-    description: "Append to a log file"
-    input: "Add a new log entry 'Process completed successfully' to application.log"
+    description: Append to a log file
+    input: Add a new log entry 'Process completed successfully' to application.log
     config:
-      operation: "append"
+      operation: append
       newline: true
-    
   backup_and_modify:
-    description: "Modify a file with backup"
-    input: "Update the database URL in config.py from localhost to production server"
+    description: Modify a file with backup
+    input: Update the database URL in config.py from localhost to production server
     config:
-      operation: "modify"
+      operation: modify
       backup: true
-      backup_ext: ".backup"
-    
+      backup_ext: .backup
   search_files:
-    description: "Search for content in files"
-    input: "Search for all TODO comments in Python files in the src directory"
+    description: Search for content in files
+    input: Search for all TODO comments in Python files in the src directory
     config:
-      operation: "search"
-      pattern: "TODO"
+      operation: search
+      pattern: TODO
       recursive: true
-    
   replace_content:
-    description: "Find and replace content"
-    input: "Replace all occurrences of 'old_function_name' with 'new_function_name' in main.py"
+    description: Find and replace content
+    input: Replace all occurrences of 'old_function_name' with 'new_function_name' in main.py
     config:
-      operation: "replace"
+      operation: replace
       backup: true
-    
   create_from_template:
-    description: "Create file from template"
-    input: "Create a new Python class file for UserManager with basic CRUD methods"
+    description: Create file from template
+    input: Create a new Python class file for UserManager with basic CRUD methods
     config:
-      operation: "write"
-      template: "python_class"
+      operation: write
+      template: python_class
       create_dirs: true
-    
   batch_backup:
-    description: "Create backups of multiple files"
-    input: "Create backup copies of all configuration files in the config directory"
+    description: Create backups of multiple files
+    input: Create backup copies of all configuration files in the config directory
     config:
-      operation: "backup"
+      operation: backup
       recursive: true
-      backup_ext: ".backup" 
+      backup_ext: .backup

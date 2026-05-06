@@ -1,80 +1,54 @@
-# Document Processor Step Configuration
-# Deterministic document parsing and chunking operations
-
-name: "document_processor_step"
-description: "Deterministic document parsing, text extraction, and chunking operations"
-
-# Document format support
+name: document_processor_step
+description: Deterministic document parsing, text extraction, and chunking operations
 supported_formats:
-  - "pdf"
-  - "txt"
-  - "docx"
-  - "html"
-  - "md"
-
-# Text chunking configuration
+- pdf
+- txt
+- docx
+- html
+- md
 chunk_size: 1000
 chunk_overlap: 200
 enable_ocr: false
 preserve_metadata: true
-
-# File processing settings
-input_directory: "data/documents"
-output_directory: "data/processed_chunks"
+input_directory: data/documents
+output_directory: data/processed_chunks
 batch_size: 10
 parallel_processing: true
-
-# Processing optimization
 incremental_processing: true
 save_chunks: true
 enable_change_detection: true
-
-# Performance settings
 max_file_size_mb: 100
 timeout_per_file_seconds: 60
 memory_limit_mb: 512
-
-# Error handling
 skip_corrupted_files: true
 continue_on_error: true
 log_processing_errors: true
-
-# Output format
-output_format: "json"
+output_format: json
 include_file_metadata: true
 include_processing_stats: true
-
-# Advanced chunking options
-chunking_strategy: "overlap"
+chunking_strategy: overlap
 respect_sentence_boundaries: true
 respect_paragraph_boundaries: true
 min_chunk_size: 100
 max_chunk_size: 2000
-
-# Content filtering
 filter_empty_chunks: true
 filter_short_chunks: true
 min_meaningful_content_ratio: 0.1
-
-# Metadata extraction
 extract_title: true
 extract_author: true
 extract_creation_date: true
 extract_modification_date: true
 extract_page_count: true
 extract_word_count: true
-
-# Input/Output data units
 input_data_units:
   document_paths:
-    class: "nanobrain.core.data_unit.DataUnitMemory"
-    name: "document_paths"
-    description: "Document file paths for processing"
+    class: nanobrain.core.data_unit.DataUnitMemory
+    name: document_paths
+    description: Document file paths for processing
     persistent: false
-
 output_data_units:
   processed_chunks:
-    class: "nanobrain.core.data_unit.DataUnitMemory"
-    name: "processed_chunks"
-    description: "Processed document chunks"
+    class: nanobrain.core.data_unit.DataUnitMemory
+    name: processed_chunks
+    description: Processed document chunks
     persistent: false

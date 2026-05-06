@@ -1,12 +1,10 @@
 name: ParslChatWorkflow
-description: Chat workflow with Parsl distributed execution using existing NanoBrain
-  infrastructure
+description: Chat workflow with Parsl distributed execution using existing NanoBrain infrastructure
 class: ParslChatWorkflow
 metadata:
   biological_analogy: Distributed neural processing with parallel execution nodes
-  justification: 'Like how the brain distributes complex processing across multiple
-    neural regions working in parallel, this workflow distributes chat processing
-    across multiple compute resources using Parsl for high-performance parallel execution.
+  justification: 'Like how the brain distributes complex processing across multiple neural regions working in parallel, this
+    workflow distributes chat processing across multiple compute resources using Parsl for high-performance parallel execution.
 
     '
   objectives:

@@ -1495,11 +1495,31 @@ class BaseStep(FromConfigBase, ABC):
         logger.info(f"🔥 BRUTAL TRUTH: Step output data units: {list(self.step_output_data_units.keys())}")
         logger.info(f"🔥 BRUTAL TRUTH: Result keys: {list(result.keys()) if isinstance(result, dict) else 'Not a dict'}")
 
+        # ✅ PARITY FIX (2026-05-05): when a step returns a dict that
+        # does NOT contain the output data unit's name as a key, AND
+        # the step has exactly one output data unit, write the entire
+        # result to that unit. This matches ``_execute_step_imperative``'s
+        # behavior (workflow.py line 2067-2071) — without this, a step
+        # whose return shape doesn't match the data unit name would
+        # silently produce no output in trigger-driven mode while
+        # working correctly in imperative mode.
+        single_output_fallback = (
+            isinstance(result, dict)
+            and len(self.step_output_data_units) == 1
+            and not any(name in result for name in self.step_output_data_units)
+        )
+
         for unit_name, data_unit in self.step_output_data_units.items():
             logger.info(f"🔥 BRUTAL TRUTH: Processing output data unit: {unit_name}")
             if unit_name in result:
                 logger.info(f"🔥 BRUTAL TRUTH: Found {unit_name} in result, extracting data")
                 result_data = result[unit_name]
+            elif single_output_fallback:
+                logger.info(
+                    f"🔥 BRUTAL TRUTH: Single-output fallback — writing "
+                    f"full result dict to {unit_name}"
+                )
+                result_data = result
 
                 # ✅ CRITICAL FIX: Prevent storing DataUnit objects as data
                 if hasattr(result_data, '__class__') and 'DataUnit' in result_data.__class__.__name__:

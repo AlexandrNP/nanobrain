@@ -5,255 +5,61 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "nanobrain"
 version = "0.1.0"
-description = "🔥 BRUTAL TRUTH: Event-driven AI agent framework for distributed workflows (RESEARCH PREVIEW)"
+description = "Event-driven AI agent framework for distributed workflows (RESEARCH PREVIEW)"
 readme = "README.md"
-requires-python = ">=3.6"
-license = {text = "MIT"}
-authors = [
-    {name = "Nanobrain Team", email = "team@nanobrain.ai"}
-]
-keywords = ["ai", "agents", "workflow", "distributed", "hpc", "research"]
-classifiers = [
-    "Development Status :: 3 - Alpha",
-    "Intended Audience :: Developers",
-    "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: MIT License",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.6",
-    "Programming Language :: Python :: 3.7",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "Topic :: Scientific/Engineering :: Artificial Intelligence",
-    "Topic :: Software Development :: Libraries :: Python Modules",
-    "Topic :: System :: Distributed Computing",
-]
-
-# 🔥 BRUTAL TRUTH: Core dependencies for Nanobrain framework
-# WARNING: This is a research framework with minimal dependencies
-# Many features require optional dependencies or external systems
+requires-python = ">=3.12"
 dependencies = [
-    # Core Framework (REQUIRED)
     "pydantic>=2.0.0",
     "pyyaml>=6.0",
-    "jsonschema>=4.0.0",
     "aiofiles>=23.0.0",
-    "structlog>=23.0.0",
+    # aiohttp: library/tools/bioinformatics/bv_brc_tool.py imports this at
+    # module top. Previously undeclared — module import fails on fresh install.
+    # Same shape of gap as the 2026-04-21 aiofiles fix.
+    "aiohttp>=3.9",
+    # aiosqlite: library/__init__.py's eager workflow imports need this;
+    # without it, ``import nanobrain.library`` raises ModuleNotFoundError.
+    "aiosqlite>=0.19",
     "cachetools>=5.0.0",
     "psutil>=5.0.0",
-
-    # Data Processing (REQUIRED)
     "pandas>=2.0.0",
-    "python-dateutil>=2.8.0",
-
-    # HTTP and API (REQUIRED for web features)
     "fastapi>=0.100.0",
     "uvicorn>=0.20.0",
-    "httpx>=0.25.0",
     "requests>=2.31.0",
-
-    # Utilities (REQUIRED)
+    # httpx: library/tools/bioinformatics/pubmed_client.py imports this for
+    # async NCBI E-utils calls (Phase 4B, 2026-05-04). Previously undeclared.
+    # Same shape of gap as the 2026-04-21 aiofiles + 2026-04-?? aiohttp fixes.
+    "httpx>=0.25.0",
     "click>=8.1.0",
-    "rich>=13.7.0",
-    "tqdm>=4.66.0",
 ]
 
 [project.optional-dependencies]
-# 🔥 BRUTAL TRUTH: LLM Integration (REQUIRED for AI features)
-# WARNING: Without these, you only get workflow orchestration
 llm = [
-    "openai>=1.0.0",
-    "anthropic>=0.3.0",
-    "langchain>=0.1.0",
+    # core/agent.py unconditionally attempts ``from openai import AsyncOpenAI``
+    # at _initialize_llm_client time. Without this dep the try/except pretends
+    # to silently disable LLM support, but the real failure is UnboundLocalError
+    # on the logger fallback path — see scope memo 07 (apecx-mcp-integration).
+    # The OpenAI client library works for both api.openai.com AND any
+    # OpenAI-compatible endpoint (Ollama, vLLM, llama.cpp-server) via base_url.
+    "openai>=1.0",
 ]
-
-# 🔥 BRUTAL TRUTH: Distributed Computing (REQUIRED for HPC)
-# WARNING: Only works on HPC systems with proper setup
 distributed = [
     "parsl>=2024.6.10",
-    "dill>=0.3.0",
 ]
-
-# 🔥 BRUTAL TRUTH: Academy Integration (EXPERIMENTAL)
-# WARNING: Requires external Academy framework (not publicly available)
 academy = [
-    "proxystore>=0.6.0",
-    "asyncio-mqtt>=0.13.0",
 ]
-
-# 🔥 BRUTAL TRUTH: RAG and Vector Search (HEAVY DEPENDENCIES)
-# WARNING: Large downloads, GPU recommended
 rag = [
     "sentence-transformers>=2.2.2,<3.0.0",
     "faiss-cpu>=1.7.4",
     "numpy>=1.24.0",
-    "scikit-learn>=1.3.0",
-    "transformers>=4.35.0,<5.0.0",
-    "torch>=2.1.0,<3.0.0",
 ]
-
-# Development tools
 dev = [
     "pytest>=7.0.0",
-    "pytest-asyncio>=0.21.0",
-    "black>=23.0.0",
-    "flake8>=6.0.0",
-    "mypy>=1.0.0",
 ]
-
-# 🔥 BRUTAL TRUTH: Everything (MASSIVE INSTALL)
-# WARNING: Downloads gigabytes of dependencies
 all = [
-    "nanobrain[llm,distributed,academy,rag,dev]"
+    "nanobrain[llm,distributed,academy,rag,dev]",
 ]
-
-[project.urls]
-Homepage = "https://github.com/nanobrain/nanobrain"
-Documentation = "https://docs.nanobrain.ai"
-Repository = "https://github.com/nanobrain/nanobrain.git"
-Issues = "https://github.com/nanobrain/nanobrain/issues"
-
-[project.scripts]
-nanobrain = "nanobrain.cli:main"
-nanobrain-demo = "nanobrain.demos.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["nanobrain*", "demos*"]
-exclude = ["tests*", "docs*", "examples*", "*.egg-info*", "*/__pycache__*"]
-
-[tool.setuptools.package-data]
-"nanobrain" = ["**/*.yml", "**/*.yaml", "**/*.txt", "**/*.md", "**/*.json"]
-"demos" = ["**/*.yml", "**/*.yaml", "**/*.py", "**/*.md", "**/*.sh", "**/*.txt"]
-
-# Black code formatting
-[tool.black]
-line-length = 100
-target-version = ['py39', 'py310', 'py311', 'py312']
-include = '\.pyi?$'
-extend-exclude = '''
-/(
-  # directories
-  \.eggs
-  | \.git
-  | \.hg
-  | \.mypy_cache
-  | \.tox
-  | \.venv
-  | build
-  | dist
-)/
-'''
-
-# Flake8 linting
-[tool.flake8]
-max-line-length = 100
-extend-ignore = ["E203", "W503"]
-exclude = [
-    ".git",
-    "__pycache__",
-    "build",
-    "dist",
-    ".venv",
-    ".eggs",
-    "*.egg",
-]
-
-# MyPy type checking
-[tool.mypy]
-python_version = "3.9"
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = true
-disallow_incomplete_defs = true
-check_untyped_defs = true
-disallow_untyped_decorators = true
-no_implicit_optional = true
-warn_redundant_casts = true
-warn_unused_ignores = true
-warn_no_return = true
-warn_unreachable = true
-strict_equality = true
-
-[[tool.mypy.overrides]]
-module = [
-    "faiss.*",
-    "sentence_transformers.*",
-    "langchain.*",
-    "unstructured.*",
-    "chromadb.*",
-    "pinecone.*",
-    "weaviate.*",
-    "qdrant_client.*",
-]
-ignore_missing_imports = true
-
-# Pytest configuration
-[tool.pytest.ini_options]
-minversion = "7.0"
-addopts = "-ra -q --strict-markers --strict-config"
-testpaths = ["tests"]
-python_files = ["test_*.py", "*_test.py"]
-python_classes = ["Test*"]
-python_functions = ["test_*"]
-markers = [
-    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
-    "integration: marks tests as integration tests",
-    "unit: marks tests as unit tests",
-    "gpu: marks tests that require GPU",
-]
-asyncio_mode = "auto"
-
-# Coverage configuration
-[tool.coverage.run]
-source = ["nanobrain"]
-omit = [
-    "*/tests/*",
-    "*/test_*",
-    "*/__pycache__/*",
-    "*/migrations/*",
-    "*/venv/*",
-    "*/.venv/*",
-]
-
-[tool.coverage.report]
-exclude_lines = [
-    "pragma: no cover",
-    "def __repr__",
-    "if self.debug:",
-    "if settings.DEBUG",
-    "raise AssertionError",
-    "raise NotImplementedError",
-    "if 0:",
-    "if __name__ == .__main__.:",
-    "class .*\\bProtocol\\):",
-    "@(abc\\.)?abstractmethod",
-]
-
-# Ruff linting and formatting (alternative to flake8/black)
-[tool.ruff]
-target-version = "py39"
-line-length = 100
-select = [
-    "E",  # pycodestyle errors
-    "W",  # pycodestyle warnings
-    "F",  # pyflakes
-    "I",  # isort
-    "B",  # flake8-bugbear
-    "C4", # flake8-comprehensions
-    "UP", # pyupgrade
-]
-ignore = [
-    "E501",  # line too long, handled by black
-    "B008",  # do not perform function calls in argument defaults
-    "C901",  # too complex
-]
-
-[tool.ruff.per-file-ignores]
-"__init__.py" = ["F401"]
-"tests/**/*" = ["B011"]
-
-[tool.ruff.isort]
-known-first-party = ["nanobrain"]
+include = ["nanobrain*"]
+exclude = ["tests*", "docs*", "demos*", "scripts*", "config*", "logs*", "results*"]

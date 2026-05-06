@@ -1,92 +1,36 @@
-# Query Enhancement Agent Configuration
-# The ONLY LLM-based component in the RAG pipeline
-
-name: "query_enhancement_agent"
-description: "LLM-based query optimization and enhancement specialist"
-
-# LLM Configuration
-model: "gpt-4"
+name: query_enhancement_agent
+description: LLM-based query optimization and enhancement specialist
+model: gpt-4
 temperature: 0.3
 max_tokens: 1500
 timeout: 30
-
-# All templates defined directly in configuration (no external files)
-prompt_template: |
-  You are a Query Enhancement Specialist for RAG systems. Your task is to optimize the following user query for better document retrieval.
-
-  Original Query: "{{ original_query }}"
-
-  Enhancement Configuration:
-  - Max query length: {{ max_query_length }} characters
-  - Domain context: {{ domain_context }}
-  - Enhancement strategies: {{ enhancement_strategies|join(', ') }}
-  - Preserve original intent: {{ preserve_original_intent }}
-
-  Context Information:
-  - Previous conversation: {{ conversation_history|length }} messages
-  - Additional context: {{ additional_context }}
-
-  Instructions:
-  1. Analyze the query for intent, scope, and information requirements
-  2. Apply the specified enhancement strategies: {{ enhancement_strategies|join(', ') }}
-  3. Preserve the original intent while improving retrieval effectiveness
-  4. Generate synonyms and related terms for better matching
-  5. Consider domain-specific terminology and concepts
-
-  {% if conversation_history %}
-  Previous Conversation Context:
-  {% for message in conversation_history[-3:] %}
-  - {{ message.role }}: {{ message.content[:100] }}...
-  {% endfor %}
-  {% endif %}
-
-  {% if domain_context != 'General' %}
-  Domain-Specific Instructions:
-  - Focus on {{ domain_context }} terminology and concepts
-  - Consider field-specific synonyms and related terms
-  - Apply domain knowledge for query expansion
-  {% endif %}
-
-  Output Format (JSON):
-  {
-      "enhanced_query": "optimized version of the query",
-      "search_terms": ["key", "terms", "and", "synonyms"],
-      "context_additions": "additional context for retrieval",
-      "enhancement_rationale": "explanation of changes made",
-      "confidence_score": 0.95
-  }
-
-  Ensure the enhanced query is under {{ max_query_length }} characters and maintains the original intent.
-
-# Fallback template (used when main template fails)
-fallback_template: |
-  Query Enhancement Task
-
-  Query: "{{ original_query }}"
-  Domain: {{ domain_context }}
-  Context: {{ additional_context }}
-  Previous messages: {{ conversation_count }}
-
-  Instructions:
-  - Max query length: {{ max_query_length }} characters
-  - Preserve original intent: {{ preserve_original_intent }}
-  - Apply available strategies: {{ enhancement_strategies|join(', ') if enhancement_strategies else 'basic enhancement' }}
-
-  Provide an enhanced query that improves retrieval effectiveness while preserving the original intent. 
-  Output as JSON with enhanced_query, search_terms, and confidence_score fields.
-
-# Template variables
+prompt_template: "You are a Query Enhancement Specialist for RAG systems. Your task is to optimize the following user query\
+  \ for better document retrieval.\n\nOriginal Query: \"{{ original_query }}\"\n\nEnhancement Configuration:\n- Max query\
+  \ length: {{ max_query_length }} characters\n- Domain context: {{ domain_context }}\n- Enhancement strategies: {{ enhancement_strategies|join(',\
+  \ ') }}\n- Preserve original intent: {{ preserve_original_intent }}\n\nContext Information:\n- Previous conversation: {{\
+  \ conversation_history|length }} messages\n- Additional context: {{ additional_context }}\n\nInstructions:\n1. Analyze the\
+  \ query for intent, scope, and information requirements\n2. Apply the specified enhancement strategies: {{ enhancement_strategies|join(',\
+  \ ') }}\n3. Preserve the original intent while improving retrieval effectiveness\n4. Generate synonyms and related terms\
+  \ for better matching\n5. Consider domain-specific terminology and concepts\n\n{% if conversation_history %}\nPrevious Conversation\
+  \ Context:\n{% for message in conversation_history[-3:] %}\n- {{ message.role }}: {{ message.content[:100] }}...\n{% endfor\
+  \ %}\n{% endif %}\n\n{% if domain_context != 'General' %}\nDomain-Specific Instructions:\n- Focus on {{ domain_context }}\
+  \ terminology and concepts\n- Consider field-specific synonyms and related terms\n- Apply domain knowledge for query expansion\n\
+  {% endif %}\n\nOutput Format (JSON):\n{\n    \"enhanced_query\": \"optimized version of the query\",\n    \"search_terms\"\
+  : [\"key\", \"terms\", \"and\", \"synonyms\"],\n    \"context_additions\": \"additional context for retrieval\",\n    \"\
+  enhancement_rationale\": \"explanation of changes made\",\n    \"confidence_score\": 0.95\n}\n\nEnsure the enhanced query\
+  \ is under {{ max_query_length }} characters and maintains the original intent.\n"
+fallback_template: "Query Enhancement Task\n\nQuery: \"{{ original_query }}\"\nDomain: {{ domain_context }}\nContext: {{ additional_context\
+  \ }}\nPrevious messages: {{ conversation_count }}\n\nInstructions:\n- Max query length: {{ max_query_length }} characters\n\
+  - Preserve original intent: {{ preserve_original_intent }}\n- Apply available strategies: {{ enhancement_strategies|join(',\
+  \ ') if enhancement_strategies else 'basic enhancement' }}\n\nProvide an enhanced query that improves retrieval effectiveness\
+  \ while preserving the original intent. \nOutput as JSON with enhanced_query, search_terms, and confidence_score fields.\n"
 template_variables:
   enhancement_strategies:
-    - "synonym_expansion"
-    - "context_integration" 
-    - "domain_optimization"
-    - "abbreviation_expansion"
-  domain_context: "General"
+  - synonym_expansion
+  - context_integration
+  - domain_optimization
+  - abbreviation_expansion
+  domain_context: General
   preserve_original_intent: true
-
-# Agent configuration
 max_query_length: 500
-
-# Emergency fallback (used when all templates fail)
-emergency_instruction: "Enhance this query for better retrieval"
+emergency_instruction: Enhance this query for better retrieval

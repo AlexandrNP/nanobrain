@@ -1,21 +1,9 @@
-# ServerFactory Configuration
-# Configuration for universal server factory
-#
-# Author: NanoBrain Development Team
-# Date: January 2025
-# Version: 1.0.0
-
-# Default server type
-default_server_type: "fastapi_universal"
-
-# Server type mappings
+default_server_type: fastapi_universal
 server_type_mappings:
-  fastapi_universal: "nanobrain.library.interfaces.web.servers.universal_server.UniversalNanoBrainServer"
-  fastapi: "nanobrain.library.interfaces.web.servers.universal_server.UniversalNanoBrainServer"
-  universal: "nanobrain.library.interfaces.web.servers.universal_server.UniversalNanoBrainServer"
-
-# Factory behavior configuration
+  fastapi_universal: nanobrain.library.interfaces.web.servers.universal_server.UniversalNanoBrainServer
+  fastapi: nanobrain.library.interfaces.web.servers.universal_server.UniversalNanoBrainServer
+  universal: nanobrain.library.interfaces.web.servers.universal_server.UniversalNanoBrainServer
 factory_config:
   auto_validate_config: true
   strict_component_loading: true
-  enable_server_caching: false 
+  enable_server_caching: false

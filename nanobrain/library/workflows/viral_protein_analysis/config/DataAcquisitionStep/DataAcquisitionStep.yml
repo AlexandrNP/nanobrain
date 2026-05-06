@@ -1,101 +1,75 @@
-name: "Enhanced BV-BRC Data Acquisition Step"
-description: "Ultra-precision CSV matching with multi-stage validation pipeline"
-class: "nanobrain.library.workflows.viral_protein_analysis.steps.data_acquisition_step.BVBRCDataAcquisitionStep"
-
-# Step configuration
+name: Enhanced BV-BRC Data Acquisition Step
+description: Ultra-precision CSV matching with multi-stage validation pipeline
+class: nanobrain.library.workflows.viral_protein_analysis.steps.data_acquisition_step.BVBRCDataAcquisitionStep
 config:
-  name: "enhanced_bv_brc_data_acquisition"
-  description: "Ultra-precision CSV matching with validation agents"
+  name: enhanced_bv_brc_data_acquisition
+  description: Ultra-precision CSV matching with validation agents
   debug_mode: false
   enable_logging: true
   log_data_transfers: true
-
-# Workflow directory for resolving relative config paths
-workflow_directory: "nanobrain/library/workflows/viral_protein_analysis"
-
-# Step-level data units (existing)
+workflow_directory: nanobrain/library/workflows/viral_protein_analysis
 input_data_units:
   synonyms_input:
-    class: "nanobrain.core.data_unit.DataUnitMemory"
-    name: "synonyms_input"
-    description: "Ultra-high-confidence synonyms and species validation criteria from enhanced virus resolution"
+    class: nanobrain.core.data_unit.DataUnitMemory
+    name: synonyms_input
+    description: Ultra-high-confidence synonyms and species validation criteria from enhanced virus resolution
     persistent: false
-
 output_data_units:
   validated_genomes:
-    class: "nanobrain.core.data_unit.DataUnitFile"
-    name: "validated_genomes"
-    description: "Validated genome data with zero contamination guarantee"
+    class: nanobrain.core.data_unit.DataUnitFile
+    name: validated_genomes
+    description: Validated genome data with zero contamination guarantee
     persistent: true
-    file_path: "data/bvbrc_cache/validated_genomes.json"
-
-# Step-level triggers (existing) - Framework compliant class+config pattern
+    file_path: data/bvbrc_cache/validated_genomes.json
 triggers:
-  - trigger_id: "input_data_received"
-    class: "nanobrain.core.trigger.DataUnitChangeTrigger"
-    config:
-      data_unit: "synonyms_input"
-      event_type: "set"
-      description: "Execute enhanced validation when ultra-high-confidence synonyms are received"
-      enable_logging: true
-
-# UPDATED: Tool configuration with class+config patterns (was inline)
+- trigger_id: input_data_received
+  class: nanobrain.core.trigger.DataUnitChangeTrigger
+  config:
+    data_unit: synonyms_input
+    event_type: set
+    description: Execute enhanced validation when ultra-high-confidence synonyms are received
+    enable_logging: true
 tools:
   bv_brc_tool:
-    class: "nanobrain.library.tools.bioinformatics.bv_brc_tool.BVBRCTool"
-    config: "nanobrain/library/workflows/viral_protein_analysis/config/DataAcquisitionStep/BVBRCTool.yml"
-  
+    class: nanobrain.library.tools.bioinformatics.bv_brc_tool.BVBRCTool
+    config: nanobrain/library/workflows/viral_protein_analysis/config/DataAcquisitionStep/BVBRCTool.yml
   species_validation_agent:
-    class: "nanobrain.library.agents.specialized.protein_synonym_agent.ProteinSynonymAgent"
-    config: "nanobrain/library/workflows/viral_protein_analysis/config/AnnotationMappingStep/SynonymDetectionAgent.yml"
-
+    class: nanobrain.library.agents.specialized.protein_synonym_agent.ProteinSynonymAgent
+    config: nanobrain/library/workflows/viral_protein_analysis/config/AnnotationMappingStep/SynonymDetectionAgent.yml
   taxonomic_verification_agent:
-    class: "nanobrain.library.agents.specialized.protein_synonym_agent.ProteinSynonymAgent"
-    config: "nanobrain/library/workflows/viral_protein_analysis/config/AnnotationMappingStep/SynonymDetectionAgent.yml"
-
-# Step-specific configuration (existing)
+    class: nanobrain.library.agents.specialized.protein_synonym_agent.ProteinSynonymAgent
+    config: nanobrain/library/workflows/viral_protein_analysis/config/AnnotationMappingStep/SynonymDetectionAgent.yml
 confidence_threshold: 0.9
 species_validation_threshold: 0.9
 taxonomic_validation_threshold: 0.9
 contamination_tolerance: 0.0
 ultra_precision_mode: true
 enable_multi_stage_validation: true
-
-# CSV file configuration (existing)
-csv_file_path: "data/bvbrc_cache/alphavirus_genomes.tsv"
-
-# Search configuration (existing)
+csv_file_path: data/bvbrc_cache/alphavirus_genomes.tsv
 search_strategies:
   enable_exact_synonym_search: true
   enable_partial_synonym_search: true
   enable_fuzzy_taxonomic_search: true
   enable_agent_pattern_search: false
-
 search_config:
   max_search_results: 100
   search_timeout: 300.0
   enable_progressive_search: true
   deduplicate_results: true
-
-# Validation pipeline configuration (existing)
 validation_pipeline:
   enable_species_validation: true
   enable_taxonomic_verification: true
   enable_final_contamination_check: true
   generate_audit_trail: true
   validation_timeout: 600.0
-
-# Cache configuration (existing)
 cache_config:
   enable_caching: true
-  cache_directory: "data/enhanced_bvbrc_cache"
+  cache_directory: data/enhanced_bvbrc_cache
   cache_ttl_hours: 24
   virus_specific: true
   confidence_based_caching: true
-
-# Output format configuration (existing)
 output_format:
   include_verification_metadata: true
   include_validation_audit_trail: true
   include_confidence_scores: true
-  include_contamination_assessment: true 
+  include_contamination_assessment: true

@@ -6,6 +6,8 @@ comprehensive recursive loading, Pydantic integration, schema extraction,
 and optional protocol support - all within the ConfigBase class itself.
 """
 
+import os
+import re
 import yaml
 import logging
 from abc import ABC
@@ -15,6 +17,58 @@ from pydantic import BaseModel, ConfigDict, Field, validator, root_validator
 from dataclasses import dataclass
 from datetime import datetime
 from pydantic import ValidationError
+
+
+# Environment-variable interpolation for YAML configs (scope memo 08).
+# Matches ``${VAR}`` and ``${VAR:-default}`` but NOT ``$${VAR}`` (escape).
+# Only POSIX ``:-`` (unset-or-empty) semantics are supported — the plain
+# ``${VAR-default}`` (unset-only) form is deliberately not recognised to
+# keep the grammar narrow and predictable.
+_ENV_VAR_PATTERN = re.compile(
+    r'(?<!\$)\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}'
+)
+
+
+def _interpolate_env_vars(value: Any) -> Any:
+    """Recursively substitute ``${VAR}`` / ``${VAR:-default}`` in all
+    string leaves of a loaded YAML structure.
+
+    Rules:
+    - ``${VAR}`` expands to the env var's value. If the env var is unset,
+      raises ``ValueError`` — silent empty-string substitution is a
+      footgun (the failure looks like a network issue at the first LLM
+      call instead of a config error at load time).
+    - ``${VAR:-default}`` expands to the env var's value if set AND
+      non-empty, otherwise to ``default`` (POSIX ``:-`` semantics).
+    - Literal ``${...}`` can be escaped as ``$${...}``. The first ``$``
+      of the escape is stripped at the end of substitution.
+    - Non-string leaves (ints, bools, None, nested dicts/lists)
+      pass through; dicts and lists are descended into.
+    """
+    if isinstance(value, str):
+        def replace(match: "re.Match[str]") -> str:
+            var_name = match.group(1)
+            default = match.group(2)
+            env_val = os.environ.get(var_name)
+            if env_val:
+                return env_val
+            if default is not None:
+                return default
+            raise ValueError(
+                f"Environment variable '{var_name}' is referenced in a "
+                f"YAML config but is not set, and no default was given. "
+                f"Either set the env var or use the "
+                f"'${{{var_name}:-<default>}}' form for an optional fallback."
+            )
+        substituted = _ENV_VAR_PATTERN.sub(replace, value)
+        # Unescape any ``$${...}`` → ``${...}`` that the negative
+        # lookbehind preserved.
+        return substituted.replace('$${', '${')
+    if isinstance(value, dict):
+        return {k: _interpolate_env_vars(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_interpolate_env_vars(v) for v in value]
+    return value
 
 logger = logging.getLogger(__name__)
 
@@ -623,7 +677,12 @@ class ConfigBase(BaseModel, ABC):
         extra="allow",
         use_enum_values=False,  # ✅ ENUM FIX: Preserve enum objects instead of converting to string values
         validate_assignment=True,
-        str_strip_whitespace=True,
+        # NOTE: str_strip_whitespace was previously True and silently dropped
+        # meaningful-whitespace string values (e.g., ``delimiter: "\t"`` in a
+        # CSV-reader step YAML arrived as ``""``). Turned off to preserve
+        # whitespace-bearing fields; individual validators should strip
+        # explicitly when it's the right semantics.
+        str_strip_whitespace=False,
         json_schema_extra={
             "examples": [],
             "nanobrain_metadata": {
@@ -805,19 +864,27 @@ class ConfigBase(BaseModel, ABC):
     
     @classmethod
     def _load_yaml_file(cls, config_path: Path) -> Dict[str, Any]:
-        """Load and parse YAML configuration file"""
+        """Load, parse, and env-var-interpolate a YAML configuration file.
+
+        Environment-variable expansion runs after ``yaml.safe_load`` so
+        downstream consumers (nested-object resolution, Pydantic
+        validation) see the resolved values. See scope memo 08 for the
+        interpolation grammar; in short: ``${VAR}`` is required-with-
+        fail-loud, ``${VAR:-default}`` is optional-with-fallback, and
+        ``$${VAR}`` is the literal-``${VAR}`` escape.
+        """
         try:
             with open(config_path, 'r', encoding='utf-8') as f:
                 config_data = yaml.safe_load(f)
-            
+
             if config_data is None:
                 config_data = {}
-            
+
             if not isinstance(config_data, dict):
                 raise ValueError(f"Configuration file must contain a YAML dictionary, got {type(config_data)}")
-            
-            return config_data
-            
+
+            return _interpolate_env_vars(config_data)
+
         except yaml.YAMLError as e:
             raise ValueError(f"Invalid YAML syntax in {config_path}: {e}")
         except UnicodeDecodeError as e:
@@ -965,22 +1032,55 @@ class ConfigBase(BaseModel, ABC):
                     # Extract class path and config
                     class_path = value['class']
                     config_value = value['config']
-                    
+
                     try:
                         # Import the class
                         module_path, class_name = class_path.rsplit('.', 1)
                         module = importlib.import_module(module_path)
                         target_class = getattr(module, class_name)
-                        
+
+                        # CRITICAL FIX: Extract executor override if present in step entry
+                        # This enables workflow-level executor overrides for steps
+                        kwargs = context.additional_context.copy()
+                        if 'executor' in value:
+                            # Step entry has executor override - resolve it and pass to step
+                            executor_config = value['executor']
+                            if isinstance(executor_config, dict) and 'class' in executor_config and 'config' in executor_config:
+                                # Resolve executor using same logic
+                                executor_class_path = executor_config['class']
+                                executor_config_value = executor_config['config']
+
+                                # Import executor class
+                                executor_module_path, executor_class_name = executor_class_path.rsplit('.', 1)
+                                executor_module = importlib.import_module(executor_module_path)
+                                executor_class = getattr(executor_module, executor_class_name)
+
+                                # Resolve executor config path and create instance
+                                if isinstance(executor_config_value, str):
+                                    executor_config_path = cls._resolve_config_path(executor_config_value, context)
+                                    executor_instance = executor_class.from_config(executor_config_path)
+                                    kwargs['executor'] = executor_instance
+                                    logger.debug(f"✅ Resolved executor override for '{key}': {executor_class_name}")
+
                         # Resolve config based on target class type and config value type
                         if isinstance(config_value, str):
                             # File path - all classes support this
                             config_path = cls._resolve_config_path(config_value, context)
-                            instance = target_class.from_config(config_path, **context.additional_context)
+                            instance = target_class.from_config(config_path, **kwargs)
+
+                            # CRITICAL FIX: Store config path on Step instances for Parsl execution
+                            # This enables steps to be reloaded from config on workers instead of serialization
+                            try:
+                                from nanobrain.core.step import BaseStep
+                                if isinstance(instance, BaseStep):
+                                    instance._config_path = str(config_path)
+                                    logger.debug(f"✅ Set _config_path on Step {key}: {config_path}")
+                            except ImportError:
+                                pass  # BaseStep not available, skip
                         else:
                             # Inline configuration dict - only supported for DataUnit, Link, Trigger classes
                             if cls._is_inline_config_supported(target_class):
-                                instance = target_class.from_config(config_value, **context.additional_context)
+                                instance = target_class.from_config(config_value, **kwargs)
                             else:
                                 raise ValueError(
                                     f"❌ FRAMEWORK VIOLATION: Inline dict configuration not supported for {class_path}\n"

@@ -1,230 +1,166 @@
-# Default CSV Import Step Configuration
-# 
-# This configuration template provides default settings for CSV file import
-# and Elasticsearch indexing operations within the NanoBrain framework.
-#
-# Usage:
-#   from nanobrain.library.infrastructure.steps import CSVImportStep
-#   step = CSVImportStep.from_config('config/csv_processing/default_csv_import.yml')
-
-# Step Identification
-name: "csv_import_step"
-description: "Import and index CSV files in Elasticsearch with automatic format detection"
-
-# Component Configuration
-component_type: "csv_import_step"
-
-# Input Data Units Configuration
+name: csv_import_step
+description: Import and index CSV files in Elasticsearch with automatic format detection
+component_type: csv_import_step
 input_data_units:
   csv_file:
-    class: "nanobrain.core.data_unit.DataUnitFile"
+    class: nanobrain.core.data_unit.DataUnitFile
     config:
-      file_path: "${csv_file_path}"
-      encoding: "auto"
+      file_path: ${csv_file_path}
+      encoding: auto
       validation_enabled: true
-      description: "CSV file to import and process"
-  
+      description: CSV file to import and process
   import_config:
-    class: "nanobrain.core.data_unit.DataUnitMemory"
+    class: nanobrain.core.data_unit.DataUnitMemory
     config:
       optional: true
-      description: "Runtime import configuration and parameters"
+      description: Runtime import configuration and parameters
       initial_value:
-        index_name: null  # Auto-generate from filename if not provided
+        index_name: null
         custom_mapping: null
         processing_options: {}
-
-# Output Data Units Configuration
 output_data_units:
   indexed_data:
-    class: "nanobrain.core.data_unit.DataUnitMemory"
+    class: nanobrain.core.data_unit.DataUnitMemory
     config:
       persistent: true
-      description: "Import results and Elasticsearch index information"
+      description: Import results and Elasticsearch index information
       schema:
-        index_name: "string"
-        structure: "object"
-        mapping: "object"
-        rows_imported: "integer"
-        file_path: "string"
-        import_timestamp: "number"
-  
+        index_name: string
+        structure: object
+        mapping: object
+        rows_imported: integer
+        file_path: string
+        import_timestamp: number
   import_status:
-    class: "nanobrain.core.data_unit.DataUnitMemory"
+    class: nanobrain.core.data_unit.DataUnitMemory
     config:
       persistent: false
-      description: "Detailed import status and processing metrics"
+      description: Detailed import status and processing metrics
       schema:
-        status: "string"  # success, failed, partial
-        processing_time: "number"
-        rows_per_second: "number"
-        progress: "object"
-        elasticsearch_info: "object"
-
-# CSV Processing Configuration
+        status: string
+        processing_time: number
+        rows_per_second: number
+        progress: object
+        elasticsearch_info: object
 csv_processing:
-  # File Size and Processing Limits
   max_file_size_mb: 500
   max_rows_per_batch: 10000
   chunk_size: 1000
-  processing_timeout: 1800  # 30 minutes
-  
-  # Format Detection Settings
+  processing_timeout: 1800
   auto_detect_delimiter: true
-  supported_delimiters: [",", ";", "\t", "|", "^"]
+  supported_delimiters:
+  - ','
+  - ;
+  - "\t"
+  - '|'
+  - ^
   auto_detect_encoding: true
-  supported_encodings: ["utf-8", "latin-1", "cp1252", "utf-16"]
+  supported_encodings:
+  - utf-8
+  - latin-1
+  - cp1252
+  - utf-16
   quote_char_detection: true
   escape_char_detection: true
-  
-  # Data Validation Settings
   validation_enabled: true
   max_field_length: 10000
   allow_empty_fields: true
   strict_mode: false
-  
-  # Performance Optimization
   parallel_processing: true
   memory_limit_mb: 2048
   cache_enabled: true
   cache_ttl: 3600
-
-# Elasticsearch Configuration
 elasticsearch_config:
-  # Index Settings
-  index_prefix: "csv_data_"
+  index_prefix: csv_data_
   create_index: true
   optimize_mapping: true
-  
-  # Bulk Import Settings
   bulk_size: 1000
-  refresh_interval: "1s"
+  refresh_interval: 1s
   request_timeout: 60
   max_retries: 3
-  
-  # Index Optimization
   number_of_shards: 1
   number_of_replicas: 0
-  
-  # Mapping Configuration
   enable_fuzzy_fields: true
   enable_keyword_fields: true
   max_keyword_length: 256
-  default_analyzer: "csv_text_analyzer"
-  fuzzy_analyzer: "csv_fuzzy_analyzer"
-
-# MCP Server Configuration
+  default_analyzer: csv_text_analyzer
+  fuzzy_analyzer: csv_fuzzy_analyzer
 mcp_server_config:
-  server_name: "elasticsearch_csv_server"
+  server_name: elasticsearch_csv_server
   connection_timeout: 30
   request_timeout: 300
-  host: "localhost"
+  host: localhost
   port: 8080
-  
-  # Health Check Settings
   health_check_enabled: true
   health_check_interval: 30
   max_connection_retries: 3
-
-# Logging Configuration
 logging:
-  level: "INFO"
+  level: INFO
   enable_progress_logging: true
   log_batch_progress: true
   log_performance_metrics: true
-  
-  # Log Formatting
   include_timestamps: true
   include_step_context: true
   include_processing_stats: true
-
-# Error Handling Configuration
 error_handling:
-  # Retry Configuration
   max_retries: 3
   retry_delay: 1.0
   exponential_backoff: true
-  
-  # Error Recovery
   continue_on_errors: false
   max_error_percentage: 10.0
   error_sampling_rate: 0.1
-  
-  # Validation Errors
   skip_invalid_rows: false
   log_validation_errors: true
   max_validation_errors: 100
-
-# Monitoring Configuration
 monitoring:
   enable_metrics: true
   enable_health_checks: true
   performance_tracking: true
-  
-  # Metrics Collection
   collect_import_metrics: true
   collect_performance_metrics: true
   collect_error_metrics: true
-  
-  # Alerting Thresholds
-  slow_import_threshold: 300  # seconds
-  high_error_rate_threshold: 0.05  # 5%
-  memory_usage_threshold: 0.8  # 80%
-
-# Dependencies Configuration
+  slow_import_threshold: 300
+  high_error_rate_threshold: 0.05
+  memory_usage_threshold: 0.8
 dependencies:
   required_services:
-    - "elasticsearch"
-  
+  - elasticsearch
   optional_services:
-    - "redis"  # For caching
-  
+  - redis
   required_libraries:
-    - "pandas"
-    - "elasticsearch"
-    - "aiohttp"
-  
+  - pandas
+  - elasticsearch
+  - aiohttp
   optional_libraries:
-    - "chardet"  # Enhanced encoding detection
-    - "python-magic"  # File type validation
-
-# Workflow Integration
+  - chardet
+  - python-magic
 workflow_integration:
-  # Event Triggers
   triggers:
-    - trigger_type: "data_updated"
-      data_unit: "csv_file"
-      description: "Import CSV when file is available"
-  
-  # Data Flow Links
+  - trigger_type: data_updated
+    data_unit: csv_file
+    description: Import CSV when file is available
   output_links:
-    - target_step: "csv_fuzzy_search_step"
-      source_data_unit: "indexed_data"
-      target_data_unit: "indexed_data"
-      description: "Pass indexed data to search step"
-  
-  # Execution Context
+  - target_step: csv_fuzzy_search_step
+    source_data_unit: indexed_data
+    target_data_unit: indexed_data
+    description: Pass indexed data to search step
   execution_context:
-    timeout: 1800  # 30 minutes
-    priority: "normal"
+    timeout: 1800
+    priority: normal
     resource_requirements:
       memory_mb: 2048
       cpu_cores: 2
-
-# Validation Schema
 validation_schema:
   required_fields:
-    - "name"
-    - "csv_processing"
-    - "elasticsearch_config"
-  
+  - name
+  - csv_processing
+  - elasticsearch_config
   field_types:
-    name: "string"
-    description: "string"
-    csv_processing: "object"
-    elasticsearch_config: "object"
-    mcp_server_config: "object"
-  
+    name: string
+    description: string
+    csv_processing: object
+    elasticsearch_config: object
+    mcp_server_config: object
   constraints:
     csv_processing.max_file_size_mb:
       min: 1

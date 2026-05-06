@@ -1,56 +1,60 @@
-name: "StepCoderEnhanced"
-description: "Advanced tool for generating software code based on natural language instructions"
-class: "CodeWriterAgent"  # Use specialized CodeWriterAgent
-
-# MANDATORY: Agent card section for A2A protocol compliance
+name: StepCoderEnhanced
+description: Advanced tool for generating software code based on natural language instructions
+class: CodeWriterAgent
 agent_card:
-  version: "2.0.0"
-  purpose: "Advanced code generation agent with multi-language support and architectural pattern implementation"
-  detailed_description: "StepCoderEnhanced is an expert-level code generation agent capable of creating high-quality software code, implementing design patterns, and building complex architectural components across multiple programming languages."
-  domain: "software_development"
-  expertise_level: "expert"
-  
+  version: 2.0.0
+  purpose: Advanced code generation agent with multi-language support and architectural pattern implementation
+  detailed_description: StepCoderEnhanced is an expert-level code generation agent capable of creating high-quality software
+    code, implementing design patterns, and building complex architectural components across multiple programming languages.
+  domain: software_development
+  expertise_level: expert
   input_format:
-    primary_mode: "json"
-    supported_modes: ["json", "text"]
-    content_types: ["application/json", "text/plain"]
+    primary_mode: json
+    supported_modes:
+    - json
+    - text
+    content_types:
+    - application/json
+    - text/plain
     format_schema:
       class: nanobrain.core.data_unit.DataUnit
       required_fields:
         input:
           class: nanobrain.core.data_unit.DataUnitString
-          description: "Detailed natural language description of code requirements (supports complex architectural patterns)"
+          description: Detailed natural language description of code requirements (supports complex architectural patterns)
       optional_fields:
         language:
           class: nanobrain.core.data_unit.DataUnitString
-          description: "Programming language (Python, JavaScript, TypeScript, Java, Go, Rust, C++, C#)"
+          description: Programming language (Python, JavaScript, TypeScript, Java, Go, Rust, C++, C#)
         complexity_level:
           class: nanobrain.core.data_unit.DataUnitString
-          description: "Code complexity level (simple, intermediate, advanced, expert)"
+          description: Code complexity level (simple, intermediate, advanced, expert)
         architecture_pattern:
           class: nanobrain.core.data_unit.DataUnitString
-          description: "Architecture pattern to implement (MVC, Clean Architecture, Microservices, etc.)"
-  
+          description: Architecture pattern to implement (MVC, Clean Architecture, Microservices, etc.)
   output_format:
-    primary_mode: "json"
-    supported_modes: ["json", "text"]
-    content_types: ["application/json", "text/plain"]
+    primary_mode: json
+    supported_modes:
+    - json
+    - text
+    content_types:
+    - application/json
+    - text/plain
     format_schema:
       class: nanobrain.core.data_unit.DataUnit
       guaranteed_fields:
         generated_code:
           class: nanobrain.core.data_unit.DataUnitString
-          description: "High-quality generated code with documentation and type hints"
+          description: High-quality generated code with documentation and type hints
         explanation:
           class: nanobrain.core.data_unit.DataUnitString
-          description: "Detailed explanation of the code structure and design decisions"
+          description: Detailed explanation of the code structure and design decisions
         usage_examples:
-          type: "array"
-          description: "Code usage examples and integration instructions"
+          type: array
+          description: Code usage examples and integration instructions
         test_code:
           class: nanobrain.core.data_unit.DataUnitString
-          description: "Unit tests for the generated code (when requested)"
-  
+          description: Unit tests for the generated code (when requested)
   capabilities:
     streaming: false
     push_notifications: false
@@ -60,433 +64,455 @@ agent_card:
     tool_usage: false
     delegation: false
     collaboration: false
-  
   skills:
-    - id: "multi_language_generation"
-      name: "Multi-Language Code Generation"
-      description: "Generate high-quality code in multiple programming languages with language-specific best practices"
-      complexity: "expert"
-      input_modes: ["text", "json"]
-      output_modes: ["text", "json"]
-      examples:
-        - "Python code with type hints, docstrings, and PEP 8 compliance"
-        - "TypeScript with interfaces, generics, and comprehensive typing"
-        - "Java with design patterns, annotations, and enterprise patterns"
-        - "Go with idiomatic patterns, error handling, and performance optimization"
-    
-    - id: "architectural_patterns"
-      name: "Software Architecture Pattern Implementation"
-      description: "Implement complex software architecture patterns and design principles"
-      complexity: "expert"
-      input_modes: ["text", "json"]
-      output_modes: ["text", "json"]
-      examples:
-        - "Clean Architecture implementation with dependency injection"
-        - "Microservice architecture with API gateway and service discovery"
-        - "Event-driven architecture with message queues and event sourcing"
-        - "Plugin system with dynamic loading and dependency management"
-    
-    - id: "advanced_code_features"
-      name: "Advanced Code Features and Optimizations"
-      description: "Generate code with advanced features like error handling, logging, testing, and performance optimization"
-      complexity: "expert"
-      input_modes: ["text", "json"]
-      output_modes: ["text", "json"]
-      examples:
-        - "Comprehensive error handling with custom exceptions and recovery strategies"
-        - "Performance-optimized algorithms with complexity analysis"
-        - "Security-focused implementations with input validation and sanitization"
-        - "Concurrent and asynchronous programming patterns"
-  
+  - id: multi_language_generation
+    name: Multi-Language Code Generation
+    description: Generate high-quality code in multiple programming languages with language-specific best practices
+    complexity: expert
+    input_modes:
+    - text
+    - json
+    output_modes:
+    - text
+    - json
+    examples:
+    - Python code with type hints, docstrings, and PEP 8 compliance
+    - TypeScript with interfaces, generics, and comprehensive typing
+    - Java with design patterns, annotations, and enterprise patterns
+    - Go with idiomatic patterns, error handling, and performance optimization
+  - id: architectural_patterns
+    name: Software Architecture Pattern Implementation
+    description: Implement complex software architecture patterns and design principles
+    complexity: expert
+    input_modes:
+    - text
+    - json
+    output_modes:
+    - text
+    - json
+    examples:
+    - Clean Architecture implementation with dependency injection
+    - Microservice architecture with API gateway and service discovery
+    - Event-driven architecture with message queues and event sourcing
+    - Plugin system with dynamic loading and dependency management
+  - id: advanced_code_features
+    name: Advanced Code Features and Optimizations
+    description: Generate code with advanced features like error handling, logging, testing, and performance optimization
+    complexity: expert
+    input_modes:
+    - text
+    - json
+    output_modes:
+    - text
+    - json
+    examples:
+    - Comprehensive error handling with custom exceptions and recovery strategies
+    - Performance-optimized algorithms with complexity analysis
+    - Security-focused implementations with input validation and sanitization
+    - Concurrent and asynchronous programming patterns
   performance:
-    typical_response_time: "5-20 seconds"
-    max_response_time: "180 seconds"
-    memory_usage: "200-600 MB"
-    cpu_requirements: "High"
+    typical_response_time: 5-20 seconds
+    max_response_time: 180 seconds
+    memory_usage: 200-600 MB
+    cpu_requirements: High
     concurrency_support: true
     max_concurrent_sessions: 3
-    rate_limit: "20 requests/minute"
-    scaling_characteristics: "CPU-bound for complex code generation and analysis"
-  
+    rate_limit: 20 requests/minute
+    scaling_characteristics: CPU-bound for complex code generation and analysis
   usage_examples:
-    - name: "Microservice API Development"
-      description: "Generate a complete microservice with REST API, database integration, and monitoring"
-      input_example:
-        input: "Create a user management microservice with FastAPI, PostgreSQL integration, JWT authentication, rate limiting, and health monitoring"
-        language: "Python"
-        complexity_level: "expert"
-        architecture_pattern: "Microservices"
-      expected_output:
-        generated_code: "Complete FastAPI microservice with models, routes, authentication, database integration..."
-        explanation: "Detailed explanation of architecture, design decisions, and implementation patterns"
-        usage_examples: ["How to start the service", "API endpoint examples", "Database setup instructions"]
-        test_code: "Comprehensive unit and integration tests with pytest"
-    
-    - name: "Design Pattern Implementation"
-      description: "Implement a specific design pattern with real-world application"
-      input_example:
-        input: "Implement a plugin system using the Factory pattern with dynamic loading for a data processing application"
-        language: "Python"
-        complexity_level: "advanced"
-      expected_output:
-        generated_code: "Factory pattern implementation with plugin loader, registry, and dynamic instantiation"
-        explanation: "Explanation of Factory pattern benefits and implementation details"
-        usage_examples: ["How to create plugins", "Plugin registration process", "Dynamic loading examples"]
-
+  - name: Microservice API Development
+    description: Generate a complete microservice with REST API, database integration, and monitoring
+    input_example:
+      input: Create a user management microservice with FastAPI, PostgreSQL integration, JWT authentication, rate limiting,
+        and health monitoring
+      language: Python
+      complexity_level: expert
+      architecture_pattern: Microservices
+    expected_output:
+      generated_code: Complete FastAPI microservice with models, routes, authentication, database integration...
+      explanation: Detailed explanation of architecture, design decisions, and implementation patterns
+      usage_examples:
+      - How to start the service
+      - API endpoint examples
+      - Database setup instructions
+      test_code: Comprehensive unit and integration tests with pytest
+  - name: Design Pattern Implementation
+    description: Implement a specific design pattern with real-world application
+    input_example:
+      input: Implement a plugin system using the Factory pattern with dynamic loading for a data processing application
+      language: Python
+      complexity_level: advanced
+    expected_output:
+      generated_code: Factory pattern implementation with plugin loader, registry, and dynamic instantiation
+      explanation: Explanation of Factory pattern benefits and implementation details
+      usage_examples:
+      - How to create plugins
+      - Plugin registration process
+      - Dynamic loading examples
 defaults:
-  model: "gpt-4-turbo"
+  model: gpt-4-turbo
   temperature: 0.2
   max_tokens: 4000
   debug_mode: false
-
 metadata:
-  biological_analogy: "Language generation areas of the brain"
-  justification: >
-    Like how language areas generate coherent sentences based on concepts,
-    this tool generates coherent code based on requirements.
-  objectives:
-    - Process natural language requests for code generation
-    - Generate clean, well-documented code from descriptions
-    - Create specialized code structures like classes and functions
-    - Refactor existing code based on natural language instructions
-  version: "2.0.0"
-  author: "NanoBrain Framework"
+  biological_analogy: Language generation areas of the brain
+  justification: 'Like how language areas generate coherent sentences based on concepts, this tool generates coherent code
+    based on requirements.
 
+    '
+  objectives:
+  - Process natural language requests for code generation
+  - Generate clean, well-documented code from descriptions
+  - Create specialized code structures like classes and functions
+  - Refactor existing code based on natural language instructions
+  version: 2.0.0
+  author: NanoBrain Framework
 config:
-  name: "StepCoderEnhanced"
-  description: "Advanced specialized agent for generating software code"
-  model: "gpt-4-turbo"
+  name: StepCoderEnhanced
+  description: Advanced specialized agent for generating software code
+  model: gpt-4-turbo
   temperature: 0.2
   max_tokens: 4000
-  system_prompt: |
-    You are an advanced code generation agent for the NanoBrain framework.
+  system_prompt: 'You are an advanced code generation agent for the NanoBrain framework.
+
 
     Your enhanced responsibilities:
+
     1. Generate high-quality, well-documented code based on natural language descriptions
+
     2. Create Python classes, functions, and modules following best practices
+
     3. Refactor existing code based on natural language instructions
+
     4. Provide clear explanations and documentation for generated code
+
     5. Handle complex architectural patterns and design principles
+
     6. Generate test cases and validation code when requested
 
+
     Advanced capabilities:
+
     - Multi-language code generation (Python, JavaScript, TypeScript, Java, Go, Rust)
+
     - Design pattern implementation (Factory, Observer, Strategy, etc.)
+
     - API design and implementation
+
     - Database schema and ORM model generation
+
     - Microservice architecture components
+
     - Error handling and logging integration
+
     - Performance optimization suggestions
 
+
     When generating code:
+
     - Follow language-specific style guidelines (PEP 8 for Python, etc.)
+
     - Include comprehensive docstrings and comments
+
     - Add type hints and annotations where appropriate
+
     - Handle errors gracefully with proper exception handling
+
     - Write clean, maintainable, and scalable code
+
     - Consider performance, security, and scalability
+
     - Include unit tests when appropriate
+
     - Provide usage examples and documentation
 
+
     Input format: You will receive structured requests with context and requirements.
+
     Output format: Provide the generated code with explanations, documentation, and usage examples.
 
-# Advanced validation schema
+    '
 validation:
   required:
-    - model
-    - name
-    - description
+  - model
+  - name
+  - description
   optional:
-    - temperature
-    - max_tokens
-    - debug_mode
-    - language
-    - context
-    - complexity_level
+  - temperature
+  - max_tokens
+  - debug_mode
+  - language
+  - context
+  - complexity_level
   constraints:
     model:
       class: nanobrain.core.data_unit.DataUnitString
-      pattern: "^(gpt-|claude-|llama-)"
-      message: "Model must be a supported LLM (gpt-, claude-, or llama-)"
+      pattern: ^(gpt-|claude-|llama-)
+      message: Model must be a supported LLM (gpt-, claude-, or llama-)
     temperature:
       type: float
       min: 0.0
       max: 1.0
-      message: "Temperature must be between 0.0 and 1.0"
+      message: Temperature must be between 0.0 and 1.0
     max_tokens:
       type: integer
       min: 100
       max: 32000
-      message: "Max tokens must be between 100 and 32000"
+      message: Max tokens must be between 100 and 32000
     complexity_level:
       class: nanobrain.core.data_unit.DataUnitString
-      enum: ["simple", "intermediate", "advanced", "expert"]
-      message: "Complexity level must be one of: simple, intermediate, advanced, expert"
+      enum:
+      - simple
+      - intermediate
+      - advanced
+      - expert
+      message: 'Complexity level must be one of: simple, intermediate, advanced, expert'
     language:
       class: nanobrain.core.data_unit.DataUnitString
-      enum: ["Python", "JavaScript", "TypeScript", "Java", "Go", "Rust", "C++", "C#"]
-      message: "Language must be a supported programming language"
-
-# Input schema with enhanced validation
+      enum:
+      - Python
+      - JavaScript
+      - TypeScript
+      - Java
+      - Go
+      - Rust
+      - C++
+      - C#
+      message: Language must be a supported programming language
 input_schema:
   class: nanobrain.core.data_unit.DataUnit
   properties:
     input:
       class: nanobrain.core.data_unit.DataUnitString
-      description: >
-        Detailed description of your code-related request. The enhanced agent can handle:
-        
-        1. Code Generation:
-           - Functions, classes, and modules
-           - API endpoints and services
-           - Database models and schemas
-           - Configuration and setup scripts
-        
-        2. Architecture Patterns:
-           - Design patterns (Factory, Observer, Strategy, etc.)
-           - Microservice components
-           - Event-driven architectures
-           - Plugin systems
-        
-        3. Advanced Features:
-           - Error handling and logging
-           - Testing and validation
-           - Performance optimization
-           - Security implementations
-        
-        Examples:
-        - "Create a microservice for user authentication with JWT tokens, rate limiting, and audit logging"
-        - "Implement a plugin system using the Factory pattern with dynamic loading capabilities"
-        - "Generate a REST API with FastAPI including CRUD operations, validation, and OpenAPI documentation"
-        - "Create a data processing pipeline with error handling, retry logic, and monitoring"
+      description: "Detailed description of your code-related request. The enhanced agent can handle:\n1. Code Generation:\n\
+        \   - Functions, classes, and modules\n   - API endpoints and services\n   - Database models and schemas\n   - Configuration\
+        \ and setup scripts\n\n2. Architecture Patterns:\n   - Design patterns (Factory, Observer, Strategy, etc.)\n   - Microservice\
+        \ components\n   - Event-driven architectures\n   - Plugin systems\n\n3. Advanced Features:\n   - Error handling and\
+        \ logging\n   - Testing and validation\n   - Performance optimization\n   - Security implementations\n\nExamples:\
+        \ - \"Create a microservice for user authentication with JWT tokens, rate limiting, and audit logging\" - \"Implement\
+        \ a plugin system using the Factory pattern with dynamic loading capabilities\" - \"Generate a REST API with FastAPI\
+        \ including CRUD operations, validation, and OpenAPI documentation\" - \"Create a data processing pipeline with error\
+        \ handling, retry logic, and monitoring\"\n"
       required: true
       min_length: 10
       max_length: 5000
-    
     language:
       class: nanobrain.core.data_unit.DataUnitString
-      description: "Programming language to use"
+      description: Programming language to use
       required: false
-      default: "Python"
-      enum: ["Python", "JavaScript", "TypeScript", "Java", "Go", "Rust", "C++", "C#"]
-    
+      default: Python
+      enum:
+      - Python
+      - JavaScript
+      - TypeScript
+      - Java
+      - Go
+      - Rust
+      - C++
+      - C#
     context:
       class: nanobrain.core.data_unit.DataUnitString
-      description: "Additional context, existing code, or architectural constraints"
+      description: Additional context, existing code, or architectural constraints
       required: false
       max_length: 10000
-    
     complexity_level:
       class: nanobrain.core.data_unit.DataUnitString
-      description: "Complexity level of the generated code"
+      description: Complexity level of the generated code
       required: false
-      default: "intermediate"
-      enum: ["simple", "intermediate", "advanced", "expert"]
-    
+      default: intermediate
+      enum:
+      - simple
+      - intermediate
+      - advanced
+      - expert
     include_tests:
-      type: "boolean"
-      description: "Whether to include unit tests with the generated code"
+      type: boolean
+      description: Whether to include unit tests with the generated code
       required: false
       default: false
-    
     include_docs:
-      type: "boolean"
-      description: "Whether to include comprehensive documentation"
+      type: boolean
+      description: Whether to include comprehensive documentation
       required: false
       default: true
-    
     architecture_pattern:
       class: nanobrain.core.data_unit.DataUnitString
-      description: "Specific architecture pattern to implement"
+      description: Specific architecture pattern to implement
       required: false
-      enum: ["MVC", "MVP", "MVVM", "Clean Architecture", "Hexagonal", "Microservices", "Event-Driven"]
-
-# Parameter schemas for different operations
+      enum:
+      - MVC
+      - MVP
+      - MVVM
+      - Clean Architecture
+      - Hexagonal
+      - Microservices
+      - Event-Driven
 parameters:
   generate_function:
-    description: "Parameters for generating a function"
+    description: Parameters for generating a function
     fields:
       function_name:
         class: nanobrain.core.data_unit.DataUnitString
-        description: "Name of the function to generate"
+        description: Name of the function to generate
         required: true
-        pattern: "^[a-zA-Z_][a-zA-Z0-9_]*$"
+        pattern: ^[a-zA-Z_][a-zA-Z0-9_]*$
       parameters:
-        type: "list"
-        description: "Function parameters with types"
+        type: list
+        description: Function parameters with types
         required: false
       return_type:
         class: nanobrain.core.data_unit.DataUnitString
-        description: "Return type of the function"
+        description: Return type of the function
         required: false
       async_function:
-        type: "boolean"
-        description: "Whether to generate an async function"
+        type: boolean
+        description: Whether to generate an async function
         required: false
         default: false
-  
   generate_class:
-    description: "Parameters for generating a class"
+    description: Parameters for generating a class
     fields:
       class_name:
         class: nanobrain.core.data_unit.DataUnitString
-        description: "Name of the class to generate"
+        description: Name of the class to generate
         required: true
-        pattern: "^[A-Z][a-zA-Z0-9_]*$"
+        pattern: ^[A-Z][a-zA-Z0-9_]*$
       base_classes:
-        type: "list"
-        description: "Base classes to inherit from"
+        type: list
+        description: Base classes to inherit from
         required: false
       methods:
-        type: "list"
-        description: "Methods to include in the class"
+        type: list
+        description: Methods to include in the class
         required: false
       properties:
-        type: "list"
-        description: "Properties to include in the class"
+        type: list
+        description: Properties to include in the class
         required: false
       design_pattern:
         class: nanobrain.core.data_unit.DataUnitString
-        description: "Design pattern to implement"
+        description: Design pattern to implement
         required: false
-        enum: ["Singleton", "Factory", "Observer", "Strategy", "Command", "Decorator"]
-  
+        enum:
+        - Singleton
+        - Factory
+        - Observer
+        - Strategy
+        - Command
+        - Decorator
   generate_api:
-    description: "Parameters for generating API code"
+    description: Parameters for generating API code
     fields:
       framework:
         class: nanobrain.core.data_unit.DataUnitString
-        description: "Web framework to use"
+        description: Web framework to use
         required: true
-        enum: ["FastAPI", "Flask", "Django", "Express", "Spring Boot", "Gin"]
+        enum:
+        - FastAPI
+        - Flask
+        - Django
+        - Express
+        - Spring Boot
+        - Gin
       endpoints:
-        type: "list"
-        description: "API endpoints to generate"
+        type: list
+        description: API endpoints to generate
         required: true
       authentication:
         class: nanobrain.core.data_unit.DataUnitString
-        description: "Authentication method"
+        description: Authentication method
         required: false
-        enum: ["JWT", "OAuth2", "API Key", "Basic Auth", "None"]
+        enum:
+        - JWT
+        - OAuth2
+        - API Key
+        - Basic Auth
+        - None
       database:
         class: nanobrain.core.data_unit.DataUnitString
-        description: "Database integration"
+        description: Database integration
         required: false
-        enum: ["PostgreSQL", "MySQL", "MongoDB", "SQLite", "Redis"]
-
-# Custom validators
+        enum:
+        - PostgreSQL
+        - MySQL
+        - MongoDB
+        - SQLite
+        - Redis
 validators:
   validate_language_context:
-    fields: ["language", "context"]
+    fields:
+    - language
+    - context
     pre: true
-    description: "Validate that context is appropriate for the selected language"
-    code: |
-      language = values.get('language', 'Python')
-      context = values.get('context', '')
-      
-      if context and language:
-          # Check for language-specific keywords in context
-          language_keywords = {
-              'Python': ['def', 'class', 'import', 'from', '__init__'],
-              'JavaScript': ['function', 'const', 'let', 'var', 'class'],
-              'TypeScript': ['interface', 'type', 'enum', 'namespace'],
-              'Java': ['public', 'private', 'class', 'interface', 'package'],
-              'Go': ['func', 'type', 'struct', 'interface', 'package'],
-              'Rust': ['fn', 'struct', 'impl', 'trait', 'mod']
-          }
-          
-          if language in language_keywords:
-              keywords = language_keywords[language]
-              # If context contains code, check if it matches the language
-              if any(keyword in context for keyword in keywords):
-                  # Context seems to match the language
-                  pass
-              elif len(context) > 100 and not any(keyword in context for keyword in keywords):
-                  # Long context without language keywords might be mismatched
-                  values['_warning'] = f"Context may not match selected language: {language}"
-      
-      return values
-  
+    description: Validate that context is appropriate for the selected language
+    code: "language = values.get('language', 'Python')\ncontext = values.get('context', '')\n\nif context and language:\n\
+      \    # Check for language-specific keywords in context\n    language_keywords = {\n        'Python': ['def', 'class',\
+      \ 'import', 'from', '__init__'],\n        'JavaScript': ['function', 'const', 'let', 'var', 'class'],\n        'TypeScript':\
+      \ ['interface', 'type', 'enum', 'namespace'],\n        'Java': ['public', 'private', 'class', 'interface', 'package'],\n\
+      \        'Go': ['func', 'type', 'struct', 'interface', 'package'],\n        'Rust': ['fn', 'struct', 'impl', 'trait',\
+      \ 'mod']\n    }\n    \n    if language in language_keywords:\n        keywords = language_keywords[language]\n     \
+      \   # If context contains code, check if it matches the language\n        if any(keyword in context for keyword in keywords):\n\
+      \            # Context seems to match the language\n            pass\n        elif len(context) > 100 and not any(keyword\
+      \ in context for keyword in keywords):\n            # Long context without language keywords might be mismatched\n \
+      \           values['_warning'] = f\"Context may not match selected language: {language}\"\n\nreturn values\n"
   validate_complexity_requirements:
-    fields: ["complexity_level", "input"]
+    fields:
+    - complexity_level
+    - input
     pre: true
-    description: "Validate that input requirements match complexity level"
-    code: |
-      complexity = values.get('complexity_level', 'intermediate')
-      input_text = values.get('input', '')
-      
-      complexity_indicators = {
-          'simple': ['function', 'basic', 'simple', 'easy'],
-          'intermediate': ['class', 'method', 'API', 'service'],
-          'advanced': ['pattern', 'architecture', 'system', 'framework'],
-          'expert': ['microservice', 'distributed', 'scalable', 'enterprise']
-      }
-      
-      if complexity in complexity_indicators:
-          indicators = complexity_indicators[complexity]
-          input_lower = input_text.lower()
-          
-          # Check if input complexity matches selected level
-          matches = sum(1 for indicator in indicators if indicator in input_lower)
-          
-          if complexity == 'simple' and matches == 0 and len(input_text) > 200:
-              values['complexity_level'] = 'intermediate'
-          elif complexity == 'expert' and matches == 0:
-              values['_suggestion'] = "Consider using 'advanced' complexity for this request"
-      
-      return values
-
-# Usage examples with different complexity levels
+    description: Validate that input requirements match complexity level
+    code: "complexity = values.get('complexity_level', 'intermediate')\ninput_text = values.get('input', '')\n\ncomplexity_indicators\
+      \ = {\n    'simple': ['function', 'basic', 'simple', 'easy'],\n    'intermediate': ['class', 'method', 'API', 'service'],\n\
+      \    'advanced': ['pattern', 'architecture', 'system', 'framework'],\n    'expert': ['microservice', 'distributed',\
+      \ 'scalable', 'enterprise']\n}\n\nif complexity in complexity_indicators:\n    indicators = complexity_indicators[complexity]\n\
+      \    input_lower = input_text.lower()\n    \n    # Check if input complexity matches selected level\n    matches = sum(1\
+      \ for indicator in indicators if indicator in input_lower)\n    \n    if complexity == 'simple' and matches == 0 and\
+      \ len(input_text) > 200:\n        values['complexity_level'] = 'intermediate'\n    elif complexity == 'expert' and matches\
+      \ == 0:\n        values['_suggestion'] = \"Consider using 'advanced' complexity for this request\"\n\nreturn values\n"
 examples:
   simple_function:
-    description: "Generate a simple utility function"
-    input: "Write a function that calculates the factorial of a number"
+    description: Generate a simple utility function
+    input: Write a function that calculates the factorial of a number
     config:
-      language: "Python"
-      complexity_level: "simple"
+      language: Python
+      complexity_level: simple
       include_tests: true
-    
   intermediate_class:
-    description: "Create a data processing class"
-    input: "Create a DataProcessor class that can load CSV files, clean data, and export results"
+    description: Create a data processing class
+    input: Create a DataProcessor class that can load CSV files, clean data, and export results
     config:
-      language: "Python"
-      complexity_level: "intermediate"
+      language: Python
+      complexity_level: intermediate
       include_tests: true
       include_docs: true
-    
   advanced_api:
-    description: "Generate a REST API with authentication"
-    input: "Create a REST API for a blog application with user authentication, CRUD operations for posts, and comment management"
+    description: Generate a REST API with authentication
+    input: Create a REST API for a blog application with user authentication, CRUD operations for posts, and comment management
     config:
-      language: "Python"
-      complexity_level: "advanced"
-      architecture_pattern: "Clean Architecture"
+      language: Python
+      complexity_level: advanced
+      architecture_pattern: Clean Architecture
       include_tests: true
-    
   expert_microservice:
-    description: "Design a microservice architecture"
-    input: "Design a microservice for order processing with event sourcing, CQRS pattern, and distributed transaction handling"
+    description: Design a microservice architecture
+    input: Design a microservice for order processing with event sourcing, CQRS pattern, and distributed transaction handling
     config:
-      language: "Python"
-      complexity_level: "expert"
-      architecture_pattern: "Event-Driven"
+      language: Python
+      complexity_level: expert
+      architecture_pattern: Event-Driven
       include_tests: true
       include_docs: true
-    
   javascript_frontend:
-    description: "Generate JavaScript frontend code"
-    input: "Create a React component for a user dashboard with real-time data updates and responsive design"
+    description: Generate JavaScript frontend code
+    input: Create a React component for a user dashboard with real-time data updates and responsive design
     config:
-      language: "JavaScript"
-      complexity_level: "advanced"
-      context: "Using React, Redux, and WebSocket for real-time updates"
-    
+      language: JavaScript
+      complexity_level: advanced
+      context: Using React, Redux, and WebSocket for real-time updates
   go_service:
-    description: "Generate Go service code"
-    input: "Create a high-performance HTTP service for file uploads with progress tracking and virus scanning"
+    description: Generate Go service code
+    input: Create a high-performance HTTP service for file uploads with progress tracking and virus scanning
     config:
-      language: "Go"
-      complexity_level: "advanced"
-      include_tests: true 
+      language: Go
+      complexity_level: advanced
+      include_tests: true

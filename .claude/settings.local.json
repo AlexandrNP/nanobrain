@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:github.com)",
+      "WebSearch",
+      "Bash(python -m pytest:*)",
+      "Bash(python -c:*)",
+      "Bash(python:*)",
+      "Bash(PYTHONPATH=/lus/flare/projects/FoundEpidem/onarykov/nanobrain:$PYTHONPATH python:*)",
+      "Bash(curl:*)",
+      "Bash(perl:*)",
+      "Bash(mmseqs version:*)",
+      "Bash(mafft:*)",
+      "Bash(psiblast -version:*)",
+      "Bash(module avail:*)",
+      "Bash(conda --version:*)",
+      "Bash(git clone:*)",
+      "Bash(cat:*)",
+      "WebFetch(domain:dev.to)",
+      "Bash(conda env create:*)",
+      "Bash(bash -c:*)",
+      "Bash(conda info:*)",
+      "Bash(/home/onarykov/.conda/envs/test-perl-wrapper/bin/perl:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

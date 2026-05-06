@@ -1,50 +1,54 @@
-name: "StepCoder"
-description: "Tool for generating software code based on natural language instructions"
-class: "CodeWriterAgent"  # Use CodeWriterAgent for specialized code generation
-
-# MANDATORY: Agent card section for A2A protocol compliance
+name: StepCoder
+description: Tool for generating software code based on natural language instructions
+class: CodeWriterAgent
 agent_card:
-  version: "1.0.0"
-  purpose: "Specialized code generation agent for software development tasks"
-  detailed_description: "StepCoder is a specialized agent designed for generating high-quality software code from natural language descriptions. It integrates file writing capabilities to save generated code directly to files."
-  domain: "software_development"
-  expertise_level: "advanced"
-  
+  version: 1.0.0
+  purpose: Specialized code generation agent for software development tasks
+  detailed_description: StepCoder is a specialized agent designed for generating high-quality software code from natural language
+    descriptions. It integrates file writing capabilities to save generated code directly to files.
+  domain: software_development
+  expertise_level: advanced
   input_format:
-    primary_mode: "json"
-    supported_modes: ["json", "text"]
-    content_types: ["application/json", "text/plain"]
+    primary_mode: json
+    supported_modes:
+    - json
+    - text
+    content_types:
+    - application/json
+    - text/plain
     format_schema:
       class: nanobrain.core.data_unit.DataUnit
       required_fields:
         input:
           class: nanobrain.core.data_unit.DataUnitString
-          description: "Natural language description of code to generate"
+          description: Natural language description of code to generate
       optional_fields:
         language:
           class: nanobrain.core.data_unit.DataUnitString
-          description: "Programming language (defaults to Python)"
+          description: Programming language (defaults to Python)
         context:
           class: nanobrain.core.data_unit.DataUnitString
-          description: "Additional context or existing code snippets"
-  
+          description: Additional context or existing code snippets
   output_format:
-    primary_mode: "json"
-    supported_modes: ["json", "text"]
-    content_types: ["application/json", "text/plain"]
+    primary_mode: json
+    supported_modes:
+    - json
+    - text
+    content_types:
+    - application/json
+    - text/plain
     format_schema:
       class: nanobrain.core.data_unit.DataUnit
       guaranteed_fields:
         generated_code:
           class: nanobrain.core.data_unit.DataUnitString
-          description: "Generated code content"
+          description: Generated code content
         file_path:
           class: nanobrain.core.data_unit.DataUnitString
-          description: "Path where code was saved"
+          description: Path where code was saved
         file_confirmation:
           class: nanobrain.core.data_unit.DataUnitString
-          description: "Confirmation of successful file creation"
-  
+          description: Confirmation of successful file creation
   capabilities:
     streaming: false
     push_notifications: false
@@ -54,208 +58,239 @@ agent_card:
     tool_usage: true
     delegation: false
     collaboration: false
-  
   skills:
-    - id: "code_generation"
-      name: "Code Generation from Natural Language"
-      description: "Generate clean, well-documented code from natural language descriptions"
-      complexity: "advanced"
-      input_modes: ["text", "json"]
-      output_modes: ["text", "json"]
-      examples:
-        - "Generate Python functions with type hints and docstrings"
-        - "Create classes with methods and proper inheritance"
-        - "Generate NanoBrain framework components (Steps, Agents, Tools)"
-    
-    - id: "file_operations"
-      name: "Automated File Creation"
-      description: "Save generated code directly to specified file paths using integrated tools"
-      complexity: "intermediate"
-      input_modes: ["json"]
-      output_modes: ["json"]
-      examples:
-        - "Save Python modules to specific directories"
-        - "Create configuration files in YAML/JSON format"
-        - "Generate executable scripts with proper permissions"
-  
+  - id: code_generation
+    name: Code Generation from Natural Language
+    description: Generate clean, well-documented code from natural language descriptions
+    complexity: advanced
+    input_modes:
+    - text
+    - json
+    output_modes:
+    - text
+    - json
+    examples:
+    - Generate Python functions with type hints and docstrings
+    - Create classes with methods and proper inheritance
+    - Generate NanoBrain framework components (Steps, Agents, Tools)
+  - id: file_operations
+    name: Automated File Creation
+    description: Save generated code directly to specified file paths using integrated tools
+    complexity: intermediate
+    input_modes:
+    - json
+    output_modes:
+    - json
+    examples:
+    - Save Python modules to specific directories
+    - Create configuration files in YAML/JSON format
+    - Generate executable scripts with proper permissions
   performance:
-    typical_response_time: "3-15 seconds"
-    max_response_time: "120 seconds"
-    memory_usage: "100-300 MB"
-    cpu_requirements: "Medium"
+    typical_response_time: 3-15 seconds
+    max_response_time: 120 seconds
+    memory_usage: 100-300 MB
+    cpu_requirements: Medium
     concurrency_support: true
     max_concurrent_sessions: 5
-    rate_limit: "30 requests/minute"
-    scaling_characteristics: "CPU-bound for complex code generation tasks"
-  
+    rate_limit: 30 requests/minute
+    scaling_characteristics: CPU-bound for complex code generation tasks
   usage_examples:
-    - name: "Python Function Generation"
-      description: "Generate a utility function with type hints and documentation"
-      input_example:
-        input: "Create a function that validates email addresses using regex"
-        language: "python"
-      expected_output:
-        generated_code: "def validate_email(email: str) -> bool:\n    \"\"\"Validate email address using regex...\"\"\""
-        file_path: "utils/validators.py"
-        file_confirmation: "Successfully created Python file at utils/validators.py"
-    
-    - name: "NanoBrain Step Component"
-      description: "Generate a custom Step class for the NanoBrain framework"
-      input_example:
-        input: "Create a DataProcessingStep that filters and transforms CSV data"
-        context: "NanoBrain framework component"
-      expected_output:
-        generated_code: "class DataProcessingStep(Step):\n    \"\"\"Step for processing CSV data...\"\"\""
-        file_path: "steps/data_processing_step.py"
-        file_confirmation: "Successfully created NanoBrain Step at steps/data_processing_step.py"
-
+  - name: Python Function Generation
+    description: Generate a utility function with type hints and documentation
+    input_example:
+      input: Create a function that validates email addresses using regex
+      language: python
+    expected_output:
+      generated_code: "def validate_email(email: str) -> bool:\n    \"\"\"Validate email address using regex...\"\"\""
+      file_path: utils/validators.py
+      file_confirmation: Successfully created Python file at utils/validators.py
+  - name: NanoBrain Step Component
+    description: Generate a custom Step class for the NanoBrain framework
+    input_example:
+      input: Create a DataProcessingStep that filters and transforms CSV data
+      context: NanoBrain framework component
+    expected_output:
+      generated_code: "class DataProcessingStep(Step):\n    \"\"\"Step for processing CSV data...\"\"\""
+      file_path: steps/data_processing_step.py
+      file_confirmation: Successfully created NanoBrain Step at steps/data_processing_step.py
 defaults:
-  model: "gpt-4-turbo"
+  model: gpt-4-turbo
   temperature: 0.2
   max_tokens: 4000
-
 metadata:
-  biological_analogy: "Language generation areas of the brain"
-  justification: >
-    Like how language areas generate coherent sentences based on concepts,
-    this tool generates coherent code based on requirements.
-  objectives:
-    - Process natural language requests for code generation
-    - Generate clean, well-documented code from descriptions
-    - Create specialized code structures like classes and functions
-    - Refactor existing code based on natural language instructions
+  biological_analogy: Language generation areas of the brain
+  justification: 'Like how language areas generate coherent sentences based on concepts, this tool generates coherent code
+    based on requirements.
 
+    '
+  objectives:
+  - Process natural language requests for code generation
+  - Generate clean, well-documented code from descriptions
+  - Create specialized code structures like classes and functions
+  - Refactor existing code based on natural language instructions
 config:
-  name: "StepCoder"
-  description: "Specialized agent for generating software code"
-  model: "gpt-4-turbo"
+  name: StepCoder
+  description: Specialized agent for generating software code
+  model: gpt-4-turbo
   temperature: 0.2
   max_tokens: 4000
-  tools_config_path: "tools.yml"
-  system_prompt: |
-    You are a specialized code generation agent for the NanoBrain framework.
+  tools_config_path: tools.yml
+  system_prompt: 'You are a specialized code generation agent for the NanoBrain framework.
+
 
     CRITICAL: You MUST use the file_writer tool to save all generated code to files. Never just return code as text.
 
+
     Your responsibilities:
+
     1. Generate simple, clean code based on natural language descriptions
+
     2. ALWAYS save the generated code to the specified file path using the file_writer tool
+
     3. Create minimal, functional code without excessive documentation
+
     4. Generate configuration files, scripts, and Python code as requested
 
+
     When generating code:
+
     - Keep code simple and minimal
+
     - Use the file_writer tool to save every piece of code
+
     - For Python: include basic docstrings only
+
     - For config files: create working YAML/JSON configurations
+
     - For scripts: create executable bash/python scripts
 
+
     HOW TO USE THE FILE_WRITER TOOL:
+
     When you need to save code to a file, call the file_writer tool with input that includes BOTH the file path AND the content:
+
 
     Format: "Create a [file type] at [file_path] with content: [actual_code_content]"
 
+
     Examples:
+
     - "Create a Python file at output/utils.py with content: def add(a, b): return a + b"
+
     - "Create a config file at config/app.yml with content: database: sqlite:///app.db"
-    - "Create a script at scripts/backup.sh with content: #!/bin/bash\necho 'Backup complete'"
+
+    - "Create a script at scripts/backup.sh with content: #!/bin/bash\necho ''Backup complete''"
+
 
     ALWAYS follow this pattern:
+
     1. Generate the requested code
+
     2. Use file_writer tool with the format above (file path + content)
+
     3. Confirm the file was saved
+
 
     NEVER just pass code content alone - ALWAYS include the file path in your tool call.
 
-  # Prompt templates for different code generation methods
+    '
   prompt_templates:
-    enhanced_input: |
-      Code Generation Request: {input_text}
+    enhanced_input: 'Code Generation Request: {input_text}
+
 
       Available tools: {available_tools}
 
+
       IMPORTANT: You MUST use the file_writer tool to save the generated code to a file. Do not just return code as text.
-      
+
+
       Steps:
+
       1. Generate the requested code (keep it simple and minimal)
+
       2. Use file_writer tool to save it to the specified file path
+
       3. Confirm the file was saved successfully
 
-    python_function: |
-      Generate a Python function with the following specifications:
+      '
+    python_function: 'Generate a Python function with the following specifications:
+
       - Function name: {function_name}
+
       - Description: {description}
+
       - Parameters: {parameters}
+
       - Return type: {return_type}
 
+
       Include:
+
       - Comprehensive docstring with Args and Returns sections
+
       - Type hints
+
       - Error handling where appropriate
+
       - Example usage in the docstring
 
-    python_class: |
-      Generate a Python class with the following specifications:
+      '
+    python_class: 'Generate a Python class with the following specifications:
+
       - Class name: {class_name}{base_classes}
+
       - Description: {description}
+
 
       Methods to implement:
+
       {methods}
 
+
       Include:
+
       - Comprehensive class docstring
+
       - Type hints for all methods
+
       - Proper __init__ method
+
       - Error handling where appropriate
+
       - Follow best practices for class design
 
-    nanobrain_step: |
-      Generate a NanoBrain Step class with the following specifications:
-      - Class name: {step_name}
-      - Description: {description}
-      - Input types: {input_types}
-      - Output types: {output_types}
+      '
+    nanobrain_step: "Generate a NanoBrain Step class with the following specifications:\n- Class name: {step_name}\n- Description:\
+      \ {description}\n- Input types: {input_types}\n- Output types: {output_types}\n\nThe class should:\n- Inherit from the\
+      \ Step base class\n- Implement the process method\n- Include proper configuration handling\n- Follow NanoBrain framework\
+      \ patterns\n- Include comprehensive docstrings\n- Handle errors gracefully\n\nExample structure:\n```python\nfrom nanobrain.src.core.step\
+      \ import Step, StepConfig\n\nclass {step_name}(Step):\n    \\\"\\\"\\\"\n    {description}\n    \\\"\\\"\\\"\n    \n\
+      \    async def process(self, inputs: Dict[str, Any]) -> Dict[str, Any]:\n        # Implementation here\n        pass\n\
+      ```\n"
+    write_code_to_file: 'Please use the {tool_name} tool to save the following code to {file_path}:
 
-      The class should:
-      - Inherit from the Step base class
-      - Implement the process method
-      - Include proper configuration handling
-      - Follow NanoBrain framework patterns
-      - Include comprehensive docstrings
-      - Handle errors gracefully
-
-      Example structure:
-      ```python
-      from nanobrain.src.core.step import Step, StepConfig
-
-      class {step_name}(Step):
-          \"\"\"
-          {description}
-          \"\"\"
-          
-          async def process(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
-              # Implementation here
-              pass
-      ```
-
-    write_code_to_file: |
-      Please use the {tool_name} tool to save the following code to {file_path}:
 
       {description}
 
+
       Code:
+
       ```python
+
       {code}
+
       ```
+
 
       File path: {file_path}
 
+      '
 validation:
   required:
-    - model
+  - model
   optional:
-    - temperature
-    - max_tokens
+  - temperature
+  - max_tokens
   constraints:
     temperature:
       min: 0.0
@@ -265,59 +300,51 @@ validation:
       min: 100
       max: 16000
       type: int
-
 input_schema:
   class: nanobrain.core.data_unit.DataUnit
   properties:
     input:
       class: nanobrain.core.data_unit.DataUnitString
-      description: >
-        Detailed description of your code-related request. The input will be processed by a specialized agent that can:
-        
-        1. Generate code from descriptions
-        2. Create classes with methods
-        3. Write functions with appropriate signatures
-        4. Refactor existing code
-        
-        Examples:
-        - "Write a Python function that implements the binary search algorithm"
-        - "Create a User class with methods for authentication and profile management"
-        - "Refactor this code to use more efficient data structures: [CODE]"
-        - "Generate a script that processes CSV files and outputs summary statistics"
-        - "Create a RESTful API endpoint for user registration using Flask"
+      description: 'Detailed description of your code-related request. The input will be processed by a specialized agent
+        that can:
+
+        1. Generate code from descriptions 2. Create classes with methods 3. Write functions with appropriate signatures 4.
+        Refactor existing code
+
+        Examples: - "Write a Python function that implements the binary search algorithm" - "Create a User class with methods
+        for authentication and profile management" - "Refactor this code to use more efficient data structures: [CODE]" -
+        "Generate a script that processes CSV files and outputs summary statistics" - "Create a RESTful API endpoint for user
+        registration using Flask"
+
+        '
       required: true
     language:
       class: nanobrain.core.data_unit.DataUnitString
-      description: "Programming language to use (e.g., Python, JavaScript, TypeScript, Java, Go, etc.). Default is 'Python'"
+      description: Programming language to use (e.g., Python, JavaScript, TypeScript, Java, Go, etc.). Default is 'Python'
       required: false
-      default: "Python"
+      default: Python
     context:
       class: nanobrain.core.data_unit.DataUnitString
-      description: "Additional context or code snippets that provide background information"
+      description: Additional context or code snippets that provide background information
       required: false
-
 examples:
   generate_function:
-    description: "Generate a Python function"
-    input: "Write a function that takes a list of integers and returns the sum of all even numbers"
-    
+    description: Generate a Python function
+    input: Write a function that takes a list of integers and returns the sum of all even numbers
   create_class:
-    description: "Create a class with methods"
-    input: "Create a DataProcessor class that can load, transform, and save data from multiple sources"
-    
+    description: Create a class with methods
+    input: Create a DataProcessor class that can load, transform, and save data from multiple sources
   javascript_code:
-    description: "Generate JavaScript code"
-    input: "Write code to fetch data from an API and display it in a table"
+    description: Generate JavaScript code
+    input: Write code to fetch data from an API and display it in a table
     config:
-      language: "JavaScript"
-      
+      language: JavaScript
   refactor_code:
-    description: "Refactor existing code"
-    input: "Refactor this code to use list comprehensions instead of for loops: for i in range(10): result.append(i*2)"
-    
+    description: Refactor existing code
+    input: 'Refactor this code to use list comprehensions instead of for loops: for i in range(10): result.append(i*2)'
   complex_with_context:
-    description: "Generate code with additional context"
-    input: "Create a data model for a blog application"
+    description: Generate code with additional context
+    input: Create a data model for a blog application
     config:
-      language: "Python"
-      context: "The application uses SQLAlchemy ORM and needs models for User, Post, and Comment with appropriate relationships." 
+      language: Python
+      context: The application uses SQLAlchemy ORM and needs models for User, Post, and Comment with appropriate relationships.

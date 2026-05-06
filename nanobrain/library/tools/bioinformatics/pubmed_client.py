@@ -615,25 +615,54 @@ class PubMedClient(ExternalTool):
             self.logger.info(f"📚 Using cached literature for {protein_type}")
             return self.search_cache[cache_key]
         
-        self.logger.info(f"🔍 Searching PubMed for Alphavirus {protein_type} literature")
-        
-        try:
-            # Phase 4A implementation: Return placeholder for infrastructure testing
-            # TODO: Implement actual PubMed API calls in Phase 4B
-            placeholder_references = []
-            
-            # For infrastructure testing, return empty list
-            if self.pubmed_config.cache_results:
-                self.search_cache[cache_key] = placeholder_references
-            
-            return placeholder_references
-            
-        except Exception as e:
-            if self.fail_fast:
-                raise PubMedError(f"PubMed search failed for {protein_type}: {e}")
-            else:
-                self.logger.warning(f"⚠️ PubMed search failed for {protein_type}: {e}")
+        self.logger.info(f"Searching PubMed for Alphavirus {protein_type} literature")
+
+        import xml.etree.ElementTree as ET
+
+        import httpx
+
+        base_url = self.pubmed_config.base_url
+        max_results = min(getattr(self.pubmed_config, "max_results", 20), 20)
+
+        common_params: dict = {
+            "db": "pubmed",
+            "tool": "nanobrain-apecx",
+            "email": self.email or "research@nanobrain.org",
+        }
+        if self.api_key:
+            common_params["api_key"] = self.api_key
+
+        query = f"Alphavirus[Organism] {protein_type}[Title/Abstract]"
+
+        async with httpx.AsyncClient(timeout=30) as http:
+            # Step 1: esearch — resolve query → PMIDs
+            await self._enforce_rate_limit()
+            search_resp = await http.get(
+                f"{base_url}/esearch.fcgi",
+                params={**common_params, "term": query, "retmax": max_results, "retmode": "json"},
+            )
+            search_resp.raise_for_status()
+            pmids: List[str] = search_resp.json().get("esearchresult", {}).get("idlist", [])
+
+            if not pmids:
+                self.logger.info("esearch returned 0 PMIDs for query %r", query)
                 return []
+
+            # Step 2: efetch — retrieve article XML (title, authors, year, abstract)
+            await self._enforce_rate_limit()
+            fetch_resp = await http.get(
+                f"{base_url}/efetch.fcgi",
+                params={**common_params, "id": ",".join(pmids), "rettype": "xml", "retmode": "xml"},
+            )
+            fetch_resp.raise_for_status()
+
+        results = _parse_pubmed_xml(fetch_resp.text)
+        self.logger.info("PubMed returned %d references for protein_type=%r", len(results), protein_type)
+
+        if self.pubmed_config.cache_results:
+            self.search_cache[cache_key] = results
+
+        return results
     
     async def _enforce_rate_limit(self):
         """Enforce NCBI rate limiting"""
@@ -754,3 +783,73 @@ class PubMedClient(ExternalTool):
         
         # Phase 4A: Return placeholder results
         return await self.search_alphavirus_literature(protein_type) 
+
+# ---------------------------------------------------------------------------
+# Module-level XML parser — no external dependencies (uses stdlib ElementTree)
+# ---------------------------------------------------------------------------
+
+def _parse_pubmed_xml(xml_text: str) -> List[LiteratureReference]:
+    """Parse PubMed efetch XML into LiteratureReference objects.
+
+    Extracts title, authors, journal, year, abstract, and PMID.
+    Full text is never fetched; abstract is the deepest retrieval.
+    """
+    import xml.etree.ElementTree as ET
+
+    try:
+        root = ET.fromstring(xml_text)
+    except ET.ParseError:
+        return []
+
+    results = []
+    for article_node in root.findall(".//PubmedArticle"):
+        citation = article_node.find("MedlineCitation")
+        if citation is None:
+            continue
+
+        pmid_node = citation.find("PMID")
+        pmid = pmid_node.text.strip() if pmid_node is not None and pmid_node.text else ""
+
+        article = citation.find("Article")
+        if article is None:
+            continue
+
+        title_node = article.find("ArticleTitle")
+        title = (title_node.text or "").strip() if title_node is not None else ""
+
+        authors: List[str] = []
+        for author in article.findall(".//Author"):
+            last = (author.findtext("LastName") or "").strip()
+            fore = (author.findtext("ForeName") or "").strip()
+            if last:
+                authors.append(f"{last} {fore}".strip() if fore else last)
+
+        journal_node = article.find(".//Journal/Title")
+        journal = (journal_node.text or "").strip() if journal_node is not None else ""
+
+        year_node = article.find(".//PubDate/Year")
+        if year_node is None:
+            year_node = article.find(".//PubDate/MedlineDate")
+        year = (year_node.text or "")[:4].strip() if year_node is not None else ""
+
+        abstract_parts = [
+            (node.text or "") for node in article.findall(".//AbstractText")
+        ]
+        abstract = " ".join(p.strip() for p in abstract_parts if p.strip()) or None
+
+        url = f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/" if pmid else ""
+
+        results.append(
+            LiteratureReference(
+                pmid=pmid,
+                title=title,
+                authors=authors,
+                journal=journal,
+                year=year,
+                relevance_score=1.0,
+                url=url,
+                abstract=abstract,
+            )
+        )
+
+    return results
