@@ -20,6 +20,31 @@ from queue import Queue, Empty
 from threading import Thread
 import uuid
 
+import tempfile
+
+
+def _default_writable_log_dir() -> Path:
+    """Return a writable default log directory.
+
+    Resolution order:
+      1. ``NANOBRAIN_LOG_DIR`` env var, if set (operator override).
+      2. ``~/.cache/nanobrain/logs/`` (XDG-style cache; writable on
+         every POSIX user account).
+      3. ``tempfile.gettempdir() / "nanobrain-logs"`` (last-resort
+         fallback for environments without a writable home).
+
+    Replaces the legacy ``Path("logs")`` default which was cwd-relative
+    and broke when nanobrain was launched from a process whose cwd was
+    read-only (e.g., Claude Desktop on macOS launches with cwd=``/``).
+    """
+    raw = os.environ.get("NANOBRAIN_LOG_DIR")
+    if raw:
+        return Path(raw).expanduser()
+    home = Path.home()
+    if home.exists():
+        return home / ".cache" / "nanobrain" / "logs"
+    return Path(tempfile.gettempdir()) / "nanobrain-logs"
+
 
 @dataclass
 class LogMessage:
@@ -91,7 +116,7 @@ class ProcessSafeLogger:
         self.log_queue = Queue()
         self.background_thread = None
         self.should_stop = threading.Event()
-        
+
         # Set up log directory
         if log_directory is None:
             try:
@@ -99,8 +124,16 @@ class ProcessSafeLogger:
                 system_manager = get_system_log_manager()
                 self.log_directory = system_manager.session_dir
             except ImportError:
-                # Fallback to default directory
-                self.log_directory = Path("logs") / f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                # Fallback to a WRITABLE default. The legacy
+                # ``Path("logs")`` was cwd-relative and broke when
+                # nanobrain was launched from a process whose cwd was
+                # read-only (e.g., Claude Desktop on macOS launches
+                # with cwd=``/``, producing
+                # ``[Errno 30] Read-only file system: 'logs'``).
+                self.log_directory = (
+                    _default_writable_log_dir()
+                    / f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                )
                 self.log_directory.mkdir(parents=True, exist_ok=True)
         else:
             self.log_directory = log_directory

@@ -7,6 +7,8 @@ Provides comprehensive logging, tracing, and monitoring capabilities.
 import asyncio
 import json
 import logging
+import os
+import tempfile
 import time
 import uuid
 import functools
@@ -18,6 +20,30 @@ from pathlib import Path
 from dataclasses import dataclass, asdict
 from enum import Enum
 import sys
+
+
+def _default_writable_log_dir() -> Path:
+    """Return a writable default log directory.
+
+    Resolution order:
+      1. ``NANOBRAIN_LOG_DIR`` env var, if set (operator override).
+      2. ``~/.cache/nanobrain/logs/`` (XDG-style cache; writable on
+         every POSIX user account).
+      3. ``tempfile.gettempdir() / "nanobrain-logs"`` (last-resort
+         fallback for environments without a writable home).
+
+    Replaces the legacy ``"logs"`` cwd-relative default which broke
+    when nanobrain was launched from a process whose cwd was read-only
+    (e.g., Claude Desktop on macOS launches with cwd=``/``, producing
+    ``[Errno 30] Read-only file system: 'logs'``).
+    """
+    raw = os.environ.get("NANOBRAIN_LOG_DIR")
+    if raw:
+        return Path(raw).expanduser()
+    home = Path.home()
+    if home.exists():
+        return home / ".cache" / "nanobrain" / "logs"
+    return Path(tempfile.gettempdir()) / "nanobrain-logs"
 
 # Configure structured logging conditionally based on global configuration
 def _configure_global_logging():
@@ -1048,7 +1074,12 @@ class SystemLogManager:
             
             file_config = self.logging_config.get('file', {})
             if base_log_dir is None:
-                base_log_dir = file_config.get('base_directory', 'logs')
+                # Use a writable default; the legacy ``'logs'`` literal
+                # was cwd-relative and crashed in read-only-cwd contexts
+                # (Claude Desktop on macOS).
+                base_log_dir = file_config.get(
+                    'base_directory', str(_default_writable_log_dir())
+                )
             
             # Check if we should use semantic directories instead of timestamped sessions
             self.use_session_directories = file_config.get('use_session_directories', True)
@@ -1069,7 +1100,8 @@ class SystemLogManager:
             self.should_log_to_file = True
             self.should_log_to_console = True
             if base_log_dir is None:
-                base_log_dir = "logs"
+                # Writable default (was cwd-relative ``"logs"``).
+                base_log_dir = str(_default_writable_log_dir())
             self.use_session_directories = True
             self.use_semantic_directories = True
             self.semantic_structure = {
