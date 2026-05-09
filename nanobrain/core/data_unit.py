@@ -49,6 +49,43 @@ class DataUnitConfig(ConfigBase):
     encoding: str = "utf-8"
     initial_value: Optional[str] = None
 
+    # G3 — DataUnitProxyRef configuration (all optional; only meaningful for
+    # DataUnitProxyRef class). See `nanobrain_capability_gaps.md G3`.
+    proxystore_connector: Optional[str] = Field(
+        default=None,
+        description="ProxyStore connector kind: 'file' | 'redis' | 'globus' | 'endpoint'. "
+                    "Required when class is DataUnitProxyRef; ignored otherwise."
+    )
+    proxystore_store_name: Optional[str] = Field(
+        default=None,
+        description="ProxyStore store name (used as the registration key)."
+    )
+    proxystore_store_dir: Optional[str] = Field(
+        default=None,
+        description="Filesystem directory for the file connector. Required when "
+                    "proxystore_connector='file'."
+    )
+    proxystore_redis_addr: Optional[str] = Field(
+        default=None,
+        description="Redis address (host:port) for the redis connector. Required "
+                    "when proxystore_connector='redis'."
+    )
+    proxystore_namespace_prefix: Optional[str] = Field(
+        default=None,
+        description="Optional namespace prefix prepended to every key (G13 "
+                    "multi-tenant ProxyStore namespacing). Default: no prefix."
+    )
+    proxystore_metadata_mime: Optional[str] = Field(
+        default=None,
+        description="Descriptive mime type recorded in the ref's metadata block. "
+                    "Not used for routing; descriptive only."
+    )
+    proxystore_metadata_max_size_bytes: Optional[int] = Field(
+        default=None,
+        description="Descriptive size hint in the ref's metadata block. "
+                    "Not enforced — purely informational for downstream consumers."
+    )
+
     @field_validator('class_field')
     @classmethod
     def validate_class_field(cls, v):
@@ -1892,6 +1929,328 @@ class DataUnitStream(DataUnitBase):
                     break
 
         self._metadata.clear()
+
+
+# ---------------------------------------------------------------------------
+# G3 — DataUnitProxyRef (added 2026-05-09)
+# ---------------------------------------------------------------------------
+#
+# Per `apecx-mcp-integration/docs/nanobrain_capability_gaps.md G3`: a DataUnit
+# whose payload is a ProxyStore reference rather than the bytes themselves.
+# Producers write to the ProxyStore and the data unit holds only the key.
+# Consumers can resolve the key on demand (`.get()`), pass the proxy onward
+# without materializing (`.as_proxy()`), or read the key directly (`.key()`).
+#
+# The change-event payload is the KEY, not the bytes — so
+# AllDataReceivedTrigger fires on key-set, not on bytes-materialization.
+# This is necessary for HPC-scale tool I/O where multi-GB payloads cannot
+# ride a Python dict between steps.
+#
+# Equality + hashing (G3 spec): two DataUnitProxyRef instances are equal iff
+# their (namespace, key) tuples are equal. metadata is descriptive, not
+# identity-bearing.
+#
+# proxystore is an OPTIONAL dependency: a workflow that doesn't use
+# DataUnitProxyRef does not need it installed. The ImportError is deferred
+# to first use, with a clear message.
+# ---------------------------------------------------------------------------
+
+# Lazy-import marker — populated on first use.
+_PROXYSTORE_IMPORT_ERROR: Optional[ImportError] = None
+
+
+def _import_proxystore():
+    """Lazy import of proxystore primitives. Returns the (Store, register_store,
+    get_store, FileConnector, RedisConnector) tuple. RedisConnector may be None
+    if the redis extra is not installed.
+
+    Raises ComponentConfigurationError with a clear remediation hint if
+    proxystore itself is missing.
+    """
+    global _PROXYSTORE_IMPORT_ERROR
+    try:
+        from proxystore.store import Store, register_store, get_store
+        from proxystore.connectors.file import FileConnector
+    except ImportError as e:
+        _PROXYSTORE_IMPORT_ERROR = e
+        raise ComponentConfigurationError(
+            f"FAIL-FAST: DataUnitProxyRef requires proxystore. "
+            f"Install with: pip install proxystore. "
+            f"Original ImportError: {e}"
+        ) from e
+    try:
+        from proxystore.connectors.redis import RedisConnector  # type: ignore
+    except ImportError:
+        RedisConnector = None  # type: ignore
+    return Store, register_store, get_store, FileConnector, RedisConnector
+
+
+class DataUnitProxyRef(DataUnitBase):
+    """DataUnit whose payload is a ProxyStore reference.
+
+    Guarantees per `nanobrain_capability_gaps.md G3`:
+
+    - ``set(value)`` writes to the configured ProxyStore and keeps only the
+      key. The trigger cascade fires on key-set (the change-event payload
+      is the key string, not the bytes).
+    - ``get()`` materializes lazily — one round-trip on first call;
+      subsequent calls reuse the resolved value.
+    - ``as_proxy()`` returns the proxy for fan-out without materialization.
+    - ``key()`` returns the raw key string (for provenance recording).
+    - ``namespace()`` returns the configured namespace prefix.
+    - ``__eq__`` / ``__hash__`` use the ``(namespace, key)`` tuple.
+
+    The ``proxystore_connector`` config field selects the backend:
+    ``file`` (filesystem-backed; ideal for tests + single-host runs) or
+    ``redis`` (multi-host, multi-tenant; required for HPC-scale).
+    The full connector list will grow as the framework adds support
+    (per the gap proposal: also ``globus``, ``endpoint``).
+    """
+
+    @classmethod
+    def from_config(
+        cls,
+        config: Union[str, Path, DataUnitConfig, Dict[str, Any]],
+        **kwargs,
+    ) -> 'DataUnitProxyRef':
+        """Standard from_config path mirroring DataUnitMemory."""
+        nb_logger = get_logger(f"{cls.__name__}.from_config")
+        nb_logger.info(f"Creating {cls.__name__} from configuration")
+
+        # Normalize to DataUnitConfig (same shape as DataUnitMemory).
+        if isinstance(config, (str, Path)):
+            config_object = DataUnitConfig.from_config(config, **kwargs)
+        elif isinstance(config, dict):
+            try:
+                DataUnitConfig._allow_direct_instantiation = True
+                config_object = DataUnitConfig(**config)
+            finally:
+                DataUnitConfig._allow_direct_instantiation = False
+        elif isinstance(config, DataUnitConfig):
+            config_object = config
+        else:
+            if hasattr(config, 'model_dump'):
+                config_dict = config.model_dump()
+            elif hasattr(config, 'dict'):
+                config_dict = config.dict()
+            else:
+                raise ValueError(f"Unsupported config type: {type(config)}")
+            try:
+                DataUnitConfig._allow_direct_instantiation = True
+                config_object = DataUnitConfig(**config_dict)
+            finally:
+                DataUnitConfig._allow_direct_instantiation = False
+
+        cls.validate_config_schema(config_object)
+        component_config = cls.extract_component_config(config_object)
+        dependencies = cls.resolve_dependencies(component_config, **kwargs)
+
+        instance = cls.create_instance(
+            config_object, component_config, dependencies)
+        instance._post_config_initialization()
+
+        nb_logger.info(f"Successfully created {cls.__name__}")
+        return instance
+
+    @classmethod
+    def extract_component_config(cls, config: DataUnitConfig) -> Dict[str, Any]:
+        """Pull out the proxystore-specific fields plus the standard ones."""
+        base = super().extract_component_config(config)
+        base.update({
+            "proxystore_connector": getattr(config, "proxystore_connector", None),
+            "proxystore_store_name": getattr(config, "proxystore_store_name", None),
+            "proxystore_store_dir": getattr(config, "proxystore_store_dir", None),
+            "proxystore_redis_addr": getattr(config, "proxystore_redis_addr", None),
+            "proxystore_namespace_prefix": getattr(
+                config, "proxystore_namespace_prefix", None),
+            "proxystore_metadata_mime": getattr(
+                config, "proxystore_metadata_mime", None),
+            "proxystore_metadata_max_size_bytes": getattr(
+                config, "proxystore_metadata_max_size_bytes", None),
+        })
+        return base
+
+    def _init_from_config(
+        self,
+        config: DataUnitConfig,
+        component_config: Dict[str, Any],
+        dependencies: Dict[str, Any],
+    ) -> None:
+        super()._init_from_config(config, component_config, dependencies)
+
+        connector_kind = component_config.get("proxystore_connector")
+        if not connector_kind:
+            raise ComponentConfigurationError(
+                f"FAIL-FAST: DataUnitProxyRef {self.name!r} requires "
+                f"proxystore_connector ('file' | 'redis' | 'globus' | 'endpoint')"
+            )
+
+        store_name = component_config.get("proxystore_store_name") or self.name
+        if not store_name:
+            raise ComponentConfigurationError(
+                f"FAIL-FAST: DataUnitProxyRef {self.name!r} requires "
+                f"proxystore_store_name (or a non-empty data unit name)"
+            )
+
+        # Build connector + store — lazy import keeps proxystore optional.
+        Store, register_store, get_store, FileConnector, RedisConnector = _import_proxystore()
+
+        if connector_kind == "file":
+            store_dir = component_config.get("proxystore_store_dir")
+            if not store_dir:
+                raise ComponentConfigurationError(
+                    f"FAIL-FAST: DataUnitProxyRef {self.name!r} with "
+                    f"proxystore_connector='file' requires proxystore_store_dir"
+                )
+            connector = FileConnector(store_dir)
+        elif connector_kind == "redis":
+            if RedisConnector is None:
+                raise ComponentConfigurationError(
+                    f"FAIL-FAST: DataUnitProxyRef {self.name!r} with "
+                    f"proxystore_connector='redis' requires the proxystore[redis] "
+                    f"extra. Install with: pip install 'proxystore[redis]'"
+                )
+            redis_addr = component_config.get("proxystore_redis_addr")
+            if not redis_addr or ":" not in redis_addr:
+                raise ComponentConfigurationError(
+                    f"FAIL-FAST: DataUnitProxyRef {self.name!r} with "
+                    f"proxystore_connector='redis' requires proxystore_redis_addr "
+                    f"in 'host:port' form"
+                )
+            host, port = redis_addr.rsplit(":", 1)
+            connector = RedisConnector(hostname=host, port=int(port))
+        else:
+            # globus / endpoint deferred to future tasks.
+            raise ComponentConfigurationError(
+                f"FAIL-FAST: DataUnitProxyRef {self.name!r} connector "
+                f"{connector_kind!r} not yet supported "
+                f"(supported: 'file', 'redis')"
+            )
+
+        # Idempotent registration: get_store returns the existing one if any.
+        existing = get_store(store_name)
+        if existing is None:
+            store = Store(store_name, connector)
+            register_store(store)
+        else:
+            store = existing
+        self._store = store
+        self._connector_kind = connector_kind
+
+        # Namespace prefix per G13 (multi-tenant). Captured for
+        # __eq__/__hash__ identity.
+        self._namespace_prefix = component_config.get(
+            "proxystore_namespace_prefix") or ""
+
+        # Metadata — descriptive only, not identity-bearing.
+        self._metadata_mime = component_config.get("proxystore_metadata_mime")
+        self._metadata_max_size_bytes = component_config.get(
+            "proxystore_metadata_max_size_bytes")
+
+        # Reference state — populated at first set().
+        self._key: Optional[str] = None
+        self._materialized_value: Any = None
+        self._materialized_for_key: Optional[str] = None
+
+    def key(self) -> Optional[str]:
+        """Return the raw key string (or None if no value has been set yet)."""
+        return self._key
+
+    def namespace(self) -> str:
+        """Return the namespace prefix used for key construction (G13)."""
+        return self._namespace_prefix
+
+    def as_proxy(self) -> Any:
+        """Return a Proxy<T> over the current key for fan-out.
+
+        Materialization is lazy on the proxy: attribute access materializes;
+        passing the proxy through another step does not.
+        """
+        if self._key is None:
+            raise ComponentConfigurationError(
+                f"FAIL-FAST: DataUnitProxyRef {self.name!r} has no value yet "
+                f"(set() has not been called)"
+            )
+        return self._store.proxy_from_key(self._key)
+
+    async def set(self, value: Any) -> None:
+        """Write ``value`` to the ProxyStore and keep only the key.
+
+        The change-event payload is the **key** (a typed proxystore Key
+        object — FileKey/RedisKey/etc — NOT a string), so
+        AllDataReceivedTrigger fires on key-set, before any consumer
+        materializes the bytes.
+
+        Note on namespacing (G13): the configured ``proxystore_namespace_prefix``
+        is tracked SEPARATELY from the proxystore Key (which is a typed
+        opaque value owned by proxystore). The prefix is used for equality,
+        hashing, and provenance recording — NOT for prefixing the Key
+        itself, because proxystore Keys are not strings. Multi-tenant
+        isolation at the storage layer requires either a per-tenant Store
+        name or a per-tenant FileConnector path; the framework-level
+        runtime work for that is gap G13's full implementation.
+        """
+        if not self._validate_data(value):
+            raise ValueError(f"Invalid data for {self.name}: {value!r}")
+
+        # put() returns a typed Key object (FileKey, RedisKey, etc).
+        # We DO NOT mangle it — we preserve the typed object as-is.
+        proxy_key = self._store.put(value)
+
+        self._key = proxy_key
+        self._materialized_value = value
+        self._materialized_for_key = proxy_key
+
+        # Fire the change event with the KEY as payload (G3 contract).
+        # Downstream consumers see the typed Key and can call store.get(key).
+        await self._set_internal_data(proxy_key, DataUnitEventType.SET)
+
+    async def get(self) -> Any:
+        """Resolve the key to its value. One round-trip on first call;
+        cached thereafter for the lifetime of the current key.
+        """
+        if not self.is_initialized:
+            await self.initialize()
+        if self._key is None:
+            return None  # never set; matches DataUnitMemory's pre-set semantics
+
+        # If we already materialized for this key, reuse the cached value.
+        # Equality is delegated to the proxystore Key's own __eq__.
+        if self._materialized_for_key == self._key:
+            return self._materialized_value
+
+        # Real round-trip through the store. This is the cross-process path:
+        # a downstream consumer in a different process gets the Key from
+        # the trigger payload, instantiates its OWN Store with the same
+        # connector config, and calls .get(key) — that path is exercised
+        # in tests/integration/test_proxy_ref_redis.py.
+        value = self._store.get(self._key)
+        self._materialized_value = value
+        self._materialized_for_key = self._key
+        return value
+
+    async def clear(self) -> None:
+        """Drop the local reference. Does NOT delete the underlying store
+        entry — the store's eviction policy is workflow-level (per the gap
+        proposal's ownership boundary)."""
+        self._key = None
+        self._materialized_value = None
+        self._materialized_for_key = None
+        await self._set_internal_data(None, DataUnitEventType.CLEAR)
+        async with self._lock:
+            self._metadata.clear()
+
+    # G3 spec — equality + hashing on (namespace, key). Two refs to the
+    # same key with different mime hints are still the same ref.
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, DataUnitProxyRef):
+            return NotImplemented
+        return (self._namespace_prefix, self._key) == (
+            other._namespace_prefix, other._key)
+
+    def __hash__(self) -> int:
+        return hash((self._namespace_prefix, self._key))
 
 
 class DataUnit(DataUnitBase):

@@ -12,7 +12,7 @@ import time
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional, List, Union
 from pathlib import Path
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 from .component_base import (
     FromConfigBase, ComponentConfigurationError, ComponentDependencyError,
@@ -30,6 +30,197 @@ from .config.config_base import ConfigBase
 from .agent_response import AgentResponse, AgentProcessingMetadata, ConversationContext
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# G6 — Typed step input/output schemas (added 2026-05-09)
+# ---------------------------------------------------------------------------
+#
+# Per `apecx-mcp-integration/docs/nanobrain_capability_gaps.md G6`: every
+# step's `process()` may declare an input + output schema. The framework
+# validates payloads at the wire boundary: input on the way in, output on
+# the way out. The dominant motivation is the silent-failure shape where
+# a step's return-dict key doesn't match the declared output_data_units
+# name (the framework silently drops the value); typed schemas surface
+# this at validation time as a FAIL-FAST.
+#
+# Reserved-field escape valve (per the gap proposal):
+# - `errors`: list[StepError] — always allowed alongside the typed payload
+# - `partial`: bool — always allowed; signals upstream degradation
+# These two field names are reserved across all step output schemas; the
+# framework validates them against fixed shapes and ignores them when
+# checking the user's declared schema.
+# ---------------------------------------------------------------------------
+
+# Reserved field names that ANY step output may include alongside its
+# typed payload. Validated against fixed shapes.
+RESERVED_OUTPUT_FIELDS = ("errors", "partial")
+
+
+class StepError(ConfigBase):
+    """Reserved error envelope used in the G6 escape valve. Step output may
+    include an `errors: list[StepError]` field even if not declared in the
+    output schema; the framework validates against this fixed shape."""
+    model_config = ConfigDict(extra="forbid")
+    code: str
+    detail: str
+    source: Optional[str] = None
+
+
+class SchemaRef(ConfigBase):
+    """G6 — declarative schema reference. EXACTLY ONE of `class` (Pydantic
+    model dotted path) or `json_schema` (inline JSON Schema dict) must be set.
+
+    The framework imports the Pydantic class at validation time and calls
+    `Cls.model_validate(payload)`; for JSON Schema, it uses `jsonschema`
+    (already a transitive dependency of the framework via several extras).
+
+    Cross-reference `apecx-mcp-integration/docs/nanobrain_capability_gaps.md G6`.
+    """
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    class_field: Optional[str] = Field(default=None, alias="class")
+    json_schema: Optional[Dict[str, Any]] = None
+    # When True, force materialization of DataUnitProxyRef payloads for
+    # validation (default: False — proxies validate at .get() time, not
+    # at write time). Per G6 spec.
+    validate_on_set: bool = False
+
+    @model_validator(mode="after")
+    def _validate_one_of(self) -> "SchemaRef":
+        has_class = self.class_field is not None
+        has_jsonschema = self.json_schema is not None
+        if has_class == has_jsonschema:
+            raise ValueError(
+                "FAIL-FAST: SchemaRef requires EXACTLY ONE of 'class' "
+                "(Pydantic model path) or 'json_schema' (inline schema)"
+            )
+        return self
+
+
+def validate_payload_against_schema(
+    payload: Any,
+    schema_ref: SchemaRef,
+    *,
+    component_name: str,
+    direction: str,
+) -> None:
+    """Validate ``payload`` against ``schema_ref``.
+
+    Raises ``ComponentConfigurationError("FAIL-FAST: ...")`` on mismatch.
+
+    For step OUTPUT direction: reserved fields (`errors`, `partial`) are
+    stripped from the payload before validation against the user's declared
+    schema, then validated independently against their fixed shapes.
+    For step INPUT direction: reserved fields are not recognized.
+
+    `direction` is one of "input" or "output" — used in the error message.
+    """
+    if not isinstance(payload, dict) and direction == "output":
+        # Non-dict outputs cannot carry reserved fields; validate as-is.
+        _validate_via_schema(payload, schema_ref, component_name, direction)
+        return
+
+    if direction == "output" and isinstance(payload, dict):
+        # Strip reserved fields, validate them separately, then validate
+        # the remainder against the user's schema.
+        reserved = {k: payload[k] for k in RESERVED_OUTPUT_FIELDS if k in payload}
+        non_reserved = {k: v for k, v in payload.items()
+                        if k not in RESERVED_OUTPUT_FIELDS}
+
+        if "errors" in reserved:
+            _validate_reserved_errors(
+                reserved["errors"], component_name)
+        if "partial" in reserved and not isinstance(reserved["partial"], bool):
+            raise ComponentConfigurationError(
+                f"FAIL-FAST: step {component_name!r} output reserved field "
+                f"'partial' must be bool, got {type(reserved['partial']).__name__}"
+            )
+
+        # If the only thing left is non-reserved keys, validate those.
+        # If the entire payload was reserved (errors-only or partial-only
+        # output with no typed payload), skip user-schema validation.
+        if non_reserved:
+            _validate_via_schema(non_reserved, schema_ref, component_name, direction)
+        return
+
+    # Input direction or non-dict payload — straight validation.
+    _validate_via_schema(payload, schema_ref, component_name, direction)
+
+
+def _validate_reserved_errors(value: Any, component_name: str) -> None:
+    if not isinstance(value, list):
+        raise ComponentConfigurationError(
+            f"FAIL-FAST: step {component_name!r} output reserved field "
+            f"'errors' must be a list, got {type(value).__name__}"
+        )
+    for i, item in enumerate(value):
+        try:
+            StepError._allow_direct_instantiation = True
+            try:
+                if isinstance(item, dict):
+                    StepError(**item)
+                elif not isinstance(item, StepError):
+                    raise ComponentConfigurationError(
+                        f"FAIL-FAST: step {component_name!r} output errors[{i}] "
+                        f"must be a dict or StepError, got {type(item).__name__}"
+                    )
+            finally:
+                StepError._allow_direct_instantiation = False
+        except ComponentConfigurationError:
+            raise
+        except Exception as e:
+            raise ComponentConfigurationError(
+                f"FAIL-FAST: step {component_name!r} output errors[{i}] "
+                f"failed StepError shape: {e}"
+            ) from e
+
+
+def _validate_via_schema(
+    payload: Any,
+    schema_ref: SchemaRef,
+    component_name: str,
+    direction: str,
+) -> None:
+    if schema_ref.class_field:
+        try:
+            cls = import_class_from_path(schema_ref.class_field)
+        except Exception as e:
+            raise ComponentConfigurationError(
+                f"FAIL-FAST: step {component_name!r} {direction} schema class "
+                f"{schema_ref.class_field!r} failed to import: {e}"
+            ) from e
+        if not (hasattr(cls, "model_validate") or hasattr(cls, "parse_obj")):
+            raise ComponentConfigurationError(
+                f"FAIL-FAST: step {component_name!r} {direction} schema class "
+                f"{schema_ref.class_field!r} is not a Pydantic model "
+                f"(no model_validate or parse_obj)"
+            )
+        try:
+            if hasattr(cls, "model_validate"):
+                cls.model_validate(payload)
+            else:
+                cls.parse_obj(payload)
+        except Exception as e:
+            raise ComponentConfigurationError(
+                f"FAIL-FAST: step {component_name!r} {direction} failed schema: {e}"
+            ) from e
+    elif schema_ref.json_schema is not None:
+        try:
+            import jsonschema
+        except ImportError as e:
+            raise ComponentConfigurationError(
+                f"FAIL-FAST: step {component_name!r} {direction} schema uses "
+                f"json_schema form which requires the 'jsonschema' package. "
+                f"Install with: pip install jsonschema. Original: {e}"
+            ) from e
+        try:
+            jsonschema.validate(payload, schema_ref.json_schema)
+        except jsonschema.ValidationError as e:
+            raise ComponentConfigurationError(
+                f"FAIL-FAST: step {component_name!r} {direction} failed schema: "
+                f"{e.message} at path {list(e.path)}"
+            ) from e
 
 
 class StepConfig(ConfigBase):
@@ -81,6 +272,24 @@ class StepConfig(ConfigBase):
     # ✅ UNIFIED RESOLUTION: Accept both dict configs and resolved trigger objects (workflows ARE steps)
     triggers: Optional[List[Union[Dict[str, Any], 'TriggerBase']]] = Field(
         default_factory=list)
+
+    # G6 — typed input/output schemas (additive; default None preserves
+    # historical no-validation behavior).
+    # See `apecx-mcp-integration/docs/nanobrain_capability_gaps.md G6`.
+    step_input_schema: Optional[Union[Dict[str, Any], 'SchemaRef']] = Field(
+        default=None,
+        description="G6 — declarative schema for the dict passed to process(). "
+                    "Either {class: 'pkg.mod.PydanticModel'} OR "
+                    "{json_schema: {...}}. When set, the framework validates "
+                    "the input on every process() invocation."
+    )
+    step_output_schema: Optional[Union[Dict[str, Any], 'SchemaRef']] = Field(
+        default=None,
+        description="G6 — declarative schema for the value returned from "
+                    "process(). Reserved fields 'errors' (list[StepError]) "
+                    "and 'partial' (bool) are admitted alongside the typed "
+                    "payload — see the gap proposal's escape valve."
+    )
 
 
 class AgentStepConfig(StepConfig):
@@ -1476,8 +1685,77 @@ class BaseStep(FromConfigBase, ABC):
                 raise
 
     async def _execute_process(self, input_data: Dict[str, Any], **kwargs) -> Any:
-        """Wrapper for process method to be executed by executor."""
-        return await self.process(input_data, **kwargs)
+        """Wrapper for process method to be executed by executor.
+
+        G6 — when ``step_input_schema`` and/or ``step_output_schema`` are
+        set on the StepConfig, the framework validates the dict at the
+        wire boundary on every invocation. Both default to None, in which
+        case no validation runs (preserves historical behavior).
+        """
+        input_schema = self._g6_resolved_input_schema()
+        if input_schema is not None:
+            validate_payload_against_schema(
+                input_data,
+                input_schema,
+                component_name=self.name,
+                direction="input",
+            )
+
+        result = await self.process(input_data, **kwargs)
+
+        output_schema = self._g6_resolved_output_schema()
+        if output_schema is not None:
+            validate_payload_against_schema(
+                result,
+                output_schema,
+                component_name=self.name,
+                direction="output",
+            )
+
+        return result
+
+    def _g6_resolved_input_schema(self) -> Optional["SchemaRef"]:
+        """Resolve the StepConfig.step_input_schema to a SchemaRef instance.
+        Lazy + cached so per-invocation overhead is one attribute access."""
+        return self._g6_resolve_schema_field("input")
+
+    def _g6_resolved_output_schema(self) -> Optional["SchemaRef"]:
+        return self._g6_resolve_schema_field("output")
+
+    def _g6_resolve_schema_field(self, direction: str) -> Optional["SchemaRef"]:
+        attr_cache = f"_g6_{direction}_schema_cached"
+        if hasattr(self, attr_cache):
+            return getattr(self, attr_cache)
+
+        config = getattr(self, "_step_config_object", None) or getattr(self, "config", None)
+        field_name = f"step_{direction}_schema"
+        raw = getattr(config, field_name, None) if config is not None else None
+        if raw is None:
+            setattr(self, attr_cache, None)
+            return None
+
+        if isinstance(raw, SchemaRef):
+            resolved = raw
+        elif isinstance(raw, dict):
+            try:
+                SchemaRef._allow_direct_instantiation = True
+                try:
+                    resolved = SchemaRef(**raw)
+                finally:
+                    SchemaRef._allow_direct_instantiation = False
+            except Exception as e:
+                raise ComponentConfigurationError(
+                    f"FAIL-FAST: step {self.name!r} {field_name} failed "
+                    f"SchemaRef shape: {e}"
+                ) from e
+        else:
+            raise ComponentConfigurationError(
+                f"FAIL-FAST: step {self.name!r} {field_name} must be a "
+                f"SchemaRef or dict, got {type(raw).__name__}"
+            )
+
+        setattr(self, attr_cache, resolved)
+        return resolved
 
     async def _update_output_data_units(self, result: Any) -> None:
         """

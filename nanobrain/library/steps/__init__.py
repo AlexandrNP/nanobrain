@@ -7,6 +7,7 @@ Simple test step implementations for the UI builder demo.
 from .data_generator_step import DataGeneratorStep
 from .data_processor_step import DataProcessorStep
 from .approval_step import ApprovalStep, ApprovalStepConfig, StepRejected
+from .loop_controller import LoopController, LoopControllerConfig
 
 __all__ = [
     'DataGeneratorStep',
@@ -14,4 +15,6 @@ __all__ = [
     'ApprovalStep',
     'ApprovalStepConfig',
     'StepRejected',
+    'LoopController',
+    'LoopControllerConfig',
 ]

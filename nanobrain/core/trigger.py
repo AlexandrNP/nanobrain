@@ -255,6 +255,35 @@ class TriggerConfig(ConfigBase):
     timer_interval_ms: Optional[int] = None
     name: str = ""
 
+    # G2 — dynamic expected-set narrowing for AllDataReceivedTrigger.
+    # See `apecx-mcp-integration/docs/nanobrain_capability_gaps.md G2`.
+    # All fields default to None; a trigger that doesn't set them uses the
+    # historical static-list semantics. When set, the trigger reads
+    # `expected_set_source` (a workflow-level data unit reference of the form
+    # "workflow.<unit_name>") on first activation, projects
+    # `expected_set_field` against its payload, formats each result through
+    # `expected_set_naming`, and intersects with the static `inputs` list to
+    # narrow to the active-this-run subset. Eliminates the "publish empty
+    # bundle so the trigger fires" workaround in gated layer steps.
+    expected_set_source: Optional[str] = Field(
+        default=None,
+        description="Workflow-level data unit reference of the form "
+                    "'workflow.<unit_name>' that carries the active set."
+    )
+    expected_set_field: Optional[str] = Field(
+        default=None,
+        description="Dotted field path to project from the source data unit's "
+                    "payload (e.g. 'active_layers'). Projection MUST be a "
+                    "JSON array of strings."
+    )
+    expected_set_naming: str = Field(
+        default="{value}",
+        description="str.format template wrapping each projected string into "
+                    "the canonical data-unit name. Default is the identity "
+                    "template; the orchestrator-typical pattern is "
+                    "'{value}_layer.layer_result_output'."
+    )
+
 
 class TriggerBase(FromConfigBase, ABC):
     """
@@ -1222,6 +1251,125 @@ class AllDataReceivedTrigger(TriggerBase):
         super()._init_from_config(config, component_config, dependencies)
         self.data_units = dependencies.get('data_units', [])
         self._monitoring_task: Optional[asyncio.Task] = None
+
+        # G2 — dynamic expected-set fields. Cached at trigger init; resolved
+        # against a source data unit on first activation via
+        # _resolve_expected_set(). When all three are absent (default), the
+        # historical static-list behavior is preserved.
+        self._expected_set_source: Optional[str] = getattr(
+            config, "expected_set_source", None)
+        self._expected_set_field: Optional[str] = getattr(
+            config, "expected_set_field", None)
+        self._expected_set_naming: str = getattr(
+            config, "expected_set_naming", "{value}") or "{value}"
+        self._resolved_expected_set: Optional[set[str]] = None  # cached after first resolve
+
+    async def _resolve_expected_set(
+        self,
+        source_data_unit: Any,
+        static_inputs: List[str],
+    ) -> set[str]:
+        """G2 expected-set resolver. Called once on first activation.
+
+        Args:
+            source_data_unit: The workflow-level data unit referenced by
+                ``expected_set_source``. Caller (workflow loader) MUST
+                resolve the ``"workflow.<unit_name>"`` reference and pass
+                the actual data unit object.
+            static_inputs: The static ``inputs`` list declared on the
+                trigger config (the FULL set of possible upstream data
+                unit names; the dynamic narrowing intersects with this).
+
+        Returns:
+            The set of data unit names that the trigger waits for on the
+            current run.
+
+        Raises:
+            ComponentConfigurationError: when the source data unit's
+                payload is missing the projected field, or the projection
+                is not a list of strings, or the projected names are not
+                a subset of ``static_inputs``.
+
+        Behavior:
+            - When ``expected_set_source`` is None, returns ``set(static_inputs)``
+              unchanged (preserves the v1 static-list semantics).
+            - When set, reads ``source_data_unit.get()``, walks
+              ``expected_set_field`` via the G1 dotted-path resolver,
+              formats each projected string through ``expected_set_naming``,
+              and intersects with ``static_inputs``.
+            - Result is cached on ``self._resolved_expected_set`` so
+              repeated calls within the same activation cycle are O(1).
+        """
+        # Cached ⇒ return cached (covers both no-source and dynamic paths
+        # after first call). Cache invariant: once set, never replaced.
+        if self._resolved_expected_set is not None:
+            return self._resolved_expected_set
+
+        # No dynamic source ⇒ static behavior. Cache and return.
+        if not self._expected_set_source:
+            self._resolved_expected_set = set(static_inputs)
+            return self._resolved_expected_set
+
+        if source_data_unit is None:
+            raise ComponentConfigurationError(
+                f"FAIL-FAST: AllDataReceivedTrigger {self.name!r} "
+                f"expected_set_source={self._expected_set_source!r} "
+                f"requires the workflow loader to resolve and pass the "
+                f"source data unit object; got None"
+            )
+
+        payload = await source_data_unit.get()
+
+        # Reuse G1's dotted-path resolver — same path semantics for
+        # consistency. Imported lazily to avoid a hard cycle.
+        from .link import get_nested_value_strict, _PATH_MISS
+
+        field_path = self._expected_set_field or ""
+        projected = get_nested_value_strict(payload, field_path)
+        if projected is _PATH_MISS:
+            raise ComponentConfigurationError(
+                f"FAIL-FAST: AllDataReceivedTrigger {self.name!r} "
+                f"expected_set_field={field_path!r} missing in source data "
+                f"unit payload (payload type "
+                f"{type(payload).__name__})"
+            )
+
+        if not isinstance(projected, (list, tuple)):
+            raise ComponentConfigurationError(
+                f"FAIL-FAST: AllDataReceivedTrigger {self.name!r} "
+                f"expected_set_field={field_path!r} projected to "
+                f"{type(projected).__name__}, expected list[str]"
+            )
+        if not all(isinstance(item, str) for item in projected):
+            raise ComponentConfigurationError(
+                f"FAIL-FAST: AllDataReceivedTrigger {self.name!r} "
+                f"expected_set_field={field_path!r} projected list contains "
+                f"non-string elements"
+            )
+
+        # Format through the naming template.
+        try:
+            named = {self._expected_set_naming.format(value=v) for v in projected}
+        except (KeyError, IndexError) as e:
+            raise ComponentConfigurationError(
+                f"FAIL-FAST: AllDataReceivedTrigger {self.name!r} "
+                f"expected_set_naming={self._expected_set_naming!r} format failed: {e}"
+            ) from e
+
+        # Intersect with static inputs (validate that every projected name
+        # actually exists in the trigger's declared input set).
+        static_set = set(static_inputs)
+        if not named.issubset(static_set):
+            offenders = named - static_set
+            raise ComponentConfigurationError(
+                f"FAIL-FAST: AllDataReceivedTrigger {self.name!r} "
+                f"expected_set narrows to {sorted(named)} which is not a "
+                f"subset of inputs={sorted(static_set)}; off-DAG names: "
+                f"{sorted(offenders)}"
+            )
+
+        self._resolved_expected_set = named
+        return self._resolved_expected_set
 
     async def start_monitoring(self) -> None:
         """Start monitoring for all data received."""
