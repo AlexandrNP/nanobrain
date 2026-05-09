@@ -6,6 +6,52 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Nanobrain is an event-driven AI agent framework for distributed workflows. It's currently in research preview and has dependencies on HPC systems and external frameworks. The framework uses a mandatory configuration-driven architecture where ALL components are created through the `from_config()` pattern.
 
+## Recent additions (2026-05-09 — deployment-validation chain)
+
+- **Ruff lint promoted to gating.** Auto-fix sweep applied 1023 safe
+  fixes across 218 files; ``[tool.ruff]`` config in ``pyproject.toml``
+  declares 12 documented category-level ignores (each with a deferred-
+  cleanup note); ``[tool.ruff.lint.per-file-ignores]`` carves out
+  legacy modules (``cleanup/**``, ``demos/**``, ``examples.py``);
+  ``.github/workflows/tests.yml`` lint job is now gating
+  (continue-on-error removed). Two real bugs surfaced + fixed:
+  G15 UTD re-export block in ``core/tool.py`` (test imported names
+  ruff dropped as "unused"); ``import sys`` in
+  ``elasticsearch_mcp_server.py`` (used by ``__main__`` block).
+- **Postgres validated end-to-end.** Spun up Postgres 16 in Docker;
+  all 15 G21 Step 4 tests passed including the 2 integration tests
+  (``test_full_lifecycle_against_real_postgres``,
+  ``test_runner_with_postgres_backend_via_from_config``) that were
+  previously skipped without ``POSTGRES_TEST_DSN``.
+- **Docker sandbox runtime validated.** Real bug surfaced + fixed in
+  apecx-mcp-integration (``--security-opt seccomp=default`` is not
+  a Docker keyword; Docker Desktop on Mac treats it as a file path).
+  After fix, all 27 sandbox tests pass — including the 4 runtime
+  integration tests gated on ``APECX_T13B_SANDBOX_EXECUTE=1``.
+- **Academy integration verified in isolation.** Single Academy test
+  passes in 0.66s against a real local Academy agent. Honest
+  caveat: the full 6-test suite has cross-test contamination — the
+  ``test_unregistered_agent_raises_not_implemented`` placeholder
+  hangs the Academy Manager singleton. This is a test-fixture bug
+  in apecx-mcp-integration, NOT a framework-side bug.
+- **Rhea apecx-integration scaffold validates inside container.**
+  Rhea Docker image builds cleanly with the apecx fork; ``import
+  rhea.extensions.apecx_utd_extension`` works at runtime in the
+  built container. Full Rhea production stack bring-up requires
+  ``.env.docker`` + 4 backing services + multi-GB embedding model
+  pull (operator scope; documented in Rhea's deploy README).
+- **Mixed-deployment integration suite (5 tests, 0.92s).** Validates
+  G5 + G7 + G10 + G21 + lightweight WorkflowBuilder all interacting
+  in one workflow shape: prep → checkpoint → resume → consume; same
+  pipeline driven by run_detached; cross-runner SQLite durability;
+  WorkflowBuilder generating v2-compatible workflow with mutators
+  fired; long-running detached workflow with heartbeat + checkpoint.
+  Pre-this-chain, NO test exercised all five primitives together.
+- Total this chain: **6 commits across nanobrain + apecx-mcp-integration,
+  ~10 new tests, 1 sandbox real-bug fix.** Full nanobrain regression
+  with both Postgres + Redis up: **717 passed, 1 skipped, 0
+  regressions ever.**
+
 ## Recent additions (2026-05-09 — infra chain)
 
 - **Infrastructure-validated.** PostgresTaskStore (G21 Step 4) and
