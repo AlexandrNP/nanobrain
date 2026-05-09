@@ -1,0 +1,49 @@
+"""Orchestration primitives for agent-authored workflows.
+
+Per ``apecx-mcp-integration/docs/nanobrain_alignment_audit.md §4.2`` and
+``apecx-mcp-integration/docs/agent_workflow_authoring.md``: the orchestrator
+that composes analytical workflows is itself a nanobrain workflow. This
+package ships the framework-side primitives the orchestrator uses:
+
+- :class:`ExecutionPlanConfig` (G16) — the typed Phase-0 output schema
+- :class:`ExecutionPlanDataUnit` (G16) — the carrier that ferries the
+  plan between orchestrator steps
+
+Future modules (deferred to follow-up tasks):
+
+- ``skeleton.py`` (G9) — Skeleton primitive with hole grammar
+- ``skeleton_loader_step.py`` (G17) — resolves skeleton_id+version
+- ``plan_lowering_step.py`` (G17) — applies the 7 lowering steps
+"""
+
+from .execution_plan import (
+    ExecutionPlanConfig,
+    ExecutionPlanDataUnit,
+    ExecutionPlanLayer,
+    ExecutionPlanResourceEnvelope,
+    ExecutionPlanProvenanceSeed,
+    ExecutionPlanToolInvocation,
+    ExecutionPlanInterSkeletonLink,
+    ExecutionPlanSkeletonRef,
+    ExecutionPlanStrategy,
+)
+from .run_context import (
+    WorkflowRunContext,
+    WorkflowRunContextConfig,
+    current_run_context,
+)
+
+__all__ = [
+    "ExecutionPlanConfig",
+    "ExecutionPlanDataUnit",
+    "ExecutionPlanLayer",
+    "ExecutionPlanResourceEnvelope",
+    "ExecutionPlanProvenanceSeed",
+    "ExecutionPlanToolInvocation",
+    "ExecutionPlanInterSkeletonLink",
+    "ExecutionPlanSkeletonRef",
+    "ExecutionPlanStrategy",
+    "WorkflowRunContext",
+    "WorkflowRunContextConfig",
+    "current_run_context",
+]

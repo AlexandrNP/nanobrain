@@ -1861,6 +1861,134 @@ class Workflow(Step):
             execution_strategy='data_driven'
         )
 
+    async def run(
+        self,
+        input_data: Optional[Dict[str, Any]] = None,
+        *,
+        await_cascade: bool = True,
+        timeout: float = 60.0,
+        settle_ms: int = 50,
+        raise_on_cascade_timeout: bool = False,
+        **kwargs,
+    ) -> Dict[str, Any]:
+        """G8 — canonical synchronous entry point for a workflow run.
+
+        ``Workflow.process()`` is intentionally fire-and-forget: it
+        deposits ``input_data`` into the first step's input data unit and
+        returns immediately while triggers fire in background tasks. That
+        shape is correct for trigger-driven event flow but is the
+        load-bearing source of the "the workflow loaded; nothing happened;
+        no error" silent-failure shape (architecture.md §13 brutal-truth #1).
+
+        ``run()`` is the canonical synchronous wrapper: invoke ``process()``,
+        await the cascade until quiet, then collect the workflow-level
+        output data units into a dict and return them. Use ``run()`` from
+        any caller that wants "give me the answer" semantics; reserve
+        ``process()`` for trigger-injection scenarios where the caller
+        intentionally yields control to the trigger cascade.
+
+        Args:
+            input_data: Mapping of workflow-level input data unit name to
+                value. Defaults to empty dict (for workflows whose first
+                step has no inputs — rare but legal).
+            await_cascade: When True (default), block until the trigger
+                cascade drains. When False, return immediately after
+                ``process()`` returns — equivalent to calling ``process()``
+                directly.
+            timeout: Maximum seconds to wait for the cascade to drain.
+                Default 60s — appropriate for typical LLM-bound workflows.
+                For short pure-compute workflows, lower (5-10s) is faster
+                to diagnose hung steps.
+            settle_ms: Milliseconds the trigger executor must remain idle
+                before the cascade is considered drained. Default 50ms —
+                small enough to be responsive, large enough to absorb
+                routine post-step bookkeeping.
+            raise_on_cascade_timeout: When True, a cascade timeout raises
+                ``TimeoutError``. When False (default), return a result
+                dict with ``"status": "cascade_timeout"`` so the caller
+                can inspect partial output. Operators should default to
+                False in production (partial output is more diagnosable
+                than an exception); tests may prefer True for fail-fast.
+
+        Returns:
+            A dict with one key per workflow-level output data unit, plus
+            a ``"status"`` field. Possible status values:
+              * ``"completed"`` — cascade drained cleanly
+              * ``"completed_no_await"`` — ``await_cascade=False``; outputs
+                may not yet reflect the cascade's effect
+              * ``"cascade_timeout"`` — cascade did not drain within
+                ``timeout`` (when ``raise_on_cascade_timeout=False``)
+              * ``"no_first_step"`` — workflow has no executable first step
+
+        Example::
+
+            wf = Workflow.from_config('my_workflow.yml')
+            result = await wf.run({'query': 'find candidates'})
+            assert result['status'] == 'completed'
+            answer = result['final_answer']  # whatever the workflow's
+                                              # output data unit is named
+
+        Cross-reference: ``apecx-mcp-integration/docs/nanobrain_capability_gaps.md G8``.
+        """
+        if input_data is None:
+            input_data = {}
+
+        process_result = await self.process(input_data, **kwargs)
+
+        if not await_cascade:
+            # Caller explicitly opted out of waiting. Pass through
+            # process()'s return value (typically a status dict) and tag
+            # it so the consumer knows outputs may be stale.
+            outputs = await self._collect_workflow_output_data_units()
+            outputs["status"] = "completed_no_await"
+            outputs["_process_return"] = process_result
+            return outputs
+
+        # Special-case the no-first-step shape from process(): no cascade
+        # to wait for, just echo the status and return empty outputs.
+        if isinstance(process_result, dict) and process_result.get("status") == "no_first_step":
+            outputs = {"status": "no_first_step", "workflow": self.name}
+            return outputs
+
+        cascade_drained = await self.wait_for_cascade(
+            timeout=timeout, settle_ms=settle_ms
+        )
+
+        outputs = await self._collect_workflow_output_data_units()
+
+        if not cascade_drained:
+            if raise_on_cascade_timeout:
+                raise TimeoutError(
+                    f"Workflow {self.name!r} cascade did not drain within "
+                    f"{timeout}s (settle_ms={settle_ms}). Partial outputs: "
+                    f"{list(outputs.keys())}"
+                )
+            outputs["status"] = "cascade_timeout"
+            outputs["_timeout_seconds"] = timeout
+        else:
+            outputs["status"] = "completed"
+
+        return outputs
+
+    async def _collect_workflow_output_data_units(self) -> Dict[str, Any]:
+        """G8 helper — read every workflow-level output data unit's
+        current value into a dict. Workflow-level outputs live on
+        ``self.step_output_data_units`` (per the framework's "workflow IS
+        a step" model). Each data unit's ``.get()`` may itself await
+        (e.g., DataUnitProxyRef.get() round-trips through the store).
+        """
+        outputs: Dict[str, Any] = {}
+        owned = getattr(self, "step_output_data_units", {}) or {}
+        for unit_name, data_unit in owned.items():
+            try:
+                outputs[unit_name] = await data_unit.get()
+            except Exception as e:
+                # Don't let one bad data unit poison the whole result;
+                # record the error inline so the caller can diagnose.
+                outputs[unit_name] = None
+                outputs.setdefault("_errors", {})[unit_name] = repr(e)
+        return outputs
+
     async def wait_for_cascade(
         self,
         timeout: float = 30.0,

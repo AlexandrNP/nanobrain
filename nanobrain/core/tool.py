@@ -17,6 +17,23 @@ from .logging_system import get_logger
 # Import new ConfigBase for constructor prohibition
 from .config.config_base import ConfigBase
 
+# G15 — UnifiedToolDescriptor primitive. Re-exported here so tool authors
+# can import it from `nanobrain.core.tool` (the canonical surface) without
+# also importing from `nanobrain.core.unified_tool_descriptor`.
+from .unified_tool_descriptor import (
+    UnifiedToolDescriptor,
+    UTDInputSpec,
+    UTDOutputSpec,
+    UTDCostEstimate,
+    UTDFailureMode,
+    UTDProvenancePin,
+    UTDVersionEntry,
+    SideEffectClass,
+    DeterminismClass,
+    ResourceClass,
+    compute_descriptor_hash,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -448,7 +465,123 @@ class ToolBase(FromConfigBase, ABC):
     def _get_config_class(cls):
         """UNIFIED PATTERN: Return ToolConfig - ONLY method that differs from other components"""
         return ToolConfig
-    
+
+    @classmethod
+    def from_descriptor(
+        cls,
+        utd: Union[UnifiedToolDescriptor, Dict[str, Any]],
+        **kwargs,
+    ) -> 'ToolBase':
+        """G15 — materialize a ToolBase from a UnifiedToolDescriptor.
+
+        Per ``apecx-mcp-integration/docs/nanobrain_capability_gaps.md G15``:
+        the catalogue-first entry path. Where ``from_config`` takes the
+        implementation parameters (which API URL, which auth token),
+        ``from_descriptor`` takes the contract description (input/output
+        schema, cost, capability) and resolves the implementation
+        parameters from the descriptor's ``provenance_pin``.
+
+        Behavior:
+        1. Normalize ``utd`` to a UnifiedToolDescriptor instance (accept
+           either an instance or a dict).
+        2. Resolve the descriptor's ``provenance_pin.class_path`` to the
+           concrete ToolBase subclass to instantiate. We use the resolved
+           class — NOT ``cls`` — because the caller may invoke
+           ``ToolBase.from_descriptor(...)`` and expect the descriptor
+           to dictate the implementation class.
+        3. Capability check: if ``utd.requires_capability`` is non-empty
+           AND the caller passes ``user_capabilities=[...]``, FAIL-FAST
+           on missing capabilities. (When ``user_capabilities`` is not
+           provided, the check is skipped — the orchestrator's HITL
+           gate GATE-A2 handles authorization at request time.)
+        4. Delegate to ``ResolvedClass.from_config(provenance_pin.config_path,
+           tool_card=utd, **kwargs)`` so the resolved tool gets the typed
+           UTD as its tool_card.
+
+        Args:
+            utd: UnifiedToolDescriptor instance OR a dict in the UTD shape.
+            **kwargs: Forwarded to from_config. Honored kwargs:
+                ``user_capabilities`` (list[str]) — capability tokens the
+                caller holds. Used for the early FAIL-FAST check.
+
+        Returns:
+            A ToolBase subclass instance.
+
+        Raises:
+            ComponentConfigurationError: on bad UTD shape, unimportable
+                class_path, or insufficient capability.
+        """
+        # Step 1: normalize to a typed UTD.
+        if isinstance(utd, dict):
+            try:
+                UnifiedToolDescriptor._allow_direct_instantiation = True
+                try:
+                    utd_obj = UnifiedToolDescriptor(**utd)
+                finally:
+                    UnifiedToolDescriptor._allow_direct_instantiation = False
+            except Exception as e:
+                raise ComponentConfigurationError(
+                    f"FAIL-FAST: from_descriptor input failed UTD shape: {e}"
+                ) from e
+        elif isinstance(utd, UnifiedToolDescriptor):
+            utd_obj = utd
+        else:
+            raise ComponentConfigurationError(
+                f"FAIL-FAST: from_descriptor expects UnifiedToolDescriptor or "
+                f"dict, got {type(utd).__name__}"
+            )
+
+        # Step 2: capability check (skip when user_capabilities not given).
+        user_capabilities = kwargs.pop("user_capabilities", None)
+        if user_capabilities is not None and utd_obj.requires_capability:
+            held = set(user_capabilities)
+            needed = set(utd_obj.requires_capability)
+            missing = needed - held
+            if missing:
+                raise ComponentConfigurationError(
+                    f"FAIL-FAST: from_descriptor for {utd_obj.descriptor_id!r} "
+                    f"requires capabilities {sorted(needed)} but caller holds "
+                    f"only {sorted(held)} (missing: {sorted(missing)})"
+                )
+
+        # Step 3: resolve the implementation class.
+        try:
+            from .component_base import import_class_from_path
+            ImplCls = import_class_from_path(utd_obj.provenance_pin.class_path)
+        except Exception as e:
+            raise ComponentConfigurationError(
+                f"FAIL-FAST: from_descriptor for {utd_obj.descriptor_id!r} "
+                f"could not import provenance_pin.class_path "
+                f"{utd_obj.provenance_pin.class_path!r}: {e}"
+            ) from e
+
+        if not issubclass(ImplCls, ToolBase):
+            raise ComponentConfigurationError(
+                f"FAIL-FAST: from_descriptor for {utd_obj.descriptor_id!r} "
+                f"resolved class {utd_obj.provenance_pin.class_path!r} is "
+                f"not a ToolBase subclass"
+            )
+
+        # Step 4: delegate to from_config. Two cases:
+        # - When provenance_pin.config_path is set, load that YAML.
+        # - When None, the descriptor IS the config: build an inline
+        #   minimal ToolConfig from the descriptor's name + tool_card=utd.
+        config_path = utd_obj.provenance_pin.config_path
+        if config_path:
+            return ImplCls.from_config(
+                config_path,
+                tool_card=utd_obj.model_dump(),
+                **kwargs,
+            )
+        else:
+            # Inline minimal ToolConfig — the descriptor itself is the spec.
+            inline_config = {
+                "name": utd_obj.descriptor_id,
+                "description": utd_obj.summary,
+                "tool_card": utd_obj.model_dump(),
+            }
+            return ImplCls.from_config(inline_config, **kwargs)
+
     @classmethod
     def extract_component_config(cls, config: ToolConfig) -> Dict[str, Any]:
         """Extract Tool configuration"""

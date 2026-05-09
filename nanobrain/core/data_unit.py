@@ -8,7 +8,7 @@ Enhanced with mandatory from_config pattern implementation.
 import asyncio
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional, List, Union, Callable
+from typing import Any, ClassVar, Dict, Optional, List, Tuple, Union, Callable
 from pydantic import BaseModel, Field, ConfigDict, field_validator
 from pathlib import Path
 import json
@@ -86,16 +86,34 @@ class DataUnitConfig(ConfigBase):
                     "Not enforced — purely informational for downstream consumers."
     )
 
+    # Allowlisted class-path prefixes for DataUnit subclasses. Originally
+    # restricted to `nanobrain.core.data_unit.*` only; widened 2026-05-09
+    # to admit framework-shipped library data units (e.g.
+    # `nanobrain.library.orchestration.execution_plan.ExecutionPlanDataUnit`
+    # for G16). Application-side data units must subclass DataUnitBase
+    # and live under one of the allowed prefixes — gap **G20** proposes
+    # operator-configurable allowlists for plugin data units.
+    #
+    # Annotated as ClassVar so Pydantic v2 treats this as a class variable
+    # rather than a ModelPrivateAttr (the default for `_` prefixed names).
+    _ALLOWED_CLASS_PATH_PREFIXES: ClassVar[Tuple[str, ...]] = (
+        "nanobrain.core.data_unit.",
+        "nanobrain.library.",
+    )
+
     @field_validator('class_field')
     @classmethod
     def validate_class_field(cls, v):
         """Validate class field is properly specified"""
         if not v or not v.strip():
             raise ValueError("Data unit class must be specified")
-        if not v.startswith('nanobrain.core.data_unit.'):
+        v = v.strip()
+        if not any(v.startswith(p) for p in cls._ALLOWED_CLASS_PATH_PREFIXES):
             raise ValueError(
-                "Data unit class must be from nanobrain.core.data_unit module")
-        return v.strip()
+                "Data unit class must be from one of: "
+                + ", ".join(cls._ALLOWED_CLASS_PATH_PREFIXES)
+            )
+        return v
 
     @property
     def class_path(self) -> str:
@@ -2157,8 +2175,31 @@ class DataUnitProxyRef(DataUnitBase):
         return self._key
 
     def namespace(self) -> str:
-        """Return the namespace prefix used for key construction (G13)."""
-        return self._namespace_prefix
+        """Return the namespace prefix used for identity (G13).
+
+        Resolution order:
+        1. The static ``proxystore_namespace_prefix`` configured on this
+           data unit (explicit > implicit). When set, the static value
+           always wins.
+        2. The active ``WorkflowRunContext``'s ``proxystore_namespace``
+           (if any). G13 contextvar-based per-run isolation.
+        3. Empty string — no namespace.
+
+        The resolved value is captured into ``__eq__`` / ``__hash__`` so
+        two refs sharing a key but in different run contexts are
+        non-equal (per the G13 multi-tenant isolation guarantee).
+        """
+        if self._namespace_prefix:
+            return self._namespace_prefix
+        # Lazy import to avoid circular dependency with library/.
+        try:
+            from nanobrain.library.orchestration.run_context import current_run_context
+        except ImportError:
+            return ""
+        ctx = current_run_context()
+        if ctx is not None:
+            return ctx.proxystore_namespace
+        return ""
 
     def as_proxy(self) -> Any:
         """Return a Proxy<T> over the current key for fan-out.
@@ -2242,15 +2283,21 @@ class DataUnitProxyRef(DataUnitBase):
 
     # G3 spec — equality + hashing on (namespace, key). Two refs to the
     # same key with different mime hints are still the same ref.
+    #
+    # G13 — uses the RESOLVED namespace (which consults the active
+    # WorkflowRunContext when no static prefix is configured). This
+    # means a ref captured during run A and inspected during run B
+    # may compare unequal even with the same key — exactly the
+    # multi-tenant isolation behavior the gap guarantees.
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, DataUnitProxyRef):
             return NotImplemented
-        return (self._namespace_prefix, self._key) == (
-            other._namespace_prefix, other._key)
+        return (self.namespace(), self._key) == (
+            other.namespace(), other._key)
 
     def __hash__(self) -> int:
-        return hash((self._namespace_prefix, self._key))
+        return hash((self.namespace(), self._key))
 
 
 class DataUnit(DataUnitBase):

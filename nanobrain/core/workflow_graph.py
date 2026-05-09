@@ -212,6 +212,100 @@ class WorkflowGraph:
         except Exception as e:
             return handle_error(e, "WorkflowGraph.has_cycles", False)
 
+    # G18 Step 2 — bounded-cycle relaxation through LoopController nodes.
+    # See `apecx-mcp-integration/docs/nanobrain_capability_gaps.md G18`.
+    # The integrity validator allows declared back-edges that route through
+    # at least one node tagged with `COMPONENT_TYPE == "loop_controller"`.
+    # Detection uses the COMPONENT_TYPE attribute (already on LoopController)
+    # to avoid an import dependency from core → library.
+
+    def _node_is_loop_controller(self, step_id: str) -> bool:
+        """True iff the node at ``step_id`` is a LoopController instance.
+
+        Detection uses the ``COMPONENT_TYPE`` class attribute set on
+        ``nanobrain.library.steps.LoopController`` rather than an
+        isinstance check, to keep workflow_graph.py free of a
+        dependency on the library.
+        """
+        node = self.nodes.get(step_id)
+        if node is None:
+            return False
+        return getattr(node, "COMPONENT_TYPE", None) == "loop_controller"
+
+    def _get_strongly_connected_components(self) -> List[List[str]]:
+        """Tarjan's SCC algorithm. Returns SCCs of size >= 2 (single-node
+        SCCs without self-loops are reported as singleton SCCs only if
+        the node has a self-link). Used by the G18 relaxation logic.
+        """
+        # Tarjan's algorithm — iterative-ish but recursive on neighbor walks.
+        index_counter = [0]
+        stack: List[str] = []
+        lowlinks: Dict[str, int] = {}
+        index: Dict[str, int] = {}
+        on_stack: Dict[str, bool] = {}
+        result: List[List[str]] = []
+
+        def strongconnect(v: str) -> None:
+            index[v] = index_counter[0]
+            lowlinks[v] = index_counter[0]
+            index_counter[0] += 1
+            stack.append(v)
+            on_stack[v] = True
+
+            for w in self.adjacency.get(v, set()):
+                if w not in index:
+                    strongconnect(w)
+                    lowlinks[v] = min(lowlinks[v], lowlinks[w])
+                elif on_stack.get(w, False):
+                    lowlinks[v] = min(lowlinks[v], index[w])
+
+            if lowlinks[v] == index[v]:
+                component: List[str] = []
+                while True:
+                    w = stack.pop()
+                    on_stack[w] = False
+                    component.append(w)
+                    if w == v:
+                        break
+                # Only report multi-node SCCs (cycles) or self-loops.
+                if len(component) > 1 or (
+                    len(component) == 1 and component[0] in self.adjacency.get(component[0], set())
+                ):
+                    result.append(component)
+
+        for v in self.nodes:
+            if v not in index:
+                strongconnect(v)
+
+        return result
+
+    def _all_cycles_pass_through_loop_controller(self) -> bool:
+        """G18 Step 2 — return True iff EVERY cycle in the graph contains
+        at least one LoopController node.
+
+        Returns True when there are no cycles (vacuous truth — nothing to
+        relax). When some cycles do NOT pass through a LoopController,
+        returns False; the validator treats those cycles as undeclared
+        and rejects the workflow.
+        """
+        sccs = self._get_strongly_connected_components()
+        if not sccs:
+            return True
+        for scc in sccs:
+            if not any(self._node_is_loop_controller(node) for node in scc):
+                return False
+        return True
+
+    def _undeclared_cycle_nodes(self) -> List[List[str]]:
+        """Return the SCCs that do NOT contain a LoopController. Used to
+        give the operator a precise error message naming the offending
+        nodes — exactly the nodes that must be either restructured to be
+        acyclic OR routed through a LoopController."""
+        return [
+            scc for scc in self._get_strongly_connected_components()
+            if not any(self._node_is_loop_controller(node) for node in scc)
+        ]
+
     def get_execution_order(self) -> List[str]:
         """Get topological execution order using Kahn's algorithm."""
         try:
@@ -298,32 +392,40 @@ class WorkflowGraph:
             if not self.nodes:
                 errors.append("Workflow graph is empty - no steps defined")
 
-            # Check for cycles but only warn if cycles are not allowed
+            # Check for cycles. Three layers of relaxation, in order:
+            #   1. allow_cycles=True (operator opt-in escape hatch — preserved
+            #      for backward compat).
+            #   2. G18 Step 2 — every cycle passes through a LoopController.
+            #   3. Otherwise: warn (legacy v1 behavior).
             if self.has_cycles():
-                if not allow_cycles:
+                if allow_cycles:
+                    self.logger.debug(
+                        f"🔄 Workflow cycles detected and allowed by "
+                        f"configuration. Steps: {self._get_cycles_info()}"
+                    )
+                elif self._all_cycles_pass_through_loop_controller():
+                    # G18 Step 2: every cycle is bounded by a LoopController.
+                    # Quiet success — log at debug only.
+                    self.logger.debug(
+                        f"🔄 Workflow cycles detected but each is bounded by "
+                        f"a LoopController (G18). Steps: {self._get_cycles_info()}"
+                    )
+                else:
+                    # At least one cycle is undeclared. Name the offending
+                    # SCCs so the operator knows exactly which subgraph
+                    # to fix.
+                    undeclared = self._undeclared_cycle_nodes()
                     cycle_warning = (
-                        "⚠️  WORKFLOW CYCLES DETECTED: This workflow contains cycles. "
-                        "Ensure that appropriate resolution mechanisms are in place:\n"
-                        "   • Data convergence logic to prevent infinite loops\n"
-                        "   • Conditional triggers to break cycles when appropriate\n"
-                        "   • Timeout mechanisms for long-running cycles\n"
-                        "   • Clear termination conditions\n"
-                        f"   Steps involved in cycles: {self._get_cycles_info()}"
+                        "⚠️  WORKFLOW CYCLES DETECTED: This workflow contains cycles "
+                        "that are NOT bounded by a LoopController.\n"
+                        f"   Undeclared cycle node groups: {undeclared}\n"
+                        "   To bound a cycle: route the back-edge through a step\n"
+                        "   of class nanobrain.library.steps.LoopController (G18).\n"
+                        "   To suppress this warning entirely (legacy escape hatch):\n"
+                        "   set 'allow_cycles: true' in the workflow configuration."
                     )
                     warnings.append(cycle_warning)
                     self.logger.warning(cycle_warning)
-
-                    # Provide guidance on how to allow cycles
-                    self.logger.info(
-                        "💡 To suppress cycle warnings, set 'allow_cycles: true' in workflow configuration "
-                        "if you have confirmed appropriate resolution mechanisms are in place."
-                    )
-                else:
-                    # Cycles are allowed - just log at debug level for troubleshooting
-                    self.logger.debug(
-                        f"🔄 Workflow cycles detected but allowed by configuration. "
-                        f"Steps involved: {self._get_cycles_info()}"
-                    )
 
             # Check for disconnected components if required
             if require_connected and len(self.nodes) > 1:
