@@ -17,6 +17,9 @@ from .workflow_runner import (
     current_pause_signal,
 )
 from .entry_triggers import (
+    EntryStateStore,
+    FileEntryStateStore,
+    InMemoryEntryStateStore,
     WorkflowEntryTrigger,
     WorkflowEntryTriggerConfig,
 )
@@ -27,6 +30,9 @@ __all__ = [
     "WorkflowRunner",
     "WorkflowRunnerConfig",
     "current_pause_signal",
+    "EntryStateStore",
+    "FileEntryStateStore",
+    "InMemoryEntryStateStore",
     "WorkflowEntryTrigger",
     "WorkflowEntryTriggerConfig",
 ]

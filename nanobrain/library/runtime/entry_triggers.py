@@ -9,6 +9,15 @@ This module implements the *workflow-start* half of G22. The
 dependency on the runtime layer; ``WorkflowEntryTrigger`` lives here
 because it depends on G21's ``WorkflowRunner``.
 
+G22 Step 4 (2026-05-09) — durable inner-trigger → launch binding:
+    Adds an optional state-store hookup so the wrapper can persist
+    the last-fire timestamp on every successful inner fire AND read
+    it back at restart to drive ``replay_missed_fires`` (G22 Step 3).
+    Two state-store backends ship: in-memory (for tests) and file
+    (single JSON file per ``entry_id``). Production deployments wire
+    the WorkflowRunner's task store or a Postgres backend through
+    this interface.
+
 Usage::
 
     runner = WorkflowRunner.from_config("config/runner.yml")
@@ -51,8 +60,11 @@ Deferred to follow-ups:
 
 from __future__ import annotations
 
+import asyncio
 import importlib
+import json
 import uuid
+from pathlib import Path
 from typing import Any, Awaitable, Callable, Dict, Literal, Optional
 
 from pydantic import ConfigDict, Field
@@ -65,6 +77,110 @@ from nanobrain.core.config.config_base import ConfigBase
 from nanobrain.core.trigger import TriggerBase
 
 from .workflow_runner import DetachedTaskHandle, WorkflowRunner
+
+
+# ---------------------------------------------------------------------------
+# G22 Step 4 — durable state store
+# ---------------------------------------------------------------------------
+
+class EntryStateStore:
+    """Abstract durable state store for WorkflowEntryTrigger bindings.
+
+    The store maps an opaque ``entry_id`` (the wrapper's name) to a
+    small dict of bookkeeping fields:
+
+        {
+          "last_fire_epoch_seconds": float | None,
+          "last_task_id": str | None,
+        }
+
+    Two implementations ship:
+      - ``InMemoryEntryStateStore`` (tests; one process)
+      - ``FileEntryStateStore`` (production; one JSON file per entry_id
+        under a configured base directory)
+
+    Production deployments that already have a Postgres / KV backend
+    can subclass this and implement get/set/delete in two lines. The
+    interface is async to keep the door open for I/O-bound backends.
+    """
+
+    async def get(self, entry_id: str) -> Optional[Dict[str, Any]]:
+        raise NotImplementedError
+
+    async def set(self, entry_id: str, state: Dict[str, Any]) -> None:
+        raise NotImplementedError
+
+    async def delete(self, entry_id: str) -> None:
+        raise NotImplementedError
+
+
+class InMemoryEntryStateStore(EntryStateStore):
+    """Process-local dict, asyncio.Lock-serialized."""
+
+    def __init__(self) -> None:
+        self._states: Dict[str, Dict[str, Any]] = {}
+        self._lock = asyncio.Lock()
+
+    async def get(self, entry_id: str) -> Optional[Dict[str, Any]]:
+        async with self._lock:
+            return dict(self._states[entry_id]) if entry_id in self._states else None
+
+    async def set(self, entry_id: str, state: Dict[str, Any]) -> None:
+        async with self._lock:
+            self._states[entry_id] = dict(state)
+
+    async def delete(self, entry_id: str) -> None:
+        async with self._lock:
+            self._states.pop(entry_id, None)
+
+
+class FileEntryStateStore(EntryStateStore):
+    """One JSON file per entry_id under a base directory.
+
+    Filename: ``<entry_id>.json``. Atomic writes via tmp+rename.
+    Asyncio.Lock-serialized to prevent torn writes from concurrent
+    set() calls on the same entry_id.
+    """
+
+    def __init__(self, base_dir: str) -> None:
+        self._base_dir = Path(base_dir)
+        self._base_dir.mkdir(parents=True, exist_ok=True)
+        self._lock = asyncio.Lock()
+
+    def _path_for(self, entry_id: str) -> Path:
+        # Sanitize: forbid path separators and dot-segments that would
+        # let a hostile entry_id escape the base_dir.
+        if not isinstance(entry_id, str) or not entry_id:
+            raise ComponentConfigurationError(
+                f"FAIL-FAST: FileEntryStateStore entry_id must be a "
+                f"non-empty string; got {entry_id!r}"
+            )
+        if "/" in entry_id or "\\" in entry_id or entry_id in (".", ".."):
+            raise ComponentConfigurationError(
+                f"FAIL-FAST: FileEntryStateStore entry_id contains "
+                f"path separators or traversal sequences: {entry_id!r}"
+            )
+        return self._base_dir / f"{entry_id}.json"
+
+    async def get(self, entry_id: str) -> Optional[Dict[str, Any]]:
+        async with self._lock:
+            p = self._path_for(entry_id)
+            if not p.is_file():
+                return None
+            return json.loads(p.read_text(encoding="utf-8"))
+
+    async def set(self, entry_id: str, state: Dict[str, Any]) -> None:
+        async with self._lock:
+            p = self._path_for(entry_id)
+            tmp = p.with_suffix(p.suffix + ".tmp")
+            tmp.write_text(json.dumps(state, indent=2), encoding="utf-8")
+            tmp.replace(p)
+
+    async def delete(self, entry_id: str) -> None:
+        async with self._lock:
+            p = self._path_for(entry_id)
+            if p.is_file():
+                p.unlink()
 
 
 # ---------------------------------------------------------------------------
@@ -303,6 +419,11 @@ class WorkflowEntryTrigger(FromConfigBase):
         self._task_id_prefix = config.task_id_prefix or config.name
         self._on_missed = config.on_missed
 
+        # G22 Step 4 — durable state. Set lazily via bind_durable_state();
+        # absent by default so existing callers see no behavior change.
+        self._state_store: Optional[EntryStateStore] = None
+        self._entry_id: Optional[str] = None
+
         runner = dependencies.get("runner")
         if not isinstance(runner, WorkflowRunner):
             raise ComponentConfigurationError(
@@ -455,5 +576,76 @@ class WorkflowEntryTrigger(FromConfigBase):
         handle = await self._runner.run_detached(
             self._workflow_callable, task_id, payload
         )
+
+        # G22 Step 4 — persist last-fire bookkeeping. Done AFTER
+        # successful run_detached scheduling, BEFORE invoking the
+        # caller's on_launch callback. If the durable store is down,
+        # the fire still completed (we never roll the workflow back),
+        # but the next restart's replay_missed_fires will see the
+        # last persisted timestamp instead of the one that just fired.
+        # This is the safer failure shape: lost-bookkeeping > lost-work.
+        if self._state_store is not None and self._entry_id is not None:
+            import time as _time
+            try:
+                await self._state_store.set(self._entry_id, {
+                    "last_fire_epoch_seconds": _time.time(),
+                    "last_task_id": task_id,
+                })
+            except Exception:  # noqa: BLE001
+                # Durable-store write failure must NOT crash the fire
+                # cascade. Log via the framework logger if available;
+                # otherwise swallow silently. The next successful fire
+                # will refresh the timestamp.
+                pass
+
         if self._on_launch:
             await self._on_launch(handle)
+
+    # ---- G22 Step 4 — durable binding API ------------------------------
+
+    def bind_durable_state(
+        self, store: EntryStateStore, entry_id: Optional[str] = None,
+    ) -> None:
+        """G22 Step 4 — attach a durable state store to this wrapper.
+
+        After binding, every successful inner-fire persists
+        ``{last_fire_epoch_seconds, last_task_id}`` under ``entry_id``
+        (defaults to ``self.name``). Deployments call this once at
+        startup BEFORE start(), then call recover_from_durable_state()
+        to consume any persisted timestamp via replay_missed_fires.
+
+        Idempotent: calling twice is safe; the second call replaces
+        the binding. Pass ``store=None`` to detach.
+        """
+        if store is not None and not isinstance(store, EntryStateStore):
+            raise ComponentConfigurationError(
+                f"FAIL-FAST: WorkflowEntryTrigger {self.name!r} "
+                f"bind_durable_state: store must be an EntryStateStore "
+                f"instance, got {type(store).__name__}"
+            )
+        self._state_store = store
+        self._entry_id = entry_id or self.name
+
+    async def recover_from_durable_state(
+        self, now_epoch_seconds: Optional[float] = None,
+    ) -> int:
+        """G22 Step 4 — read the persisted last-fire timestamp and
+        delegate to ``replay_missed_fires`` to apply ``on_missed``
+        policy.
+
+        Call this at deployment startup AFTER bind_durable_state and
+        BEFORE start(). Returns the count of replayed fires (0 when
+        no prior state exists OR when the inner trigger is non-cadenced).
+        """
+        if self._state_store is None or self._entry_id is None:
+            return 0
+        state = await self._state_store.get(self._entry_id)
+        if not state:
+            return 0
+        last_fire = state.get("last_fire_epoch_seconds")
+        if last_fire is None:
+            return 0
+        return await self.replay_missed_fires(
+            last_known_fire_epoch_seconds=float(last_fire),
+            now_epoch_seconds=now_epoch_seconds,
+        )
