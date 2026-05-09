@@ -1791,7 +1791,25 @@ class BaseStep(FromConfigBase, ABC):
         set on the StepConfig, the framework validates the dict at the
         wire boundary on every invocation. Both default to None, in which
         case no validation runs (preserves historical behavior).
+
+        G21 Step 5 — automatic cooperation with WorkflowRunner pause.
+        When this step runs inside a detached workflow context, the
+        runner publishes a ``PauseSignal`` contextvar (PEP 567 asyncio-
+        task-local). Before invoking ``process()``, we check the signal
+        and ``await wait_until_resumed()`` if paused. This makes pause a
+        framework-level cooperative protocol — user step code does NOT
+        need to consult the contextvar manually for pause to work. The
+        check is a no-op when no signal is published (no detached run);
+        existing behavior is preserved.
+
+        Pause semantics: the framework gates step BOUNDARIES, not step
+        internals. A step that is mid-process when pause is requested
+        runs to completion; the NEXT step's _execute_process is what
+        blocks. This matches the gap proposal's "soft-pause; in-flight
+        steps complete; no new steps started" semantics.
         """
+        await _await_pause_signal_if_present()
+
         input_schema = self._g6_resolved_input_schema()
         if input_schema is not None:
             validate_payload_against_schema(
@@ -3140,3 +3158,59 @@ class AgentStep(BaseStep):
         self.nb_logger.info(f"   Mapped keys: {list(mapped_result.keys())}")
 
         return mapped_result
+
+
+# ---------------------------------------------------------------------------
+# G21 Step 5 — automatic PauseSignal cooperation
+# ---------------------------------------------------------------------------
+#
+# This helper is consulted at every BaseStep._execute_process call. When a
+# step runs inside a detached workflow run, the WorkflowRunner publishes
+# a PauseSignal contextvar (PEP 567 asyncio-task-local). If the signal
+# is paused, this helper blocks until resumed — making pause a framework-
+# level cooperative protocol rather than a per-step opt-in.
+#
+# Layering rule: nanobrain.core MUST NOT import from nanobrain.library.
+# We honor that with a lazy + cached import. If the runtime module is
+# unavailable for any reason (older nanobrain layout, partial install),
+# the helper degrades to a no-op rather than failing.
+#
+# Performance: the cached _CURRENT_PAUSE_SIGNAL_GETTER is one attribute
+# load per _execute_process call after first use; the contextvar.get()
+# call itself is O(1).
+# ---------------------------------------------------------------------------
+
+_CURRENT_PAUSE_SIGNAL_GETTER: Any = None  # set on first _await_pause_signal_if_present call
+_CURRENT_PAUSE_SIGNAL_PROBED: bool = False
+
+
+async def _await_pause_signal_if_present() -> None:
+    """Block until the current detached run's PauseSignal is resumed,
+    or no-op when no pause signal is published in the current contextvar.
+
+    See ``nanobrain.library.runtime.workflow_runner.PauseSignal`` and
+    G21 Step 2 + Step 5 for the full cooperative-pause protocol.
+    """
+    global _CURRENT_PAUSE_SIGNAL_GETTER, _CURRENT_PAUSE_SIGNAL_PROBED
+
+    if not _CURRENT_PAUSE_SIGNAL_PROBED:
+        _CURRENT_PAUSE_SIGNAL_PROBED = True
+        try:
+            from nanobrain.library.runtime.workflow_runner import (
+                current_pause_signal,
+            )
+            _CURRENT_PAUSE_SIGNAL_GETTER = current_pause_signal
+        except ImportError:
+            # Runtime module not importable — degrade to no-op.
+            _CURRENT_PAUSE_SIGNAL_GETTER = None
+
+    if _CURRENT_PAUSE_SIGNAL_GETTER is None:
+        return
+
+    signal = _CURRENT_PAUSE_SIGNAL_GETTER()
+    if signal is None or not signal.is_paused():
+        return
+
+    # Paused — block until resumed. asyncio.Event.wait honors task
+    # cancellation, so cancel-during-pause still terminates the step.
+    await signal.wait_until_resumed()
