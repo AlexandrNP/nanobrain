@@ -67,6 +67,22 @@ _LINK_CLASSES_NEEDING_AUTO_TRANSFER = (
     "QueueLink",
 )
 
+# G10 Step 2 — link classes whose `gate_semantics` field is meaningful.
+# Today only ConditionalLink reads gate_semantics on the link side, but
+# the propagation logic checks against this list to stay forward-
+# compatible with future gated link types.
+_LINK_CLASSES_NEEDING_GATE_SEMANTICS = (
+    "ConditionalLink",
+)
+
+# G10 Step 2 — trigger classes whose `gate_semantics` field is meaningful.
+# AllDataReceivedTrigger is the consumer that observes sentinel-bearing
+# data units; ManualTrigger / TimerTrigger / DataUnitChangeTrigger /
+# EventTrigger don't gate, so propagation skips them.
+_TRIGGER_CLASSES_NEEDING_GATE_SEMANTICS = (
+    "AllDataReceivedTrigger",
+)
+
 
 def _link_class_needs_auto_transfer_check(class_path: str) -> bool:
     """Return True if `class_path` names a link class whose auto_transfer
@@ -78,6 +94,52 @@ def _link_class_needs_auto_transfer_check(class_path: str) -> bool:
         return False
     trailing = class_path.rsplit(".", 1)[-1]
     return trailing in _LINK_CLASSES_NEEDING_AUTO_TRANSFER
+
+
+def _link_class_needs_gate_semantics_check(class_path: str) -> bool:
+    """G10 Step 2 — does this link class read gate_semantics?"""
+    if not isinstance(class_path, str):
+        return False
+    trailing = class_path.rsplit(".", 1)[-1]
+    return trailing in _LINK_CLASSES_NEEDING_GATE_SEMANTICS
+
+
+def _trigger_class_needs_gate_semantics_check(class_path: str) -> bool:
+    """G10 Step 2 — does this trigger class read gate_semantics?"""
+    if not isinstance(class_path, str):
+        return False
+    trailing = class_path.rsplit(".", 1)[-1]
+    return trailing in _TRIGGER_CLASSES_NEEDING_GATE_SEMANTICS
+
+
+def _set_inline_default_in_entry(entry: Dict[str, Any], field: str,
+                                 value: Any) -> bool:
+    """G10 Step 2 / G7 Step 3 helper. Mutate ``entry`` in place to set
+    ``field=value`` if absent. Handles both inline shapes:
+
+    - Nested: ``{class: ..., config: {...}}`` — mutate ``config`` dict.
+    - Flat:   ``{class: ..., <field-keys>: ...}`` — mutate ``entry`` itself.
+
+    Returns True if the field was set; False if it was already present
+    or the entry's ``config`` is a string path (out of scope until G7
+    Step 4 ships path-reference rewriting).
+    """
+    if not isinstance(entry, dict):
+        return False
+    inner = entry.get("config")
+    if isinstance(inner, dict):
+        if field in inner:
+            return False
+        inner[field] = value
+        return True
+    if isinstance(inner, str):
+        # path-reference; cannot inject without loading the YAML
+        return False
+    # Flat shape: entry itself is the config dict
+    if field in entry:
+        return False
+    entry[field] = value
+    return True
 
 
 def _link_inline_config_omits_auto_transfer(link_entry: Any) -> Optional[bool]:
@@ -201,6 +263,25 @@ class WorkflowConfig(StepConfig):
                     "you have intentionally audited."
     )
 
+    # G10 Step 2 — workflow-level gate_semantics that propagates to every
+    # inline ConditionalLink AND every inline AllDataReceivedTrigger that
+    # omits its own per-link/per-trigger setting. ``setdefault`` semantics:
+    # explicit per-component values are NEVER overridden. When unset
+    # (the default), the framework leaves each component on its own
+    # default (``publish_empty`` for legacy compat).
+    #
+    # See ``apecx-mcp-integration/docs/nanobrain_capability_gaps.md G10``.
+    gate_semantics: Optional[Literal["publish_empty", "gate_to_bottom"]] = Field(
+        default=None,
+        description="Workflow-level default gate_semantics. When set, this "
+                    "value is injected into every inline ConditionalLink "
+                    "and AllDataReceivedTrigger that omits its own "
+                    "gate_semantics field. Explicit per-component values "
+                    "always win. Recommended: set to 'gate_to_bottom' on "
+                    "any workflow that uses gating to avoid the "
+                    "publish-empty deadlock failure shape."
+    )
+
     # Enhanced workflow configuration supporting class+config patterns
     steps: Dict[str, Any] = Field(
         default_factory=dict,
@@ -284,16 +365,95 @@ class WorkflowConfig(StepConfig):
                 # — leave alone.
                 continue
 
-            inner_config = link_entry.get('config')
-            if isinstance(inner_config, dict):
-                # Nested-config shape: {class: ..., config: {...inline...}}
-                inner_config.setdefault('auto_transfer', True)
-            elif inner_config is None:
-                # Flat shape: link_entry IS the config (no nested 'config' key)
-                link_entry.setdefault('auto_transfer', True)
-            # else: inner_config is a string path — out of scope for Step 3.
+            _set_inline_default_in_entry(link_entry, 'auto_transfer', True)
 
         return self
+
+    # G10 Step 2 — propagate workflow-level gate_semantics into every
+    # inline ConditionalLink and AllDataReceivedTrigger that omits its
+    # own per-component setting. Path-reference configs are NOT mutated
+    # (parity with G7 Step 3; loading external YAML is Step 3 scope of
+    # this gap and tracked separately).
+    @model_validator(mode='after')
+    def _propagate_gate_semantics(self) -> 'WorkflowConfig':
+        """Inject workflow.gate_semantics into child links/triggers.
+
+        Walks:
+          - self.links[<name>]                 — every link entry
+          - self.steps[<step_name>].triggers[] — list-shape triggers under
+                                                 each step (inline configs)
+          - self.triggers[]                    — workflow-level triggers
+                                                 (inherited from StepConfig)
+
+        For each entry whose class is in the gate-semantics-aware
+        whitelist, ``setdefault('gate_semantics', <workflow-default>)`` is
+        called. Explicit per-component values are preserved.
+
+        When ``self.gate_semantics`` is None, this validator is a no-op.
+        """
+        if self.gate_semantics is None:
+            return self
+
+        gate_value = self.gate_semantics
+
+        # 1. Links
+        if isinstance(self.links, dict):
+            for link_entry in self.links.values():
+                if not isinstance(link_entry, dict):
+                    continue
+                class_path = link_entry.get('class', '')
+                if not _link_class_needs_gate_semantics_check(class_path):
+                    continue
+                _set_inline_default_in_entry(
+                    link_entry, 'gate_semantics', gate_value
+                )
+
+        # 2. Per-step triggers
+        if isinstance(self.steps, dict):
+            for step_entry in self.steps.values():
+                self._propagate_gate_semantics_into_step(step_entry, gate_value)
+
+        # 3. Workflow-level triggers (inherited from StepConfig)
+        own_triggers = getattr(self, 'triggers', None)
+        if isinstance(own_triggers, list):
+            for trig_entry in own_triggers:
+                self._maybe_set_trigger_gate_semantics(trig_entry, gate_value)
+
+        return self
+
+    def _propagate_gate_semantics_into_step(
+        self, step_entry: Any, gate_value: str,
+    ) -> None:
+        """Helper for ``_propagate_gate_semantics``: inspect a single
+        step entry, find its inline triggers, and stamp gate_semantics
+        on the gate-aware ones."""
+        if not isinstance(step_entry, dict):
+            return  # already-resolved BaseStep instance; skip
+
+        # Triggers can live at the top level of the step entry OR nested
+        # under a 'config' dict (mirrors the link two-shape pattern).
+        for container in (step_entry, step_entry.get('config') or {}):
+            if not isinstance(container, dict):
+                continue
+            triggers = container.get('triggers')
+            if not isinstance(triggers, list):
+                continue
+            for trig_entry in triggers:
+                self._maybe_set_trigger_gate_semantics(trig_entry, gate_value)
+
+    @staticmethod
+    def _maybe_set_trigger_gate_semantics(
+        trig_entry: Any, gate_value: str,
+    ) -> None:
+        """Stamp gate_semantics on a trigger config dict if its class is
+        gate-aware AND the field is absent. No-op for resolved instances,
+        path-reference configs, or non-gate-aware trigger classes."""
+        if not isinstance(trig_entry, dict):
+            return
+        class_path = trig_entry.get('class', '')
+        if not _trigger_class_needs_gate_semantics_check(class_path):
+            return
+        _set_inline_default_in_entry(trig_entry, 'gate_semantics', gate_value)
 
 
 # WorkflowGraph imported from workflow_graph.py
