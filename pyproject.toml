@@ -55,6 +55,24 @@ rag = [
 dev = [
     "pytest>=7.0.0",
 ]
+test = [
+    # Canonical test stack used by tests/unit/ + the CI workflow.
+    # ``dev`` stays minimal so light-touch contributors only get pytest;
+    # ``test`` is the maintainer-grade extra that includes everything
+    # the integration tests (G5 ProxyStore, G21 Postgres) need.
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0.0",
+    # G3 / G5 — ProxyStore for cross-process resume + transport.
+    "proxystore>=0.6",
+    # G21 Step 4 — psycopg 3 for PostgresTaskStore integration tests.
+    # ``psycopg[binary]`` includes the libpq C wheel; no system libpq
+    # required. Skip unless the operator sets POSTGRES_TEST_DSN.
+    "psycopg[binary]>=3.1",
+    # G5 Step 2 RedisKey — proxystore[redis] pulls in the redis client
+    # transitively; if that ever stops being true, add ``redis>=5.0``
+    # explicitly here.
+]
 all = [
     "nanobrain[llm,distributed,academy,rag,dev]",
 ]
