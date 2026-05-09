@@ -6,6 +6,50 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Nanobrain is an event-driven AI agent framework for distributed workflows. It's currently in research preview and has dependencies on HPC systems and external frameworks. The framework uses a mandatory configuration-driven architecture where ALL components are created through the `from_config()` pattern.
 
+## Recent additions (2026-05-09 — Academy/Rhea/tool-wrapping chain)
+
+- **Academy lifecycle bug fixed** at
+  `nanobrain/core/academy_integration.py`. ``AcademyAgentHandle.__call__``
+  was entering the Manager BEFORE checking whether a real handle was
+  registered, leaving a partially-initialized Manager singleton on
+  the placeholder fail-fast raise. Subsequent tests in the same
+  process deadlocked. Fix: reorder checks so demo-mode + placeholder
+  paths fail-fast WITHOUT touching the Manager. Result: full 6-test
+  Academy suite passes cleanly in 1.38s.
+- **Spawn / scrape / utilize patterns validated** for Academy in
+  workflows. New `tests/integration/test_academy_in_workflow.py` (11
+  tests): dynamic agent registration from inside workflow code;
+  Python-side action introspection (`_scrape_agent_actions`); dispatch
+  via attribute + `__call__` syntax; end-to-end orchestrator step
+  that spawns + scrapes + utilizes in one `process()` call.
+- **`UnifiedToolDescriptor.from_python_callable` factory** at
+  `nanobrain/core/unified_tool_descriptor.py`. Mirrors Rhea/FastMCP's
+  auto-generation: introspects `inspect.signature` + docstring +
+  type annotations to derive a UTD from a Python function. Author
+  overrides any field via kwargs. 18 unit tests at
+  `tests/unit/test_utd_from_python_callable.py`.
+- **Rhea MCP server brought up** in Docker with minimum-viable
+  dependency set (just Redis on port 6379). MCP HTTP transport
+  responds at `http://localhost:3001/mcp/` with proper session
+  handshake. Postgres + MinIO + embedding services are NOT required
+  for tool-host functionality.
+- **Cross-framework end-to-end integration test** at
+  `tests/integration/test_cross_framework_deployment.py` (4 tests):
+  live MCP discovery against the Rhea worker; Rhea→UTD wire-format
+  conversion validated by nanobrain's UTD validator; ONE workflow
+  via WorkflowRunner.run_detached doing both Rhea discovery AND
+  Academy dispatch. Gated on `RHEA_MCP_URL` env var.
+- **Rhea-side T-RH-02 minimum** at
+  `apecx-cowork/rhea/rhea/extensions/apecx_utd_extension/utd_producer.py`
+  (commit `23c876b` on apecx-integration branch). Pure-Python wire-
+  format converter; does NOT import nanobrain (cross-framework
+  contract is the dict shape). FastMCP `Tool` → UTD dict consumable
+  by `UnifiedToolDescriptor.from_dict`.
+- Total this chain: **2 commits across nanobrain + rhea, ~33 new
+  tests, 1 critical lifecycle bug fixed.** Full nanobrain regression
+  with Postgres + Redis + Rhea up: **750 passed, 1 skipped, 0
+  regressions.**
+
 ## Recent additions (2026-05-09 — deployment-validation chain)
 
 - **Ruff lint promoted to gating.** Auto-fix sweep applied 1023 safe
