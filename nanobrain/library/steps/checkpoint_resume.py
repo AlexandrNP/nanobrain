@@ -387,7 +387,15 @@ class CheckpointStep(BaseStep):
 # ---------------------------------------------------------------------------
 
 class ResumeStepConfig(StepConfig):
-    """Configuration for ResumeStep."""
+    """Configuration for ResumeStep.
+
+    G5 Step 3 (2026-05-09) — ``on_missing='rebuild'`` is now supported.
+    The rebuild path resolves a dotted-path callable (``rebuild_callable``),
+    invokes it to regenerate the data, AND writes a fresh manifest at
+    ``manifest_path`` so subsequent resumes hit the cache. The rebuild
+    primitive is the "fail-to-cache, fall back to compute" pattern;
+    operationally equivalent to a memoized expensive computation.
+    """
     on_missing: Literal["fail", "skip", "rebuild"] = "fail"
     accept_code_identity_mismatch: bool = Field(
         default=False,
@@ -398,6 +406,41 @@ class ResumeStepConfig(StepConfig):
                     "but resume still proceeds — the operator decides "
                     "whether to abort downstream.",
     )
+
+    # G5 Step 3 — rebuild path. When on_missing='rebuild' AND the
+    # manifest is missing, the framework resolves this dotted-path
+    # callable, invokes it with the input_data dict, and treats its
+    # return value as the resumed payload. A fresh manifest is then
+    # written to manifest_path so subsequent resumes hit the cache.
+    rebuild_callable: Optional[str] = Field(
+        default=None,
+        description="Dotted-path string resolving to a callable "
+                    "f(input_data: dict) -> dict that regenerates the "
+                    "checkpointed data. Required when on_missing='rebuild'. "
+                    "May be sync or async; the framework awaits coroutine "
+                    "return values."
+    )
+    rebuild_base_dir: Optional[str] = Field(
+        default=None,
+        description="Base directory for the manifest written after a "
+                    "successful rebuild. Required when on_missing='rebuild'. "
+                    "Mirrors CheckpointStepConfig.base_dir."
+    )
+
+    @model_validator(mode="after")
+    def _validate_rebuild_fields(self) -> "ResumeStepConfig":
+        if self.on_missing == "rebuild":
+            if not self.rebuild_callable:
+                raise ValueError(
+                    "FAIL-FAST: ResumeStepConfig on_missing='rebuild' "
+                    "requires rebuild_callable"
+                )
+            if not self.rebuild_base_dir:
+                raise ValueError(
+                    "FAIL-FAST: ResumeStepConfig on_missing='rebuild' "
+                    "requires rebuild_base_dir"
+                )
+        return self
 
 
 class ResumeStep(BaseStep):
@@ -468,11 +511,13 @@ class ResumeStep(BaseStep):
                 )
                 return {}
             elif self._cfg.on_missing == "rebuild":
-                raise NotImplementedError(
-                    "ResumeStep on_missing='rebuild' is the workflow-runner's "
-                    "responsibility (G5 Step 3 follow-up); v1 supports "
-                    "'fail' and 'skip' only"
+                logger.warning(
+                    "ResumeStep %s: manifest at %s missing; on_missing="
+                    "'rebuild' → invoking rebuild_callable=%r",
+                    self.name, manifest_path, self._cfg.rebuild_callable,
                 )
+                rebuilt = await self._do_rebuild(input_data, manifest_path)
+                return rebuilt
 
         manifest = json.loads(manifest_path.read_text())
         if manifest.get("manifest_version") != _MANIFEST_VERSION:
@@ -545,6 +590,110 @@ class ResumeStep(BaseStep):
             restored["_code_identity_warning"] = code_identity_warning
 
         return restored
+
+    async def _do_rebuild(
+        self, input_data: Dict[str, Any], manifest_path: Path,
+    ) -> Dict[str, Any]:
+        """G5 Step 3 — execute the rebuild path: resolve the configured
+        callable, invoke it, then write a fresh manifest at
+        ``manifest_path`` so subsequent resumes hit the cache.
+
+        Returns the rebuilt-and-resumed payload dict (with _resumed_*
+        bookkeeping fields, mirroring the normal resume return shape).
+        """
+        callable_obj = _resolve_dotted_callable(self._cfg.rebuild_callable)
+        result = callable_obj(input_data)
+        if asyncio.iscoroutine(result):
+            result = await result
+
+        if not isinstance(result, dict):
+            raise ComponentConfigurationError(
+                f"FAIL-FAST: ResumeStep {self.name!r} rebuild_callable "
+                f"{self._cfg.rebuild_callable!r} returned "
+                f"{type(result).__name__}, expected dict"
+            )
+
+        # Write a fresh manifest at manifest_path so the next resume
+        # hits the cache. We mirror CheckpointStep's filesystem-backend
+        # logic directly here rather than delegating, to avoid coupling
+        # ResumeStep's rebuild path to the full CheckpointStep config
+        # surface (operator only declares rebuild_base_dir).
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        base_dir = Path(self._cfg.rebuild_base_dir)
+        base_dir.mkdir(parents=True, exist_ok=True)
+        storage = _FilesystemStorage(base_dir=base_dir)
+
+        entries: Dict[str, Any] = {}
+        for key, value in result.items():
+            if key.startswith("_"):
+                # Bookkeeping keys (e.g., _resumed_at) — pass through to
+                # the response but don't snapshot them.
+                continue
+            descriptor = await storage.write_value(value=value, hint=key)
+            entries[key] = descriptor
+
+        manifest_body = {
+            "manifest_version": _MANIFEST_VERSION,
+            "step_name": self.name,
+            "backend": "filesystem",
+            "captured": list(entries.keys()),
+            "entries": entries,
+            "code_identity": _capture_code_identity(),
+            "rebuilt_from_callable": self._cfg.rebuild_callable,
+            "rebuilt_at": datetime.now(timezone.utc).isoformat(),
+        }
+        # Atomic write: write to .tmp then rename.
+        tmp_path = manifest_path.with_suffix(manifest_path.suffix + ".tmp")
+        tmp_path.write_text(json.dumps(manifest_body, indent=2))
+        tmp_path.replace(manifest_path)
+
+        # Compose the response in the same shape as the normal resume
+        # path, plus a marker indicating this was a rebuild.
+        response = dict(result)
+        response["_resumed_from_manifest"] = str(manifest_path)
+        response["_resumed_at"] = datetime.now(timezone.utc).isoformat()
+        response["_rebuilt"] = True
+        return response
+
+
+# ---------------------------------------------------------------------------
+# Dotted-path callable resolver (mirrors entry_triggers helper)
+# ---------------------------------------------------------------------------
+
+def _resolve_dotted_callable(spec: str):
+    """Resolve a dotted-path spec to a callable. Mirrors
+    nanobrain.library.runtime.entry_triggers._resolve_dotted_callable;
+    duplicated here to avoid the steps → runtime import dependency."""
+    import importlib
+
+    if not isinstance(spec, str) or "." not in spec:
+        raise ComponentConfigurationError(
+            f"FAIL-FAST: rebuild_callable must be a dotted-path string "
+            f"like 'pkg.mod.func'; got {spec!r}"
+        )
+    module_path, _, attr_path = spec.rpartition(".")
+    try:
+        mod = importlib.import_module(module_path)
+    except ModuleNotFoundError as exc:
+        raise ComponentConfigurationError(
+            f"FAIL-FAST: rebuild_callable module {module_path!r} not "
+            f"importable: {exc}"
+        ) from exc
+    obj: Any = mod
+    for part in attr_path.split("."):
+        try:
+            obj = getattr(obj, part)
+        except AttributeError as exc:
+            raise ComponentConfigurationError(
+                f"FAIL-FAST: rebuild_callable attribute {attr_path!r} "
+                f"not found on module {module_path!r}: {exc}"
+            ) from exc
+    if not callable(obj):
+        raise ComponentConfigurationError(
+            f"FAIL-FAST: rebuild_callable {spec!r} resolved to non-callable "
+            f"{type(obj).__name__}"
+        )
+    return obj
 
 
 # ---------------------------------------------------------------------------

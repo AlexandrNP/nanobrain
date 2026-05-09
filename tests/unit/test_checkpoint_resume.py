@@ -267,14 +267,19 @@ class TestResumeOnMissing:
                 assert result == {}
         asyncio.run(run())
 
-    def test_on_missing_rebuild_raises_not_implemented(self):
+    def test_on_missing_rebuild_without_callable_fails_fast(self):
+        """G5 Step 3 (2026-05-09) — on_missing='rebuild' is now real, but
+        requires rebuild_callable + rebuild_base_dir at config construction
+        time. The legacy "raises NotImplementedError at process time"
+        behavior is gone. See tests/unit/test_resume_step_rebuild.py for
+        the full rebuild-path coverage."""
         async def run():
             with tempfile.TemporaryDirectory() as tmp:
                 tmp = Path(tmp)
-                rs = _build_rs(tmp, on_missing="rebuild")
-                with pytest.raises(NotImplementedError) as exc_info:
-                    await rs.process({"manifest_path": str(tmp / "ghost.json")})
-                assert "G5 Step 3" in str(exc_info.value)
+                with pytest.raises(Exception) as exc_info:
+                    _build_rs(tmp, on_missing="rebuild")
+                assert "FAIL-FAST" in str(exc_info.value)
+                assert "rebuild_callable" in str(exc_info.value)
         asyncio.run(run())
 
     def test_missing_manifest_path_in_input(self):
