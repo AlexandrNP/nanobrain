@@ -32,6 +32,21 @@ from .run_context import (
     WorkflowRunContextConfig,
     current_run_context,
 )
+from .skeleton import (
+    Skeleton,
+    SkeletonHole,
+    SkeletonHoleType,
+    SkeletonRegistry,
+    compute_skeleton_body_hash,
+)
+from .skeleton_loader_step import (
+    SkeletonLoaderStep,
+    SkeletonLoaderStepConfig,
+)
+from .plan_lowering_step import (
+    PlanLoweringStep,
+    PlanLoweringStepConfig,
+)
 
 __all__ = [
     "ExecutionPlanConfig",
@@ -46,4 +61,13 @@ __all__ = [
     "WorkflowRunContext",
     "WorkflowRunContextConfig",
     "current_run_context",
+    "Skeleton",
+    "SkeletonHole",
+    "SkeletonHoleType",
+    "SkeletonRegistry",
+    "compute_skeleton_body_hash",
+    "SkeletonLoaderStep",
+    "SkeletonLoaderStepConfig",
+    "PlanLoweringStep",
+    "PlanLoweringStepConfig",
 ]

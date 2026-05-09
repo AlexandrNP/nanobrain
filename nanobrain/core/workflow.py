@@ -1970,6 +1970,61 @@ class Workflow(Step):
 
         return outputs
 
+    def aggregate_resource_envelope(self) -> "ResourceEnvelope":
+        """G12 — aggregate per-step ResourceEnvelopes into one
+        workflow-level envelope.
+
+        Walks every child step (and recurses into nested workflows),
+        collects each step's declared ``resource_envelope``, and
+        applies the per-field aggregation rules from
+        ``aggregate_resource_envelopes`` (sum walltime + cost; max
+        cpu + memory; union capability_tokens).
+
+        Returns a ResourceEnvelope. Steps without a declared envelope
+        contribute nothing — they don't penalize the rollup, but they
+        also don't bound it. Operators who want a fully-bounded
+        workflow MUST declare envelopes on every step.
+
+        Used by:
+        - HPC bundle exporter (sizes the PBS request).
+        - HITL cost gate (checks workflow envelope against per-user
+          threshold before executing).
+
+        See ``apecx-mcp-integration/docs/nanobrain_capability_gaps.md G12``.
+        """
+        from .step import ResourceEnvelope, aggregate_resource_envelopes
+
+        envelopes: List[ResourceEnvelope] = []
+
+        # Walk children. self.child_steps is the standard container
+        # populated by _init_from_config.
+        children = getattr(self, "child_steps", {}) or {}
+        for step_id, step in children.items():
+            # Recurse into nested Workflows (Workflow IS a Step, so a
+            # nested Workflow's aggregate is its own subtree's roll-up).
+            if isinstance(step, Workflow):
+                envelopes.append(step.aggregate_resource_envelope())
+                continue
+
+            cfg = getattr(step, "config", None)
+            if cfg is None:
+                continue
+            raw = getattr(cfg, "resource_envelope", None)
+            if raw is None:
+                continue
+            if isinstance(raw, ResourceEnvelope):
+                envelopes.append(raw)
+            elif isinstance(raw, dict):
+                ResourceEnvelope._allow_direct_instantiation = True
+                try:
+                    envelopes.append(ResourceEnvelope(**raw))
+                finally:
+                    ResourceEnvelope._allow_direct_instantiation = False
+            # Other types are silently skipped — type-mismatch should
+            # have FAIL-FASTed at config load.
+
+        return aggregate_resource_envelopes(envelopes)
+
     async def _collect_workflow_output_data_units(self) -> Dict[str, Any]:
         """G8 helper — read every workflow-level output data unit's
         current value into a dict. Workflow-level outputs live on

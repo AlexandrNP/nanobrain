@@ -300,3 +300,63 @@ class UnifiedToolDescriptor(ConfigBase):
     def descriptor_version(self) -> str:
         m = _DESCRIPTOR_ID_RE.match(self.descriptor_id)
         return m.group("version") if m else ""
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "UnifiedToolDescriptor":
+        """Build a UnifiedToolDescriptor from a plain dict, handling
+        every nested ConfigBase model's direct-instantiation admittance.
+
+        Without this helper, callers have to flip ``_allow_direct_instantiation``
+        on the UTD AND on every nested model (UTDInputSpec, UTDOutputSpec,
+        UTDProvenancePin, UTDCostEstimate, UTDFailureMode,
+        UTDVersionEntry) — which is brittle and easy to get wrong.
+
+        Use this for in-memory UTD construction (tests + apecx-mcp-side
+        programmatic UTD authoring). For file-loaded UTDs, use
+        ``UnifiedToolDescriptor.from_config(path)`` (the standard route).
+        """
+        nested_classes = (
+            UTDInputSpec, UTDOutputSpec, UTDCostEstimate,
+            UTDFailureMode, UTDProvenancePin, UTDVersionEntry,
+            cls,
+        )
+        # Open every nested class for direct construction.
+        for nested in nested_classes:
+            nested._allow_direct_instantiation = True
+        try:
+            normalized = dict(data)
+
+            # Pre-build the simple nested fields:
+            if isinstance(normalized.get("provenance_pin"), dict):
+                normalized["provenance_pin"] = UTDProvenancePin(
+                    **normalized["provenance_pin"])
+            if isinstance(normalized.get("cost_estimate"), dict):
+                normalized["cost_estimate"] = UTDCostEstimate(
+                    **normalized["cost_estimate"])
+
+            # Pre-build list nested fields:
+            for list_field, nested_cls in [
+                ("inputs", UTDInputSpec),
+                ("outputs", UTDOutputSpec),
+                ("failure_modes", UTDFailureMode),
+                ("version_history", UTDVersionEntry),
+            ]:
+                if list_field in normalized and isinstance(normalized[list_field], list):
+                    built = []
+                    for item in normalized[list_field]:
+                        if isinstance(item, nested_cls):
+                            built.append(item)
+                        elif isinstance(item, dict):
+                            built.append(nested_cls(**item))
+                        else:
+                            raise ValueError(
+                                f"FAIL-FAST: UTD {list_field}[*] must be a "
+                                f"dict or {nested_cls.__name__}, got "
+                                f"{type(item).__name__}"
+                            )
+                    normalized[list_field] = built
+
+            return cls(**normalized)
+        finally:
+            for nested in nested_classes:
+                nested._allow_direct_instantiation = False

@@ -57,6 +57,94 @@ logger = logging.getLogger(__name__)
 RESERVED_OUTPUT_FIELDS = ("errors", "partial")
 
 
+# ---------------------------------------------------------------------------
+# G12 — Declarative resource envelope on Step.
+# ---------------------------------------------------------------------------
+
+class ResourceEnvelope(ConfigBase):
+    """G12 — per-step resource projection.
+
+    Each field is OPTIONAL; a step that omits a field is treated as
+    "no declared bound" for that dimension. The aggregator
+    (Workflow.aggregate_resource_envelope) skips None fields.
+
+    Per-field aggregation rules (workflow rolls up per-step values):
+
+    | Field | Aggregation |
+    |---|---|
+    | walltime_minutes | sum (worst-case sequential) |
+    | cpu_cores | max (steps run on the same allocation; envelope is the peak) |
+    | memory_gb | max |
+    | capability_tokens | union (every token any step needs) |
+    | cost_units | sum (every step's cost adds) |
+
+    Future enhancement: parallel-aware aggregation that knows when the
+    workflow runs steps in parallel (then walltime = max not sum). v1
+    over-projects, which is the safe direction (operator sees a
+    too-high envelope, not a too-low one).
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    walltime_minutes: Optional[float] = Field(default=None, ge=0.0)
+    cpu_cores: Optional[float] = Field(default=None, ge=0.0)
+    memory_gb: Optional[float] = Field(default=None, ge=0.0)
+    capability_tokens: List[str] = Field(default_factory=list)
+    cost_units: Optional[float] = Field(default=None, ge=0.0)
+
+
+def aggregate_resource_envelopes(
+    envelopes: List[ResourceEnvelope],
+) -> ResourceEnvelope:
+    """G12 — aggregate per-step envelopes into a workflow-level envelope.
+
+    Per-field rule (see ResourceEnvelope docstring):
+    - walltime_minutes: sum (worst-case sequential)
+    - cpu_cores / memory_gb: max
+    - capability_tokens: union
+    - cost_units: sum
+
+    Returns a new ResourceEnvelope. Omitted fields (None across all
+    inputs) remain None in the output. Empty list returns an empty
+    envelope (all None / empty list).
+    """
+    if not envelopes:
+        ResourceEnvelope._allow_direct_instantiation = True
+        try:
+            return ResourceEnvelope()
+        finally:
+            ResourceEnvelope._allow_direct_instantiation = False
+
+    # Sum-fields: walltime, cost. None contributes 0; if EVERY input is
+    # None for a field, output is also None.
+    def _sum_or_none(values: List[Optional[float]]) -> Optional[float]:
+        non_none = [v for v in values if v is not None]
+        return sum(non_none) if non_none else None
+
+    def _max_or_none(values: List[Optional[float]]) -> Optional[float]:
+        non_none = [v for v in values if v is not None]
+        return max(non_none) if non_none else None
+
+    walltimes = [e.walltime_minutes for e in envelopes]
+    costs = [e.cost_units for e in envelopes]
+    cpus = [e.cpu_cores for e in envelopes]
+    mems = [e.memory_gb for e in envelopes]
+    all_tokens: set[str] = set()
+    for e in envelopes:
+        all_tokens.update(e.capability_tokens)
+
+    ResourceEnvelope._allow_direct_instantiation = True
+    try:
+        return ResourceEnvelope(
+            walltime_minutes=_sum_or_none(walltimes),
+            cpu_cores=_max_or_none(cpus),
+            memory_gb=_max_or_none(mems),
+            capability_tokens=sorted(all_tokens),
+            cost_units=_sum_or_none(costs),
+        )
+    finally:
+        ResourceEnvelope._allow_direct_instantiation = False
+
+
 class StepError(ConfigBase):
     """Reserved error envelope used in the G6 escape valve. Step output may
     include an `errors: list[StepError]` field even if not declared in the
@@ -289,6 +377,18 @@ class StepConfig(ConfigBase):
                     "process(). Reserved fields 'errors' (list[StepError]) "
                     "and 'partial' (bool) are admitted alongside the typed "
                     "payload — see the gap proposal's escape valve."
+    )
+
+    # G12 — declarative resource envelope (additive; default None preserves
+    # historical un-bounded behavior). Used by HPC bundle exporter + cost
+    # gate (HITL §3.4) to project workflow resource needs before execution.
+    # See `apecx-mcp-integration/docs/nanobrain_capability_gaps.md G12`.
+    resource_envelope: Optional[Union[Dict[str, Any], 'ResourceEnvelope']] = Field(
+        default=None,
+        description="G12 — coarse resource projection: walltime_minutes, "
+                    "cpu_cores, memory_gb, capability_tokens, cost_units. "
+                    "Per-step values; the workflow aggregates via "
+                    "Workflow.aggregate_resource_envelope().",
     )
 
 
