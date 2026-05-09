@@ -89,9 +89,17 @@ class WorkflowEntryTriggerConfig(ConfigBase):
     name: str
     target_workflow: Optional[str] = Field(
         default=None,
-        description="Reserved-for-future. v1 expects workflow_callable as a "
-                    "kwarg to from_config; this string is recorded but not "
-                    "resolved automatically."
+        description="Dotted-path string resolving to one of: "
+                    "(a) an async callable f(payload) -> Any (preferred), "
+                    "(b) a Workflow instance with a .run method (we'll "
+                    "    bind .run automatically), "
+                    "(c) a class — NOT supported in v2; instantiate via "
+                    "    from_config first and pass the resulting "
+                    "    instance's .run method via kwarg or via the "
+                    "    instance attribute path. "
+                    "When set, framework auto-resolves and uses the result "
+                    "as the workflow callable. Explicit workflow_callable "
+                    "kwarg overrides this (programmatic > YAML)."
     )
     payload_factory: Optional[str] = Field(
         default=None,
@@ -158,6 +166,84 @@ def _resolve_dotted_callable(spec: str) -> Callable[[Any], Any]:
     return obj
 
 
+def _resolve_workflow_target(spec: str) -> Callable[..., Awaitable[Any]]:
+    """G22 Step 2 — resolve a ``target_workflow`` dotted-path spec to a
+    callable suitable for ``WorkflowRunner.run_detached``.
+
+    The spec resolves to one of two acceptable shapes:
+
+    1. **A callable** (async function, coroutine, bound method, etc.) →
+       returned directly.
+    2. **An instance with a callable ``.run`` attribute** (e.g., a
+       ``Workflow`` instance) → ``.run`` is bound and returned.
+
+    Returning a *class* is deliberately rejected: the framework's
+    ``from_config`` discipline forbids ad-hoc construction of Workflow
+    classes here. If the user wants a class, they must instantiate it
+    (via ``from_config``) and pass the instance — either by referring
+    to a module-level instance variable in the dotted path, or by
+    passing ``workflow_callable=<wf>.run`` programmatically.
+
+    Raises ``ComponentConfigurationError`` (FAIL-FAST) on resolution
+    failure or shape mismatch.
+    """
+    if not isinstance(spec, str) or "." not in spec:
+        raise ComponentConfigurationError(
+            f"FAIL-FAST: target_workflow must be a dotted-path string "
+            f"like 'pkg.mod.func' or 'pkg.mod.workflow_instance'; got "
+            f"{spec!r}"
+        )
+    module_path, _, attr_path = spec.partition(":")
+    if not attr_path:
+        module_path, _, attr_path = spec.rpartition(".")
+    try:
+        mod = importlib.import_module(module_path)
+    except ModuleNotFoundError as exc:
+        raise ComponentConfigurationError(
+            f"FAIL-FAST: target_workflow module {module_path!r} not "
+            f"importable: {exc}"
+        ) from exc
+    obj: Any = mod
+    for part in attr_path.split("."):
+        try:
+            obj = getattr(obj, part)
+        except AttributeError as exc:
+            raise ComponentConfigurationError(
+                f"FAIL-FAST: target_workflow attribute {attr_path!r} not "
+                f"found on module {module_path!r}: {exc}"
+            ) from exc
+
+    # Acceptable shape 1: a callable directly (function, bound method,
+    # coroutine function).
+    if callable(obj) and not isinstance(obj, type):
+        return obj
+
+    # Acceptable shape 2: an instance with a callable .run attribute.
+    # Workflow instances are the canonical case; we duck-type so any
+    # object that quacks like a workflow (.run(payload)) works.
+    run_attr = getattr(obj, "run", None)
+    if callable(run_attr) and not isinstance(obj, type):
+        return run_attr
+
+    # Reject classes deliberately — the from_config discipline says
+    # don't ad-hoc-construct here.
+    if isinstance(obj, type):
+        raise ComponentConfigurationError(
+            f"FAIL-FAST: target_workflow {spec!r} resolved to a class "
+            f"({obj.__name__}); the framework's from_config discipline "
+            f"forbids ad-hoc class instantiation here. Instantiate via "
+            f"{obj.__name__}.from_config(<yaml>) and reference the "
+            f"resulting instance (e.g., 'mymodule.my_workflow_instance') "
+            f"OR pass workflow_callable=<wf>.run programmatically."
+        )
+
+    raise ComponentConfigurationError(
+        f"FAIL-FAST: target_workflow {spec!r} resolved to "
+        f"{type(obj).__name__}, which is neither callable nor an "
+        f"instance with a callable .run method"
+    )
+
+
 # ---------------------------------------------------------------------------
 # WorkflowEntryTrigger
 # ---------------------------------------------------------------------------
@@ -216,14 +302,29 @@ class WorkflowEntryTrigger(FromConfigBase):
             )
         self._inner: TriggerBase = inner_trigger
 
+        # G22 Step 2 — resolution precedence:
+        #   1. workflow_callable kwarg wins (programmatic > YAML).
+        #   2. Else, if target_workflow YAML field is set, resolve it
+        #      via the dotted-path resolver. The resolved object can be:
+        #        - a callable directly → use it
+        #        - a Workflow instance (anything with a callable .run
+        #          attribute) → bind .run as the callable
+        #   3. Else, FAIL-FAST.
         workflow_callable = dependencies.get("workflow_callable")
+        if workflow_callable is None and config.target_workflow:
+            workflow_callable = _resolve_workflow_target(config.target_workflow)
         if not callable(workflow_callable):
             raise ComponentConfigurationError(
                 f"FAIL-FAST: WorkflowEntryTrigger {config.name!r} requires "
-                f"a callable via the 'workflow_callable' kwarg to from_config; "
-                f"got {type(workflow_callable).__name__}"
+                f"a callable workflow target. Provide one via the "
+                f"'workflow_callable' kwarg to from_config OR set "
+                f"'target_workflow' in YAML to a dotted-path resolving to "
+                f"a callable or a Workflow instance with a .run method. "
+                f"Got: workflow_callable={type(workflow_callable).__name__}, "
+                f"target_workflow={config.target_workflow!r}"
             )
         self._workflow_callable: Callable[..., Awaitable[Any]] = workflow_callable
+        self._target_workflow_spec = config.target_workflow
 
         # Optional callback invoked AFTER each successful run_detached call,
         # so the caller can record the task_id without polling list_active.
