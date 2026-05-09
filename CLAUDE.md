@@ -8,6 +8,22 @@ Nanobrain is an event-driven AI agent framework for distributed workflows. It's 
 
 ## Recent additions (2026-05-09)
 
+- **G22 v1 — EventTrigger + WorkflowEntryTrigger** shipped:
+  - `EventTrigger` at `nanobrain/core/trigger.py` (transport-agnostic;
+    callers invoke `fire_event(body)` from a webhook handler or
+    message-bus consumer). Optional G1 `event_filter` predicate dict
+    on `TriggerConfig.event_filter` gates fires. `TriggerType.EVENT`
+    enum value added.
+  - `WorkflowEntryTrigger` at `nanobrain/library/runtime/entry_triggers.py`
+    wraps any inner TriggerBase to launch a detached workflow run via
+    G21's WorkflowRunner. Auto-generates task IDs, optionally calls
+    a dotted-path-resolved `payload_factory`, forwards `autonomy_level`
+    and `cost_envelope_template` into payload metadata as
+    `__autonomy_level__` / `__cost_envelope_template__`. Optional
+    `on_launch(handle)` callback for caller-side task tracking.
+  - 21 unit tests across two new files; full regression 557 passed,
+    1 skipped, 0 regressions. All 22 capability gaps now shipped.
+
 - **G21 v1 — WorkflowRunner.run_detached** shipped at
   `nanobrain/library/runtime/workflow_runner.py` (new subpackage).
   `run_detached(workflow_callable, task_id, payload)` schedules an

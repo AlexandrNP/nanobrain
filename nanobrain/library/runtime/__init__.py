@@ -14,9 +14,15 @@ from .workflow_runner import (
     WorkflowRunner,
     WorkflowRunnerConfig,
 )
+from .entry_triggers import (
+    WorkflowEntryTrigger,
+    WorkflowEntryTriggerConfig,
+)
 
 __all__ = [
     "DetachedTaskHandle",
     "WorkflowRunner",
     "WorkflowRunnerConfig",
+    "WorkflowEntryTrigger",
+    "WorkflowEntryTriggerConfig",
 ]

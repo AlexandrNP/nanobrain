@@ -238,6 +238,7 @@ class TriggerType(Enum):
     TIMER = "timer"
     MANUAL = "manual"
     CONDITION = "condition"
+    EVENT = "event"  # G22 — externally-fired event trigger
 
 
 class TriggerConfig(ConfigBase):
@@ -300,6 +301,19 @@ class TriggerConfig(ConfigBase):
                     "payloads as satisfied. 'gate_to_bottom' additionally "
                     "treats ConditionalLink.GATED_OFF_SENTINEL as satisfied "
                     "and excludes it from the trigger payload."
+    )
+
+    # G22 — EventTrigger filter. Optional G1 PredicateConfig dict (or
+    # legacy condition shape) that gates whether an incoming event
+    # actually fires the trigger. When None, every fire_event() call
+    # fires; when set, the predicate is evaluated against the event
+    # body and fire_event() returns silently on miss.
+    event_filter: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Optional G1-style predicate dict applied to incoming "
+                    "event bodies in EventTrigger.fire_event(). When set, "
+                    "fire_event silently returns when the predicate is "
+                    "False; when None, every event fires the trigger."
     )
 
 
@@ -1772,3 +1786,122 @@ class ManualTrigger(TriggerBase):
             await self.trigger(data)
         else:
             logger.warning(f"ManualTrigger {self.name} not active")
+
+
+class EventTrigger(TriggerBase):
+    """G22 — externally-fired event trigger.
+
+    Per ``apecx-mcp-integration/docs/nanobrain_capability_gaps.md G22``.
+
+    Designed for HTTP webhooks and message-bus subscriptions. The
+    framework-provided primitive is **transport-agnostic**: this class
+    does not embed an HTTP server or a message-bus client. External
+    code (a webhook handler in your deployment, or a message-bus
+    consumer task) calls ``await trigger.fire_event(event_body)`` for
+    each incoming event. Production deployments wire the transport
+    plumbing on top of this primitive.
+
+    The optional ``event_filter`` field on ``TriggerConfig`` is a G1
+    declarative predicate dict (e.g.
+    ``{"op": "eq", "field": "kind", "value": "novel"}``). When set,
+    ``fire_event`` evaluates the predicate against the event body and
+    returns silently (no callbacks invoked) on miss. When unset, every
+    event fires.
+
+    The trigger holds NO event history; it is fire-and-forget. Callers
+    that need replay-on-restart semantics should layer a durable queue
+    in front of ``fire_event``.
+    """
+
+    @classmethod
+    def from_config(cls, config: Union[str, Path, TriggerConfig, Dict[str, Any]],
+                    **kwargs) -> "EventTrigger":
+        """Standard from_config implementation matching ManualTrigger /
+        TimerTrigger; supports file paths, dict, and TriggerConfig input."""
+        nb_logger = get_logger(f"{cls.__name__}.from_config")
+        nb_logger.info(f"Creating {cls.__name__} from configuration")
+
+        if isinstance(config, (str, Path)):
+            config_object = TriggerConfig.from_config(config, **kwargs)
+        elif isinstance(config, dict):
+            normalized_config = config.copy()
+            try:
+                TriggerConfig._allow_direct_instantiation = True
+                config_object = TriggerConfig(**normalized_config)
+            finally:
+                TriggerConfig._allow_direct_instantiation = False
+        elif isinstance(config, TriggerConfig):
+            config_object = config
+        else:
+            if hasattr(config, "model_dump"):
+                config_dict = config.model_dump()
+            elif hasattr(config, "dict"):
+                config_dict = config.dict()
+            else:
+                raise ValueError(f"Unsupported config type: {type(config)}")
+            try:
+                TriggerConfig._allow_direct_instantiation = True
+                config_object = TriggerConfig(**config_dict)
+            finally:
+                TriggerConfig._allow_direct_instantiation = False
+
+        cls.validate_config_schema(config_object)
+        component_config = cls.extract_component_config(config_object)
+        dependencies = cls.resolve_dependencies(component_config, **kwargs)
+        instance = cls.create_instance(config_object, component_config, dependencies)
+        instance._post_config_initialization()
+
+        nb_logger.info(f"Successfully created {cls.__name__}")
+        return instance
+
+    def _init_from_config(self, config: TriggerConfig, component_config: Dict[str, Any],
+                          dependencies: Dict[str, Any]) -> None:
+        """Initialize EventTrigger; pre-build the optional event_filter
+        predicate so each fire_event call is O(predicate-eval), not
+        O(predicate-build + eval)."""
+        super()._init_from_config(config, component_config, dependencies)
+
+        self._event_filter_raw = getattr(config, "event_filter", None)
+        self._event_filter_func: Optional[Callable[[Any], bool]] = None
+        if self._event_filter_raw is not None:
+            # Reuse the G1 condition resolver — same dict shape as
+            # ConditionalLink's `condition` field. Lazy import to avoid
+            # the trigger.py ↔ link.py cycle.
+            from .link import parse_condition_from_config
+            self._event_filter_func = parse_condition_from_config(self._event_filter_raw)
+
+    async def start_monitoring(self) -> None:
+        """No-op: event-driven, not polled."""
+        self._is_active = True
+        logger.debug(f"EventTrigger {self.name} ready for fire_event() calls")
+
+    async def stop_monitoring(self) -> None:
+        """No-op: nothing to cancel."""
+        self._is_active = False
+        logger.debug(f"EventTrigger {self.name} deactivated")
+
+    async def fire_event(self, event_body: Any) -> bool:
+        """Fire the trigger with ``event_body`` if the optional filter
+        passes. Returns True if the trigger fired, False if filtered out
+        or inactive.
+
+        FAIL-FAST is preserved: predicate evaluation errors propagate
+        as ``ComponentConfigurationError`` from the G1 evaluator; we
+        do not swallow them.
+        """
+        if not self._is_active:
+            logger.warning(f"EventTrigger {self.name} not active; ignoring event")
+            return False
+
+        if self._event_filter_func is not None:
+            should_fire = self._event_filter_func(event_body)
+            if asyncio.iscoroutine(should_fire):
+                should_fire = await should_fire
+            if not should_fire:
+                logger.debug(
+                    f"EventTrigger {self.name} event filtered out by predicate"
+                )
+                return False
+
+        await self.trigger(event_body)
+        return True
