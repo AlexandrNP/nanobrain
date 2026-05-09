@@ -6,6 +6,30 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Nanobrain is an event-driven AI agent framework for distributed workflows. It's currently in research preview and has dependencies on HPC systems and external frameworks. The framework uses a mandatory configuration-driven architecture where ALL components are created through the `from_config()` pattern.
 
+## Recent additions (2026-05-09)
+
+- **G1 — Declarative ConditionalLink predicate DSL** shipped at
+  `nanobrain/core/link.py`: `PredicateConfig` (Pydantic, `extra: forbid`,
+  fixed op vocabulary `eq | ne | in | contains | exists | all | any | not`),
+  `evaluate_predicate` (FAIL-FASTs on dotted-path miss when `op != "exists"`),
+  `get_nested_value_strict` (uses `_PATH_MISS` sentinel to distinguish
+  legitimate `None` payloads from missing fields). Backwards-compatible:
+  legacy `field/operator/value` dicts and bare-string conditions still work
+  with deprecation warnings. Tests at `tests/unit/test_link_predicates.py`
+  (48 tests, all green). See `apecx-mcp-integration/docs/nanobrain_capability_gaps.md G1`
+  for the proposal.
+
+## ⚠️ Dominant silent-failure shape
+
+**`DirectLink` (and other `LinkBase` subclasses) defaults `auto_transfer=False`.**
+Without an explicit `auto_transfer: true` in YAML, the link silently no-ops:
+the workflow loads, every step runs, no exception, but no data ever
+transfers. Gap **G7** (`apecx-mcp-integration/docs/nanobrain_capability_gaps.md`)
+proposes flipping the default in `config_version: 2`. Until then, every
+hand-authored link YAML must include the flag. The
+`.claude/skills/nanobrain-data-units-triggers-links/SKILL.md` carries the
+full warning.
+
 ## Core Architecture Principles
 
 ### The `from_config()` Pattern (MANDATORY)

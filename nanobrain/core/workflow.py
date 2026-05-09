@@ -11,7 +11,7 @@ import asyncio
 import logging
 import time
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Union, Set, Tuple, Callable
+from typing import Any, Dict, List, Literal, Optional, Union, Set, Tuple, Callable
 from pathlib import Path
 
 from pydantic import BaseModel, Field, ConfigDict, field_validator
@@ -33,6 +33,138 @@ from .workflow_graph import WorkflowGraph
 logger = logging.getLogger(__name__)
 
 
+# ---------------------------------------------------------------------------
+# G7 Step 2 — auto_transfer deprecation WARNING (added 2026-05-09)
+# ---------------------------------------------------------------------------
+#
+# Per `apecx-mcp-integration/docs/nanobrain_capability_gaps.md G7`: the
+# `LinkBase.auto_transfer` field defaults to False, meaning a `DirectLink`
+# (or subclass) without an explicit `auto_transfer: true` in YAML silently
+# no-ops on every trigger fire. The workflow loads cleanly, every step
+# runs, no exception is raised — but no data ever transfers. This is the
+# dominant silent-failure shape documented in `architecture.md §13`
+# brutal-truth #3.
+#
+# Step 2 of the G7 migration plan is to emit a deprecation WARNING at
+# workflow load when a v1 workflow (the current default) has a Link config
+# that omits `auto_transfer`. Authors silence the warning by being
+# explicit (`auto_transfer: true` if you want transfer, `auto_transfer: false`
+# if you genuinely want to suppress it).
+#
+# Step 3 (land v2 semantics) and Step 4 (flip new-workflow default to v2)
+# are deferred — they need cross-repo coordination per the gap doc's
+# Migration section.
+# ---------------------------------------------------------------------------
+
+# Tokens we look for in `class:` strings to decide whether a link config
+# is one of the link subclasses subject to the auto_transfer warning.
+# Prefix-matched against the class path; case-sensitive.
+_LINK_CLASSES_NEEDING_AUTO_TRANSFER = (
+    "DirectLink",
+    "TransformLink",
+    "ConditionalLink",
+    "FileLink",
+    "QueueLink",
+)
+
+
+def _link_class_needs_auto_transfer_check(class_path: str) -> bool:
+    """Return True if `class_path` names a link class whose auto_transfer
+    semantics matter. Conservative: returns True only when the trailing
+    name in the dotted path matches one of the known link subclasses.
+    Returns False for AcademyLink and any unknown classes.
+    """
+    if not isinstance(class_path, str):
+        return False
+    trailing = class_path.rsplit(".", 1)[-1]
+    return trailing in _LINK_CLASSES_NEEDING_AUTO_TRANSFER
+
+
+def _link_inline_config_omits_auto_transfer(link_entry: Any) -> Optional[bool]:
+    """Return:
+        True  — link entry is an inline config dict and `auto_transfer` is missing
+        False — link entry has explicit `auto_transfer` key (any value)
+        None  — cannot statically determine (path-reference config, or already
+                a resolved LinkBase instance, or shape we don't recognize)
+
+    Two YAML shapes for inline configs:
+        1. Top-level keys directly on the link entry (legacy):
+            {class: "...", source: "...", target: "...", auto_transfer: true}
+        2. Nested under config: (canonical):
+            {class: "...", config: {source: "...", auto_transfer: true}}
+    Both shapes are inspected.
+    """
+    if not isinstance(link_entry, dict):
+        return None  # already-resolved LinkBase or unknown shape
+
+    inner_config = link_entry.get("config")
+    if isinstance(inner_config, dict):
+        return "auto_transfer" not in inner_config
+    if isinstance(inner_config, str):
+        return None  # path-reference; can't tell without loading the file
+
+    # Legacy shape — top-level keys ARE the config
+    return "auto_transfer" not in link_entry
+
+
+def _warn_on_implicit_auto_transfer(
+    workflow_name: str,
+    links_config: Dict[str, Any],
+    config_version: int,
+) -> None:
+    """Emit one WARNING per link that omits `auto_transfer`. v2 workflows
+    suppress the warning (the v2 default makes omission safe — though as
+    of 2026-05-09 v2 semantics are not yet implemented; declaring v2 today
+    silences the warning but does NOT change runtime behavior).
+
+    Path-reference link configs cannot be statically inspected; we emit a
+    softer DEBUG-level note for those so authors who care can find them.
+    """
+    if config_version >= 2:
+        return  # v2 promises auto_transfer=True default; no warning needed
+
+    if not isinstance(links_config, dict) or not links_config:
+        return
+
+    implicit_links: List[str] = []
+    indeterminate_links: List[str] = []
+
+    for link_name, link_entry in links_config.items():
+        if not isinstance(link_entry, dict):
+            continue  # already-resolved LinkBase; skip
+        class_path = link_entry.get("class", "")
+        if not _link_class_needs_auto_transfer_check(class_path):
+            continue  # AcademyLink (auto_transfer is set explicitly there) or unknown
+
+        omits = _link_inline_config_omits_auto_transfer(link_entry)
+        if omits is True:
+            implicit_links.append(f"{link_name} ({class_path})")
+        elif omits is None:
+            indeterminate_links.append(f"{link_name} ({class_path})")
+
+    if implicit_links:
+        logger.warning(
+            "Workflow %r: %d link(s) omit `auto_transfer` and will silently no-op "
+            "on trigger fire (links: %s). Add `auto_transfer: true` explicitly "
+            "to every DirectLink/TransformLink/ConditionalLink/FileLink/QueueLink "
+            "in your YAML, OR set `config_version: 2` on this workflow once "
+            "G7 v2 semantics ship to opt into the new default. "
+            "See nanobrain_capability_gaps.md G7 + architecture.md §13 brutal-truth #3.",
+            workflow_name,
+            len(implicit_links),
+            ", ".join(implicit_links),
+        )
+
+    if indeterminate_links:
+        logger.debug(
+            "Workflow %r: %d link config(s) use path-reference form, so the "
+            "auto_transfer field cannot be statically verified at workflow load. "
+            "Audit each linked YAML to ensure `auto_transfer: true` is set "
+            "(links: %s).",
+            workflow_name,
+            len(indeterminate_links),
+            ", ".join(indeterminate_links),
+        )
 
 
 
@@ -49,6 +181,24 @@ class WorkflowConfig(StepConfig):
     ❌ FORBIDDEN: WorkflowConfig(name="test", steps=...)
     ✅ REQUIRED: WorkflowConfig.from_config('path/to/config.yml')
     """
+
+    # G7 — config_version field. v1 (current) preserves the historical
+    # default of auto_transfer=False on links. v2 will flip the default
+    # (in a future release) to eliminate the dominant silent-failure shape.
+    # See `apecx-mcp-integration/docs/nanobrain_capability_gaps.md G7`.
+    # Today this field is informational only — the loader uses it solely to
+    # decide whether to emit the auto_transfer deprecation WARNING (v1 emits
+    # the WARNING when DirectLinks omit the flag; v2 will not, because the
+    # new default makes omission safe).
+    config_version: Literal[1, 2] = Field(
+        default=1,
+        description="Workflow config schema version. v1 = legacy semantics; "
+                    "v2 = G7 auto_transfer-true default (NOT yet active in this "
+                    "release; declaring v2 today is reserved-for-future and "
+                    "currently behaves as v1 with no WARNING). Set v1 explicitly "
+                    "to suppress the auto_transfer deprecation WARNING for "
+                    "workflows you have intentionally audited."
+    )
 
     # Enhanced workflow configuration supporting class+config patterns
     steps: Dict[str, Any] = Field(
@@ -1555,6 +1705,18 @@ class Workflow(Step):
                           dependencies: Dict[str, Any]) -> None:
         """Enhanced workflow initialization with automatic data unit creation"""
         super()._init_from_config(config, component_config, dependencies)
+
+        # G7 Step 2 — emit deprecation WARNING for v1 workflows with
+        # DirectLinks (or subclasses) whose YAML omits auto_transfer.
+        # Without auto_transfer: true the link silently no-ops on every
+        # trigger fire — the dominant silent-failure shape in the codebase
+        # (architecture.md §13 brutal-truth #3).
+        # See `apecx-mcp-integration/docs/nanobrain_capability_gaps.md G7`.
+        _warn_on_implicit_auto_transfer(
+            workflow_name=getattr(config, 'name', '<unnamed>'),
+            links_config=getattr(config, 'links', {}) or {},
+            config_version=getattr(config, 'config_version', 1),
+        )
 
         # Workflow-specific configuration
         self.workflow_config = config

@@ -10,10 +10,10 @@ import asyncio
 import logging
 import time
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional, List, Callable, Union
+from typing import Any, Dict, Optional, List, Callable, Union, Literal
 from enum import Enum
 from pathlib import Path
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 # Async file operations
 import aiofiles
@@ -27,49 +27,343 @@ from .config.config_base import ConfigBase
 logger = logging.getLogger(__name__)
 
 
-def get_nested_value(data: Dict[str, Any], field_path: str) -> Any:
+# Sentinel for "field path miss" — distinct from a legitimate None payload value.
+_PATH_MISS = object()
+
+
+def get_nested_value(data: Any, field_path: str) -> Any:
     """
-    Extract nested value from dictionary using dot notation.
+    Extract nested value from dictionary or object attribute path using dot notation.
 
     Args:
-        data: Dictionary to extract from
+        data: Dict or object to extract from
         field_path: Dot-separated path like "routing_decision.next_step"
 
     Returns:
-        The value at the specified path, or None if not found
+        The value at the specified path, or None if not found.
+
+    Note:
+        Returns None on miss to preserve backwards compatibility with the legacy
+        dict-condition path. NEW code (G1 PredicateConfig evaluator) uses
+        ``get_nested_value_strict`` below, which FAIL-FASTs on miss to eliminate
+        the silent-failure shape (per ``nanobrain_capability_gaps.md G1``).
     """
     try:
         current = data
         for key in field_path.split('.'):
-            current = current[key]
+            if isinstance(current, dict):
+                current = current[key]
+            else:
+                current = getattr(current, key)
         return current
     except (KeyError, TypeError, AttributeError):
         return None
 
 
-def parse_condition_from_config(condition_config: Union[str, Dict[str, Any]]) -> Callable:
+def get_nested_value_strict(data: Any, field_path: str) -> Any:
+    """
+    G1 strict-mode dotted-path resolver. Walks the path through dicts (via
+    ``__getitem__``) and Pydantic models / objects (via ``getattr``).
+
+    Returns:
+        The resolved value, or the module-level ``_PATH_MISS`` sentinel when
+        the path cannot be resolved. Caller must distinguish the sentinel
+        from a legitimate ``None`` payload value.
+
+    Used by:
+        ``evaluate_predicate`` (G1 evaluator). For the legacy "soft miss
+        returns None" semantics, use ``get_nested_value`` instead.
+    """
+    if not field_path:
+        return data
+    current = data
+    for key in field_path.split('.'):
+        if isinstance(current, dict):
+            if key not in current:
+                return _PATH_MISS
+            current = current[key]
+        else:
+            if not hasattr(current, key):
+                return _PATH_MISS
+            current = getattr(current, key)
+    return current
+
+
+# ---------------------------------------------------------------------------
+# G1 — Declarative predicate DSL for ConditionalLink
+# ---------------------------------------------------------------------------
+#
+# Per ``nanobrain_capability_gaps.md G1``: a fixed vocabulary of predicate
+# operators that an LLM (or human) can author safely in YAML, without needing
+# to synthesize a Python callable + import path. The evaluator is pure (no
+# side effects) and FAIL-FASTs on dotted-path miss when ``op != "exists"``.
+#
+# YAML form expected on a ConditionalLink config:
+#
+#     predicate: {op: contains, field: active_layers, value: structural}
+#     # or a combinator:
+#     predicate:
+#       op: all
+#       of:
+#         - {op: contains, field: active_layers, value: structural}
+#         - {op: eq, field: layer_options.structural.compute_accessibility, value: true}
+#
+# This is opt-in: existing ConditionalLink configs that use ``condition: {...}``
+# with the legacy ``field/operator/value`` keys keep working unchanged. The new
+# shape is used when the config dict has an ``op`` key (the new vocabulary).
+# ---------------------------------------------------------------------------
+
+PredicateOp = Literal["eq", "ne", "in", "contains", "exists", "all", "any", "not"]
+LEAF_OPS = {"eq", "ne", "in", "contains", "exists"}
+COMBINATOR_OPS = {"all", "any", "not"}
+
+
+class PredicateConfig(ConfigBase):
+    """G1 declarative predicate over a source data unit's payload.
+
+    Validated at workflow load (``model_validator`` ensures leaf vs. combinator
+    fields are populated correctly). Fixed vocabulary: see ``PredicateOp``.
+
+    The evaluator (``evaluate_predicate``) runs the predicate against the
+    payload of the link's configured ``source`` data unit. ``field`` is a
+    dotted path (e.g. ``"active_layers"`` or
+    ``"layer_options.structural.compute_accessibility"``) resolved by
+    successive ``__getitem__`` on dicts and ``__getattr__`` on objects.
+
+    Path miss raises ``ComponentConfigurationError("FAIL-FAST: predicate ...
+    field <path> missing in payload")`` for ``op != "exists"`` (where
+    ``"exists"`` is itself the presence check).
+
+    Cross-reference ``nanobrain_capability_gaps.md G1``.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    op: PredicateOp
+    field: Optional[str] = None
+    value: Any = None
+    of: Optional[List["PredicateConfig"]] = None
+
+    @model_validator(mode="after")
+    def _validate_shape(self) -> "PredicateConfig":
+        if self.op in LEAF_OPS:
+            if self.of is not None:
+                raise ValueError(
+                    f"FAIL-FAST: predicate op={self.op!r} is a leaf op; "
+                    f"'of' must not be set"
+                )
+            if self.op != "exists" and self.field is None:
+                raise ValueError(
+                    f"FAIL-FAST: predicate op={self.op!r} requires 'field'"
+                )
+            if self.op in {"eq", "ne", "in", "contains"} and self.value is None:
+                # Allow value=None ONLY if the user genuinely wants to test
+                # against None; we cannot tell intent from absence. Pydantic
+                # treats absent + explicit None identically, so we conservatively
+                # accept None values here. A FAIL-FAST on missing 'value' would
+                # be a false positive for legitimate `eq: null` configs.
+                pass
+            if self.op == "exists":
+                if self.field is None:
+                    raise ValueError(
+                        "FAIL-FAST: predicate op='exists' requires 'field'"
+                    )
+                if self.value is not None:
+                    raise ValueError(
+                        "FAIL-FAST: predicate op='exists' must not set 'value'"
+                    )
+        elif self.op in COMBINATOR_OPS:
+            if self.field is not None or self.value is not None:
+                raise ValueError(
+                    f"FAIL-FAST: predicate op={self.op!r} is a combinator; "
+                    f"'field' and 'value' must not be set"
+                )
+            if self.of is None or len(self.of) == 0:
+                raise ValueError(
+                    f"FAIL-FAST: predicate op={self.op!r} requires 'of' "
+                    f"with at least one sub-predicate"
+                )
+            if self.op == "not" and len(self.of) != 1:
+                raise ValueError(
+                    "FAIL-FAST: predicate op='not' requires exactly one "
+                    "sub-predicate"
+                )
+        else:
+            # Should be unreachable due to Literal type, but defensive.
+            raise ValueError(
+                f"FAIL-FAST: unknown predicate op={self.op!r}; "
+                f"vocabulary is eq | ne | in | contains | exists | all | any | not"
+            )
+        return self
+
+
+PredicateConfig.model_rebuild()
+
+
+def evaluate_predicate(payload: Any, predicate: PredicateConfig) -> bool:
+    """G1 predicate evaluator. Pure function — no side effects.
+
+    Args:
+        payload: The value held by the ConditionalLink's source data unit
+            at the moment the link fires. Typically a dict or a Pydantic
+            model.
+        predicate: The validated ``PredicateConfig``.
+
+    Returns:
+        bool: whether the predicate matches.
+
+    Raises:
+        ComponentConfigurationError: when ``op != "exists"`` and the
+            predicate's ``field`` cannot be resolved against ``payload``.
+            This is the G1 FAIL-FAST contract — silent ``None`` returns from
+            path-miss are forbidden because they hide bugs.
+    """
+    op = predicate.op
+
+    if op in COMBINATOR_OPS:
+        if op == "all":
+            return all(evaluate_predicate(payload, sub) for sub in predicate.of or [])
+        if op == "any":
+            return any(evaluate_predicate(payload, sub) for sub in predicate.of or [])
+        if op == "not":
+            # validator guarantees len(of) == 1
+            return not evaluate_predicate(payload, predicate.of[0])
+
+    # Leaf operations — resolve the field path first (except 'exists', which
+    # uses path-miss semantics intentionally).
+    field_path = predicate.field
+    if op == "exists":
+        resolved = get_nested_value_strict(payload, field_path)
+        return resolved is not _PATH_MISS
+
+    resolved = get_nested_value_strict(payload, field_path)
+    if resolved is _PATH_MISS:
+        raise ComponentConfigurationError(
+            f"FAIL-FAST: predicate op={op!r} field={field_path!r} missing in payload "
+            f"(payload type {type(payload).__name__}); use op='exists' if "
+            f"a missing field should be a legitimate False rather than an error"
+        )
+
+    if op == "eq":
+        return resolved == predicate.value
+    if op == "ne":
+        return resolved != predicate.value
+    if op == "in":
+        # value is the container; resolved is the needle
+        try:
+            return resolved in predicate.value
+        except TypeError as e:
+            raise ComponentConfigurationError(
+                f"FAIL-FAST: predicate op='in' value must be iterable, "
+                f"got {type(predicate.value).__name__}: {predicate.value!r}"
+            ) from e
+    if op == "contains":
+        # resolved is the container; value is the needle
+        try:
+            return predicate.value in resolved
+        except TypeError as e:
+            raise ComponentConfigurationError(
+                f"FAIL-FAST: predicate op='contains' field {field_path!r} resolved to "
+                f"non-container {type(resolved).__name__}: {resolved!r}"
+            ) from e
+
+    # Unreachable due to validator, but defensive.
+    raise ComponentConfigurationError(
+        f"FAIL-FAST: unhandled predicate op={op!r} (validator should have rejected this)"
+    )
+
+
+def parse_condition_from_config(condition_config: Union[str, Dict[str, Any], "PredicateConfig"]) -> Callable:
     """
     Parse YAML condition configuration into a callable function.
 
+    Three accepted input shapes (in priority order):
+
+    1. **G1 declarative predicate** (NEW; preferred). A dict containing an
+       ``op:`` key from the fixed vocabulary
+       ``eq | ne | in | contains | exists | all | any | not``. Built into
+       a ``PredicateConfig`` (validated), then evaluated via
+       ``evaluate_predicate``. FAIL-FASTs on dotted-path miss for ``op !=
+       "exists"`` — silent ``False`` returns are forbidden.
+
+    2. **Legacy dict** (deprecated). A dict with ``field/operator/value``
+       keys using the old vocabulary
+       ``equals | not_equals | contains | greater_than | less_than | exists``.
+       Continues to work; logs a deprecation WARNING.
+
+    3. **Legacy string** (deprecated). A bare string used as a substring
+       presence check on ``str(payload)``. Continues to work; logs a
+       deprecation WARNING.
+
     Args:
-        condition_config: Either a string expression or dictionary with field/operator/value
+        condition_config: One of the three shapes above, or a pre-built
+            ``PredicateConfig`` instance.
 
     Returns:
-        Callable function that evaluates the condition
+        Callable[[Any], bool] — invoked synchronously with the source data
+        unit's payload at link-fire time.
+
+    Raises:
+        ComponentConfigurationError: when the input is a dict that LOOKS
+            like a G1 predicate (has ``op``) but fails ``PredicateConfig``
+            validation. Legacy dicts that lack ``op`` continue to use the
+            legacy path with a deprecation warning.
     """
+    # Shape 1 — already a built PredicateConfig (programmatic callers).
+    if isinstance(condition_config, PredicateConfig):
+        predicate = condition_config
+
+        def g1_predicate_func(data: Any) -> bool:
+            return evaluate_predicate(data, predicate)
+        return g1_predicate_func
+
+    # Shape 1 — dict with G1 'op' key. Build PredicateConfig (which
+    # validates) and bind a fresh evaluator closure.
+    if isinstance(condition_config, dict) and "op" in condition_config:
+        try:
+            # ConfigBase normally forbids direct construction; the
+            # _allow_direct_instantiation flag is the documented backdoor for
+            # internal builders (mirrors LinkConfig handling above).
+            PredicateConfig._allow_direct_instantiation = True
+            try:
+                predicate = PredicateConfig(**condition_config)
+            finally:
+                PredicateConfig._allow_direct_instantiation = False
+        except Exception as e:
+            raise ComponentConfigurationError(
+                f"FAIL-FAST: predicate config validation failed: {e}"
+            ) from e
+
+        def g1_predicate_dict_func(data: Any) -> bool:
+            return evaluate_predicate(data, predicate)
+        return g1_predicate_dict_func
+
+    # Shape 3 — bare string (legacy substring-presence check).
     if isinstance(condition_config, str):
-        # Simple string conditions - could be enhanced later
-        def string_condition_func(data):
-            # For now, just check if the string exists in the data representation
+        logger.warning(
+            "ConditionalLink condition: bare-string form is deprecated; "
+            "migrate to a declarative predicate per nanobrain_capability_gaps.md G1, "
+            "e.g. {op: contains, field: <path>, value: %r}",
+            condition_config,
+        )
+
+        def string_condition_func(data: Any) -> bool:
             return condition_config in str(data)
         return string_condition_func
 
-    elif isinstance(condition_config, dict):
+    # Shape 2 — legacy dict with field/operator/value (deprecated).
+    if isinstance(condition_config, dict):
+        logger.warning(
+            "ConditionalLink condition: legacy field/operator/value form is "
+            "deprecated; migrate to a declarative predicate per "
+            "nanobrain_capability_gaps.md G1 (use 'op' key with vocabulary "
+            "eq/ne/in/contains/exists/all/any/not). Got config: %r",
+            condition_config,
+        )
         field = condition_config.get('field')
         operator = condition_config.get('operator', 'equals')
         value = condition_config.get('value')
 
-        def dict_condition_func(data):
+        def dict_condition_func(data: Any) -> bool:
             try:
                 field_value = get_nested_value(data, field)
 
@@ -96,11 +390,16 @@ def parse_condition_from_config(condition_config: Union[str, Dict[str, Any]]) ->
 
         return dict_condition_func
 
-    else:
-        # Fallback for other types
-        def default_condition_func(data):
-            return bool(condition_config)
-        return default_condition_func
+    # Fallback for other types — also deprecated.
+    logger.warning(
+        "ConditionalLink condition: unsupported config type %s; treating as "
+        "boolean coercion of the value (deprecated; will be removed)",
+        type(condition_config).__name__,
+    )
+
+    def default_condition_func(data: Any) -> bool:
+        return bool(condition_config)
+    return default_condition_func
 
 
 def parse_transform_from_config(transform_spec: str) -> Callable:
