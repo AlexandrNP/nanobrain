@@ -11,7 +11,11 @@ Currently exports:
 
 from .workflow_runner import (
     DetachedTaskHandle,
+    InMemoryTaskStore,
     PauseSignal,
+    PostgresTaskStore,
+    SqliteTaskStore,
+    TaskStore,
     WorkflowRunner,
     WorkflowRunnerConfig,
     current_pause_signal,
@@ -26,7 +30,11 @@ from .entry_triggers import (
 
 __all__ = [
     "DetachedTaskHandle",
+    "InMemoryTaskStore",
     "PauseSignal",
+    "PostgresTaskStore",
+    "SqliteTaskStore",
+    "TaskStore",
     "WorkflowRunner",
     "WorkflowRunnerConfig",
     "current_pause_signal",

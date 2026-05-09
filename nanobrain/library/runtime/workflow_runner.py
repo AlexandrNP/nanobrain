@@ -187,8 +187,27 @@ class DetachedTaskHandle:
 # Task store backends
 # ---------------------------------------------------------------------------
 
-class _TaskStore:
-    """Abstract base for task stores."""
+class TaskStore:
+    """Abstract base for task stores. Public extension point.
+
+    Three implementations ship in this module:
+      - InMemoryTaskStore (default; tests + single-process dev)
+      - SqliteTaskStore (single-process production with durability)
+      - PostgresTaskStore (multi-process production; psycopg 3 optional dep)
+
+    Deployments with other backends (Redis, DynamoDB, MongoDB,
+    custom-managed-DB) subclass this and implement the four async
+    methods. The runner consumes the abstract interface, so any
+    conforming backend works without runner changes.
+
+    Wire a custom backend at runner-construction time by either:
+      (a) instantiating WorkflowRunner.from_config(...) then assigning
+          ``runner._store = MyStore(...)`` BEFORE the first run_detached
+          call (programmatic; bypasses the YAML factory); or
+      (b) extending WorkflowRunnerConfig.task_store_backend with a new
+          Literal value AND patching _init_from_config to dispatch to
+          your backend (canonical; recommended for first-class support).
+    """
 
     async def insert(self, handle: DetachedTaskHandle) -> None:
         raise NotImplementedError
@@ -203,7 +222,13 @@ class _TaskStore:
         raise NotImplementedError
 
 
-class _InMemoryTaskStore(_TaskStore):
+# Backwards-compat alias — keep the underscore-prefixed name working
+# for any external code that imported it. Will be removed after one
+# release.
+_TaskStore = TaskStore
+
+
+class InMemoryTaskStore(TaskStore):
     """Process-local dict, serialized by an asyncio.Lock. The default."""
 
     def __init__(self) -> None:
@@ -236,7 +261,11 @@ class _InMemoryTaskStore(_TaskStore):
             ]
 
 
-class _SQLiteTaskStore(_TaskStore):
+# Backwards-compat alias.
+_InMemoryTaskStore = InMemoryTaskStore
+
+
+class SqliteTaskStore(TaskStore):
     """SQLite-backed task store. Single connection serialized by an
     asyncio.Lock — sufficient for a single-process detached runner.
     Multi-process / cross-restart resume is Step 4 scope.
@@ -344,6 +373,197 @@ class _SQLiteTaskStore(_TaskStore):
             return [h for h in (self._from_row(r) for r in rows) if h is not None]
 
 
+# Backwards-compat alias.
+_SQLiteTaskStore = SqliteTaskStore
+
+
+class PostgresTaskStore(TaskStore):
+    """G21 Step 4 — Postgres-backed TaskStore for cross-process resume.
+
+    Uses ``psycopg`` (psycopg 3) as a lazy import — it is NOT a hard
+    dependency of nanobrain. Install with:
+
+        pip install psycopg[binary]
+
+    Instantiating this class without psycopg installed raises
+    ``ImportError`` with the install hint.
+
+    Usage::
+
+        from nanobrain.library.runtime import PostgresTaskStore
+        store = PostgresTaskStore(dsn="postgresql://user:pw@host/db")
+        await store.initialize()  # create the table if missing
+        # then attach to runner: runner._store = store
+
+    DDL: see ``_SCHEMA``. The table is created with ``IF NOT EXISTS``
+    so deployments can pre-create it via migrations and just rely on
+    this code at runtime.
+
+    Cross-process semantics (the value-add over SqliteTaskStore):
+    multiple worker processes can each hold a WorkflowRunner pointed
+    at the same Postgres DB. Each process sees the union of all
+    tasks; ``list_active`` returns running tasks across the whole
+    fleet. The G21 Step 3 watchdog reaps tasks whose heartbeat went
+    stale across the fleet — useful for crash recovery (a worker
+    process died mid-task; the watchdog on a surviving worker reaps
+    the orphan).
+
+    Limitations (Step 4 honest deferrals):
+    - The runner does NOT YET resume orphan tasks (i.e., re-launch
+      a workflow whose runner crashed). Orphans are reaped to
+      ``failed`` by the watchdog; rebuilding via G5 ResumeStep is
+      the deployment author's job.
+    - Connection pooling is not implemented; v1 uses a single
+      connection serialized by an asyncio.Lock. For higher throughput,
+      subclass and swap in psycopg's AsyncConnectionPool.
+    """
+
+    _SCHEMA = """
+        CREATE TABLE IF NOT EXISTS nanobrain_detached_tasks (
+            task_id TEXT PRIMARY KEY,
+            status TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            last_heartbeat_at TEXT,
+            completed_at TEXT,
+            result_json TEXT,
+            error TEXT,
+            cost_actual_json TEXT
+        )
+    """
+
+    def __init__(self, dsn: str, *, table_name: str = "nanobrain_detached_tasks") -> None:
+        try:
+            import psycopg as _psycopg  # noqa: F401  (probe only)
+        except ImportError as exc:
+            raise ImportError(
+                "PostgresTaskStore requires psycopg (psycopg 3). Install "
+                "with: pip install 'psycopg[binary]'"
+            ) from exc
+        self._dsn = dsn
+        self._table = table_name
+        self._conn = None  # opened lazily in initialize()
+        self._lock = asyncio.Lock()
+        self._initialized = False
+
+    async def initialize(self) -> None:
+        """Open the connection and ensure the table exists. Idempotent."""
+        if self._initialized:
+            return
+        import psycopg
+        self._conn = await psycopg.AsyncConnection.connect(
+            self._dsn, autocommit=True,
+        )
+        # Schema; replace the table-name placeholder safely (we own the
+        # name, not user input, but psycopg.sql.SQL would be more idiomatic).
+        async with self._conn.cursor() as cur:
+            await cur.execute(self._SCHEMA.replace(
+                "nanobrain_detached_tasks", self._table,
+            ))
+        self._initialized = True
+
+    async def close(self) -> None:
+        if self._conn is not None:
+            await self._conn.close()
+            self._conn = None
+            self._initialized = False
+
+    @staticmethod
+    def _to_row(h: DetachedTaskHandle) -> Tuple:
+        return (
+            h.task_id,
+            h.status,
+            h.created_at.isoformat(),
+            h.last_heartbeat_at.isoformat() if h.last_heartbeat_at else None,
+            h.completed_at.isoformat() if h.completed_at else None,
+            json.dumps(h.result) if h.result is not None else None,
+            h.error,
+            json.dumps(h.cost_actual) if h.cost_actual else None,
+        )
+
+    @staticmethod
+    def _from_row(r: Optional[Tuple]) -> Optional[DetachedTaskHandle]:
+        if r is None:
+            return None
+
+        def _dt(s: Optional[str]) -> Optional[datetime]:
+            return datetime.fromisoformat(s) if s else None
+
+        return DetachedTaskHandle(
+            task_id=r[0],
+            status=r[1],
+            created_at=_dt(r[2]),
+            last_heartbeat_at=_dt(r[3]),
+            completed_at=_dt(r[4]),
+            result=json.loads(r[5]) if r[5] else None,
+            error=r[6],
+            cost_actual=json.loads(r[7]) if r[7] else None,
+        )
+
+    async def insert(self, handle: DetachedTaskHandle) -> None:
+        if not self._initialized:
+            await self.initialize()
+        import psycopg
+        async with self._lock:
+            try:
+                async with self._conn.cursor() as cur:
+                    await cur.execute(
+                        f"INSERT INTO {self._table} VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
+                        self._to_row(handle),
+                    )
+            except psycopg.errors.UniqueViolation as exc:
+                raise ValueError(
+                    f"FAIL-FAST: task_id {handle.task_id!r} already exists"
+                ) from exc
+
+    async def update(self, handle: DetachedTaskHandle) -> None:
+        if not self._initialized:
+            await self.initialize()
+        async with self._lock:
+            async with self._conn.cursor() as cur:
+                await cur.execute(
+                    f"UPDATE {self._table} SET status=%s, last_heartbeat_at=%s, "
+                    f"completed_at=%s, result_json=%s, error=%s, "
+                    f"cost_actual_json=%s WHERE task_id=%s",
+                    (
+                        handle.status,
+                        handle.last_heartbeat_at.isoformat() if handle.last_heartbeat_at else None,
+                        handle.completed_at.isoformat() if handle.completed_at else None,
+                        json.dumps(handle.result) if handle.result is not None else None,
+                        handle.error,
+                        json.dumps(handle.cost_actual) if handle.cost_actual else None,
+                        handle.task_id,
+                    ),
+                )
+
+    async def get(self, task_id: str) -> Optional[DetachedTaskHandle]:
+        if not self._initialized:
+            await self.initialize()
+        async with self._lock:
+            async with self._conn.cursor() as cur:
+                await cur.execute(
+                    f"SELECT task_id, status, created_at, last_heartbeat_at, "
+                    f"completed_at, result_json, error, cost_actual_json "
+                    f"FROM {self._table} WHERE task_id=%s",
+                    (task_id,),
+                )
+                return self._from_row(await cur.fetchone())
+
+    async def list_active(self) -> List[DetachedTaskHandle]:
+        if not self._initialized:
+            await self.initialize()
+        async with self._lock:
+            placeholders = ",".join(["%s"] * len(_STATUS_ACTIVE))
+            async with self._conn.cursor() as cur:
+                await cur.execute(
+                    f"SELECT task_id, status, created_at, last_heartbeat_at, "
+                    f"completed_at, result_json, error, cost_actual_json "
+                    f"FROM {self._table} WHERE status IN ({placeholders})",
+                    _STATUS_ACTIVE,
+                )
+                rows = await cur.fetchall()
+                return [h for h in (self._from_row(r) for r in rows) if h is not None]
+
+
 def _clone(h: DetachedTaskHandle) -> DetachedTaskHandle:
     """Shallow copy a handle. The store hands callers copies so they
     cannot mutate stored state via the returned reference."""
@@ -365,8 +585,21 @@ class WorkflowRunnerConfig(ConfigBase):
     """
 
     name: str
-    task_store_backend: Literal["in_memory", "sqlite"] = "in_memory"
+    task_store_backend: Literal["in_memory", "sqlite", "postgres"] = "in_memory"
     sqlite_db_path: Optional[str] = None
+    postgres_dsn: Optional[str] = Field(
+        default=None,
+        description="DSN for the postgres backend, e.g. "
+                    "'postgresql://user:pw@host/db'. Required when "
+                    "task_store_backend='postgres'. psycopg 3 must be "
+                    "installed (pip install 'psycopg[binary]')."
+    )
+    postgres_table_name: str = Field(
+        default="nanobrain_detached_tasks",
+        description="Table name for the postgres backend. Default "
+                    "'nanobrain_detached_tasks'. Override when sharing "
+                    "a database with other applications."
+    )
     max_concurrent_detached_tasks: int = Field(default=16, ge=1)
 
     # G21 Step 3 — heartbeat watchdog. The runner spawns a background
@@ -411,13 +644,37 @@ class WorkflowRunnerConfig(ConfigBase):
                     "FAIL-FAST: WorkflowRunnerConfig task_store_backend='sqlite' "
                     "requires sqlite_db_path"
                 )
+            if self.postgres_dsn:
+                raise ValueError(
+                    "FAIL-FAST: WorkflowRunnerConfig postgres_dsn set but "
+                    "task_store_backend='sqlite'; remove postgres_dsn or "
+                    "set backend to 'postgres'"
+                )
+        elif self.task_store_backend == "postgres":
+            if not self.postgres_dsn:
+                raise ValueError(
+                    "FAIL-FAST: WorkflowRunnerConfig task_store_backend="
+                    "'postgres' requires postgres_dsn"
+                )
+            if self.sqlite_db_path:
+                raise ValueError(
+                    "FAIL-FAST: WorkflowRunnerConfig sqlite_db_path set but "
+                    "task_store_backend='postgres'; remove sqlite_db_path or "
+                    "set backend to 'sqlite'"
+                )
         else:
-            # in_memory — sqlite_db_path is meaningless and likely a typo.
+            # in_memory — neither backend-specific field should be set.
             if self.sqlite_db_path:
                 raise ValueError(
                     "FAIL-FAST: WorkflowRunnerConfig sqlite_db_path is set but "
                     "task_store_backend='in_memory'; remove sqlite_db_path or "
                     "set backend to 'sqlite'"
+                )
+            if self.postgres_dsn:
+                raise ValueError(
+                    "FAIL-FAST: WorkflowRunnerConfig postgres_dsn is set but "
+                    "task_store_backend='in_memory'; remove postgres_dsn or "
+                    "set backend to 'postgres'"
                 )
         # G21 Step 3 — sanity: stale threshold must exceed the heartbeat
         # interval, otherwise the watchdog reaps healthy tasks. Skipped
@@ -474,11 +731,22 @@ class WorkflowRunner(FromConfigBase):
     ) -> None:
         self.name = config.name
         self._max_concurrent = config.max_concurrent_detached_tasks
-        self._store: _TaskStore
+        self._store: TaskStore
         if config.task_store_backend == "in_memory":
-            self._store = _InMemoryTaskStore()
+            self._store = InMemoryTaskStore()
+        elif config.task_store_backend == "sqlite":
+            self._store = SqliteTaskStore(config.sqlite_db_path)  # type: ignore[arg-type]
+        elif config.task_store_backend == "postgres":
+            self._store = PostgresTaskStore(
+                dsn=config.postgres_dsn,  # type: ignore[arg-type]
+                table_name=config.postgres_table_name,
+            )
         else:
-            self._store = _SQLiteTaskStore(config.sqlite_db_path)  # type: ignore[arg-type]
+            # Defensive — Pydantic Literal already rejects unknowns.
+            raise ComponentConfigurationError(
+                f"FAIL-FAST: unknown task_store_backend "
+                f"{config.task_store_backend!r}"
+            )
         self._tasks: Dict[str, asyncio.Task] = {}
         # G21 Step 2 — per-task PauseSignal registry. The runner owns
         # the signal; pause/resume mutate it; the inner _runner
