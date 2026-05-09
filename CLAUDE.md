@@ -8,6 +8,20 @@ Nanobrain is an event-driven AI agent framework for distributed workflows. It's 
 
 ## Recent additions (2026-05-09)
 
+- **G21 v1 — WorkflowRunner.run_detached** shipped at
+  `nanobrain/library/runtime/workflow_runner.py` (new subpackage).
+  `run_detached(workflow_callable, task_id, payload)` schedules an
+  asyncio task and returns the queued `DetachedTaskHandle` immediately.
+  Two task store backends: `in_memory` (default) and `sqlite` (stdlib
+  `sqlite3`). Lifecycle states: queued → running → (completed |
+  cancelled | failed). `cancel(task_id)` cooperatively cancels the
+  underlying asyncio task. `await_completion(task_id, timeout)` is a
+  test/sync convenience join-point. `pause` is reserved for Step 2
+  (raises NotImplementedError; needs step-level cancellation hook in
+  BaseStep). Cross-process resume + heartbeat watchdog deferred to
+  Steps 3-4. 18 unit tests at `tests/unit/test_workflow_runner.py`,
+  full regression 536 passed, 1 skipped, 0 regressions.
+
 - **G7 Step 3 — v2 auto_transfer default flip (active)** shipped at
   `nanobrain/core/workflow.py`: `WorkflowConfig._apply_v2_link_defaults`
   Pydantic `model_validator(mode='after')` mutates inline link configs
