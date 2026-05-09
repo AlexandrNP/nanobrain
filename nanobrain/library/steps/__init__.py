@@ -14,6 +14,12 @@ from .tool_execution_step import (
     ToolBackendAdapter,
     ToolBackendRegistry,
 )
+from .checkpoint_resume import (
+    CheckpointStep,
+    CheckpointStepConfig,
+    ResumeStep,
+    ResumeStepConfig,
+)
 
 __all__ = [
     'DataGeneratorStep',
@@ -27,4 +33,8 @@ __all__ = [
     'ToolExecutionStepConfig',
     'ToolBackendAdapter',
     'ToolBackendRegistry',
+    'CheckpointStep',
+    'CheckpointStepConfig',
+    'ResumeStep',
+    'ResumeStepConfig',
 ]

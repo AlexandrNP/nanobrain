@@ -8,6 +8,17 @@ Nanobrain is an event-driven AI agent framework for distributed workflows. It's 
 
 ## Recent additions (2026-05-09)
 
+- **G5 — CheckpointStep + ResumeStep primitives** shipped at
+  `nanobrain/library/steps/checkpoint_resume.py`: content-addressed
+  filesystem snapshots (default backend) + manifest with code-identity
+  capture + atomic write (write-tmp-then-rename). `ResumeStep` validates
+  manifest version, SHA-256 content hash on read, and supports
+  `on_missing: fail|skip|rebuild` (rebuild is `NotImplementedError` until
+  G5 Step 3). Streams (async iterators) are FAIL-FAST'd at capture time.
+  ProxyStore backend exists but is in-process-only for v1 (Key
+  serialization deferred). 20 unit tests at
+  `tests/unit/test_checkpoint_resume.py`, all green.
+
 - **G1 — Declarative ConditionalLink predicate DSL** shipped at
   `nanobrain/core/link.py`: `PredicateConfig` (Pydantic, `extra: forbid`,
   fixed op vocabulary `eq | ne | in | contains | exists | all | any | not`),
