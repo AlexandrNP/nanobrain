@@ -45,9 +45,12 @@ class TestWorkflowConfigVersionField:
         finally:
             WorkflowConfig._allow_direct_instantiation = False
 
-    def test_default_is_v1(self):
+    def test_default_is_v2(self):
+        """G7 Step 4 (2026-05-09) — workspace-wide default flipped from
+        v1 to v2. Authors who want legacy semantics must declare
+        ``config_version: 1`` explicitly."""
         cfg = self._build(name="test")
-        assert cfg.config_version == 1
+        assert cfg.config_version == 2
 
     def test_explicit_v1_accepted(self):
         cfg = self._build(name="test", config_version=1)
@@ -358,18 +361,67 @@ class TestV2LinkDefaultsApplied:
         cfg = self._build(name="test", config_version=2, links={"l": link_dict})
         assert "auto_transfer" not in cfg.links["l"]
 
-    def test_v2_skips_path_reference_config(self):
-        """When 'config' is a string (path to external YAML), Step 3
-        does NOT mutate — that is Step 4 scope (workspace-wide flip)."""
+    def test_v2_rewrites_path_reference_config(self, tmp_path):
+        """G7 Step 4 — path-reference link configs are now LOADED and
+        REWRITTEN to nested-inline form when config_version >= 2.
+        The external YAML is read; auto_transfer is injected if absent;
+        the entry's 'config' value flips from a string to a dict."""
+        # Create a real external link YAML in tmp_path
+        ext = tmp_path / "some_link.yml"
+        ext.write_text("source: a.x\ntarget: b.x\n")
+
         link_dict = {
             "class": "nanobrain.core.link.DirectLink",
-            "config": "config/some_link.yml",
+            "config": str(ext),
         }
-        cfg = self._build(name="test", config_version=2, links={"l": link_dict})
-        # The string was not converted to a dict and 'auto_transfer' was
-        # not added at the top level either.
-        assert cfg.links["l"]["config"] == "config/some_link.yml"
-        assert "auto_transfer" not in cfg.links["l"]
+        cfg = self._build(
+            name="test", config_version=2,
+            links={"l": link_dict},
+        )
+        # 'config' was rewritten from a string to the loaded dict
+        assert isinstance(cfg.links["l"]["config"], dict)
+        assert cfg.links["l"]["config"]["auto_transfer"] is True
+        assert cfg.links["l"]["config"]["source"] == "a.x"
+        assert cfg.links["l"]["config"]["target"] == "b.x"
+
+    def test_v1_still_skips_path_reference(self, tmp_path):
+        """v1 must NOT load path-reference configs (Step 4 is v2-only)."""
+        ext = tmp_path / "some_link.yml"
+        ext.write_text("source: a.x\ntarget: b.x\n")
+
+        link_dict = {
+            "class": "nanobrain.core.link.DirectLink",
+            "config": str(ext),
+        }
+        cfg = self._build(name="test", config_version=1,
+                          links={"l": link_dict})
+        # v1: still a string; not loaded.
+        assert cfg.links["l"]["config"] == str(ext)
+
+    def test_v2_path_reference_preserves_explicit_value(self, tmp_path):
+        """An external YAML that already declares auto_transfer: false
+        must NOT be overridden by v2 default injection — author intent
+        wins (the same setdefault semantics as the inline path)."""
+        ext = tmp_path / "some_link.yml"
+        ext.write_text("source: a.x\ntarget: b.x\nauto_transfer: false\n")
+
+        link_dict = {
+            "class": "nanobrain.core.link.DirectLink",
+            "config": str(ext),
+        }
+        cfg = self._build(name="test", config_version=2,
+                          links={"l": link_dict})
+        assert cfg.links["l"]["config"]["auto_transfer"] is False
+
+    def test_v2_path_reference_missing_file_fails_fast(self):
+        link_dict = {
+            "class": "nanobrain.core.link.DirectLink",
+            "config": "/nonexistent/path/ghost.yml",
+        }
+        with pytest.raises(Exception) as exc_info:
+            self._build(name="test", config_version=2,
+                        links={"l": link_dict})
+        assert "FAIL-FAST" in str(exc_info.value)
 
     def test_v2_handles_multiple_links_independently(self):
         """Each link in the dict is processed independently; mixed-shape

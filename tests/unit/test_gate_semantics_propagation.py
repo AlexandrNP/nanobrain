@@ -118,15 +118,43 @@ class TestLinkPropagation:
                      links={"l": link_dict})
         assert "gate_semantics" not in cfg.links["l"]
 
-    def test_path_reference_not_mutated(self):
+    def test_path_reference_rewritten_in_v2(self, tmp_path):
+        """G7 Step 4 — path-reference link configs are LOADED and
+        REWRITTEN to nested-inline form when config_version >= 2 and
+        a workflow-level gate_semantics is set."""
+        ext = tmp_path / "some_link.yml"
+        ext.write_text(
+            "source: a.x\n"
+            "target: b.x\n"
+            "condition: true_only\n"
+        )
         link_dict = {
             "class": "nanobrain.core.link.ConditionalLink",
-            "config": "config/some_link.yml",
+            "config": str(ext),
         }
+        # Default config_version is now 2 (post-G7 Step 4)
         cfg = _build(name="t", gate_semantics="gate_to_bottom",
                      links={"l": link_dict})
-        assert cfg.links["l"]["config"] == "config/some_link.yml"
-        assert "gate_semantics" not in cfg.links["l"]
+        assert isinstance(cfg.links["l"]["config"], dict)
+        assert cfg.links["l"]["config"]["gate_semantics"] == "gate_to_bottom"
+
+    def test_path_reference_skipped_in_v1(self, tmp_path):
+        """v1 still skips path-reference configs (Step 4 is v2-only)."""
+        ext = tmp_path / "some_link.yml"
+        ext.write_text(
+            "source: a.x\n"
+            "target: b.x\n"
+            "condition: true_only\n"
+        )
+        link_dict = {
+            "class": "nanobrain.core.link.ConditionalLink",
+            "config": str(ext),
+        }
+        cfg = _build(name="t", config_version=1,
+                     gate_semantics="gate_to_bottom",
+                     links={"l": link_dict})
+        # Still a string; not loaded.
+        assert cfg.links["l"]["config"] == str(ext)
 
 
 # ---------------------------------------------------------------------------

@@ -112,17 +112,39 @@ def _trigger_class_needs_gate_semantics_check(class_path: str) -> bool:
     return trailing in _TRIGGER_CLASSES_NEEDING_GATE_SEMANTICS
 
 
-def _set_inline_default_in_entry(entry: Dict[str, Any], field: str,
-                                 value: Any) -> bool:
-    """G10 Step 2 / G7 Step 3 helper. Mutate ``entry`` in place to set
-    ``field=value`` if absent. Handles both inline shapes:
+def _set_inline_default_in_entry(
+    entry: Dict[str, Any],
+    field: str,
+    value: Any,
+    rewrite_path_reference: bool = False,
+    workflow_directory: Optional[str] = None,
+) -> bool:
+    """G10 Step 2 / G7 Step 3 / G7 Step 4 helper. Mutate ``entry`` in
+    place to set ``field=value`` if absent. Handles three shapes:
 
     - Nested: ``{class: ..., config: {...}}`` — mutate ``config`` dict.
     - Flat:   ``{class: ..., <field-keys>: ...}`` — mutate ``entry`` itself.
+    - Path-reference: ``{class: ..., config: "external.yml"}`` — when
+      ``rewrite_path_reference=True``, load the external YAML, inject
+      the field if absent, and rewrite the entry to NESTED inline form
+      (``config: <loaded-dict>``) so downstream consumers see a single
+      uniform shape. The original file is NOT modified — the rewrite
+      happens in-memory on the parent WorkflowConfig dict only.
 
-    Returns True if the field was set; False if it was already present
-    or the entry's ``config`` is a string path (out of scope until G7
-    Step 4 ships path-reference rewriting).
+    Args:
+        entry: Link/trigger entry dict to mutate.
+        field: Field name to set (e.g., ``auto_transfer``, ``gate_semantics``).
+        value: Value to set when the field is absent.
+        rewrite_path_reference: When True (G7 Step 4 caller), path-
+            reference configs are loaded and rewritten. When False
+            (legacy G7 Step 3 / G10 Step 2 path), they are skipped.
+        workflow_directory: Base directory for resolving relative paths
+            in ``config:`` strings. When None, paths resolve relative
+            to CWD (matches ConfigBase.from_config search order).
+
+    Returns True if the field was set (including the path-reference
+    rewrite + set case); False if it was already present or path-
+    reference was skipped.
     """
     if not isinstance(entry, dict):
         return False
@@ -133,13 +155,65 @@ def _set_inline_default_in_entry(entry: Dict[str, Any], field: str,
         inner[field] = value
         return True
     if isinstance(inner, str):
-        # path-reference; cannot inject without loading the YAML
-        return False
+        if not rewrite_path_reference:
+            # Legacy behavior — path-reference; cannot inject without
+            # loading the YAML.
+            return False
+        # G7 Step 4 — load + inject + rewrite in-memory.
+        loaded = _load_path_reference_config(inner, workflow_directory)
+        if not isinstance(loaded, dict):
+            raise ValueError(
+                f"FAIL-FAST: path-reference config {inner!r} loaded as "
+                f"{type(loaded).__name__}, expected dict"
+            )
+        if field not in loaded:
+            loaded[field] = value
+            mutated = True
+        else:
+            mutated = False
+        entry["config"] = loaded
+        return mutated
     # Flat shape: entry itself is the config dict
     if field in entry:
         return False
     entry[field] = value
     return True
+
+
+def _load_path_reference_config(
+    path_str: str, workflow_directory: Optional[str],
+) -> Any:
+    """Load a path-reference config string to its YAML body.
+
+    Resolution order matches the framework's standard:
+        1. absolute path
+        2. relative to ``workflow_directory`` when set
+        3. relative to current working directory
+
+    Lazy import of yaml + pathlib to avoid import-time cycles.
+    """
+    import yaml as _yaml
+    from pathlib import Path as _Path
+
+    candidates: List["_Path"] = []
+    p = _Path(path_str)
+    if p.is_absolute():
+        candidates.append(p)
+    else:
+        if workflow_directory:
+            candidates.append(_Path(workflow_directory) / p)
+        candidates.append(_Path.cwd() / p)
+        candidates.append(p)  # last-ditch: pass through
+
+    for candidate in candidates:
+        if candidate.is_file():
+            with candidate.open("r", encoding="utf-8") as f:
+                return _yaml.safe_load(f)
+
+    raise FileNotFoundError(
+        f"FAIL-FAST: path-reference config {path_str!r} not found in any "
+        f"of: {[str(c) for c in candidates]}"
+    )
 
 
 def _link_inline_config_omits_auto_transfer(link_entry: Any) -> Optional[bool]:
@@ -254,13 +328,15 @@ class WorkflowConfig(StepConfig):
     # the Step 4 workspace-wide default flip + external YAML rewriting.
     # See `apecx-mcp-integration/docs/nanobrain_capability_gaps.md G7`.
     config_version: Literal[1, 2] = Field(
-        default=1,
+        default=2,
         description="Workflow config schema version. v1 = legacy semantics "
                     "(auto_transfer defaults to False; deprecation WARNING "
                     "emitted for inline links that omit the flag). v2 = G7 "
-                    "auto_transfer-true default for inline configs (Step 3). "
-                    "Set v1 explicitly to suppress the WARNING for workflows "
-                    "you have intentionally audited."
+                    "auto_transfer-true default for inline AND path-reference "
+                    "configs (Step 4 — workspace-wide default flipped from "
+                    "v1 to v2 on 2026-05-09). Set 'config_version: 1' "
+                    "explicitly to preserve legacy auto_transfer-False "
+                    "behavior — no other migration step is required."
     )
 
     # G10 Step 2 — workflow-level gate_semantics that propagates to every
@@ -348,6 +424,12 @@ class WorkflowConfig(StepConfig):
         Mutation is in-place on the same dict objects that LinkBase.from_config
         will subsequently consume — see workflow_graph.add_link / loader code.
         Explicit values (True or False) are NEVER overridden; only absent keys.
+
+        G7 Step 4 — path-reference link configs (``config: "external.yml"``)
+        are also rewritten in v2: the external YAML is loaded, the
+        field is injected, and the entry is rewritten to nested-inline
+        form. Path resolution honors ``self.workflow_directory`` when
+        set; otherwise CWD-relative.
         """
         if self.config_version < 2:
             return self
@@ -356,16 +438,15 @@ class WorkflowConfig(StepConfig):
 
         for link_name, link_entry in self.links.items():
             if not isinstance(link_entry, dict):
-                # Already-resolved LinkBase instance (e.g., programmatic
-                # construction); nothing to mutate.
                 continue
             class_path = link_entry.get('class', '')
             if not _link_class_needs_auto_transfer_check(class_path):
-                # AcademyLink (sets auto_transfer explicitly) or unknown class
-                # — leave alone.
                 continue
-
-            _set_inline_default_in_entry(link_entry, 'auto_transfer', True)
+            _set_inline_default_in_entry(
+                link_entry, 'auto_transfer', True,
+                rewrite_path_reference=True,
+                workflow_directory=self.workflow_directory,
+            )
 
         return self
 
@@ -395,6 +476,7 @@ class WorkflowConfig(StepConfig):
             return self
 
         gate_value = self.gate_semantics
+        rewrite_path_ref = self.config_version >= 2  # G7 Step 4
 
         # 1. Links
         if isinstance(self.links, dict):
@@ -405,24 +487,31 @@ class WorkflowConfig(StepConfig):
                 if not _link_class_needs_gate_semantics_check(class_path):
                     continue
                 _set_inline_default_in_entry(
-                    link_entry, 'gate_semantics', gate_value
+                    link_entry, 'gate_semantics', gate_value,
+                    rewrite_path_reference=rewrite_path_ref,
+                    workflow_directory=self.workflow_directory,
                 )
 
         # 2. Per-step triggers
         if isinstance(self.steps, dict):
             for step_entry in self.steps.values():
-                self._propagate_gate_semantics_into_step(step_entry, gate_value)
+                self._propagate_gate_semantics_into_step(
+                    step_entry, gate_value, rewrite_path_ref,
+                )
 
         # 3. Workflow-level triggers (inherited from StepConfig)
         own_triggers = getattr(self, 'triggers', None)
         if isinstance(own_triggers, list):
             for trig_entry in own_triggers:
-                self._maybe_set_trigger_gate_semantics(trig_entry, gate_value)
+                self._maybe_set_trigger_gate_semantics(
+                    trig_entry, gate_value, rewrite_path_ref,
+                    self.workflow_directory,
+                )
 
         return self
 
     def _propagate_gate_semantics_into_step(
-        self, step_entry: Any, gate_value: str,
+        self, step_entry: Any, gate_value: str, rewrite_path_ref: bool,
     ) -> None:
         """Helper for ``_propagate_gate_semantics``: inspect a single
         step entry, find its inline triggers, and stamp gate_semantics
@@ -439,21 +528,31 @@ class WorkflowConfig(StepConfig):
             if not isinstance(triggers, list):
                 continue
             for trig_entry in triggers:
-                self._maybe_set_trigger_gate_semantics(trig_entry, gate_value)
+                self._maybe_set_trigger_gate_semantics(
+                    trig_entry, gate_value, rewrite_path_ref,
+                    self.workflow_directory,
+                )
 
     @staticmethod
     def _maybe_set_trigger_gate_semantics(
         trig_entry: Any, gate_value: str,
+        rewrite_path_ref: bool = False,
+        workflow_directory: Optional[str] = None,
     ) -> None:
         """Stamp gate_semantics on a trigger config dict if its class is
-        gate-aware AND the field is absent. No-op for resolved instances,
-        path-reference configs, or non-gate-aware trigger classes."""
+        gate-aware AND the field is absent. No-op for resolved instances
+        or non-gate-aware trigger classes. Path-reference configs are
+        loaded + rewritten when ``rewrite_path_ref=True`` (G7 Step 4)."""
         if not isinstance(trig_entry, dict):
             return
         class_path = trig_entry.get('class', '')
         if not _trigger_class_needs_gate_semantics_check(class_path):
             return
-        _set_inline_default_in_entry(trig_entry, 'gate_semantics', gate_value)
+        _set_inline_default_in_entry(
+            trig_entry, 'gate_semantics', gate_value,
+            rewrite_path_reference=rewrite_path_ref,
+            workflow_directory=workflow_directory,
+        )
 
 
 # WorkflowGraph imported from workflow_graph.py
