@@ -6,6 +6,44 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Nanobrain is an event-driven AI agent framework for distributed workflows. It's currently in research preview and has dependencies on HPC systems and external frameworks. The framework uses a mandatory configuration-driven architecture where ALL components are created through the `from_config()` pattern.
 
+## Recent additions (2026-05-09 — infra chain)
+
+- **Infrastructure-validated.** PostgresTaskStore (G21 Step 4) and
+  RedisKey rebuild (G5 Step 2) are now end-to-end tested against
+  real Postgres 16 and Redis 7 containers. The skipped-without-env-var
+  contract is preserved; CI runs the same path automatically.
+- **G21 Step 5 — BaseStep automatic PauseSignal cooperation.**
+  ``BaseStep._execute_process`` now consults ``current_pause_signal()``
+  before each ``process()`` call. User step code does NOT need to
+  consult the contextvar manually for pause to work — the framework
+  cooperates automatically at step boundaries. Closes the last G21
+  deferral. Layering compliance: lazy + cached import of the runtime
+  module from core/step.py (core MUST NOT depend on library statically;
+  the helper degrades to no-op when the runtime module is unavailable).
+- **G5 Step 2 RedisKey rebuild.** ProxyStore Redis-backed checkpoints
+  now round-trip cross-process the same way FileKey does. Manifest
+  carries connector hints (redis_host + redis_port); fresh ResumeStep
+  re-registers the Store from hints. ``proxystore_connector_kind``
+  expanded from ``Literal['file']`` to ``Literal['file', 'redis']``.
+- **GitHub Actions CI.** New ``.github/workflows/tests.yml`` runs the
+  full unit suite on push + PR for Python 3.12 with Postgres 16 +
+  Redis 7 service containers. The "0 regressions" claim is now
+  CI-enforced. New ``[test]`` extra in ``pyproject.toml`` declares
+  the canonical test stack (pytest + pytest-asyncio + pytest-cov +
+  proxystore + psycopg[binary]).
+- **Lightweight WorkflowBuilder hardening.** Audit surfaced three
+  silent-failure shapes: dead ``version: '2.0'`` field (framework
+  reads ``config_version``); discovery only finding DirectLink and
+  zero triggers; no ``add_trigger`` API at all. All fixed. New
+  ``add_link()`` (full link-type discrimination), ``add_trigger()``
+  (workflow-level + step-level), ``load()`` (closes the loop via
+  ``Workflow.from_config``). Framework class paths resolved via a
+  static map; discovery is the fallback for user-defined classes.
+- Total this chain: **5 commits + 1 CI workflow + ~37 new unit
+  tests**. Full nanobrain regression: **712 passed with both Postgres
+  + Redis up**, 1 skipped (the pre-existing framework skip), 0
+  regressions.
+
 ## Recent additions (2026-05-09)
 
 - **All 22 nanobrain capability gaps + every documented Step 2-4
