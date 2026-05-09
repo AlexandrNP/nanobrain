@@ -11,8 +11,10 @@ Currently exports:
 
 from .workflow_runner import (
     DetachedTaskHandle,
+    PauseSignal,
     WorkflowRunner,
     WorkflowRunnerConfig,
+    current_pause_signal,
 )
 from .entry_triggers import (
     WorkflowEntryTrigger,
@@ -21,8 +23,10 @@ from .entry_triggers import (
 
 __all__ = [
     "DetachedTaskHandle",
+    "PauseSignal",
     "WorkflowRunner",
     "WorkflowRunnerConfig",
+    "current_pause_signal",
     "WorkflowEntryTrigger",
     "WorkflowEntryTriggerConfig",
 ]

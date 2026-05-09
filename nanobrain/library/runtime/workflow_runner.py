@@ -7,8 +7,8 @@ an entry point that returns immediately with a ``task_id`` and continues
 running in a managed background context. ``Workflow.run()`` (G8) is
 synchronous and blocks the caller; this module adds the detached path.
 
-v1 scope (this module)
-======================
+v1 + Step 2 scope (this module)
+================================
 
 Implemented:
 
@@ -24,14 +24,28 @@ Implemented:
   and for callers that want a synchronous join point.
 - Task store: in-memory (default) or SQLite (stdlib ``sqlite3``).
 - Per-runner concurrency cap via ``asyncio.Semaphore``.
+- **G21 Step 2** — ``pause(task_id)`` / ``resume(task_id)`` /
+  ``is_paused(task_id)`` cooperative-pause primitives. A pause
+  request:
+    * Sets a per-task ``_PauseSignal`` contextvar that is published
+      inside the runner coroutine wrapping the workflow callable.
+      Step authors who want pause-aware behavior call
+      ``current_pause_signal()`` and check ``is_paused()`` between
+      step boundaries; the framework does NOT enforce pause inside
+      the standard step-execution path (that requires per-step
+      cooperation hooks that are out-of-scope for Step 2).
+    * Updates the task handle's ``status`` to ``"paused"`` so
+      callers polling ``get_handle`` see it immediately.
+    * In-flight asyncio tasks are NOT cancelled; the workflow
+      continues to run unless its step authors honor the signal.
+  Brutal truth: a workflow that does NOT consult the contextvar
+  will run to completion regardless of pause requests. Pause is a
+  cooperative protocol, not a hard preemption. ``resume`` clears
+  the signal and updates status back to ``"running"``.
 
 NOT implemented (deferred follow-ups; documented honestly so callers
 do not assume capabilities the v1 release does not have):
 
-- Step 2 — ``pause(task_id)`` raises ``NotImplementedError``. A real
-  pause requires a step-level cancellation hook on ``BaseStep`` so
-  the runner can prevent the *next* step from starting without
-  killing the in-flight one. That hook does not exist yet.
 - Step 3 — heartbeat watchdog + stale-task reaper.
 - Step 4 — cross-process resume (Postgres durability backend, G5
   checkpoint integration so a process restart resumes from the last
@@ -39,11 +53,17 @@ do not assume capabilities the v1 release does not have):
 - ``CostEnvelope`` and ``autonomy_level`` parameters from the gap
   proposal are reserved-for-future. The v1 ``run_detached`` signature
   takes only the workflow callable, task_id, and payload.
+- The standard ``BaseStep`` does not yet consult the pause signal;
+  pause-aware step authoring is on the framework user today. A
+  future framework change can wire BaseStep to check
+  ``current_pause_signal()`` automatically without touching this
+  module — that is the contract Step 2 ships.
 """
 
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import dataclasses
 import json
 import sqlite3
@@ -81,6 +101,62 @@ _VALID_STATUSES: Tuple[str, ...] = (
 )
 
 _STATUS_ACTIVE: Tuple[str, ...] = ("queued", "running", "paused")
+
+
+# ---------------------------------------------------------------------------
+# G21 Step 2 — cooperative pause signal
+# ---------------------------------------------------------------------------
+
+class PauseSignal:
+    """Per-task pause signal published by the runner inside the
+    coroutine that wraps the workflow callable.
+
+    Step authors who want pause-aware behavior call
+    :func:`current_pause_signal` from inside ``process()`` and consult
+    :meth:`is_paused` between meaningful work boundaries.
+    Implementations that want to BLOCK on pause can ``await
+    signal.wait_until_resumed()``; implementations that want to
+    cooperative-exit can check ``signal.is_paused()`` and return early.
+
+    The signal is a thin wrapper around an :class:`asyncio.Event` —
+    the framework reuses asyncio's primitives rather than rolling its
+    own polling loop. ``set()`` semantics are inverted from a normal
+    Event: the event is *set* when the task is RUNNING (callers can
+    proceed) and *cleared* when paused (callers wait).
+    """
+
+    def __init__(self) -> None:
+        self._event = asyncio.Event()
+        self._event.set()  # default: not paused
+
+    def is_paused(self) -> bool:
+        return not self._event.is_set()
+
+    def pause(self) -> None:
+        self._event.clear()
+
+    def resume(self) -> None:
+        self._event.set()
+
+    async def wait_until_resumed(self) -> None:
+        """Block until the signal is resumed. No-op if not paused."""
+        await self._event.wait()
+
+
+# Module-global contextvar. Asyncio-task-local via PEP 567, so two
+# concurrent workflow runs see independent signals. None when no
+# detached run is active.
+_current_pause_signal: contextvars.ContextVar[Optional[PauseSignal]] = (
+    contextvars.ContextVar("current_pause_signal", default=None)
+)
+
+
+def current_pause_signal() -> Optional[PauseSignal]:
+    """Return the pause signal for the current detached run, or None
+    when called outside a detached run context. Step authors who want
+    pause-aware behavior call this from inside ``process()`` and
+    consult the returned signal."""
+    return _current_pause_signal.get()
 
 
 # ---------------------------------------------------------------------------
@@ -364,6 +440,10 @@ class WorkflowRunner(FromConfigBase):
         else:
             self._store = _SQLiteTaskStore(config.sqlite_db_path)  # type: ignore[arg-type]
         self._tasks: Dict[str, asyncio.Task] = {}
+        # G21 Step 2 — per-task PauseSignal registry. The runner owns
+        # the signal; pause/resume mutate it; the inner _runner
+        # coroutine publishes it as a contextvar so step code can read.
+        self._pause_signals: Dict[str, PauseSignal] = {}
         self._semaphore = asyncio.Semaphore(self._max_concurrent)
 
     # ---- Public API ---------------------------------------------------
@@ -392,25 +472,40 @@ class WorkflowRunner(FromConfigBase):
         )
         await self._store.insert(handle)
 
+        # G21 Step 2 — per-task pause signal. Created BEFORE the asyncio
+        # task is scheduled so a caller can call pause() on the handle
+        # in between run_detached() returning and _runner actually
+        # entering the workflow callable; the workflow then sees the
+        # signal already paused on its first contextvar read.
+        signal = PauseSignal()
+        self._pause_signals[task_id] = signal
+
         async def _runner() -> None:
-            async with self._semaphore:
-                handle.status = "running"
-                handle.last_heartbeat_at = datetime.now(timezone.utc)
-                await self._store.update(handle)
-                try:
-                    result = await workflow_callable(payload)
-                    handle.status = "completed"
-                    handle.result = result
-                except asyncio.CancelledError:
-                    handle.status = "cancelled"
+            # Publish the pause signal as a contextvar BEFORE entering
+            # the workflow callable so any nested process() that calls
+            # current_pause_signal() sees this task's signal.
+            token = _current_pause_signal.set(signal)
+            try:
+                async with self._semaphore:
+                    handle.status = "running"
+                    handle.last_heartbeat_at = datetime.now(timezone.utc)
+                    await self._store.update(handle)
+                    try:
+                        result = await workflow_callable(payload)
+                        handle.status = "completed"
+                        handle.result = result
+                    except asyncio.CancelledError:
+                        handle.status = "cancelled"
+                        handle.completed_at = datetime.now(timezone.utc)
+                        await self._store.update(handle)
+                        raise
+                    except Exception as exc:  # noqa: BLE001
+                        handle.status = "failed"
+                        handle.error = f"{type(exc).__name__}: {exc}"
                     handle.completed_at = datetime.now(timezone.utc)
                     await self._store.update(handle)
-                    raise
-                except Exception as exc:  # noqa: BLE001
-                    handle.status = "failed"
-                    handle.error = f"{type(exc).__name__}: {exc}"
-                handle.completed_at = datetime.now(timezone.utc)
-                await self._store.update(handle)
+            finally:
+                _current_pause_signal.reset(token)
 
         self._tasks[task_id] = asyncio.create_task(
             _runner(), name=f"detached-{task_id}",
@@ -441,17 +536,82 @@ class WorkflowRunner(FromConfigBase):
             # join the task to ensure the store reflects the cancel.
             pass
 
-    async def pause(self, task_id: str, reason: str = "") -> None:  # pragma: no cover
-        """Reserved for G21 Step 2. Soft-pause requires a step-level
-        cancellation hook in ``BaseStep`` so the runner can prevent the
-        *next* step from starting without killing the in-flight one;
-        that hook does not exist yet. Calling this raises so callers do
-        not silently get a no-op when they expected a pause."""
-        raise NotImplementedError(
-            "G21 Step 2 — pause requires a step-level cancellation hook "
-            "in BaseStep that the runner can use to gate the next step "
-            "without killing the in-flight one. Reserved-for-future."
-        )
+    async def pause(self, task_id: str, reason: str = "") -> None:
+        """G21 Step 2 — cooperative soft-pause for a detached task.
+
+        Sets the per-task ``PauseSignal``'s paused state and updates the
+        handle's ``status`` to ``"paused"`` so callers polling
+        ``get_handle`` see it immediately.
+
+        Brutal truth: pause is a *cooperative* protocol. Step authors
+        who want pause-aware behavior MUST consult
+        ``current_pause_signal()`` from inside ``process()`` and either
+        ``await signal.wait_until_resumed()`` or check ``is_paused()``
+        between work units. A workflow that does NOT consult the signal
+        will run to completion regardless of pause requests. The
+        framework does NOT preempt running steps.
+
+        Raises ``ComponentConfigurationError`` if ``task_id`` is unknown.
+        Returns silently when the task is already terminal (completed
+        / cancelled / failed) — pause-after-done is a no-op.
+        """
+        signal = self._pause_signals.get(task_id)
+        if signal is None:
+            raise ComponentConfigurationError(
+                f"FAIL-FAST: WorkflowRunner.pause: task_id {task_id!r} "
+                f"is not registered with this runner"
+            )
+        handle = await self._store.get(task_id)
+        if handle is None:
+            raise ComponentConfigurationError(
+                f"FAIL-FAST: WorkflowRunner.pause: task_id {task_id!r} "
+                f"missing from task store"
+            )
+        if handle.status not in _STATUS_ACTIVE:
+            # Already terminal — pause is a no-op.
+            return
+        signal.pause()
+        handle.status = "paused"
+        await self._store.update(handle)
+
+    async def resume(self, task_id: str) -> None:
+        """G21 Step 2 — clear a pause signal and update status.
+
+        Symmetric to ``pause``. Status moves paused → running; if the
+        task was never paused, this is a no-op (still updates status to
+        running for idempotency). Raises ``ComponentConfigurationError``
+        for unknown ``task_id``.
+        """
+        signal = self._pause_signals.get(task_id)
+        if signal is None:
+            raise ComponentConfigurationError(
+                f"FAIL-FAST: WorkflowRunner.resume: task_id {task_id!r} "
+                f"is not registered with this runner"
+            )
+        handle = await self._store.get(task_id)
+        if handle is None:
+            raise ComponentConfigurationError(
+                f"FAIL-FAST: WorkflowRunner.resume: task_id {task_id!r} "
+                f"missing from task store"
+            )
+        if handle.status not in _STATUS_ACTIVE:
+            return
+        signal.resume()
+        if handle.status == "paused":
+            handle.status = "running"
+            await self._store.update(handle)
+
+    def is_paused(self, task_id: str) -> bool:
+        """G21 Step 2 — query whether the task's pause signal is set.
+
+        Synchronous because reading the signal flag is non-blocking.
+        Returns False for unknown task_ids (does NOT raise) so that
+        polling code can treat unknown-or-not-paused identically.
+        """
+        signal = self._pause_signals.get(task_id)
+        if signal is None:
+            return False
+        return signal.is_paused()
 
     async def get_handle(self, task_id: str) -> Optional[DetachedTaskHandle]:
         """Return the current handle from the store, or None if
@@ -482,7 +642,12 @@ class WorkflowRunner(FromConfigBase):
                 f"{task_id!r} is not registered with this runner"
             )
         try:
-            await asyncio.wait_for(task, timeout=timeout)
+            # asyncio.shield prevents the inner task from being
+            # cancelled when wait_for cancels the outer wait on timeout.
+            # Without shield, await_completion(timeout=...) silently
+            # cancels paused / slow workflows — a footgun the pause
+            # smoke test surfaced.
+            await asyncio.wait_for(asyncio.shield(task), timeout=timeout)
         except asyncio.TimeoutError:
             raise
         except (asyncio.CancelledError, Exception):  # noqa: BLE001

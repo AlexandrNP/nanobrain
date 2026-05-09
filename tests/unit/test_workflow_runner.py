@@ -219,19 +219,35 @@ class TestAwaitCompletion:
 
 
 # ---------------------------------------------------------------------------
-# 12. pause is reserved-for-future
+# 12. pause / resume / is_paused
+# (G21 Step 2 — see also tests/unit/test_workflow_runner_pause.py for the
+# full cooperative-pause coverage.)
 # ---------------------------------------------------------------------------
 
-class TestPauseDeferred:
+class TestPauseUnknownTask:
 
-    def test_pause_raises_not_implemented(self):
+    def test_pause_unknown_task_id_fails_fast(self):
         async def run():
             with tempfile.TemporaryDirectory() as tmp:
                 r = _build_runner(Path(tmp))
-                with pytest.raises(NotImplementedError) as exc_info:
-                    await r.pause("anything", reason="x")
-                assert "G21 Step 2" in str(exc_info.value)
+                with pytest.raises(ComponentConfigurationError) as exc_info:
+                    await r.pause("ghost", reason="x")
+                assert "FAIL-FAST" in str(exc_info.value)
         asyncio.run(run())
+
+    def test_resume_unknown_task_id_fails_fast(self):
+        async def run():
+            with tempfile.TemporaryDirectory() as tmp:
+                r = _build_runner(Path(tmp))
+                with pytest.raises(ComponentConfigurationError) as exc_info:
+                    await r.resume("ghost")
+                assert "FAIL-FAST" in str(exc_info.value)
+        asyncio.run(run())
+
+    def test_is_paused_unknown_task_returns_false(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            r = _build_runner(Path(tmp))
+            assert r.is_paused("ghost") is False
 
 
 # ---------------------------------------------------------------------------
