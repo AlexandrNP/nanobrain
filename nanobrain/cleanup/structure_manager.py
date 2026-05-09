@@ -5,11 +5,10 @@ This module provides functionality to reorganize the repository structure,
 enforce consistent naming conventions, and manage package hierarchies.
 """
 
-import os
 import re
 import ast
 from pathlib import Path
-from typing import Dict, List, Set, Tuple, Optional, Any
+from typing import List, Tuple
 from dataclasses import dataclass
 import shutil
 
@@ -179,7 +178,7 @@ class StructureManager:
             return CleanupResult(
                 success=len(errors) == 0,
                 files_processed=len(moved_files) + len(created_dirs),
-                message=f"Separated core framework and demos",
+                message="Separated core framework and demos",
                 details={
                     'moved_files': moved_files,
                     'created_directories': created_dirs,
@@ -219,7 +218,7 @@ class StructureManager:
             return CleanupResult(
                 success=len(errors) == 0,
                 files_processed=len(renamed_items),
-                message=f"Enforced naming conventions",
+                message="Enforced naming conventions",
                 details={
                     'renamed_items': renamed_items,
                     'errors': errors
@@ -256,7 +255,7 @@ class StructureManager:
             return CleanupResult(
                 success=len(errors) == 0,
                 files_processed=len(created_files),
-                message=f"Created package hierarchies",
+                message="Created package hierarchies",
                 details={
                     'created_files': created_files,
                     'errors': errors
@@ -307,7 +306,7 @@ class StructureManager:
             return CleanupResult(
                 success=len(errors) == 0,
                 files_processed=len(archived_files),
-                message=f"Organized archive content",
+                message="Organized archive content",
                 details={
                     'archived_files': archived_files,
                     'archive_directory': str(self.archive_dir),
@@ -367,7 +366,7 @@ class StructureManager:
             return CleanupResult(
                 success=len(errors) == 0,
                 files_processed=len(updated_files),
-                message=f"Updated import statements",
+                message="Updated import statements",
                 details={
                     'updated_files': updated_files,
                     'total_updates': total_updates,
@@ -652,7 +651,7 @@ This directory contains files and directories that have been archived during the
         for archived_file in sorted(archived_files):
             index_content += f"- {archived_file}\n"
         
-        index_content += f"""
+        index_content += """
 ## Archive Date
 
 This archive was created during the nanobrain repository cleanup process.

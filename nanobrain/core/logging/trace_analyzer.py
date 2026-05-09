@@ -5,10 +5,8 @@ This module provides tools to analyze workflow execution traces and generate
 human-readable reports that actually help with debugging.
 """
 
-import json
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any
 from datetime import datetime
-from nanobrain.core.logging.workflow_tracer import EventType
 
 
 class TraceAnalyzer:
@@ -32,7 +30,7 @@ class TraceAnalyzer:
         """Generate comprehensive execution report"""
         report = []
         report.append("=" * 80)
-        report.append(f"🔍 WORKFLOW EXECUTION TRACE REPORT")
+        report.append("🔍 WORKFLOW EXECUTION TRACE REPORT")
         report.append(f"Workflow: {self.workflow_id}")
         report.append(f"Generated: {datetime.now().isoformat()}")
         report.append("=" * 80)
@@ -74,7 +72,7 @@ class TraceAnalyzer:
             status = "✅" if trigger['executed'] else "❌"
             report.append(f"{status} {trigger['trigger_id']} → {trigger['target_step']}")
             if not trigger['executed']:
-                report.append(f"   ⚠️ Trigger fired but step did not execute")
+                report.append("   ⚠️ Trigger fired but step did not execute")
         
         # Step Execution Analysis
         steps = self._analyze_step_execution()

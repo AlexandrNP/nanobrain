@@ -9,13 +9,12 @@ execution, environment management, and result parsing.
 import asyncio
 import os
 import shutil
-import subprocess
 import tempfile
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 from nanobrain.core.logging_system import get_logger
 from nanobrain.core.component_base import FromConfigBase
@@ -745,7 +744,7 @@ class ExternalTool(FromConfigBase, ABC):
         executable = command[0]
 
         # If executable path is specified and command doesn't contain path separators
-        if self.executable_path and not os.path.sep in executable:
+        if self.executable_path and os.path.sep not in executable:
             full_executable = os.path.join(self.executable_path, executable)
             if os.path.exists(full_executable):
                 return [full_executable] + command[1:]

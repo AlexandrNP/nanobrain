@@ -14,9 +14,7 @@ Based on NCBI Entrez API guidelines from https://www.bv-brc.org/docs/
 import asyncio
 import time
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Any, Union
-from pydantic import Field
-import json
+from typing import Dict, List, Optional, Any
 
 from nanobrain.core.external_tool import (
     ExternalTool,
@@ -24,10 +22,8 @@ from nanobrain.core.external_tool import (
     ToolExecutionError,
     InstallationStatus,
     DiagnosticReport,
-    ToolInstallationError,
     ExternalToolConfig
 )
-from nanobrain.core.tool import ToolConfig
 from nanobrain.core.logging_system import get_logger
 
 
@@ -578,7 +574,7 @@ class PubMedClient(ExternalTool):
                 ])
             else:
                 status.issues.extend([
-                    f"BioPython: missing",
+                    "BioPython: missing",
                     "PubMed client requires BioPython"
                 ])
                 status.suggestions.extend([
@@ -617,7 +613,6 @@ class PubMedClient(ExternalTool):
         
         self.logger.info(f"Searching PubMed for Alphavirus {protein_type} literature")
 
-        import xml.etree.ElementTree as ET
 
         import httpx
 

@@ -14,7 +14,7 @@ communication with EXISTING Academy agents running on distributed resources.
 import asyncio
 # Removed logging import - using self.nb_logger instead
 import uuid
-from typing import Any, Dict, Optional, Union, Type
+from typing import Any, Dict, Optional
 from pydantic import Field
 
 # Import Nanobrain components
@@ -26,8 +26,7 @@ from academy.identifier import AgentId
 from academy.exchange import (
     RedisExchangeFactory,
     ProxyStoreExchangeFactory,
-    LocalExchangeFactory,
-    ExchangeClient
+    LocalExchangeFactory
 )
 
 

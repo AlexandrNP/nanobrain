@@ -5,11 +5,9 @@ Deterministic similarity search and ranking operations.
 """
 
 import asyncio
-import logging
 import json
 import hashlib
 from typing import Dict, Any, List, Optional, Tuple
-from pathlib import Path
 
 from nanobrain.core.step import BaseStep, StepConfig
 from nanobrain.core.logging_system import get_logger

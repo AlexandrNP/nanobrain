@@ -4,7 +4,6 @@ Health Router
 FastAPI router for health check and status endpoints.
 """
 
-import time
 from datetime import datetime
 from typing import Dict, Any
 from fastapi import APIRouter, Depends

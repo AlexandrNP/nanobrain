@@ -5,8 +5,7 @@ Intelligent information synthesis using multi-turn LLM capabilities.
 """
 
 import json
-import time
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 from nanobrain.core.agent import ConversationalAgent
 from nanobrain.core.logging_system import get_logger
 
@@ -56,7 +55,7 @@ class ResponseSynthesisAgent(ConversationalAgent):
         self.continuation_template = self._load_template_from_config('continuation_template')
         self.finalization_template = self._load_template_from_config('finalization_template')
 
-        logger.info(f"🧠 ResponseSynthesisAgent initialized with templates from configuration")
+        logger.info("🧠 ResponseSynthesisAgent initialized with templates from configuration")
 
     async def initialize(self):
         """Initialize the agent."""
@@ -142,7 +141,7 @@ class ResponseSynthesisAgent(ConversationalAgent):
                     query, retrieved_chunks, context, conversation_history
                 )
             
-            logger.info(f"✅ Response synthesized successfully")
+            logger.info("✅ Response synthesized successfully")
             
             return self._format_synthesis_output(synthesized_result)
             

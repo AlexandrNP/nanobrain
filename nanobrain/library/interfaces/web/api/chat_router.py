@@ -7,8 +7,7 @@ FastAPI router for chat-related endpoints.
 import time
 import uuid
 from typing import Dict, Any
-from fastapi import APIRouter, HTTPException, Depends, Request
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, HTTPException, Depends
 
 from ..models.request_models import ChatRequest
 from ..models.response_models import (

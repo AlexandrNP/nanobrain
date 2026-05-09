@@ -5,14 +5,11 @@ Re-architected to inherit from NanoBrain Step base class.
 Step 14: Generate PSSM matrices and create viral_pssm.json output.
 """
 
-import asyncio
 import time
-import json
 from datetime import datetime
 from typing import Dict, Any, List, Optional
 
 from nanobrain.core.step import Step, StepConfig
-from nanobrain.core.logging_system import get_logger
 
 
 class PSSMAnalysisStep(Step):
@@ -33,7 +30,7 @@ class PSSMAnalysisStep(Step):
         self.pssm_config = step_config_dict.get('pssm_config', {})
         self.step_config = step_config_dict
         
-        self.nb_logger.info(f"🧬 PSSMAnalysisStep initialized")
+        self.nb_logger.info("🧬 PSSMAnalysisStep initialized")
         
     async def process(self, input_data: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """
@@ -47,7 +44,7 @@ class PSSMAnalysisStep(Step):
         # Call the original execute method
         result = await self.execute(input_data)
         
-        self.nb_logger.info(f"✅ PSSM analysis completed successfully")
+        self.nb_logger.info("✅ PSSM analysis completed successfully")
         return result
         
     async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:

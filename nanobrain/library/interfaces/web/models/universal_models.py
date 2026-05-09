@@ -8,13 +8,11 @@ Date: January 2025
 Version: 1.0.0
 """
 
-from typing import Dict, List, Optional, Any, Union
+from typing import Dict, List, Optional, Any
 from enum import Enum
 from datetime import datetime
 from pydantic import BaseModel, Field, ConfigDict
 
-from nanobrain.library.interfaces.web.models.request_models import ChatRequest
-from nanobrain.library.interfaces.web.models.response_models import ChatResponse
 
 
 class IntentType(str, Enum):

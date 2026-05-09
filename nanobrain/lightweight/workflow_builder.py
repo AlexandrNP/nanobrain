@@ -73,7 +73,6 @@ try:
     from .discovery_minimal import MinimalConfigDiscovery
 except ImportError:
     # Fallback for isolated testing
-    import sys
     from pathlib import Path
     discovery_path = Path(__file__).parent / "discovery_minimal.py"
     import importlib.util

@@ -12,7 +12,7 @@ import logging
 import json
 import csv
 import io
-from typing import Dict, Any, Optional, List, Union
+from typing import Dict, Any, Optional, List
 from datetime import datetime
 from abc import ABC, abstractmethod
 

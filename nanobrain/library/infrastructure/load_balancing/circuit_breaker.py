@@ -7,7 +7,7 @@ Fault tolerance patterns for handling failures gracefully.
 import asyncio
 import time
 from enum import Enum
-from typing import Any, Callable, Optional, Dict
+from typing import Any, Callable, Dict
 from nanobrain.core.logging_system import get_logger
 
 

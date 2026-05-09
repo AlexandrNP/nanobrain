@@ -11,8 +11,8 @@ import time
 import yaml
 import os
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional, List, Union, Type
-from pydantic import BaseModel, Field, ConfigDict
+from typing import Any, Dict, Optional, List
+from pydantic import BaseModel, Field
 from pathlib import Path
 
 # LangChain imports for tool compatibility
@@ -28,11 +28,10 @@ except ImportError:
     LANGCHAIN_AVAILABLE = False
 
 from .component_base import FromConfigBase
-from .executor import ExecutorBase, LocalExecutor, ExecutorConfig
+from .executor import LocalExecutor, ExecutorConfig
 from .tool import ToolBase, ToolRegistry, ToolType, ToolConfig, create_tool
 from .logging_system import (
-    NanoBrainLogger, get_logger, OperationType, ToolCallLog,
-    AgentConversationLog, trace_function_calls
+    get_logger
 )
 from .prompt_template_manager import PromptTemplateManager
 # Import new ConfigBase for constructor prohibition
@@ -1500,7 +1499,7 @@ class Agent(FromConfigBase, ABC):
             self.agent_logger.log_debug(f"Making LLM call with {len(messages)} messages")
 
             # PHASE 1 DIAGNOSTICS: Critical API call tracing
-            self.agent_logger.log_info(f"🔍 [LLM-TRACE] CALLING llm_client.chat.completions.create() - CRITICAL POINT")
+            self.agent_logger.log_info("🔍 [LLM-TRACE] CALLING llm_client.chat.completions.create() - CRITICAL POINT")
             api_call_start = time.time()
 
             # Make the API call
@@ -1510,7 +1509,7 @@ class Agent(FromConfigBase, ABC):
             self.agent_logger.log_info(f"✅ [LLM-TRACE] API call completed in {api_call_duration:.2f}s")
 
             # PHASE 1 DIAGNOSTICS: Trace response processing
-            self.agent_logger.log_info(f"🔍 [LLM-TRACE] Processing API response...")
+            self.agent_logger.log_info("🔍 [LLM-TRACE] Processing API response...")
             self.agent_logger.log_info(f"🔍 [LLM-TRACE] Response type: {type(response)}")
             self.agent_logger.log_info(f"🔍 [LLM-TRACE] Response has usage: {hasattr(response, 'usage') and response.usage is not None}")
             self.agent_logger.log_info(f"🔍 [LLM-TRACE] Response has choices: {hasattr(response, 'choices') and len(response.choices) > 0}")
@@ -1525,7 +1524,7 @@ class Agent(FromConfigBase, ABC):
             self._total_llm_calls += 1
 
             # PHASE 1 DIAGNOSTICS: Trace response conversion
-            self.agent_logger.log_info(f"🔍 [LLM-TRACE] Converting response to dict...")
+            self.agent_logger.log_info("🔍 [LLM-TRACE] Converting response to dict...")
 
             # Convert response to dict
             response_dict = {
@@ -1961,7 +1960,7 @@ class ConversationalAgent(Agent):
                 except Exception as e:
                     self.agent_logger.log_error(
                         f"❌ Exception in _call_llm(): {e}", exc_info=True)
-                    response = f"I apologize, but I'm unable to process your request at this time. Please try again later."
+                    response = "I apologize, but I'm unable to process your request at this time. Please try again later."
                     context['response_text'] = response
                     return response
 

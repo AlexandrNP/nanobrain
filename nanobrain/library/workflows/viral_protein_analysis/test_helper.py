@@ -14,7 +14,6 @@ This module provides easy-to-use functions for:
 """
 
 import asyncio
-from pathlib import Path
 from typing import Dict, Any, Optional
 import logging
 

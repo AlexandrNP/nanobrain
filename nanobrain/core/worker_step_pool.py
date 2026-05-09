@@ -10,13 +10,11 @@ Manages per-worker step instances for PARSL executor, ensuring:
 4. Non-shared resources ARE duplicated per worker
 """
 
-import asyncio
 import logging
 import uuid
 from typing import Any, Dict, Type, Optional, List
 from dataclasses import dataclass, field
 
-from .shared_resource import get_resource_pool
 
 
 logger = logging.getLogger(__name__)
@@ -111,7 +109,7 @@ class WorkerStepPool:
                         resource_id = attr.get_resource_id()
                         shared_resources[resource_id] = attr
                         logger.debug(f"   Found @shared resource: {resource_id}")
-            except Exception as e:
+            except Exception:
                 # Skip attributes that can't be accessed
                 pass
         
@@ -141,7 +139,7 @@ class WorkerStepPool:
                         if resource_id in shared_resources:
                             setattr(instance, attr_name, shared_resources[resource_id])
                             logger.debug(f"   Applied shared resource {resource_id} to {attr_name}")
-            except Exception as e:
+            except Exception:
                 pass
     
     async def initialize_workers(self):

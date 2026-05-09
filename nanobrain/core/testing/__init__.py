@@ -50,7 +50,7 @@ try:
             SKIPPED = _constants.SKIPPED
             ERROR = _constants.ERROR
             
-    except Exception as e:
+    except Exception:
         # Keep default constants if config loading fails
         pass
         

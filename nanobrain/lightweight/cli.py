@@ -50,7 +50,7 @@ def cmd_discover(args):
                     print(f"    ... and {len(configs) - 3} more")
     else:
         # Show all classes
-        print(f"\n📊 Discovery Summary:")
+        print("\n📊 Discovery Summary:")
         print(f"  Total classes: {len(class_to_configs)}")
         
         # Group by category
@@ -76,7 +76,7 @@ def cmd_discover(args):
                 categories[category] = []
             categories[category].append(class_name)
         
-        print(f"\n📂 Classes by Category:")
+        print("\n📂 Classes by Category:")
         for category, classes in sorted(categories.items()):
             print(f"  {category}: {len(classes)}")
             if args.verbose:
@@ -225,7 +225,7 @@ def cmd_validate(args):
             print(f"❌ Missing required fields: {missing_fields}")
             return 1
         
-        print(f"✅ Basic structure valid")
+        print("✅ Basic structure valid")
         print(f"   Name: {workflow_data.get('name')}")
         print(f"   Steps: {len(workflow_data.get('steps', {}))}")
         print(f"   Links: {len(workflow_data.get('links', []))}")

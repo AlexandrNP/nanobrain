@@ -27,14 +27,13 @@ Registry source:
 from __future__ import annotations
 
 import logging
-from typing import Any, ClassVar, Dict, Optional
+from typing import Any, Dict
 
-from pydantic import Field
 
 from nanobrain.core.component_base import ComponentConfigurationError
 from nanobrain.core.step import BaseStep, StepConfig
 
-from .skeleton import Skeleton, SkeletonRegistry
+from .skeleton import SkeletonRegistry
 
 logger = logging.getLogger(__name__)
 

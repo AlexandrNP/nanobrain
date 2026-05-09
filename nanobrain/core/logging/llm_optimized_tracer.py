@@ -17,9 +17,8 @@ This module provides REAL LLM-optimized logging with:
 
 import json
 import time
-from typing import Dict, List, Any, Optional, Union
+from typing import Dict, List, Any, Optional
 from dataclasses import dataclass
-from datetime import datetime
 from enum import Enum
 import logging
 

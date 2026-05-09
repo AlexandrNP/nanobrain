@@ -14,7 +14,7 @@ import sys
 import os
 import shlex
 import re
-from typing import Dict, Any, Optional, List, Callable, Union
+from typing import Dict, Any, Optional, List, Callable
 from dataclasses import dataclass, field
 from enum import Enum
 

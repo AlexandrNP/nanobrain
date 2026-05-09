@@ -18,13 +18,10 @@ import json
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
-import logging
+from typing import Any, Dict, List, Set
 
 from nanobrain.core.step import BaseStep, StepConfig
-from nanobrain.core.shared_resource import shared, get_resource_pool
 from nanobrain.core.logging_system import get_logger
-from nanobrain.core.workflow_divergence import WorkflowDivergenceManager
 
 
 class SharedResultAggregationStep(BaseStep):

@@ -5,7 +5,6 @@ This module provides concurrency-safe logging that works across process boundari
 particularly important for Parsl distributed execution.
 """
 
-import asyncio
 import json
 import logging
 import multiprocessing
@@ -14,11 +13,10 @@ import time
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Optional, Union, List
+from typing import Any, Dict, Optional, List
 from dataclasses import dataclass, asdict
 from queue import Queue, Empty
 from threading import Thread
-import uuid
 
 import tempfile
 

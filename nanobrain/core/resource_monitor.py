@@ -10,12 +10,11 @@ Provides comprehensive system resource monitoring with:
 """
 
 import asyncio
-import logging
 import os
 import time
 from typing import Any, Dict, Optional, Callable, List
 from dataclasses import dataclass
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import Field
 
 from .logging_system import get_logger
 # Import new ConfigBase for constructor prohibition

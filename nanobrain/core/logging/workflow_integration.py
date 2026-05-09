@@ -7,8 +7,7 @@ without requiring massive code changes.
 """
 
 import functools
-import inspect
-from typing import Any, Dict, Optional, Callable
+from typing import Any, Dict, Optional
 from nanobrain.core.logging.workflow_tracer import WorkflowTracer, EventType
 
 

@@ -6,13 +6,10 @@ for distributed execution. Follows NanoBrain architecture and reuses
 existing components.
 """
 
-import sys
-import os
 import asyncio
 import yaml
 from typing import Dict, Any, Optional, List
 from datetime import datetime
-from pathlib import Path
 
 # Core framework imports
 from nanobrain.core.component_base import FromConfigBase
@@ -24,7 +21,6 @@ from nanobrain.library.agents.specialized.parsl_agent import ParslAgent
 
 # Step imports
 from .steps.distributed_processing_step.distributed_processing_step import DistributedProcessingStep
-from nanobrain.core.config import ConfigBase
 
 # Parsl imports with fallback
 try:
@@ -217,7 +213,7 @@ class ParslChatWorkflow(FromConfigBase):
         Returns:
             Dict containing the response and metadata
         """
-        self.logger.info(f"Processing single message with first available agent")
+        self.logger.info("Processing single message with first available agent")
         
         if not self.agents:
             return {

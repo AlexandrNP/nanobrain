@@ -5,12 +5,9 @@ This step classifies user queries and extracts virus species using LLM agents.
 NO hardcoded virus species patterns - all extraction via LLM with configurable prompts.
 """
 
-import json
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
 from nanobrain.core.step import Step
-from nanobrain.core.data_unit import DataUnit
-from nanobrain.core.agent import SimpleAgent
 
 
 class QueryClassificationStep(Step):
@@ -221,7 +218,7 @@ class QueryClassificationStep(Step):
             return {
                 'virus_species': detected_virus,
                 'confidence': 0.6 if detected_virus else 0.0,
-                'reasoning': f'Fallback detection from agent response and query analysis',
+                'reasoning': 'Fallback detection from agent response and query analysis',
                 'analysis_type': 'pssm' if analysis_requested else 'conversational',
                 'routing_decision': 'virus_name_resolution' if detected_virus else 'conversational_response'
             }

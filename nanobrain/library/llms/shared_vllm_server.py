@@ -19,7 +19,7 @@ from typing import Optional, Dict, Any
 from threading import Lock
 from parsl import python_app
 
-from nanobrain.core.shared_resource import shared, get_worker_id, get_resource_pool
+from nanobrain.core.shared_resource import shared, get_worker_id
 
 logger = logging.getLogger(__name__)
 
@@ -267,7 +267,7 @@ class SharedvLLMServer:
 
         health_url = f"{server_url}/health"
         logger.info(f"⏳ Waiting for vLLM server health check: {health_url}")
-        logger.info(f"   (This may take 2-5 minutes for model loading)")
+        logger.info("   (This may take 2-5 minutes for model loading)")
 
         start_time = time.time()
 

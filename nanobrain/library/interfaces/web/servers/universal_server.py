@@ -8,9 +8,8 @@ Date: January 2025
 Version: 1.0.0
 """
 
-import asyncio
 import logging
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional
 from datetime import datetime
 
 try:
@@ -24,8 +23,6 @@ except ImportError:
 
 from nanobrain.library.interfaces.web.servers.base_server import BaseUniversalServer, BaseServerConfig
 from nanobrain.library.interfaces.web.models.request_models import ChatRequest
-from nanobrain.library.interfaces.web.models.response_models import ChatResponse, HealthResponse
-from nanobrain.library.interfaces.web.models.workflow_models import WorkflowCapabilities
 from pydantic import Field
 
 # Server logger

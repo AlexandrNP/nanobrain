@@ -9,10 +9,9 @@ BRUTAL TRUTH: This does what the previous version SHOULD have done.
 """
 
 import os
-import re
 import ast
 from pathlib import Path
-from typing import Dict, List, Any, Optional, Set
+from typing import Dict, List, Any, Optional
 
 
 class ComprehensiveDiscovery:
@@ -111,7 +110,7 @@ class ComprehensiveDiscovery:
                 if isinstance(node, ast.ClassDef):
                     self._analyze_class_node(node, py_file, content)
                     
-        except Exception as e:
+        except Exception:
             self.stats["python_files_failed"] += 1
             # Don't print errors for every file - too noisy
             pass
@@ -244,7 +243,7 @@ class ComprehensiveDiscovery:
     def _print_stats(self) -> None:
         """Print discovery statistics."""
         
-        print(f"\n📊 COMPREHENSIVE DISCOVERY STATISTICS:")
+        print("\n📊 COMPREHENSIVE DISCOVERY STATISTICS:")
         print(f"  Python files scanned: {self.stats['python_files_scanned']}")
         print(f"  Python files failed: {self.stats['python_files_failed']}")
         print(f"  Total classes found: {self.stats['classes_found']}")
@@ -258,7 +257,7 @@ class ComprehensiveDiscovery:
             category = class_info["category"]
             categories[category] = categories.get(category, 0) + 1
         
-        print(f"\n📂 CLASSES BY CATEGORY:")
+        print("\n📂 CLASSES BY CATEGORY:")
         for category, count in sorted(categories.items()):
             print(f"  {category}: {count}")
     

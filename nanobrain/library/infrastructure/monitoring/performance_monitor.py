@@ -5,7 +5,6 @@ Comprehensive metrics collection for system performance tracking.
 """
 
 import asyncio
-import time
 import psutil
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional

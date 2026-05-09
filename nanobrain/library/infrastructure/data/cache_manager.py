@@ -6,16 +6,12 @@ Provides comprehensive caching with memory and disk tiers, service-specific
 strategies, and configurable deduplication for similar requests.
 """
 
-import os
-import json
 import time
 import pickle
-import hashlib
 import asyncio
 import gzip
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Dict, Any, Optional, List
 from pathlib import Path
-from collections import OrderedDict
 import yaml
 from cachetools import TTLCache
 from nanobrain.core.logging_system import get_logger

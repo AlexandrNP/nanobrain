@@ -81,3 +81,93 @@ all = [
 where = ["."]
 include = ["nanobrain*"]
 exclude = ["tests*", "docs*", "demos*", "scripts*", "config*", "logs*", "results*"]
+
+
+# ---------------------------------------------------------------------------
+# [tool.ruff] — gating lint configuration (2026-05-09 infra chain)
+# ---------------------------------------------------------------------------
+#
+# History: pre-2026-05-09 the repo had ZERO ruff enforcement (1248 errors
+# at first run). The autofixable 1023 were applied; the remaining 201 are
+# either (a) intentional patterns (re-export shims, forward-reference
+# type hints) or (b) legacy modules slated for removal that aren't worth
+# fixing.
+#
+# This config:
+# 1. Pins the target Python version so `ruff` knows what builtins to expect.
+# 2. Selects the canonical defaults (E + F) — same set ruff applies by
+#    default, declared explicitly so future ruff versions don't surprise.
+# 3. Per-file-ignores carve out the deliberate cases below.
+# 4. ``ignore`` covers categories where the autofix removed code that was
+#    actually used (e.g., re-exports). Each entry has a comment.
+#
+# When a category here is genuinely cleaned up across the codebase,
+# remove its ignore from this file in the same PR.
+# ---------------------------------------------------------------------------
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+# Select the default ruleset (pyflakes F + pycodestyle E). W (pycodestyle
+# warnings) NOT selected — too noisy on whitespace in this codebase
+# without a separate cleanup pass; enable later if desired.
+select = ["E", "F"]
+
+# Repo-wide ignores — categories with too many false positives in this
+# codebase to gate on without a substantial cleanup. Each entry has a
+# documented reason; remove from this list when the codebase is clean
+# of that category and you want to gate on it going forward.
+ignore = [
+    # Forward-reference type hints (G12 ResourceEnvelope, etc.) live as
+    # strings; Python never resolves them. Ruff flags them anyway.
+    # Eliminating these requires either ``from __future__ import annotations``
+    # everywhere or actual import shuffling. Defer.
+    "F821",
+    # Star imports: ``__init__.py`` re-export modules deliberately use
+    # ``from .x import *`` to forward submodule symbols. Could be cleaned
+    # up by enumerating every name in ``__all__``; defer.
+    "F403",
+    "F405",
+    # Bare except: 20 sites; need thoughtful per-site review (most should
+    # narrow to ``Exception`` or specific types). Defer.
+    "E722",
+    # Line length: enforced through ``line-length = 100`` above; pycodestyle
+    # E501 is too noisy across legacy files. Defer.
+    "E501",
+    # Unused variable. 57 sites in legacy modules; many are debug-leftovers
+    # or intentional unpack-and-discard. Cleanup is per-site review work.
+    "F841",
+    # Unused import (when not in __init__.py — those are already ignored).
+    # 20 remaining sites are mostly conditional-import patterns where the
+    # name IS used inside an ``if HAS_X:`` block but ruff can't see that.
+    "F401",
+    # Method redefinition flagged across class boundaries — false-positive
+    # shape (WorkflowConfig.validate_graph (Pydantic field) vs
+    # WorkflowGraph.validate_graph (method) on a different class). Defer.
+    "F811",
+    # Module-level imports not at top — 4 sites use deliberate
+    # late-import-after-sys.path-tweak patterns in scripts/demos.
+    "E402",
+    # Two-statement lines, true/false comparison, type comparison,
+    # lambda-assignment. Misc legacy style; cleanup is per-site.
+    "E701", "E712", "E721", "E731",
+    "F402",  # import shadowed by loop var
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Test files commonly use unused-fixture-arg patterns + module-level
+# imports for monkeypatching. Skip the noise.
+"tests/**" = ["F401", "F811", "E402"]
+
+# ``__init__.py`` modules are mostly re-export shims; F401 (unused-import
+# at module top) is the deliberate shape.
+"**/__init__.py" = ["F401"]
+
+# nanobrain/cleanup/ is legacy + slated for removal. Don't gate on it.
+"nanobrain/cleanup/**" = ["E", "F", "W"]
+
+# Demo + example modules — best-effort code that doesn't enforce strictness.
+"demos/**" = ["E", "F", "W"]
+"nanobrain/lightweight/examples.py" = ["E", "F", "W"]

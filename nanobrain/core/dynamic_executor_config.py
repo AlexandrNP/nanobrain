@@ -14,7 +14,6 @@ Using the same config for 70 workflows = guaranteed PBS crash.
 """
 
 import json
-import os
 import time
 import yaml
 from pathlib import Path

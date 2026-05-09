@@ -14,10 +14,9 @@ Usage:
 import asyncio
 import argparse
 import sys
-import os
 import signal
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional
 
 # Add nanobrain to path
 script_dir = Path(__file__).parent
@@ -181,7 +180,7 @@ class ChatbotServer:
         host = config.server.host
         port = config.server.port
         
-        print(f"\n🧠 NanoBrain Chatbot Server")
+        print("\n🧠 NanoBrain Chatbot Server")
         print("=" * 50)
         print(f"📋 Mode:           {mode}")
         print(f"🌐 Server:         http://{host}:{port}")
@@ -200,24 +199,24 @@ class ChatbotServer:
         
         # Show workflow status
         if self.workflow:
-            print(f"🧬 Workflow:       ✅ ChatbotViralWorkflow loaded")
+            print("🧬 Workflow:       ✅ ChatbotViralWorkflow loaded")
         else:
-            print(f"🧬 Workflow:       ⚠️  No workflow loaded")
+            print("🧬 Workflow:       ⚠️  No workflow loaded")
         
         print("=" * 50)
-        print(f"🎯 Features:")
-        print(f"   • 💬 Intelligent viral protein analysis chat")
-        print(f"   • 🧬 Alphavirus specialization")
-        print(f"   • 📊 Real-time health monitoring")
+        print("🎯 Features:")
+        print("   • 💬 Intelligent viral protein analysis chat")
+        print("   • 🧬 Alphavirus specialization")
+        print("   • 📊 Real-time health monitoring")
         
         if mode == "development":
-            print(f"   • 🔧 Hot reloading and debug features")
-            print(f"   • 📖 Interactive API documentation")
+            print("   • 🔧 Hot reloading and debug features")
+            print("   • 📖 Interactive API documentation")
         else:
-            print(f"   • 🏭 Production optimizations")
-            print(f"   • 🔒 Security features enabled")
+            print("   • 🏭 Production optimizations")
+            print("   • 🔒 Security features enabled")
         
-        print(f"\nPress Ctrl+C to stop the server")
+        print("\nPress Ctrl+C to stop the server")
         print()
     
     async def shutdown(self) -> None:

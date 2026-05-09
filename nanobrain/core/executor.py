@@ -8,11 +8,11 @@ Enhanced with mandatory from_config pattern implementation.
 import asyncio
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional, Set, Union, List
+from typing import Any, Dict, Optional, Union
 from enum import Enum
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import Field
 
-from .component_base import FromConfigBase, ComponentConfigurationError, ComponentDependencyError
+from .component_base import FromConfigBase
 # Import new ConfigBase for constructor prohibition
 from .config.config_base import ConfigBase
 
@@ -599,7 +599,7 @@ class LocalExecutor(ExecutorBase):
                         result = task(**kwargs)
                         # If the result is a coroutine, handle it properly
                         if asyncio.iscoroutine(result):
-                            logger.info(f"🔥 BRUTAL TRUTH: LocalExecutor function returned coroutine, creating task")
+                            logger.info("🔥 BRUTAL TRUTH: LocalExecutor function returned coroutine, creating task")
                             async_task = asyncio.create_task(result)
                             result = await async_task
                             logger.info(f"🔥 BRUTAL TRUTH: LocalExecutor coroutine task completed with result type: {type(result)}")
@@ -1024,7 +1024,7 @@ class ParslExecutor(ExecutorBase):
             return 'top_level'
         else:
             # No PBS allocation - local development or testing
-            self.nb_logger.info(f"🔥 DETECTED: Local execution (no PBS)")
+            self.nb_logger.info("🔥 DETECTED: Local execution (no PBS)")
             return 'top_level'
 
     async def _track_resource_submission(self, resource_spec: Dict[str, Any], submission_id: str):
@@ -1032,7 +1032,7 @@ class ParslExecutor(ExecutorBase):
         async with self._submission_lock:
             # Log concurrent resource requests
             if self._active_submissions:
-                self.nb_logger.info(f"🔥 PARALLEL PATHS: Concurrent submissions detected:")
+                self.nb_logger.info("🔥 PARALLEL PATHS: Concurrent submissions detected:")
                 for sid, spec in self._active_submissions.items():
                     self.nb_logger.info(f"   {sid}: {spec}")
                 self.nb_logger.info(f"   NEW {submission_id}: {resource_spec}")
@@ -1072,11 +1072,11 @@ class ParslExecutor(ExecutorBase):
             if execution_context == 'subworkflow':
                 # Subworkflows MUST use WorkQueue to share PBS allocation
                 forced_executor_type = 'parsl.executors.WorkQueueExecutor'
-                self.nb_logger.info(f"🔥 FORCING WorkQueueExecutor for subworkflow execution")
+                self.nb_logger.info("🔥 FORCING WorkQueueExecutor for subworkflow execution")
             elif execution_context == 'top_level':
                 # Top-level workflows should use HTEX (or config-specified executor)
                 # Don't force, let config decide (could be HTEX or WorkQueue)
-                self.nb_logger.info(f"🔥 Using executor from config for top-level execution")
+                self.nb_logger.info("🔥 Using executor from config for top-level execution")
 
             # Get project root path for worker initialization
             project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -1124,7 +1124,7 @@ class ParslExecutor(ExecutorBase):
                                         }
                                     }
                                     self.nb_logger.info(f"🔥 FORCING LocalProvider+MPIExecLauncher for subworkflow (was: {original_provider})")
-                                    self.nb_logger.info(f"🔥 Subworkflow will use existing PBS allocation with MPI distribution")
+                                    self.nb_logger.info("🔥 Subworkflow will use existing PBS allocation with MPI distribution")
 
                             # Import the executor class
                             if executor_class_name == 'parsl.executors.HighThroughputExecutor':
@@ -1312,7 +1312,6 @@ class ParslExecutor(ExecutorBase):
             raise RuntimeError("ParslExecutor not initialized")
             
         try:
-            import parsl
             import asyncio
             
             # Convert task to Parsl app if needed
@@ -1429,16 +1428,16 @@ class ParslExecutor(ExecutorBase):
         self.nb_logger.info(f"🔥 BRUTAL TRUTH: ParslExecutor.execute() called with task: {task}")
 
         if not self.is_initialized:
-            self.nb_logger.info(f"🔥 BRUTAL TRUTH: Executor not initialized, initializing...")
+            self.nb_logger.info("🔥 BRUTAL TRUTH: Executor not initialized, initializing...")
             await self.initialize()
 
         # STEP 1: Check if this should use WorkQueueExecutor delegation
         if self._should_use_workqueue_delegation():
-            self.nb_logger.info(f"🔥 BRUTAL TRUTH: Detected WorkQueueExecutor configuration - delegating to WorkQueue execution...")
+            self.nb_logger.info("🔥 BRUTAL TRUTH: Detected WorkQueueExecutor configuration - delegating to WorkQueue execution...")
             return await self._execute_workqueue_delegation(task, add_worker_id, resource_specification, **kwargs)
 
         try:
-            self.nb_logger.info(f"🔥 BRUTAL TRUTH: Attempting primary PARSL execution...")
+            self.nb_logger.info("🔥 BRUTAL TRUTH: Attempting primary PARSL execution...")
             # Attempt primary PARSL execution with resource specification
             return await self._execute_parsl(task, add_worker_id, resource_specification, **kwargs)
         except Exception as e:
@@ -1448,13 +1447,13 @@ class ParslExecutor(ExecutorBase):
 
             # Check if fallback should be attempted
             if self._should_fallback(e):
-                self.nb_logger.warning(f"🔥 BRUTAL TRUTH: Fallback is enabled, attempting fallback...")
+                self.nb_logger.warning("🔥 BRUTAL TRUTH: Fallback is enabled, attempting fallback...")
                 logger.warning(f"PARSL execution failed: {e}")
                 logger.info("🔄 Attempting fallback execution...")
                 return await self._execute_fallback(task, add_worker_id, e, **kwargs)
             else:
                 # Re-raise if fallback not configured or not appropriate
-                self.nb_logger.error(f"🔥 BRUTAL TRUTH: No fallback configured, re-raising exception...")
+                self.nb_logger.error("🔥 BRUTAL TRUTH: No fallback configured, re-raising exception...")
                 logger.error(f"PARSL execution failed and no fallback available: {e}")
                 raise
 
@@ -1465,7 +1464,6 @@ class ParslExecutor(ExecutorBase):
 
         # Generate worker ID and submission ID for this execution
         import uuid
-        import time
         worker_id = f"parsl_worker_{uuid.uuid4().hex[:8]}"
         submission_id = f"submission_{uuid.uuid4().hex[:8]}"
 
@@ -1473,7 +1471,6 @@ class ParslExecutor(ExecutorBase):
         # Create a simple node-tracking Parsl app with resource specification
         try:
             self.nb_logger.info(f"🔥 BRUTAL TRUTH: Creating Parsl app with resource_specification: {resource_specification}")
-            import parsl
 
             # Merge default resource specification from config with provided one
             final_resource_spec = {}
@@ -1537,7 +1534,7 @@ class ParslExecutor(ExecutorBase):
             )
 
             # Wait for Parsl future result
-            self.nb_logger.info(f"🔥 BRUTAL TRUTH: Waiting for Parsl execution...")
+            self.nb_logger.info("🔥 BRUTAL TRUTH: Waiting for Parsl execution...")
             import asyncio
             loop = asyncio.get_event_loop()
             result = await loop.run_in_executor(None, parsl_future.result)
@@ -1618,11 +1615,11 @@ class ParslExecutor(ExecutorBase):
 
         Returns True if the Parsl configuration contains WorkQueueExecutor.
         """
-        self.nb_logger.info(f"🔥 BRUTAL TRUTH: _should_use_workqueue_delegation() called")
+        self.nb_logger.info("🔥 BRUTAL TRUTH: _should_use_workqueue_delegation() called")
         self.nb_logger.info(f"🔥 BRUTAL TRUTH: self.config.parsl_config = {self.config.parsl_config}")
 
         if not self.config.parsl_config or 'executors' not in self.config.parsl_config:
-            self.nb_logger.info(f"🔥 BRUTAL TRUTH: No parsl_config or executors found - returning False")
+            self.nb_logger.info("🔥 BRUTAL TRUTH: No parsl_config or executors found - returning False")
             return False
 
         # Check if any executor in the configuration is WorkQueueExecutor
@@ -1636,7 +1633,7 @@ class ParslExecutor(ExecutorBase):
                     self.nb_logger.info(f"🔥 BRUTAL TRUTH: Found WorkQueueExecutor in config: {executor_class_name}")
                     return True
 
-        self.nb_logger.info(f"🔥 BRUTAL TRUTH: No WorkQueueExecutor found - returning False")
+        self.nb_logger.info("🔥 BRUTAL TRUTH: No WorkQueueExecutor found - returning False")
         return False
 
     async def _execute_workqueue_delegation(self, task: Any, add_worker_id: bool = True,
@@ -1659,13 +1656,13 @@ class ParslExecutor(ExecutorBase):
             # STEP 3: Execute task using the existing Parsl WorkQueueExecutor
             # The WorkQueueExecutor is already configured in the Parsl config
             # We just need to submit the task normally - Parsl will route it to WorkQueue
-            self.nb_logger.info(f"🔥 BRUTAL TRUTH: Submitting task to WorkQueueExecutor via Parsl...")
+            self.nb_logger.info("🔥 BRUTAL TRUTH: Submitting task to WorkQueueExecutor via Parsl...")
 
             # Use the existing _execute_parsl method - it will automatically use WorkQueueExecutor
             # because that's what's configured in the Parsl config
             result = await self._execute_parsl(task, add_worker_id, resource_specification, **kwargs)
 
-            self.nb_logger.info(f"🔥 BRUTAL TRUTH: WorkQueue delegation completed successfully")
+            self.nb_logger.info("🔥 BRUTAL TRUTH: WorkQueue delegation completed successfully")
             return result
 
         except Exception as e:
@@ -1743,7 +1740,7 @@ class ParslExecutor(ExecutorBase):
                         '_executor_type': f'fallback_{fallback_type}'
                     }
 
-            logger.info(f"✅ Fallback execution completed successfully")
+            logger.info("✅ Fallback execution completed successfully")
 
             # Cleanup fallback executor
             await fallback_executor.shutdown()
@@ -1932,7 +1929,7 @@ def create_executor(executor_type: Union[ExecutorType, str],
         ComponentConfigurationError: If configuration is invalid
     """
     logger = logging.getLogger("executor.factory")
-    logger.info(f"Creating executor via mandatory from_config")
+    logger.info("Creating executor via mandatory from_config")
     
     if isinstance(executor_type, str):
         executor_type = ExecutorType(executor_type)

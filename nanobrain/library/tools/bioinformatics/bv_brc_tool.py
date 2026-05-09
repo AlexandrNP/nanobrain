@@ -19,12 +19,9 @@ Features:
 import asyncio
 import csv
 import io
-import json
 import os
-import re
 import tempfile
-import aiohttp
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Union
 from pydantic import Field
@@ -36,13 +33,11 @@ from nanobrain.core.external_tool import (
     ExternalTool,
     ToolResult,
     InstallationStatus,
-    DiagnosticReport,
     ToolInstallationError,
     ToolExecutionError,
     ExternalToolConfig
 )
 from nanobrain.core.progressive_scaling import ProgressiveScalingMixin
-from nanobrain.core.tool import ToolConfig
 from nanobrain.core.logging_system import get_logger
 
 # New enhanced components will be imported on-demand to avoid circular imports
@@ -689,7 +684,7 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
             if self.bv_brc_config.verify_on_init:
                 await self._verify_installation()
 
-            self.logger.info(f"✅ Enhanced BV-BRC tool initialized successfully")
+            self.logger.info("✅ Enhanced BV-BRC tool initialized successfully")
             self.logger.info(f"   - Command pipeline: {status.executable_path}")
 
             if self._enhanced_components_available():
@@ -843,8 +838,8 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
         # For potentially long operations, add progress indicators
         long_operations = ['p3-all-genomes', 'p3-get-genome-features', 'p3-get-feature-sequence']
         if any(op in command for op in long_operations):
-            self.logger.info(f"⏳ This may take 2-8 minutes for viral data retrieval from BV-BRC database...")
-            self.logger.info(f"📊 Progress will be logged every 30 seconds during execution")
+            self.logger.info("⏳ This may take 2-8 minutes for viral data retrieval from BV-BRC database...")
+            self.logger.info("📊 Progress will be logged every 30 seconds during execution")
 
         # Use base class's _execute_with_retry directly to avoid recursion
         try:
@@ -1562,7 +1557,7 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
             self.logger.info(f"Step 1 complete: Found {len(genome_ids)} genomes")
 
             # Step 2: cut -f1 <taxon_id>.tsv | p3-get-genome-features --attr patric_id --attr product
-            self.logger.info(f"Step 2: Getting genome features (may take 1-2 minutes for viral data)")
+            self.logger.info("Step 2: Getting genome features (may take 1-2 minutes for viral data)")
 
             # Write Step 1 results to temporary file for exact pipeline replication
             temp_tsv_file = f"/tmp/{taxon_id}.tsv"
@@ -1575,7 +1570,7 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
             cmd2 = f'cut -f1 {temp_tsv_file} | {p3_features_path} --attr patric_id --attr product --attr aa_sequence_md5'
 
             self.logger.info(f"⏳ Executing: {cmd2}")
-            self.logger.info(f"   Please wait... retrieving features from BV-BRC database")
+            self.logger.info("   Please wait... retrieving features from BV-BRC database")
 
             result2 = await self._execute_shell_command([
                 "/bin/bash", "-c", cmd2
@@ -1632,7 +1627,7 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
                 self.logger.warning("Only header line found in feature data")
 
             # Step 3: grep "CDS\|mat" <taxon_id>.id_md5 |cut -f2 | sort -u | perl filter
-            self.logger.info(f"Step 3: Filtering and extracting unique MD5s")
+            self.logger.info("Step 3: Filtering and extracting unique MD5s")
 
             # Use shell command for complex pipe exactly as specified (NON-BLOCKING)
             temp_file = f"/tmp/{taxon_id}.id_md5"
@@ -1656,12 +1651,12 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
             unique_md5s = [line.strip() for line in md5_lines if line.strip()]
 
             if not unique_md5s:
-                raise BVBRCDataError(f"Step 3 found no unique MD5 hashes")
+                raise BVBRCDataError("Step 3 found no unique MD5 hashes")
 
             self.logger.info(f"Step 3 complete: Found {len(unique_md5s)} unique MD5s")
 
             # Step 4: p3-get-feature-sequence --input <taxon_id>.uniqe.md5 --col 0
-            self.logger.info(f"Step 4: Getting feature sequences")
+            self.logger.info("Step 4: Getting feature sequences")
 
             # Create temporary MD5 file (NON-BLOCKING)
             md5_file = f"/tmp/{taxon_id}.uniqe.md5"
@@ -1764,7 +1759,6 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
         Returns:
             Dict with results and file information
         """
-        import tempfile
         import time
         start_time = time.time()
 
@@ -1800,7 +1794,7 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
                 self.logger.info(f"✅ Step 1: Found {genome_count} genomes")
 
                 # Step 2: Get genome features using pipeline
-                self.logger.info(f"Step 2: Getting genome features")
+                self.logger.info("Step 2: Getting genome features")
 
                 # First part: extract genome IDs
                 cut_cmd = ["cut", "-f1", str(genomes_file)]
@@ -1827,7 +1821,7 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
                 self.logger.info(f"✅ Step 2: Found {features_count} features")
 
                 # Step 3: Filter unique MD5s using shell pipeline
-                self.logger.info(f"Step 3: Filtering unique MD5 hashes")
+                self.logger.info("Step 3: Filtering unique MD5 hashes")
 
                 # grep "CDS\\|mat" file.id_md5 | cut -f2 | sort -u | perl filter
                 grep_cmd = ["grep", "CDS\\|mat", str(features_file)]
@@ -1868,7 +1862,7 @@ class BVBRCTool(ProgressiveScalingMixin, ExternalTool):
                 self.logger.info(f"✅ Step 3: Found {unique_count} unique MD5 hashes")
 
                 # Step 4: Get sequences for unique MD5s
-                self.logger.info(f"Step 4: Getting protein sequences")
+                self.logger.info("Step 4: Getting protein sequences")
 
                 # p3-get-feature-sequence actually expects MD5 sequences as input (not feature IDs as documented)
                 # So we can use the unique MD5 file directly

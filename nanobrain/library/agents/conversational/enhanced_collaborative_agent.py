@@ -22,7 +22,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', 'sr
 from nanobrain.core.agent import ConversationalAgent, AgentConfig
 from nanobrain.core.a2a_support import A2ASupportMixin
 from nanobrain.core.mcp_support import MCPSupportMixin
-from nanobrain.core.component_base import FromConfigBase, ComponentConfigurationError, ComponentDependencyError
 from nanobrain.core.logging_system import get_logger
 
 
@@ -409,7 +408,6 @@ class EnhancedCollaborativeAgent(A2ASupportMixin, MCPSupportMixin, Conversationa
         """Resolve EnhancedCollaborativeAgent dependencies"""
         # Create executor via from_config to avoid direct instantiation
         from nanobrain.core.executor import LocalExecutor, ExecutorConfig
-        import os
         from pathlib import Path
         
         # ✅ FRAMEWORK COMPLIANCE: Use from_config pattern for ExecutorConfig

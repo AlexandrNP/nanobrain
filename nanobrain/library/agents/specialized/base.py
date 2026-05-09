@@ -4,18 +4,14 @@ Base Agent Classes
 Base classes for specialized agents in the NanoBrain framework.
 """
 
-import asyncio
 import time
-from typing import Dict, Any, Optional, List, Union
-from datetime import datetime
+from typing import Dict, Any, Optional, List
 from abc import ABC, abstractmethod
-from pathlib import Path
 
 # Updated imports for nanobrain package structure
-from nanobrain.core.component_base import FromConfigBase
 from nanobrain.core.agent import Agent, SimpleAgent, ConversationalAgent, AgentConfig
 from nanobrain.core.executor import LocalExecutor, ExecutorConfig
-from nanobrain.core.logging_system import NanoBrainLogger, get_logger
+from nanobrain.core.logging_system import get_logger
 
 
 class SpecializedAgentBase(ABC):
@@ -519,7 +515,6 @@ class SimpleSpecializedAgent(SimpleAgent, SpecializedAgentBase):
     def resolve_dependencies(cls, component_config: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """Resolve SimpleSpecializedAgent dependencies"""
         # Create executor via from_config to avoid direct instantiation
-        from nanobrain.core.executor import LocalExecutor, ExecutorConfig
 
         executor_config = kwargs.get('executor_config')
         if not executor_config:
@@ -649,7 +644,7 @@ class ConversationalSpecializedAgent(ConversationalAgent, SpecializedAgentBase):
             return f"I encountered an error while processing your request: {str(e)}"
 
         # PHASE 1 DIAGNOSTICS: Enhanced specialized processing tracing
-        self.specialized_logger.info(f"🔍 [AGENT-TRACE] Checking specialized processing...")
+        self.specialized_logger.info("🔍 [AGENT-TRACE] Checking specialized processing...")
         try:
             should_handle = self._should_handle_specialized(input_text, **kwargs)
             self.specialized_logger.info(f"🔍 [AGENT-TRACE] _should_handle_specialized() returned: {should_handle}")
@@ -659,7 +654,7 @@ class ConversationalSpecializedAgent(ConversationalAgent, SpecializedAgentBase):
 
         if should_handle:
             try:
-                self.specialized_logger.info(f"🔍 [AGENT-TRACE] Calling _process_specialized_request...")
+                self.specialized_logger.info("🔍 [AGENT-TRACE] Calling _process_specialized_request...")
                 specialized_result = await self._process_specialized_request(input_text, **kwargs)
                 self.specialized_logger.info(f"🔍 [AGENT-TRACE] _process_specialized_request returned: {specialized_result is not None}")
 
@@ -682,7 +677,7 @@ class ConversationalSpecializedAgent(ConversationalAgent, SpecializedAgentBase):
                     f"❌ [AGENT-TRACE] Specialized processing failed: {e}")
 
         # PHASE 1 DIAGNOSTICS: Log transition to LLM processing
-        self.specialized_logger.info(f"🔍 [AGENT-TRACE] Transitioning to LLM processing...")
+        self.specialized_logger.info("🔍 [AGENT-TRACE] Transitioning to LLM processing...")
 
         # Fall back to conversational processing (using tools if available)
         if hasattr(self, 'tool_registry') and self.tool_registry.list_tools():
@@ -769,7 +764,7 @@ class ConversationalSpecializedAgent(ConversationalAgent, SpecializedAgentBase):
         # PHASE 1 DIAGNOSTICS: Enhanced LLM processing tracing
         try:
             # PHASE 1 DIAGNOSTICS: Comprehensive LLM client state logging
-            self.specialized_logger.info(f"🔍 [AGENT-TRACE] Starting LLM processing...")
+            self.specialized_logger.info("🔍 [AGENT-TRACE] Starting LLM processing...")
             self.specialized_logger.info(
                 f"🔍 [AGENT-TRACE] LLM client check: hasattr={hasattr(self, 'llm_client')}, client={getattr(self, 'llm_client', None) is not None}")
 
@@ -778,7 +773,7 @@ class ConversationalSpecializedAgent(ConversationalAgent, SpecializedAgentBase):
 
             # Use the parent ConversationalAgent's LLM processing
             if hasattr(self, 'llm_client') and self.llm_client:
-                self.specialized_logger.info(f"🔍 [AGENT-TRACE] Building message context...")
+                self.specialized_logger.info("🔍 [AGENT-TRACE] Building message context...")
 
                 # Create conversation context with system prompt
                 messages = []
@@ -810,14 +805,14 @@ class ConversationalSpecializedAgent(ConversationalAgent, SpecializedAgentBase):
 
                 # PHASE 1 DIAGNOSTICS: Critical LLM call tracing
                 try:
-                    self.specialized_logger.info(f"🔍 [AGENT-TRACE] CALLING _call_llm() - THIS IS THE CRITICAL POINT")
+                    self.specialized_logger.info("🔍 [AGENT-TRACE] CALLING _call_llm() - THIS IS THE CRITICAL POINT")
                     llm_call_start = time.time()
                     llm_response = await self._call_llm(messages)
                     llm_call_duration = time.time() - llm_call_start
                     self.specialized_logger.info(f"✅ [AGENT-TRACE] _call_llm() completed in {llm_call_duration:.2f}s")
 
                     # PHASE 1 DIAGNOSTICS: Trace response processing
-                    self.specialized_logger.info(f"🔍 [AGENT-TRACE] Processing LLM response...")
+                    self.specialized_logger.info("🔍 [AGENT-TRACE] Processing LLM response...")
                     self.specialized_logger.info(f"🔍 [AGENT-TRACE] Response type: {type(llm_response)}")
                     self.specialized_logger.info(f"🔍 [AGENT-TRACE] Response has choices: {'choices' in llm_response if llm_response else False}")
 
@@ -834,7 +829,7 @@ class ConversationalSpecializedAgent(ConversationalAgent, SpecializedAgentBase):
                             self.specialized_logger.info(f"✅ [AGENT-TRACE] Agent processing completed successfully in {total_elapsed:.2f}s")
                             return response
 
-                    self.specialized_logger.error(f"❌ [AGENT-TRACE] No valid response content extracted from LLM response")
+                    self.specialized_logger.error("❌ [AGENT-TRACE] No valid response content extracted from LLM response")
 
                 except Exception as e:
                     # CRITICAL FIX: Safe variable access in exception handler

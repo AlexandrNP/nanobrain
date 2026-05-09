@@ -5,7 +5,7 @@ AgentStep wrapper for ResponseSynthesisAgent - intelligent information synthesis
 """
 
 from typing import Dict, Any
-from nanobrain.core.step import AgentStep, StepConfig
+from nanobrain.core.step import AgentStep
 from nanobrain.core.logging_system import get_logger
 
 logger = get_logger(__name__)

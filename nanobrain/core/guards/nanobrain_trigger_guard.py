@@ -11,8 +11,7 @@ adapted for the NanoBrain framework with complete from_config compliance.
 
 import contextvars
 import functools
-from typing import Dict, Any, List, Optional, Callable, Union
-from pathlib import Path
+from typing import Dict, Any, List, Optional, Callable
 
 from ..component_base import FromConfigBase
 from ..config.config_base import ConfigBase

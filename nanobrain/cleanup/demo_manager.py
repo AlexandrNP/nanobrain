@@ -6,10 +6,9 @@ organizing demos into keep, archive, and delete categories while
 preserving essential documentation and functionality.
 """
 
-import os
 import shutil
 from pathlib import Path
-from typing import List, Set, Dict, Optional
+from typing import List, Dict
 from datetime import datetime
 import logging
 import json

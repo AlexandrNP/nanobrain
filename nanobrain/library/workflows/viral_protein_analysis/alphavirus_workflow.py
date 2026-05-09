@@ -9,12 +9,9 @@ Enhanced for framework compliance with Dict-based configuration format.
 import asyncio
 import time
 import importlib
-from typing import Dict, Any, List, Optional
-from pathlib import Path
-import os
+from typing import Dict, Any
 
 from nanobrain.core.workflow import Workflow, WorkflowConfig
-from nanobrain.core.logging_system import get_logger
 
 
 class AlphavirusWorkflow(Workflow):
@@ -110,7 +107,7 @@ class AlphavirusWorkflow(Workflow):
             config_path = step_config.get('config')
 
             if not step_class or not config_path:
-                raise ValueError(f"Step configuration must include 'class' and 'config' fields")
+                raise ValueError("Step configuration must include 'class' and 'config' fields")
 
             # Enhanced from_config handles automatic instantiation
             module_path, class_name = step_class.rsplit('.', 1)
@@ -182,7 +179,7 @@ class AlphavirusWorkflow(Workflow):
                 child_links = getattr(self, 'child_links', {})
                 workflow_links = getattr(self, 'workflow_links', {})
 
-                self.nb_logger.info(f"🔧 Links storage debug:")
+                self.nb_logger.info("🔧 Links storage debug:")
                 self.nb_logger.info(f"🔧   self.links: {len(links_dict)} items")
                 self.nb_logger.info(f"🔧   self.child_links: {len(child_links)} items")
                 self.nb_logger.info(f"🔧   self.workflow_links: {len(workflow_links)} items")
@@ -230,7 +227,7 @@ class AlphavirusWorkflow(Workflow):
                     self.nb_logger.info(f"✅ Activated {len(activated_links)} links from workflow_input: {activated_links}")
             else:
                 if hasattr(self, 'nb_logger') and self.nb_logger:
-                    self.nb_logger.warning(f"⚠️ No links found with workflow_input as source")
+                    self.nb_logger.warning("⚠️ No links found with workflow_input as source")
 
         except Exception as e:
             if hasattr(self, 'nb_logger') and self.nb_logger:
@@ -296,7 +293,7 @@ class AlphavirusWorkflow(Workflow):
                 await workflow_trigger.start_monitoring()
 
                 if hasattr(self, 'nb_logger') and self.nb_logger:
-                    self.nb_logger.info(f"✅ Created workflow input trigger - will activate all workflow_input links when data is set")
+                    self.nb_logger.info("✅ Created workflow input trigger - will activate all workflow_input links when data is set")
             else:
                 if hasattr(self, 'nb_logger') and self.nb_logger:
                     self.nb_logger.warning("Failed to create workflow input trigger")
@@ -309,7 +306,7 @@ class AlphavirusWorkflow(Workflow):
         """Triggered when data is set to workflow_input - activates all associated links"""
         try:
             if hasattr(self, 'nb_logger') and self.nb_logger:
-                self.nb_logger.info(f"🔥 Workflow input trigger fired - activating links from workflow_input")
+                self.nb_logger.info("🔥 Workflow input trigger fired - activating links from workflow_input")
 
             # Find and activate all links that have workflow_input as their source
             activated_links = []
@@ -336,7 +333,7 @@ class AlphavirusWorkflow(Workflow):
                     self.nb_logger.info(f"✅ Successfully activated {len(activated_links)} links from workflow_input: {activated_links}")
             else:
                 if hasattr(self, 'nb_logger') and self.nb_logger:
-                    self.nb_logger.warning(f"⚠️ No links found with workflow_input as source")
+                    self.nb_logger.warning("⚠️ No links found with workflow_input as source")
 
         except Exception as e:
             if hasattr(self, 'nb_logger') and self.nb_logger:
@@ -403,14 +400,14 @@ class AlphavirusWorkflow(Workflow):
 
             try:
                 if hasattr(self, 'nb_logger') and self.nb_logger:
-                    self.nb_logger.info(f"🚀 Started enhanced event-driven workflow execution")
+                    self.nb_logger.info("🚀 Started enhanced event-driven workflow execution")
 
                 # Trigger event-driven pipeline by setting input data
                 if hasattr(self, 'nb_logger') and self.nb_logger:
                     self.nb_logger.info(f"🔄 Setting data to workflow_input: {input_data}")
                 await workflow_input.set(input_data or {})
                 if hasattr(self, 'nb_logger') and self.nb_logger:
-                    self.nb_logger.info(f"✅ Data successfully set to workflow_input")
+                    self.nb_logger.info("✅ Data successfully set to workflow_input")
 
                 # Simple solution: Directly activate first link from workflow_input
                 await self._activate_workflow_input_links()
@@ -424,7 +421,7 @@ class AlphavirusWorkflow(Workflow):
                     await asyncio.wait_for(completion_event.wait(), timeout=timeout)
 
                     if hasattr(self, 'nb_logger') and self.nb_logger:
-                        self.nb_logger.info(f"✅ Enhanced event-driven workflow completed successfully")
+                        self.nb_logger.info("✅ Enhanced event-driven workflow completed successfully")
 
                     return result_data['output']
 

@@ -6,7 +6,7 @@ Request/response logging middleware that integrates with NanoBrain's logging sys
 
 import time
 import json
-from typing import Callable, Dict, Any, Optional
+from typing import Callable
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp

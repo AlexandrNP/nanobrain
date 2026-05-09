@@ -5,13 +5,11 @@ This module provides functionality to identify, analyze, and consolidate
 overlapping and redundant documentation files throughout the repository.
 """
 
-import os
 import re
 import hashlib
 from pathlib import Path
-from typing import Dict, List, Set, Tuple, Optional
+from typing import Dict, List, Optional
 from dataclasses import dataclass
-from collections import defaultdict
 import difflib
 
 from .models import CleanupResult, ValidationResult

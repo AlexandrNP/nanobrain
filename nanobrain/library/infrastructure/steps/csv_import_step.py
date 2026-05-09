@@ -25,15 +25,12 @@ Usage:
     await step.execute()
 """
 
-import asyncio
 import time
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, List
 from pathlib import Path
 
 from nanobrain.core.step import BaseStep, StepConfig
-from nanobrain.core.data_unit import DataUnitBase, DataUnitFile, DataUnitMemory
-from nanobrain.core.logging_system import get_logger, OperationType
-from nanobrain.core.component_base import ComponentConfigurationError
+from nanobrain.core.logging_system import OperationType
 
 
 class ProcessingError(Exception):
@@ -270,7 +267,7 @@ class CSVImportStep(BaseStep):
                     }
                 }
                 
-                self.nb_logger.info(f"CSV import completed successfully",
+                self.nb_logger.info("CSV import completed successfully",
                                    rows_imported=import_result.get('rows_imported', 0),
                                    processing_time=processing_time,
                                    index_name=index_name)

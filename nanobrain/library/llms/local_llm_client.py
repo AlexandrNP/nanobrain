@@ -194,8 +194,8 @@ class LocalLLM:
             return cls(shared_server=shared_server, **kwargs)
 
         # STEP 2: Check distributed registry (cross-node, slower)
-        logger.info(f"❌ No vLLM servers in local pool")
-        logger.info(f"🔍 Checking distributed registry for cross-node servers...")
+        logger.info("❌ No vLLM servers in local pool")
+        logger.info("🔍 Checking distributed registry for cross-node servers...")
 
         try:
             backend = os.getenv('NANOBRAIN_REGISTRY_BACKEND', 'file')
@@ -228,7 +228,7 @@ class LocalLLM:
                 return cls(base_url=server_url, **kwargs)
 
             else:
-                logger.info(f"❌ No vLLM servers found in distributed registry")
+                logger.info("❌ No vLLM servers found in distributed registry")
 
         except ImportError as e:
             logger.warning(f"⚠️  ProxyStore not available: {e}")
@@ -238,7 +238,7 @@ class LocalLLM:
             logger.warning("   Continuing without cross-node discovery")
 
         # STEP 3: No existing server found anywhere
-        logger.info(f"❌ No existing vLLM servers found (local or distributed)")
+        logger.info("❌ No existing vLLM servers found (local or distributed)")
 
         if not create_if_missing:
             raise RuntimeError(
@@ -247,7 +247,7 @@ class LocalLLM:
             )
 
         # Create new shared server
-        logger.info(f"🔧 Creating new shared vLLM server...")
+        logger.info("🔧 Creating new shared vLLM server...")
         logger.info(f"   Model: {model_name}")
         logger.info(f"   TP: {tensor_parallel_size}")
         logger.info(f"   PP: {pipeline_parallel_size}")
@@ -261,7 +261,7 @@ class LocalLLM:
         )
 
         # Initialize server (will auto-register in distributed registry)
-        logger.info(f"🚀 Initializing new vLLM server...")
+        logger.info("🚀 Initializing new vLLM server...")
         await shared_server.initialize()
 
         # Create client

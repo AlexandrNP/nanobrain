@@ -7,8 +7,7 @@ Inherits from ConversationalAgent and adds distributed processing capabilities.
 
 import asyncio
 import time
-import os
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional
 from datetime import datetime
 
 # NanoBrain core imports - use absolute imports
@@ -87,7 +86,7 @@ class ParslAgent(ConversationalAgent):
         
         if hasattr(self, 'nb_logger'):
             self.nb_logger.info(
-                f"ParslAgent initialized",
+                "ParslAgent initialized",
                 agent_name=self.config.name,
                 parsl_enabled=bool(self.parsl_executor and PARSL_AVAILABLE),
                 model=self.config.model
@@ -117,7 +116,7 @@ class ParslAgent(ConversationalAgent):
                 
                 if hasattr(self, 'nb_logger'):
                     self.nb_logger.debug(
-                        f"Processing message via Parsl distributed execution",
+                        "Processing message via Parsl distributed execution",
                         agent_name=self.config.name,
                         message_length=len(message)
                     )
@@ -132,7 +131,7 @@ class ParslAgent(ConversationalAgent):
                 
                 if hasattr(self, 'nb_logger'):
                     self.nb_logger.info(
-                        f"Distributed processing completed",
+                        "Distributed processing completed",
                         agent_name=self.config.name,
                         processing_time=processing_time,
                         distributed_calls=self.distributed_calls
@@ -144,7 +143,7 @@ class ParslAgent(ConversationalAgent):
                 # Fallback to parent class processing
                 if hasattr(self, 'nb_logger'):
                     self.nb_logger.debug(
-                        f"Using fallback local processing",
+                        "Using fallback local processing",
                         agent_name=self.config.name,
                         reason="parsl_not_available" if not PARSL_AVAILABLE else "parsl_not_configured"
                     )
@@ -177,7 +176,7 @@ class ParslAgent(ConversationalAgent):
             
             if hasattr(self, 'nb_logger'):
                 self.nb_logger.info(
-                    f"Parsl applications registered successfully",
+                    "Parsl applications registered successfully",
                     agent_name=self.config.name
                 )
                 
@@ -211,7 +210,7 @@ class ParslAgent(ConversationalAgent):
             
             if hasattr(self, 'nb_logger'):
                 self.nb_logger.debug(
-                    f"Serializable config prepared",
+                    "Serializable config prepared",
                     agent_name=self.config.name,
                     config_keys=list(self._serializable_config.keys())
                 )
@@ -269,7 +268,7 @@ class ParslAgent(ConversationalAgent):
         """Shutdown the agent and cleanup resources."""
         if hasattr(self, 'nb_logger'):
             self.nb_logger.info(
-                f"Shutting down ParslAgent",
+                "Shutting down ParslAgent",
                 agent_name=self.config.name,
                 distributed_calls=self.distributed_calls,
                 total_distributed_time=self.total_distributed_time
@@ -317,9 +316,6 @@ def process_agent_message_distributed(agent_config: Dict, message: str, context:
     Returns:
         Dict containing response and metadata
     """
-    import os
-    import asyncio
-    from datetime import datetime
     
     try:
         # Import NanoBrain components in worker

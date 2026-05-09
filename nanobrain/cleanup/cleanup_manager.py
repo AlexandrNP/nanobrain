@@ -10,7 +10,7 @@ import os
 import re
 import shutil
 from pathlib import Path
-from typing import List, Set, Dict, Optional
+from typing import List
 from datetime import datetime
 import logging
 import fnmatch
@@ -281,7 +281,7 @@ class CleanupManager:
             with open(gitignore_path, 'a') as f:
                 f.write('\n'.join(gitignore_entries))
             
-            self.logger.info(f"Updated .gitignore with temporary file patterns")
+            self.logger.info("Updated .gitignore with temporary file patterns")
             return True
             
         except Exception as e:

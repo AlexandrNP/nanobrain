@@ -7,8 +7,7 @@ format validation, data quality checks, and schema validation.
 
 import csv
 import re
-from typing import Dict, List, Any, Optional, Set, Tuple
-from pathlib import Path
+from typing import Dict, List, Any, Optional
 import logging
 
 logger = logging.getLogger(__name__)

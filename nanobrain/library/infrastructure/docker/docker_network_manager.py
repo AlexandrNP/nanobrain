@@ -6,14 +6,13 @@ networking, isolation, and service discovery.
 
 """
 
-from typing import Dict, List, Optional, Any, Union, ClassVar
+from typing import Dict, List, Optional, Any, ClassVar
 from dataclasses import dataclass, field
 
 import docker
-from docker.errors import DockerException, APIError
+from docker.errors import DockerException
 
 from .container_config import DockerComponentConfig, DockerComponentBase
-from nanobrain.core.logging_system import get_logger
 from nanobrain.core.component_base import ComponentDependencyError
 
 

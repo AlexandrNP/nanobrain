@@ -35,8 +35,6 @@ def execute_workflow_distributed(
         - error: Error message (if failed)
         - worker_info: Metadata about worker execution
     """
-    import os
-    import asyncio
     import socket
     import traceback
     

@@ -37,8 +37,6 @@ Usage:
 """
 
 import asyncio
-import json
-import uuid
 from datetime import datetime, timezone
 from typing import Dict, List, Any, Optional, Union, Tuple
 from dataclasses import dataclass, field
@@ -137,7 +135,7 @@ class ElasticsearchSearchStep(BaseStep):
         super().__init__(config, **kwargs)
         
         self.config = config
-        self.logger = get_logger(f"elasticsearch_search_step")
+        self.logger = get_logger("elasticsearch_search_step")
         
         # MCP client for Elasticsearch communication
         self.mcp_client: Optional[MCPClient] = None

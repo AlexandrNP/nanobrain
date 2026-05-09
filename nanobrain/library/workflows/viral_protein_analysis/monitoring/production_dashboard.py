@@ -7,16 +7,15 @@ with real-time metrics, health checks, and system status.
 
 import asyncio
 import json
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass
 from fastapi import FastAPI, WebSocket, HTTPException
 from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles
 import uvicorn
 
 from nanobrain.core.logging_system import get_logger
-from .performance_monitor import performance_monitor, PerformanceMetrics
+from .performance_monitor import performance_monitor
 
 
 @dataclass

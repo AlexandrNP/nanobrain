@@ -4,7 +4,7 @@ Response Models
 Pydantic models for API response serialization and validation.
 """
 
-from typing import Optional, Dict, Any, List, Union
+from typing import Optional, Dict, Any
 from pydantic import BaseModel, Field, ConfigDict, field_validator
 from datetime import datetime
 from enum import Enum

@@ -14,7 +14,7 @@ import logging
 import time
 import json
 import threading
-from typing import Dict, List, Any, Optional, Union
+from typing import Dict, List, Any, Optional
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from enum import Enum

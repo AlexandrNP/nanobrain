@@ -8,7 +8,6 @@ import asyncio
 import time
 from typing import Any, Dict, Optional
 from nanobrain.core.step import BaseStep
-from nanobrain.core.data_unit import DataUnitString
 
 
 class DataProcessorStep(BaseStep):

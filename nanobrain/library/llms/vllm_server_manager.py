@@ -16,7 +16,6 @@ import logging
 import socket
 import time
 from pathlib import Path
-from typing import Optional
 from parsl import python_app
 
 logger = logging.getLogger(__name__)
@@ -50,7 +49,6 @@ def start_vllm_server(
         RuntimeError: If vLLM server fails to start
     """
     import subprocess
-    import socket
 
     # Get compute node hostname
     hostname = socket.gethostname()
@@ -200,7 +198,7 @@ class vLLMServerManager:
 
         health_url = f"{server_url}/health"
         logger.info(f"⏳ Waiting for vLLM server health check: {health_url}")
-        logger.info(f"   (This may take 2-5 minutes for model loading)")
+        logger.info("   (This may take 2-5 minutes for model loading)")
 
         start_time = time.time()
 

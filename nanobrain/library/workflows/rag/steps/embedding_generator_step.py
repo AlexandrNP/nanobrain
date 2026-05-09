@@ -5,10 +5,9 @@ Deterministic embedding generation via API calls to embedding services.
 """
 
 import asyncio
-import logging
 import json
 import hashlib
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Tuple
 from pathlib import Path
 
 from nanobrain.core.step import BaseStep, StepConfig

@@ -13,15 +13,14 @@ This example shows:
 import sys
 import os
 import asyncio
-from typing import Dict, Any
+from typing import Any
 
 # Add library to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', '..', '..'))
 
 from library.infrastructure.interfaces.cli import (
-    BaseCLI, CLIConfig, CLIMode,
-    InteractiveCLI, InteractiveCLIConfig,
-    CLIStep, CLIStepConfig,
+    BaseCLI, CLIConfig, InteractiveCLI, InteractiveCLIConfig,
+    CLIStepConfig,
     create_cli_step
 )
 

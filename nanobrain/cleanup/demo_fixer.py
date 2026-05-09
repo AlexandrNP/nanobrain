@@ -5,13 +5,12 @@ This module provides functionality to fix and standardize target demonstration
 implementations, focusing on the viral_pssm_workflow and rag_database_creation demos.
 """
 
-import os
 import re
 import shutil
 import ast
 import yaml
 from pathlib import Path
-from typing import List, Dict, Optional, Set, Tuple
+from typing import List, Dict
 import logging
 
 from .models import FixResult, ConsolidationResult, PathFixResult, ValidationResult

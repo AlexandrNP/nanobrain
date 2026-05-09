@@ -9,15 +9,9 @@ import time
 import uuid
 from typing import Dict, Any, List, Optional
 from fastapi import APIRouter, HTTPException, Depends, Query, Path
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, ConfigDict
 
 from ..models.request_models import ChatRequest, ChatOptions
-from ..models.response_models import (
-    ChatResponse, 
-    HealthResponse,
-    ResponseStatus
-)
 
 
 class FrontendChatRequest(BaseModel):

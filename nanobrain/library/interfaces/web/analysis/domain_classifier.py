@@ -9,7 +9,7 @@ Version: 1.0.0
 """
 
 import logging
-from typing import Dict, Any, Optional, List, Set
+from typing import Dict, Any, Optional, List
 import re
 
 from nanobrain.core.component_base import FromConfigBase

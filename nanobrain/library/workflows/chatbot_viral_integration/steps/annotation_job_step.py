@@ -11,13 +11,13 @@ Version: 4.1.0
 
 from nanobrain.core.step import Step, StepConfig
 from nanobrain.library.infrastructure.data.chat_session_data import (
-    AnnotationJobData, QueryClassificationData, ChatSessionData
+    AnnotationJobData
 )
-from typing import Dict, Any, Optional, AsyncGenerator, Callable, List
+from typing import Dict, Any, Optional, AsyncGenerator
 import asyncio
 import uuid
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 import yaml
 
@@ -612,7 +612,7 @@ class AnnotationJobStep(Step):
                 # Check if this is a WorkflowData object
                 if hasattr(workflow_result, 'clusters') and hasattr(workflow_result, 'clustering_analysis'):
                     # This is a WorkflowData object - extract clustering data directly
-                    self.nb_logger.info(f"🔍 WorkflowData object detected - extracting clustering results")
+                    self.nb_logger.info("🔍 WorkflowData object detected - extracting clustering results")
                     clusters = getattr(workflow_result, 'clusters', [])
                     clustering_analysis = getattr(workflow_result, 'clustering_analysis', None)
                     
@@ -627,7 +627,7 @@ class AnnotationJobStep(Step):
                             'clustering_method': 'product_based'  # Default method
                         }
                     else:
-                        self.nb_logger.warning(f"❌ No clusters found in WorkflowData object")
+                        self.nb_logger.warning("❌ No clusters found in WorkflowData object")
                         clustering_result = None
                         
                 elif isinstance(workflow_result, dict):
@@ -671,7 +671,7 @@ class AnnotationJobStep(Step):
                         clusters = clustering_result.get('protein_clusters', {})
                         self.nb_logger.info(f"🔍 Found {len(clusters)} protein clusters")
                 else:
-                    self.nb_logger.warning(f"❌ No clustering result found in workflow result")
+                    self.nb_logger.warning("❌ No clustering result found in workflow result")
                 
                 if clustering_result and clustering_result.get('success'):
                     # Successfully extract clustering data
@@ -704,7 +704,7 @@ class AnnotationJobStep(Step):
                     if clustering_result:
                         self.nb_logger.warning(f"❌ Clustering result found but failed: success={clustering_result.get('success')}, keys={list(clustering_result.keys()) if isinstance(clustering_result, dict) else 'Not a dict'}")
                     else:
-                        self.nb_logger.warning(f"❌ No clustering results found in workflow result")
+                        self.nb_logger.warning("❌ No clustering results found in workflow result")
                         
                     error = f"Clustering analysis failed or returned no results. Available keys: {list(workflow_result.keys()) if isinstance(workflow_result, dict) else 'Not a dict'}"
                     success = False

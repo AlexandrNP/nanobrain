@@ -6,12 +6,11 @@ Provides comprehensive resource monitoring with configurable thresholds,
 automatic workflow pausing, and user notification system.
 """
 
-import os
 import time
 import psutil
 import asyncio
 import shutil
-from typing import Dict, Any, Optional, List, Callable
+from typing import Dict, Any, Optional, Callable
 from pathlib import Path
 from dataclasses import dataclass
 from nanobrain.core.logging_system import get_logger

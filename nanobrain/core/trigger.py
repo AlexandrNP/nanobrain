@@ -8,14 +8,13 @@ Enhanced with mandatory from_config pattern implementation.
 import asyncio
 import logging
 import time
-import weakref
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Literal, Optional, List, Callable, Set, Union
 from enum import Enum
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import Field
 from pathlib import Path
 
-from .component_base import FromConfigBase, ComponentConfigurationError, ComponentDependencyError
+from .component_base import FromConfigBase, ComponentConfigurationError
 # Import logging system
 from .logging_system import get_logger, get_system_log_manager
 # Import new ConfigBase for constructor prohibition

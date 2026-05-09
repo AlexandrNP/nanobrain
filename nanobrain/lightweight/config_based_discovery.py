@@ -9,10 +9,9 @@ BRUTAL TRUTH: This is what I should have implemented from the start.
 The config files contain the EXPLICIT mappings - use them!
 """
 
-import os
 import yaml
 from pathlib import Path
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, List, Any, Optional
 import logging
 
 logger = logging.getLogger(__name__)
@@ -80,7 +79,7 @@ class ConfigBasedDiscovery:
         # Process discovered mappings
         self._process_class_mappings()
         
-        print(f"✅ Config-based discovery complete")
+        print("✅ Config-based discovery complete")
         self._print_config_stats()
         
         return {
@@ -205,7 +204,7 @@ class ConfigBasedDiscovery:
     def _print_config_stats(self) -> None:
         """Print discovery statistics."""
         
-        print(f"\n📊 CONFIG-BASED DISCOVERY STATISTICS:")
+        print("\n📊 CONFIG-BASED DISCOVERY STATISTICS:")
         print(f"  Config files scanned: {self.stats['config_files_scanned']}")
         print(f"  Config files failed: {self.stats['config_files_failed']}")
         print(f"  Class mappings found: {self.stats['class_mappings_found']}")
@@ -219,7 +218,7 @@ class ConfigBasedDiscovery:
         }
         
         if multiple_configs:
-            print(f"\n📂 CLASSES WITH MULTIPLE CONFIGS:")
+            print("\n📂 CLASSES WITH MULTIPLE CONFIGS:")
             for class_name, count in sorted(multiple_configs.items()):
                 print(f"  {class_name}: {count} configs")
                 configs = self.class_to_configs[class_name]

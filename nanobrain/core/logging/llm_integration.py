@@ -11,7 +11,7 @@ This module provides LLM-optimized instrumentation that focuses on:
 import functools
 import time
 from typing import Dict, Any, Optional
-from nanobrain.core.logging.llm_optimized_tracer import LLMOptimizedTracer, LLMEventType
+from nanobrain.core.logging.llm_optimized_tracer import LLMOptimizedTracer
 
 
 class LLMOptimizedIntegration:

@@ -5,13 +5,11 @@ This module provides comprehensive backup functionality to ensure safe cleanup
 operations with full recovery capabilities.
 """
 
-import os
 import shutil
 import subprocess
-import hashlib
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional
 import logging
 
 from .models import BackupResult, GitBackupResult, ValidationResult

@@ -10,7 +10,7 @@ Version: 1.0.0
 
 import asyncio
 import logging
-from typing import Dict, Any, Optional, List, Union
+from typing import Dict, Any, Optional, List
 from datetime import datetime
 import uuid
 
@@ -21,7 +21,6 @@ from nanobrain.library.interfaces.web.models.universal_models import (
     RequestAnalysis, WorkflowMatch, WorkflowRoute, MultiWorkflowRoute,
     UniversalResponse, RoutingStrategy
 )
-from nanobrain.library.interfaces.web.models.workflow_models import WorkflowExecutionPlan
 from pydantic import Field
 
 # Router logger
@@ -584,7 +583,6 @@ class WorkflowRouter(FromConfigBase):
     
     async def wait_for_workflow_completion(self, output_data_unit, timeout: float = 900.0):
         """Wait for workflow completion with timeout"""
-        import asyncio
         import time
         
         start_time = time.time()
@@ -592,7 +590,7 @@ class WorkflowRouter(FromConfigBase):
             # Check if output data unit has result
             current_value = await output_data_unit.get()
             if current_value is not None:
-                logger.debug(f"📤 Workflow completed, received result")
+                logger.debug("📤 Workflow completed, received result")
                 return current_value
             
             # Wait briefly before checking again

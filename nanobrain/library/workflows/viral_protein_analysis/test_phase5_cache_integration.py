@@ -18,10 +18,8 @@ Test Coverage:
 - End-to-end cache workflow
 """
 
-import asyncio
 import pytest
 import tempfile
-import shutil
 from pathlib import Path
 from typing import Dict, Any
 from datetime import datetime
@@ -266,7 +264,7 @@ class TestImportValidation:
     def test_no_bvbrc_cache_manager_import(self):
         """Test that BVBRCCacheManager is no longer importable"""
         with pytest.raises(ImportError):
-            from nanobrain.library.workflows.viral_protein_analysis.bvbrc_cache_manager import BVBRCCacheManager
+            pass
     
     def test_virus_specific_cache_manager_import(self):
         """Test that VirusSpecificCacheManager is properly importable"""

@@ -8,7 +8,7 @@ Direct implementation of the metaclass pattern with Nanobrain integration.
 
 from abc import ABCMeta
 from types import FunctionType
-from typing import Dict, Any, Optional, List, Callable
+from typing import Dict, Any, Optional, List
 from .nanobrain_guard_config import NanobrainTriggerGuardConfig
 from .contextvar_core import only_via_trigger, via_trigger, is_trigger_active
 

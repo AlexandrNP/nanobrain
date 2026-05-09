@@ -9,17 +9,13 @@ and virus genome name resolution.
 
 import asyncio
 import json
-import os
 import time
-from typing import Dict, List, Optional, Any, Union
+from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
-from pathlib import Path
 
 from elasticsearch import AsyncElasticsearch
-from elasticsearch.exceptions import ConnectionError, NotFoundError, RequestError
 
 from nanobrain.core.external_tool import ExternalTool, ToolResult, InstallationStatus, ExternalToolConfig
-from nanobrain.core.tool import ToolConfig
 from nanobrain.core.logging_system import get_logger
 from nanobrain.library.infrastructure.docker import (
     DockerManager, ContainerConfig, HealthCheckConfig, ResourceLimits,
@@ -1386,9 +1382,9 @@ class ElasticsearchTool(ExternalTool):
     async def _generate_specific_suggestions(self) -> List[str]:
         """Generate Elasticsearch-specific installation suggestions"""
         return [
-            f"Enable auto-installation: Set auto_install_enabled=true in configuration",
-            f"Install Docker: Elasticsearch auto-installation requires Docker",
-            f"Download Elasticsearch manually: https://www.elastic.co/downloads/elasticsearch",
+            "Enable auto-installation: Set auto_install_enabled=true in configuration",
+            "Install Docker: Elasticsearch auto-installation requires Docker",
+            "Download Elasticsearch manually: https://www.elastic.co/downloads/elasticsearch",
             f"Use Docker: docker run -p 9200:9200 elasticsearch:{self.es_config.image_tag}",
             f"Check network connectivity to {self.es_config.host}:{self.es_config.port}"
         ]

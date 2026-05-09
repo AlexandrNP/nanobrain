@@ -18,15 +18,12 @@ import os
 import asyncio
 import subprocess
 import tempfile
-import shutil
-import json
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 from datetime import datetime
 
 from nanobrain.core.step import Step, StepConfig
 from nanobrain.core.executor import ParslExecutor
-from nanobrain.core.logging_system import get_logger
 
 
 class FastaClusterPSSMStep(Step):
@@ -95,7 +92,7 @@ class FastaClusterPSSMStep(Step):
         # Initialize executor (will be loaded in initialize())
         self.executor = None
 
-        self.nb_logger.info(f"🧬 FastaClusterPSSMStep initialized")
+        self.nb_logger.info("🧬 FastaClusterPSSMStep initialized")
         self.nb_logger.info(f"   Executor config path: {self.executor_config_path}")
         self.nb_logger.info(f"   Default threads: {self.default_threads}")
         self.nb_logger.info(f"   Timeout: {self.timeout}s")
@@ -184,7 +181,7 @@ class FastaClusterPSSMStep(Step):
                 parameters=parameters
             )
 
-            self.nb_logger.info(f"✅ PSSM generation completed successfully")
+            self.nb_logger.info("✅ PSSM generation completed successfully")
             return result
 
         except Exception as e:
@@ -226,9 +223,6 @@ class FastaClusterPSSMStep(Step):
             - Environment variables are set (PSSM_ENV_ROOT, PERL5LIB, PSSM_SCRIPT, MAFFT_THREADS)
             - Both Python (Parsl) and PSSM tools are available
             """
-            import os
-            import subprocess
-            import tempfile
             from pathlib import Path
 
             # Get PSSM script path from environment (set by worker_init)
@@ -337,7 +331,7 @@ class FastaClusterPSSMStep(Step):
                 'execution_time': execution_time
             }
 
-        self.nb_logger.info(f"✅ Task completed:")
+        self.nb_logger.info("✅ Task completed:")
         self.nb_logger.info(f"   PSSMs generated: {task_result['pssm_count']}")
         self.nb_logger.info(f"   Alignments: {task_result['alignment_count']}")
         self.nb_logger.info(f"   Execution time: {execution_time:.2f}s")

@@ -13,7 +13,7 @@ from nanobrain.core.step import Step, StepConfig
 from nanobrain.library.infrastructure.data.chat_session_data import (
     AnnotationJobData, ConversationalResponseData, MessageType, ChatSessionData
 )
-from typing import Dict, Any, List, Optional, AsyncGenerator
+from typing import Dict, Any, List
 import time
 import json
 from datetime import datetime
@@ -110,7 +110,7 @@ class ResponseFormattingStep(Step):
             formatted_response['processing_time_ms'] = (time.time() - start_time) * 1000
             formatted_response['formatted_at'] = datetime.now().isoformat()
             
-            self.nb_logger.info(f"✅ Response formatted successfully")
+            self.nb_logger.info("✅ Response formatted successfully")
             
             return {
                 'success': True,
@@ -153,7 +153,7 @@ class ResponseFormattingStep(Step):
                 cluster_count = len(job_data.result['protein_clusters']) if hasattr(job_data.result['protein_clusters'], '__len__') else 'no len'
                 self.nb_logger.info(f"🔍 DEBUG: Response formatter - found {cluster_count} protein clusters")
         else:
-            self.nb_logger.info(f"🔍 DEBUG: Response formatter - no result data")
+            self.nb_logger.info("🔍 DEBUG: Response formatter - no result data")
         
         try:
             if job_data.status == 'failed':
@@ -176,7 +176,7 @@ class ResponseFormattingStep(Step):
             # CRITICAL FIX: Check for clustering results regardless of status
             # This handles race condition where job has results but status hasn't updated yet
             if job_data.result and isinstance(job_data.result, dict) and 'protein_clusters' in job_data.result:
-                self.nb_logger.info(f"🎯 CLUSTERING RESULTS DETECTED: Formatting clustering response regardless of status")
+                self.nb_logger.info("🎯 CLUSTERING RESULTS DETECTED: Formatting clustering response regardless of status")
                 return await self._format_clustering_analysis_response(job_data, job_data.result)
             
             if job_data.status == 'running':
@@ -408,8 +408,8 @@ class ResponseFormattingStep(Step):
                 "---",
                 "",
                 f"**Generated**: {time.strftime('%Y-%m-%d %H:%M:%S')}",
-                f"**Analysis Type**: PSSM Matrix Generation",
-                f"**Organism Focus**: Eastern Equine Encephalitis Virus"
+                "**Analysis Type**: PSSM Matrix Generation",
+                "**Organism Focus**: Eastern Equine Encephalitis Virus"
             ])
             
             return {
@@ -617,7 +617,7 @@ class ResponseFormattingStep(Step):
                 "---",
                 "",
                 f"**Generated**: {time.strftime('%Y-%m-%d %H:%M:%S')}",
-                f"**Analysis Method**: Product-based protein clustering",
+                "**Analysis Method**: Product-based protein clustering",
                 f"**Total Processing Time**: {execution_time:.2f}s"
             ])
             
@@ -931,9 +931,9 @@ Your viral protein annotation results are ready! The analysis has identified fun
             "✅ **PSSM Matrix Analysis Completed**",
             "",
             f"**Job ID**: `{job_data.job_id}`",
-            f"**Target Organism**: Eastern Equine Encephalitis Virus (EEEV)",
-            f"**Analysis Method**: NanoBrain Alphavirus Analysis",
-            f"**Proteins Analyzed**: 5",
+            "**Target Organism**: Eastern Equine Encephalitis Virus (EEEV)",
+            "**Analysis Method**: NanoBrain Alphavirus Analysis",
+            "**Proteins Analyzed**: 5",
             "",
             "## 📊 PSSM Matrix Results",
             "",

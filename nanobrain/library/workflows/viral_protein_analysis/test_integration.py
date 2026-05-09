@@ -15,11 +15,8 @@ This test validates:
 
 import asyncio
 import pytest
-from typing import Dict, Any
 import logging
-from pathlib import Path
 
-from nanobrain.library.workflows.viral_protein_analysis.alphavirus_workflow import AlphavirusWorkflow
 from nanobrain.library.workflows.viral_protein_analysis.test_helper import ViralProteinWorkflowTester
 
 # Configure logging

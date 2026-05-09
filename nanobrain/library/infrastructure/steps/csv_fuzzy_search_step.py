@@ -25,15 +25,11 @@ Usage:
     await step.execute()
 """
 
-import asyncio
 import time
-from typing import Dict, Any, Optional, List
-from pathlib import Path
+from typing import Dict, Any, List
 
 from nanobrain.core.step import BaseStep, StepConfig
-from nanobrain.core.data_unit import DataUnitBase, DataUnitMemory
-from nanobrain.core.logging_system import get_logger, OperationType
-from nanobrain.core.component_base import ComponentConfigurationError
+from nanobrain.core.logging_system import OperationType
 
 
 class ProcessingError(Exception):
@@ -285,7 +281,7 @@ class CSVFuzzySearchStep(BaseStep):
                     'step_stats': self.search_stats.copy()
                 }
                 
-                self.nb_logger.info(f"Fuzzy search completed successfully",
+                self.nb_logger.info("Fuzzy search completed successfully",
                                    query=query_string,
                                    results_count=len(formatted_results.get('results', [])),
                                    search_duration=search_duration,

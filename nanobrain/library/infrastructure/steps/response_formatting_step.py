@@ -33,24 +33,20 @@ Usage:
     await step.execute()
 """
 
-import asyncio
 import json
 import time
-from typing import Dict, Any, Optional, List, Union
+from typing import Dict, Any, List
 from datetime import datetime, timezone
-from pathlib import Path
 from enum import Enum
 
 from nanobrain.core.step import BaseStep, StepConfig
-from nanobrain.core.config.config_base import ConfigBase
-from nanobrain.core.component_base import ComponentConfigurationError, ComponentDependencyError
 from nanobrain.core.logging_system import get_logger
 from nanobrain.core.data_unit import DataUnitBase, DataUnitMemory
 from nanobrain.core.trigger import TriggerBase
 from nanobrain.library.infrastructure.data.progress_update_data_unit import ProgressUpdateDataUnit
 from nanobrain.library.infrastructure.data.session_context_data_unit import SessionContextDataUnit
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import Field, ConfigDict
 
 
 class ResponseFormat(Enum):
@@ -340,7 +336,7 @@ class ResponseFormattingStep(BaseStep):
         self.chunk_size = config.streaming_chunk_size
         
         self.logger.info(
-            f"ResponseFormattingStep initialized successfully",
+            "ResponseFormattingStep initialized successfully",
             extra={
                 "component_name": self.name,
                 "default_format": self.default_format.value,
@@ -402,7 +398,7 @@ class ResponseFormattingStep(BaseStep):
             }
             
             self.logger.debug(
-                f"ResponseFormattingStep processing completed",
+                "ResponseFormattingStep processing completed",
                 extra={
                     "response_type": response_type,
                     "output_format": self.default_format.value,
@@ -528,7 +524,7 @@ class ResponseFormattingStep(BaseStep):
         if self.enable_rich:
             # Create visual progress bar
             progress_bar = self._create_progress_bar(current_progress)
-            content = f"🔄 **Processing in Progress**\n\n"
+            content = "🔄 **Processing in Progress**\n\n"
             content += f"{progress_bar} **{current_progress:.1f}%**\n\n"
             content += f"**Current Step:** {current_step}\n"
             
@@ -765,5 +761,5 @@ class ResponseFormattingStep(BaseStep):
     
     def cleanup(self) -> None:
         """Clean up response formatting resources."""
-        self.logger.info(f"Cleaning up ResponseFormattingStep")
+        self.logger.info("Cleaning up ResponseFormattingStep")
         # No specific cleanup needed for this step 

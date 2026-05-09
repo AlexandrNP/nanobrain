@@ -12,7 +12,6 @@ This module provides:
 
 import sys
 import os
-import asyncio
 from typing import Dict, Any, Optional
 from dataclasses import dataclass, field
 
@@ -377,7 +376,7 @@ class CLIStep(BaseCLI, Step):
         stats = self.get_performance_stats()
         
         info_lines = [
-            f"Step Information:",
+            "Step Information:",
             f"  Name: {self.config.name}",
             f"  Description: {self.config.description}",
             f"  Execution count: {stats.get('execution_count', 0)}",

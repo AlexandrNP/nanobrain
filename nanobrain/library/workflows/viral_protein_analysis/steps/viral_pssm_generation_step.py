@@ -5,14 +5,11 @@ Generates the final viral_pssm.json output.
 Replaces the _generate_viral_pssm_json method from AlphavirusWorkflow.
 """
 
-import asyncio
 import time
-import json
 from datetime import datetime
 from typing import Dict, Any, List, Optional
 
 from nanobrain.core.step import Step, StepConfig
-from nanobrain.core.logging_system import get_logger
 
 
 class ViralPSSMGenerationStep(Step):
@@ -75,7 +72,7 @@ class ViralPSSMGenerationStep(Step):
         self.cluster_id_mapping = self.pssm_config.get('cluster_id_mapping', {})
         self.protein_functions = self.pssm_config.get('protein_functions', {})
         
-        self.nb_logger.info(f"🧬 ViralPSSMGenerationStep initialized")
+        self.nb_logger.info("🧬 ViralPSSMGenerationStep initialized")
     
     def __init__(self, config: StepConfig, **kwargs):
         super().__init__(config, **kwargs)
@@ -88,7 +85,7 @@ class ViralPSSMGenerationStep(Step):
         self.metadata_config = step_config_dict.get('metadata', {})
         self.output_format = step_config_dict.get('output_format', {})
         
-        self.nb_logger.info(f"🧬 ViralPSSMGenerationStep initialized")
+        self.nb_logger.info("🧬 ViralPSSMGenerationStep initialized")
         
     async def process(self, input_data: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """
@@ -96,7 +93,7 @@ class ViralPSSMGenerationStep(Step):
         """
         self.nb_logger.info("🔄 Processing viral PSSM generation step")
         result = await self.execute(input_data)
-        self.nb_logger.info(f"✅ Viral PSSM generation completed successfully")
+        self.nb_logger.info("✅ Viral PSSM generation completed successfully")
         return result
         
     async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:

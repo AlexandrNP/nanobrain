@@ -707,7 +707,7 @@ class YAMLWorkflowConfig(YAMLConfig):
     def add_link(self, link_config: Dict[str, Any]) -> None:
         """Add a link configuration."""
         self.links.append(link_config)
-        logger.debug(f"Added link configuration")
+        logger.debug("Added link configuration")
     
     def validate_references(self) -> List[str]:
         """

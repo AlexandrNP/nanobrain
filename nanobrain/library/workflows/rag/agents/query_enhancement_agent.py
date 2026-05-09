@@ -4,11 +4,8 @@ Query Enhancement Agent for RAG systems.
 The ONLY LLM-based component in the RAG pipeline.
 """
 
-import asyncio
-import logging
 import json
-from typing import Dict, Any, List, Optional
-from pathlib import Path
+from typing import Dict, Any, List
 
 from nanobrain.core.logging_system import get_logger
 from nanobrain.core.agent import SimpleAgent
@@ -51,7 +48,7 @@ class QueryEnhancementAgent(SimpleAgent):
         self.preserve_original_intent = getattr(self.config, 'preserve_original_intent', True)
         self.template_variables = getattr(self.config, 'template_variables', {})
 
-        logger.info(f"🧠 QueryEnhancementAgent initialized with template from configuration")
+        logger.info("🧠 QueryEnhancementAgent initialized with template from configuration")
 
     async def initialize(self):
         """Initialize the agent."""

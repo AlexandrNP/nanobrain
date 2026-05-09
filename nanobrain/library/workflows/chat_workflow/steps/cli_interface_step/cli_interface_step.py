@@ -213,7 +213,7 @@ CLI Interface Status:
                 stderr=asyncio.subprocess.PIPE
             )
             await process.communicate()
-        except Exception as e:
+        except Exception:
             # Fallback: just print newlines if clear command fails
             print('\n' * 50)
         return {

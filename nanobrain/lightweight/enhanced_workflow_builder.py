@@ -16,7 +16,7 @@ import json
 import yaml
 import importlib
 from pathlib import Path
-from typing import Dict, List, Any, Optional, Union
+from typing import Dict, List, Any, Optional
 from dataclasses import dataclass, field
 
 
@@ -72,7 +72,7 @@ class EnhancedWorkflowBuilder:
         # Available classes from discovery
         self.available_classes = self.discovery.list_available_classes()
         
-        print(f"🔧 Enhanced Workflow Builder initialized")
+        print("🔧 Enhanced Workflow Builder initialized")
         print(f"   Workflow: {workflow_name}")
         print(f"   Available classes: {len(self.available_classes)}")
     
@@ -398,7 +398,7 @@ class EnhancedWorkflowBuilder:
     def print_workflow_yaml(self):
         """Print workflow configuration in YAML format."""
 
-        print(f"\n📄 WORKFLOW CONFIGURATION (YAML):")
+        print("\n📄 WORKFLOW CONFIGURATION (YAML):")
         print("=" * 50)
         yaml_content = self.get_workflow_yaml()
         print(yaml_content)
@@ -453,7 +453,7 @@ class EnhancedWorkflowBuilder:
 
         # Show components
         if self.components:
-            print(f"\n🔧 COMPONENTS:")
+            print("\n🔧 COMPONENTS:")
             for comp_name, component in self.components.items():
                 status = "⚠️" if component.validation_errors else "✅"
                 print(f"  {status} {comp_name}: {component.class_name}")
@@ -463,14 +463,14 @@ class EnhancedWorkflowBuilder:
 
         # Show connections
         if self.connections:
-            print(f"\n🔗 CONNECTIONS:")
+            print("\n🔗 CONNECTIONS:")
             for connection in self.connections:
                 print(f"  {connection.source} → {connection.target} ({connection.link_class})")
 
         # Show validation status
         validation = self.validate_workflow()
         if validation["valid"]:
-            print(f"\n✅ Workflow is valid")
+            print("\n✅ Workflow is valid")
         else:
             print(f"\n❌ Workflow has {len(validation['errors'])} errors")
             for error in validation["errors"]:

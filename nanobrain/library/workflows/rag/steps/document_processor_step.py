@@ -5,10 +5,9 @@ Deterministic document parsing, text extraction, and chunking operations.
 """
 
 import asyncio
-import logging
 import hashlib
 import json
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List
 from pathlib import Path
 
 from nanobrain.core.step import BaseStep, StepConfig

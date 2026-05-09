@@ -5,7 +5,6 @@ This module coordinates all cleanup phases, manages dependencies between phases,
 and provides rollback capabilities and comprehensive logging.
 """
 
-import os
 import sys
 import time
 import argparse
@@ -863,13 +862,13 @@ def main():
         summary = orchestrator.execute_cleanup(args.phases)
         
         # Print summary
-        print(f"\nCleanup Summary:")
+        print("\nCleanup Summary:")
         print(f"  Duration: {summary.end_time - summary.start_time}")
         print(f"  Phases completed: {len(summary.phases_completed)}")
         print(f"  Success: {summary.success}")
         
         if not summary.success:
-            print(f"  Failed phases:")
+            print("  Failed phases:")
             for phase_result in summary.phases_completed:
                 if not phase_result.success:
                     print(f"    - {phase_result.phase_name}: {phase_result.errors}")

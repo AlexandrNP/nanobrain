@@ -13,12 +13,12 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional, List, Callable, Union, Literal
 from enum import Enum
 from pathlib import Path
-from pydantic import BaseModel, Field, ConfigDict, model_validator
+from pydantic import Field, ConfigDict, model_validator
 
 # Async file operations
 import aiofiles
 
-from .component_base import FromConfigBase, ComponentConfigurationError, ComponentDependencyError
+from .component_base import FromConfigBase, ComponentConfigurationError
 # Import logging system
 from .logging_system import get_logger, get_system_log_manager
 # Import new ConfigBase for constructor prohibition
@@ -1185,7 +1185,7 @@ class LinkBase(FromConfigBase, ABC):
             else:
                 if self.enable_logging and self.nb_logger:
                     self.nb_logger.debug(
-                        f"⚠️ No 'new_data' in event, falling back to source.get()")
+                        "⚠️ No 'new_data' in event, falling back to source.get()")
                 # Fallback: Get data from source data unit
                 if hasattr(self.source, 'get'):
                     if asyncio.iscoroutinefunction(self.source.get):

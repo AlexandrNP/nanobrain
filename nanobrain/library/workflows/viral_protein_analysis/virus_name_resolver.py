@@ -9,7 +9,6 @@ Based on BV-BRC CLI documentation and data acquisition patterns.
 
 import pandas as pd
 import re
-import time
 from typing import Dict, List, Optional, Tuple
 from pathlib import Path
 from dataclasses import dataclass, field

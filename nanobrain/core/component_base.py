@@ -6,9 +6,8 @@ Provides the mandatory from_config pattern foundation for all framework componen
 
 import importlib
 import inspect
-import os
-from abc import ABC, abstractmethod
-from typing import Dict, Any, ClassVar, List, Optional, Type, Union
+from abc import ABC
+from typing import Dict, Any, ClassVar, List, Type, Union
 from pathlib import Path
 from pydantic import BaseModel
 
@@ -740,7 +739,7 @@ class FromConfigBase(ABC):
             parent_relative_path = calling_class_dir.parent / config_file
             resolution_attempts.append(("Class Parent Directory", parent_relative_path))
             
-        except (OSError, TypeError) as e:
+        except (OSError, TypeError):
             # If we can't determine class file location, continue with other strategies
             pass
         

@@ -96,7 +96,7 @@ async def execute_query(workflow, query: str):
         logger.info("✅ User query data set in workflow input data unit")
     else:
         logger.error("❌ Workflow user query input data unit not found")
-        return f"Error: Could not find workflow input data unit"
+        return "Error: Could not find workflow input data unit"
 
     # Set document paths data (optional)
     document_paths = ["data/documents"]

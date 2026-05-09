@@ -11,7 +11,7 @@ import ast
 import os
 import sys
 from pathlib import Path
-from typing import Dict, List, Set, Tuple, Optional, Any
+from typing import Dict, List, Set, Tuple, Optional
 from dataclasses import dataclass
 import logging
 

@@ -5,11 +5,8 @@ Implements YAML-based configuration with mandatory agent_card and tool_card sect
 for A2A protocol compliance and unified framework architecture.
 """
 
-from typing import Dict, Any, List, Optional, Union
+from typing import Dict, Any, List, Optional
 from pydantic import BaseModel, Field, ConfigDict
-from pathlib import Path
-import json
-import yaml
 import logging
 
 from .yaml_config import YAMLConfig

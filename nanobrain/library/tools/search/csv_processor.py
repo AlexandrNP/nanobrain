@@ -6,10 +6,8 @@ data validation, and transformation for Elasticsearch indexing.
 """
 
 import csv
-import io
 import os
-from typing import Dict, List, Any, Optional, Iterator, Tuple
-from pathlib import Path
+from typing import Dict, List, Any, Optional, Iterator
 import logging
 
 # Optional imports with fallbacks

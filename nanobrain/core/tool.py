@@ -10,7 +10,7 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional, List, Callable, Union
 from enum import Enum
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import Field
 
 from .component_base import FromConfigBase, ComponentConfigurationError, ComponentDependencyError
 from .logging_system import get_logger
@@ -20,7 +20,10 @@ from .config.config_base import ConfigBase
 # G15 — UnifiedToolDescriptor primitive. Re-exported here so tool authors
 # can import it from `nanobrain.core.tool` (the canonical surface) without
 # also importing from `nanobrain.core.unified_tool_descriptor`.
-from .unified_tool_descriptor import (
+# noqa: F401 — these names are intentionally re-exported even when this
+# module doesn't reference them locally; tests + downstream callers
+# import them via ``from nanobrain.core.tool import UTDInputSpec`` etc.
+from .unified_tool_descriptor import (  # noqa: F401
     UnifiedToolDescriptor,
     UTDInputSpec,
     UTDOutputSpec,
@@ -28,9 +31,6 @@ from .unified_tool_descriptor import (
     UTDFailureMode,
     UTDProvenancePin,
     UTDVersionEntry,
-    SideEffectClass,
-    DeterminismClass,
-    ResourceClass,
     compute_descriptor_hash,
 )
 
@@ -1191,7 +1191,7 @@ def create_tool(config: Union[Dict[str, Any], ToolConfig], **kwargs) -> ToolBase
         ComponentConfigurationError: If configuration is invalid
     """
     logger = get_logger("tool.factory")
-    logger.info(f"Creating tool via mandatory from_config")
+    logger.info("Creating tool via mandatory from_config")
     
     if isinstance(config, dict):
         config = ToolConfig.from_config(config)

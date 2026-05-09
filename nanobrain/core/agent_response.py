@@ -7,8 +7,7 @@ Provides type safety and structured data handling for agent processing results.
 """
 
 from dataclasses import dataclass, asdict, field
-from typing import Dict, List, Any, Optional, Union
-from datetime import datetime
+from typing import Dict, List, Any, Optional
 import time
 import uuid
 

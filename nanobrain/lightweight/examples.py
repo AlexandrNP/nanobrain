@@ -92,7 +92,7 @@ def example_2_custom_parameters():
     
     # Validate before saving
     validation = builder.validate_workflow()
-    print(f"\n🔍 Validation Results:")
+    print("\n🔍 Validation Results:")
     print(f"   Valid: {validation['valid']}")
     print(f"   Errors: {len(validation['errors'])}")
     print(f"   Warnings: {len(validation['warnings'])}")
@@ -201,7 +201,7 @@ def example_4_config_exploration():
                 print(f"    ... and {len(components) - 5} more {category.lower()}s")
     
     # Build a workflow using the exploration results
-    print(f"\n🔨 Building workflow with explored components:")
+    print("\n🔨 Building workflow with explored components:")
     
     # Use DataUnit with specific config choice
     data_unit_configs = builder.discovery.get_all_configs_for_class("DataUnit")
@@ -275,7 +275,7 @@ def example_5_error_handling():
     
     # Show validation results
     validation = builder.validate_workflow()
-    print(f"\n🔍 Final validation:")
+    print("\n🔍 Final validation:")
     print(f"   Valid: {validation['valid']}")
     print(f"   Components: {validation['component_count']}")
     print(f"   Connections: {validation['connection_count']}")
@@ -305,18 +305,18 @@ def main():
         example_files.append(example_4_config_exploration())
         example_files.append(example_5_error_handling())
         
-        print(f"\n🎉 ALL EXAMPLES COMPLETED SUCCESSFULLY!")
+        print("\n🎉 ALL EXAMPLES COMPLETED SUCCESSFULLY!")
         print(f"Generated {len(example_files)} workflow files:")
         for file in example_files:
             print(f"   📄 {file}")
         
-        print(f"\n💡 Next Steps:")
-        print(f"   1. Examine the generated YAML files")
-        print(f"   2. Use them as templates for your own workflows")
-        print(f"   3. Load them into the nanobrain framework for execution")
+        print("\n💡 Next Steps:")
+        print("   1. Examine the generated YAML files")
+        print("   2. Use them as templates for your own workflows")
+        print("   3. Load them into the nanobrain framework for execution")
         
         # Clean up example files
-        print(f"\n🧹 Cleaning up example files...")
+        print("\n🧹 Cleaning up example files...")
         for file in example_files:
             Path(file).unlink(missing_ok=True)
         print(f"   ✅ Cleaned up {len(example_files)} files")

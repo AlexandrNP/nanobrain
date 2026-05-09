@@ -10,10 +10,9 @@ Version: 4.1.0
 """
 
 from nanobrain.core.step import Step, StepConfig
-from nanobrain.core.agent import AgentConfig
 from nanobrain.library.agents.specialized.base import ConversationalSpecializedAgent
 from nanobrain.library.infrastructure.data.chat_session_data import (
-    ConversationalResponseData, MessageType
+    ConversationalResponseData
 )
 from typing import Dict, Any, List, Optional
 import time
@@ -289,7 +288,7 @@ class ConversationalResponseStep(Step):
             if not classification_data:
                 # Use the extracted query_text
                 if not query_text:
-                    self.nb_logger.error(f"🔍 DEBUG: No query_text extracted from input data")
+                    self.nb_logger.error("🔍 DEBUG: No query_text extracted from input data")
                     raise ValueError("Missing both classification_data and query_text")
 
                 # Create a simple classification data structure
@@ -405,7 +404,7 @@ class ConversationalResponseStep(Step):
         
         try:
             # PHASE 1 DIAGNOSTICS: Enhanced agent call tracing
-            self.nb_logger.info(f"🔍 [STEP-TRACE] Calling agent.process() with enhanced query...")
+            self.nb_logger.info("🔍 [STEP-TRACE] Calling agent.process() with enhanced query...")
             self.nb_logger.info(f"🔍 [STEP-TRACE] Agent type: {type(self.agent)}")
             self.nb_logger.info(f"🔍 [STEP-TRACE] Agent name: {getattr(self.agent, 'name', 'unknown')}")
             self.nb_logger.info(f"🔍 [STEP-TRACE] Enhanced query length: {len(enhanced_query)}")

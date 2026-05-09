@@ -49,10 +49,8 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-from typing import Any, ClassVar, Dict, List, Optional
+from typing import Any, Dict, List
 
-import yaml
-from pydantic import Field
 
 from nanobrain.core.component_base import ComponentConfigurationError
 from nanobrain.core.step import BaseStep, StepConfig

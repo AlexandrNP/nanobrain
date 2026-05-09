@@ -15,9 +15,8 @@ This iteration focuses on USABLE, HIGH-QUALITY discovery results.
 import os
 import ast
 import importlib
-import inspect
 from pathlib import Path
-from typing import Dict, List, Any, Optional, Set
+from typing import Dict, List, Any, Optional
 
 
 class RefinedDiscovery:
@@ -78,10 +77,10 @@ class RefinedDiscovery:
                 self._scan_directory_refined(scan_dir)
         
         # Extract schemas from config classes
-        print(f"🔬 Extracting schemas from config classes...")
+        print("🔬 Extracting schemas from config classes...")
         self._extract_schemas()
         
-        print(f"✅ Refined discovery complete")
+        print("✅ Refined discovery complete")
         self._print_refined_stats()
         
         return {
@@ -311,7 +310,7 @@ class RefinedDiscovery:
                     if component_name in self.component_classes:
                         self.component_classes[component_name]["schema"] = schema
                         
-            except Exception as e:
+            except Exception:
                 # Schema extraction failed for this class
                 pass
     
@@ -369,7 +368,7 @@ class RefinedDiscovery:
     def _print_refined_stats(self) -> None:
         """Print refined discovery statistics."""
 
-        print(f"\n📊 REFINED DISCOVERY STATISTICS:")
+        print("\n📊 REFINED DISCOVERY STATISTICS:")
         print(f"  Python files scanned: {self.stats['python_files_scanned']}")
         print(f"  Total classes found: {self.stats['total_classes_found']}")
         print(f"  Abstract classes skipped: {self.stats['abstract_classes_skipped']}")
@@ -383,7 +382,7 @@ class RefinedDiscovery:
             category = comp_info["category"]
             component_categories[category] = component_categories.get(category, 0) + 1
 
-        print(f"\n📂 COMPONENT CLASSES BY CATEGORY:")
+        print("\n📂 COMPONENT CLASSES BY CATEGORY:")
         for category, count in sorted(component_categories.items()):
             print(f"  {category}: {count}")
 

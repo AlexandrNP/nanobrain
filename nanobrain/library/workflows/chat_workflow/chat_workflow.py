@@ -18,24 +18,18 @@ User Input → CLI Interface Step → Conversation Manager Step → Agent Proces
                                    Performance Tracking (substep)
 """
 
-import sys
-import os
 import asyncio
-from typing import Dict, Any, Optional, List
-from datetime import datetime
+from typing import Dict, Any, Optional
 
 # Core framework imports with proper nanobrain package structure
 from nanobrain.core.component_base import FromConfigBase
-from nanobrain.core.data_unit import DataUnitMemory, DataUnitConfig
-from nanobrain.core.trigger import DataUnitChangeTrigger, TriggerConfig, TriggerType
-from nanobrain.core.link import DirectLink, LinkConfig, LinkType
+from nanobrain.core.data_unit import DataUnitMemory
 from nanobrain.core.executor import LocalExecutor, ExecutorConfig
-from nanobrain.core.logging_system import get_logger, OperationType
+from nanobrain.core.logging_system import get_logger
 from nanobrain.core.agent import AgentConfig
 
 # Library imports with updated paths
 from nanobrain.library.agents.conversational import EnhancedCollaborativeAgent
-from nanobrain.library.infrastructure.data import ConversationHistoryUnit
 
 
 class ChatWorkflow(FromConfigBase):
@@ -576,7 +570,7 @@ class ChatWorkflow(FromConfigBase):
                 executor_config = ExecutorConfig.from_config(str(default_executor_path))
             
             executor = LocalExecutor.from_config(executor_config)
-        except Exception as e:
+        except Exception:
             # Fallback: Use LocalExecutor's default configuration
             executor = LocalExecutor.from_config('config/workflows/chat/fallback_executor.yml')
         

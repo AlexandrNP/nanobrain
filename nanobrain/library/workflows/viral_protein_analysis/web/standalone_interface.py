@@ -7,14 +7,12 @@ for EEEV protein boundary analysis with literature support.
 """
 
 import asyncio
-import json
 import time
 from typing import Dict, Any, Optional, List
 from pathlib import Path
 from fastapi import FastAPI, WebSocket, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict
 import yaml
 from dataclasses import dataclass
 

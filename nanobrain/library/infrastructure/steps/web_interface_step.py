@@ -39,29 +39,26 @@ import asyncio
 import uuid
 import time
 import json
-from typing import Dict, Any, Optional, List, Union, Set, Callable
+from typing import Dict, Any, Optional, List, Set, Callable
 from datetime import datetime, timezone
 from pathlib import Path
-from concurrent.futures import ThreadPoolExecutor
 
-from fastapi import FastAPI, HTTPException, WebSocket, Request, Response
+from fastapi import FastAPI, HTTPException, WebSocket, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.websockets import WebSocketDisconnect
 import uvicorn
 from pydantic import BaseModel, Field
-import websockets
 
 from nanobrain.core.step import BaseStep, StepConfig
-from nanobrain.core.config.config_base import ConfigBase
 from nanobrain.core.logging_system import get_logger
-from nanobrain.core.component_base import ComponentConfigurationError, ComponentDependencyError
+from nanobrain.core.component_base import ComponentDependencyError
 from pydantic import ConfigDict
 
 # Import data units
-from nanobrain.core.data_unit import DataUnitBase, DataUnitMemory
+from nanobrain.core.data_unit import DataUnitMemory
 from nanobrain.library.infrastructure.data.session_context_data_unit import SessionContextDataUnit
 from nanobrain.library.infrastructure.data.progress_update_data_unit import ProgressUpdateDataUnit
 
@@ -969,7 +966,7 @@ class WebInterfaceStep(BaseStep):
             self.logger.info(f"🔍 [HTTP-DEBUG] Verification - data in http_requests unit: {verification_data}")
 
             self.logger.debug(
-                f"Populated central http_requests data unit",
+                "Populated central http_requests data unit",
                 extra={
                     "request_id": request_id,
                     "session_id": session_id,
@@ -1032,7 +1029,7 @@ class WebInterfaceStep(BaseStep):
             await session_unit.set(session_data)
 
             self.logger.debug(
-                f"Updated session context data unit",
+                "Updated session context data unit",
                 extra={
                     "session_id": session_id,
                     "request_count": session_data['request_count']
@@ -1321,7 +1318,7 @@ class WebInterfaceStep(BaseStep):
             self.server_task = asyncio.create_task(server.serve())
 
             self.logger.info(
-                f"HTTP server started successfully",
+                "HTTP server started successfully",
                 extra={
                     "host": self.config.server_config.host,
                     "port": self.config.server_config.port,

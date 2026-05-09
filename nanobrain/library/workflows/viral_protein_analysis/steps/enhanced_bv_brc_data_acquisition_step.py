@@ -12,18 +12,13 @@ NO hardcoded virus patterns - all validation via configurable agents
 ZERO contamination tolerance - rejects any matches with contamination risk
 """
 
-import asyncio
 import json
-import os
 import pandas as pd
-from pathlib import Path
-from typing import Dict, Any, List, Optional, Tuple, Set
+from typing import Dict, Any, List, Optional
 from datetime import datetime
-from dataclasses import dataclass, asdict
-import re
+from dataclasses import dataclass
 
 from nanobrain.core.step import Step
-from nanobrain.core.data_unit import DataUnit
 from nanobrain.core.agent import SimpleAgent
 from nanobrain.library.tools.bioinformatics.bv_brc_tool import BVBRCTool
 import yaml
@@ -772,7 +767,7 @@ class EnhancedBVBRCDataAcquisitionStep(Step):
             self.bv_brc_tool = self._create_bv_brc_tool(component_config)
         
         if self.bv_brc_tool and resolved_tools.get('bv_brc_tool') and self.nb_logger:
-            self.nb_logger.info(f"✅ Using resolved BV-BRC tool from enhanced ConfigBase system")
+            self.nb_logger.info("✅ Using resolved BV-BRC tool from enhanced ConfigBase system")
         
         # Use resolved species validation agent if available
         self.species_validation_agent = resolved_tools.get('species_validation_agent') or self.step_tools.get('species_validation_agent')
@@ -781,7 +776,7 @@ class EnhancedBVBRCDataAcquisitionStep(Step):
             self.species_validation_agent = self._create_species_validation_agent(component_config)
         
         if self.species_validation_agent and resolved_tools.get('species_validation_agent') and self.nb_logger:
-            self.nb_logger.info(f"✅ Using resolved species validation agent from enhanced ConfigBase system")
+            self.nb_logger.info("✅ Using resolved species validation agent from enhanced ConfigBase system")
         
         # Use resolved taxonomic verification agent if available
         self.taxonomic_verification_agent = resolved_tools.get('taxonomic_verification_agent') or self.step_tools.get('taxonomic_verification_agent')
@@ -790,7 +785,7 @@ class EnhancedBVBRCDataAcquisitionStep(Step):
             self.taxonomic_verification_agent = self._create_taxonomic_verification_agent(component_config)
         
         if self.taxonomic_verification_agent and resolved_tools.get('taxonomic_verification_agent') and self.nb_logger:
-            self.nb_logger.info(f"✅ Using resolved taxonomic verification agent from enhanced ConfigBase system")
+            self.nb_logger.info("✅ Using resolved taxonomic verification agent from enhanced ConfigBase system")
         
         # Get contamination tolerance (should be 0.0 for zero tolerance)
         self.contamination_tolerance = component_config.get('contamination_tolerance', 0.0)
@@ -800,7 +795,7 @@ class EnhancedBVBRCDataAcquisitionStep(Step):
         self.taxonomic_validation_threshold = component_config.get('taxonomic_validation_threshold', 0.9)
         
         if self.nb_logger:
-            self.nb_logger.info(f"🛡️ Enhanced BV-BRC Data Acquisition initialized with ZERO contamination tolerance")
+            self.nb_logger.info("🛡️ Enhanced BV-BRC Data Acquisition initialized with ZERO contamination tolerance")
             self.nb_logger.info(f"🎯 Validation thresholds - Species: {self.species_validation_threshold}, Taxonomic: {self.taxonomic_validation_threshold}")
     
     def _create_species_validation_agent(self, component_config: Dict[str, Any]) -> SimpleAgent:

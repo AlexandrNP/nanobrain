@@ -17,7 +17,7 @@ Key Features:
 import asyncio
 import logging
 import uuid
-from typing import Any, Dict, Optional, Type, Callable
+from typing import Any, Dict, Optional, Type
 from functools import wraps
 from threading import Lock
 from dataclasses import dataclass, field

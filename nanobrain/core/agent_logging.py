@@ -5,14 +5,13 @@ for NanoBrain agents without parent class initialization pollution.
 
 import os
 import time
-import asyncio
 import threading
-from typing import Dict, Any, Optional, Union, List
+from typing import Dict, Any, Optional
 from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 
-from .async_logging import get_process_safe_logger, ProcessSafeLogger
+from .async_logging import get_process_safe_logger
 
 
 @dataclass
@@ -159,7 +158,7 @@ class AgentLogger:
         if not self._is_concrete_instance or not self.logger:
             return
 
-        self.logger.info(f"LLM call completed",
+        self.logger.info("LLM call completed",
                          agent_name=self.agent_name,
                          model=model,
                          messages_count=messages_count,

@@ -18,11 +18,10 @@ import uuid
 import yaml
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
-from dataclasses import dataclass, asdict
-import logging
+from typing import Any, Dict, List, Optional
+from dataclasses import dataclass
 
-from nanobrain.core.shared_resource import shared, get_resource_pool
+from nanobrain.core.shared_resource import shared
 from nanobrain.core.logging_system import get_logger
 from nanobrain.core.pbs_resource_manager import get_pbs_resource_manager, ResourceAllocation
 from nanobrain.core.dynamic_executor_config import DynamicExecutorConfigGenerator
@@ -149,7 +148,7 @@ class WorkflowDivergenceManager:
             len(spawn_parameters)
         )
 
-        self.logger.info(f"📊 Resource allocation strategy:")
+        self.logger.info("📊 Resource allocation strategy:")
         self.logger.info(f"   - Workflows to spawn: {len(spawn_parameters)}")
         self.logger.info(f"   - Cores per workflow: {cores_per_workflow}")
         self.logger.info(f"   - Max concurrent workflows: {max_concurrent}")
@@ -206,7 +205,7 @@ class WorkflowDivergenceManager:
 
                 else:
                     # Fallback: Generate workflow-specific config (old behavior)
-                    self.logger.warning(f"⚠️ No shared executor config found, generating workflow-specific config")
+                    self.logger.warning("⚠️ No shared executor config found, generating workflow-specific config")
 
                     # Create workflow directory structure first
                     workflow_dir = await self._create_workflow_directory(workflow_uuid, workflow_config)
@@ -461,8 +460,6 @@ class WorkflowDivergenceManager:
             Updated configuration with local file paths
         """
         import copy
-        import shutil
-        from pathlib import Path
 
         updated_config = copy.deepcopy(config)
 
@@ -487,8 +484,6 @@ class WorkflowDivergenceManager:
         - Agent configurations: agents.*.config
         - Nested configurations at any level
         """
-        import shutil
-        from pathlib import Path
 
         for key, value in config_dict.items():
             current_path = f"{path_prefix}.{key}" if path_prefix else key

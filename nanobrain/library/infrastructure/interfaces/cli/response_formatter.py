@@ -13,7 +13,7 @@ This module provides:
 import sys
 import os
 import json
-from typing import Dict, Any, Optional, List, Union
+from typing import Dict, Any, Optional, List
 from dataclasses import dataclass, field
 from enum import Enum
 

@@ -15,7 +15,7 @@ import asyncio
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 
-from nanobrain.core.logging_system import get_logger, OperationType
+from nanobrain.core.logging_system import get_logger
 from nanobrain.core.data_unit import DataUnitMemory, DataUnitConfig
 
 
@@ -114,7 +114,7 @@ class DistributedProcessingStep:
             # Store results in output data unit
             await self.output_data_unit.set(results)
 
-            self.logger.info(f"Distributed processing completed successfully")
+            self.logger.info("Distributed processing completed successfully")
             return results
 
         except Exception as e:

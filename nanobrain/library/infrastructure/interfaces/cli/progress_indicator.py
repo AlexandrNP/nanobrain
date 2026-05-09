@@ -13,9 +13,8 @@ This module provides:
 import sys
 import os
 import time
-import asyncio
 import threading
-from typing import Dict, Any, Optional, Callable
+from typing import Dict, Any, Optional
 from dataclasses import dataclass, field
 from enum import Enum
 

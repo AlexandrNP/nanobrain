@@ -9,10 +9,9 @@ BRUTAL TRUTH: This should scan EVERY .yml/.yaml file in the entire framework
 and extract ALL class references. No excuses, no shortcuts.
 """
 
-import os
 import yaml
 from pathlib import Path
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, List, Any, Optional
 import logging
 
 logger = logging.getLogger(__name__)
@@ -70,7 +69,7 @@ class ComprehensiveConfigDiscovery:
         # Process discovered mappings
         self._process_class_mappings()
         
-        print(f"✅ Comprehensive config discovery complete")
+        print("✅ Comprehensive config discovery complete")
         self._print_comprehensive_stats()
         
         return {
@@ -309,7 +308,7 @@ class ComprehensiveConfigDiscovery:
     def _print_comprehensive_stats(self) -> None:
         """Print comprehensive discovery statistics."""
         
-        print(f"\n📊 COMPREHENSIVE CONFIG DISCOVERY STATISTICS:")
+        print("\n📊 COMPREHENSIVE CONFIG DISCOVERY STATISTICS:")
         print(f"  Directories scanned: {self.stats['directories_scanned']}")
         print(f"  Total YAML files found: {self.stats['total_yaml_files_found']}")
         print(f"  Config files processed: {self.stats['config_files_processed']}")
@@ -325,7 +324,7 @@ class ComprehensiveConfigDiscovery:
         }
         
         if multiple_configs:
-            print(f"\n📂 CLASSES WITH MULTIPLE CONFIGS:")
+            print("\n📂 CLASSES WITH MULTIPLE CONFIGS:")
             for class_name, count in sorted(multiple_configs.items(), key=lambda x: x[1], reverse=True):
                 print(f"  {class_name}: {count} configs")
                 configs = self.class_to_configs[class_name]
@@ -342,7 +341,7 @@ class ComprehensiveConfigDiscovery:
             dir_path = str(Path(config_info["relative_path"]).parent)
             directory_counts[dir_path] = directory_counts.get(dir_path, 0) + 1
         
-        print(f"\n📁 CONFIG FILES BY DIRECTORY (top 10):")
+        print("\n📁 CONFIG FILES BY DIRECTORY (top 10):")
         sorted_dirs = sorted(directory_counts.items(), key=lambda x: x[1], reverse=True)
         for dir_path, count in sorted_dirs[:10]:
             print(f"  {dir_path}: {count} files")

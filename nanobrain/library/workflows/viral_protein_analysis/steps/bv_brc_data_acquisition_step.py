@@ -14,19 +14,14 @@ https://www.bv-brc.org/docs/cli_tutorial/cli_getting_started.html
 """
 
 import asyncio
-import tempfile
 import time
-from typing import Dict, Any, List, Optional, Set
+from typing import Dict, Any, List, Optional
 from pathlib import Path
-import hashlib
-import re
 import json
 
 from nanobrain.core.step import Step, StepConfig
-from nanobrain.core.logging_system import get_logger
 from nanobrain.library.tools.bioinformatics.bv_brc_tool import BVBRCTool, BVBRCConfig
 import yaml
-from pathlib import Path
 import pandas as pd
 
 
@@ -168,7 +163,7 @@ class BVBRCDataAcquisitionStep(Step):
 
         if json_cache_path.exists():
             if hasattr(self, 'nb_logger') and self.nb_logger:
-                self.nb_logger.info(f"💾 JSON cache found - skipping BV-BRC tool initialization")
+                self.nb_logger.info("💾 JSON cache found - skipping BV-BRC tool initialization")
             self.bv_brc_tool = None
             # Set default configuration parameters
             self.min_genome_length = 8000
@@ -458,7 +453,7 @@ class BVBRCDataAcquisitionStep(Step):
             mapped_result = business_result
             self.nb_logger.warning("⚠️ No output data units configured for BVBRCDataAcquisitionStep, returning original result")
 
-        self.nb_logger.info(f"✅ BV-BRC data acquisition completed successfully")
+        self.nb_logger.info("✅ BV-BRC data acquisition completed successfully")
         return mapped_result
 
 
@@ -546,10 +541,10 @@ class BVBRCDataAcquisitionStep(Step):
 
                 # Skip genome download - create mock genome data from cache
                 self.nb_logger.info(
-                    f"🔄 Step 1: SKIPPING genome download - using existing cache")
+                    "🔄 Step 1: SKIPPING genome download - using existing cache")
                 original_genomes = []  # We don't need genome data when using cache
                 self.nb_logger.info(
-                    f"✅ Using cached data - skipped genome download")
+                    "✅ Using cached data - skipped genome download")
 
             elif cached_proteins_path.exists() and self._is_cache_valid(cached_proteins_path, max_age_hours=24):
                 # Check if current cache is empty and fallback to good cache
@@ -586,10 +581,10 @@ class BVBRCDataAcquisitionStep(Step):
 
                 # Skip genome download - create mock genome data from cache
                 self.nb_logger.info(
-                    f"🔄 Step 1: SKIPPING genome download - using existing cache")
+                    "🔄 Step 1: SKIPPING genome download - using existing cache")
                 original_genomes = []  # We don't need genome data when using cache
                 self.nb_logger.info(
-                    f"✅ Using cached data - skipped genome download")
+                    "✅ Using cached data - skipped genome download")
 
             else:
                 # No valid cache found - proceed with genome download
@@ -661,14 +656,14 @@ class BVBRCDataAcquisitionStep(Step):
                     f"✅ Filtered to {len(filtered_genomes)} genomes within size range ({self.min_genome_length}-{self.max_genome_length} bp)")
 
                 if not filtered_genomes:
-                    raise ValueError(f"No genomes found within size range")
+                    raise ValueError("No genomes found within size range")
             else:
                 # Using cache - create mock filtered genomes
                 self.nb_logger.info(
                     "🔄 Step 2: SKIPPING genome filtering - using cached data")
                 filtered_genomes = []  # We don't need genome data when using cache
                 self.nb_logger.info(
-                    f"✅ Using cached data - skipped genome filtering")
+                    "✅ Using cached data - skipped genome filtering")
 
             # Steps 3-4: Get unique protein MD5s
             self.nb_logger.info("🔄 Steps 3-4: Extracting unique protein MD5s")
@@ -1081,8 +1076,6 @@ class BVBRCDataAcquisitionStep(Step):
         This is the ONLY way p3-get-genome-features works!
         """
 
-        import os
-        import asyncio
 
         # Generate cache key if not provided
         if not cache_key:
@@ -1113,9 +1106,9 @@ class BVBRCDataAcquisitionStep(Step):
             self.nb_logger.info(
                 f"💾 Found existing protein cache: {cached_proteins_path}")
 
-            print(f"✅ USING CACHED PROTEIN DATA - SKIPPING ALL BV-BRC COMMANDS")
+            print("✅ USING CACHED PROTEIN DATA - SKIPPING ALL BV-BRC COMMANDS")
             self.nb_logger.info(
-                f"💾 Using cached protein data - skipping ALL BV-BRC commands")
+                "💾 Using cached protein data - skipping ALL BV-BRC commands")
             try:
                 with open(cached_proteins_path, 'rb') as f:
                     cached_data = f.read()
@@ -1130,7 +1123,7 @@ class BVBRCDataAcquisitionStep(Step):
         # Only proceed with BV-BRC commands if no cache exists AND we have genome_ids
         if not genome_ids:
             self.nb_logger.error(
-                f"❌ No cache found and no genome_ids provided")
+                "❌ No cache found and no genome_ids provided")
             return []
 
         # Get genomes cache path for BV-BRC pipeline
@@ -1326,8 +1319,6 @@ class BVBRCDataAcquisitionStep(Step):
     async def _get_sequences_for_proteins(self, protein_batch: List[ProteinData]) -> List[SequenceData]:
         """Get sequences for proteins using cached data first, then p3-get-feature-sequence if needed"""
 
-        import os
-        import asyncio
 
         # FIRST: Check if we have cached sequence data (FASTA format)
         if hasattr(self, 'current_cache_key') and self.current_cache_key:
@@ -1753,9 +1744,9 @@ class BVBRCDataAcquisitionStep(Step):
             self.nb_logger.info(
                 f"💾 Found existing FASTA cache: {fasta_cache_path}")
 
-            print(f"✅ USING CACHED FASTA DATA - SKIPPING FASTA CREATION")
+            print("✅ USING CACHED FASTA DATA - SKIPPING FASTA CREATION")
             self.nb_logger.info(
-                f"💾 Using cached FASTA data - skipping FASTA creation")
+                "💾 Using cached FASTA data - skipping FASTA creation")
 
             try:
                 with open(fasta_cache_path, 'r') as f:
@@ -1902,7 +1893,6 @@ class BVBRCDataAcquisitionStep(Step):
 
         This function is essential for data acquisition to find genome IDs from CSV files.
         """
-        import pandas as pd
 
         try:
             # Get configurable CSV file path from step configuration

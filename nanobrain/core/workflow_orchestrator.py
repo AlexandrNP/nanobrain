@@ -18,11 +18,9 @@ import json
 import yaml
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
-import logging
+from typing import Any, Dict, List
 
 from nanobrain.core.workflow_divergence import WorkflowDivergenceManager
-from nanobrain.core.shared_resource import get_resource_pool
 from nanobrain.core.logging_system import get_logger
 from test_aggregation_simple import SimpleResultAggregator
 
@@ -207,7 +205,6 @@ class AlphavirusWorkflowOrchestrator:
     
     async def _wait_for_real_workflow_completion(self, aggregator: SimpleResultAggregator):
         """Wait for real workflow execution to complete - NO MOCKS!"""
-        import asyncio
         from pathlib import Path
 
         self.logger.info("🔄 Monitoring real workflow execution...")
@@ -276,7 +273,7 @@ class AlphavirusWorkflowOrchestrator:
         with open(summary_file, 'w') as f:
             json.dump(summary, f, indent=2)
         
-        self.logger.info(f"💾 Final results saved:")
+        self.logger.info("💾 Final results saved:")
         self.logger.info(f"   - Results: {results_file}")
         self.logger.info(f"   - Timing: {timing_file}")
         self.logger.info(f"   - Summary: {summary_file}")

@@ -6,7 +6,6 @@ Discovers framework components by scanning existing configuration files.
 This avoids import hell by finding classes through their usage in configs.
 """
 
-import os
 import yaml
 from pathlib import Path
 from typing import Dict, List, Any, Optional

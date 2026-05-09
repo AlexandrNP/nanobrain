@@ -5,17 +5,12 @@ Re-architected to inherit from NanoBrain Step base class.
 Steps 10-13: Align protein clusters and prepare for PSSM analysis.
 """
 
-import asyncio
 import time
-import tempfile
-import subprocess
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 
 from nanobrain.core.step import Step, StepConfig
-from nanobrain.core.logging_system import get_logger
 import yaml
-from pathlib import Path
 
 
 class AlignmentStep(Step):
@@ -161,7 +156,7 @@ class AlignmentStep(Step):
                 'refactoring_status': 'phase_2_complete_migration'
             }
 
-            self.nb_logger.info(f"✅ Alignment step completed successfully")
+            self.nb_logger.info("✅ Alignment step completed successfully")
             return result
 
         except Exception as e:

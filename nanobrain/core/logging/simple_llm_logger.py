@@ -14,7 +14,6 @@ This provides ACTUALLY simple logging that LLMs can process:
 
 import time
 import logging
-from typing import Any, Dict, Optional
 
 logger = logging.getLogger("LLM_SIMPLE")
 

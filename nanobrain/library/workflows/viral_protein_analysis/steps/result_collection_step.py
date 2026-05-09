@@ -5,15 +5,13 @@ Handles file collection and organization logic from the workflow.
 Replaces the _collect_output_files method from AlphavirusWorkflow.
 """
 
-import asyncio
 import time
 import json
 from pathlib import Path
 from datetime import datetime
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, Optional
 
 from nanobrain.core.step import Step, StepConfig
-from nanobrain.core.logging_system import get_logger
 
 
 class ResultCollectionStep(Step):
@@ -87,7 +85,7 @@ class ResultCollectionStep(Step):
         """
         self.nb_logger.info("🔄 Processing result collection step")
         result = await self.execute(input_data)
-        self.nb_logger.info(f"✅ Result collection completed successfully")
+        self.nb_logger.info("✅ Result collection completed successfully")
         return result
         
     async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:

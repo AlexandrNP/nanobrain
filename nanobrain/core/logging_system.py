@@ -14,7 +14,7 @@ import uuid
 import functools
 import inspect
 from contextlib import contextmanager, asynccontextmanager
-from typing import Any, Dict, Optional, List, Callable, Union
+from typing import Any, Dict, Optional, List, Callable
 from datetime import datetime, timezone
 from pathlib import Path
 from dataclasses import dataclass, asdict
@@ -273,7 +273,7 @@ def _configure_comprehensive_parsl_logging():
                 # Prevent propagation to avoid duplicate messages
                 logger.propagate = False
                 
-            except Exception as e:
+            except Exception:
                 # If file handler creation fails, use null handler
                 logger.addHandler(logging.NullHandler())
                 logger.propagate = False
@@ -282,7 +282,7 @@ def _configure_comprehensive_parsl_logging():
         import os
         os.environ['PARSL_RUNINFO_DIR'] = str(parsl_log_dir / "runinfo")
             
-    except Exception as e:
+    except Exception:
         # Fallback: if configuration fails, use basic suppression
         for logger_name in ['parsl', 'parsl.dataflow', 'parsl.executors']:
             logger = logging.getLogger(logger_name)
@@ -506,7 +506,7 @@ class NanoBrainLogger:
                         sub_logger.addHandler(logging.NullHandler())
                         sub_logger.propagate = False
                         sub_logger.setLevel(logging.CRITICAL)
-        except Exception as e:
+        except Exception:
             # Don't let logging configuration issues break functionality
             pass
 
@@ -1445,7 +1445,7 @@ def reconfigure_global_logging():
             root_logger.handlers.clear()
             root_logger.addHandler(logging.NullHandler())
             root_logger.setLevel(logging.CRITICAL)
-    except Exception as e:
+    except Exception:
         # Config not available or error occurred
         pass
 

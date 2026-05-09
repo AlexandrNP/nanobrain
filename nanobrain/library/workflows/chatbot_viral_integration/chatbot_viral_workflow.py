@@ -15,25 +15,15 @@ Version: 4.5.0 - Updated for Phase 3 workflow-as-step integration
 
 from nanobrain.core.workflow import Workflow, WorkflowConfig
 from nanobrain.core.step import StepConfig, Step
-from nanobrain.core.data_unit import DataUnit, DataUnitConfig
-from nanobrain.core.trigger import DataUnitChangeTrigger, TriggerBase
 from nanobrain.library.infrastructure.data.chat_session_data import (
-    ChatSessionData, ChatMessage, MessageRole, MessageType,
-    QueryClassificationData, AnnotationJobData, ConversationalResponseData
+    ChatSessionData, MessageRole, MessageType
 )
 
-from .steps import (
-    QueryClassificationStep,
-    AnnotationJobStep,
-    ConversationalResponseStep,
-    ResponseFormattingStep
-)
 
 from typing import Dict, Any, Optional, AsyncGenerator, Callable
 import uuid
 import asyncio
 import time
-import yaml
 from pathlib import Path
 from datetime import datetime
 import importlib
@@ -454,7 +444,7 @@ class ChatbotViralWorkflow(Workflow):
 
         if not step_class or not config_path:
             raise ValueError(
-                f"Step configuration must include 'class' and 'config' fields")
+                "Step configuration must include 'class' and 'config' fields")
 
         # Import and instantiate using enhanced from_config
         module_path, class_name = step_class.rsplit('.', 1)

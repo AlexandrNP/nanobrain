@@ -11,8 +11,7 @@ import psutil
 import gc
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
-import logging
+from datetime import datetime
 
 from nanobrain.core.logging_system import get_logger
 

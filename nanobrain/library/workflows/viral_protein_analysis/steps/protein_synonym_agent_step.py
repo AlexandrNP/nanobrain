@@ -7,10 +7,10 @@ within the viral protein analysis workflow using Link-based communication.
 
 import time
 import asyncio
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from pathlib import Path
 
-from nanobrain.core.data_unit import DataUnit, DataUnitConfig
+from nanobrain.core.data_unit import DataUnit
 from nanobrain.core.step import Step
 from nanobrain.core.config import YAMLConfig
 from nanobrain.library.agents.specialized.protein_synonym_agent import ProteinSynonymAgent
@@ -168,7 +168,7 @@ class ProteinSynonymAgentStep(Step):
             }
             
         except asyncio.TimeoutError:
-            self.nb_logger.error(f"Timeout processing synonym request")
+            self.nb_logger.error("Timeout processing synonym request")
             return {
                 'status': 'timeout',
                 'error': 'Processing timeout',

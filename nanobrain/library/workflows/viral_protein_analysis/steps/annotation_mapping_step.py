@@ -5,15 +5,12 @@ SINGLE RESPONSIBILITY: Cache-based synonym resolution with LLM fallback
 """
 
 import asyncio
-import os
 import json
-import time
-from typing import Dict, Any, Optional, Tuple, List
+from typing import Dict, Any, Tuple, List
 from pathlib import Path
 from datetime import datetime
 
 from nanobrain.core.step import Step, StepConfig
-from nanobrain.core.logging_system import get_logger
 
 
 class AnnotationMappingStep(Step):
@@ -50,7 +47,7 @@ class AnnotationMappingStep(Step):
         # Use resolved synonym agent if available
         self.synonym_agent = resolved_tools.get('synonym_detection_agent') or self.step_tools.get('synonym_detection_agent')
         if self.synonym_agent and resolved_tools.get('synonym_detection_agent') and hasattr(self, 'nb_logger') and self.nb_logger:
-            self.nb_logger.info(f"✅ Using resolved synonym detection agent from enhanced ConfigBase system")
+            self.nb_logger.info("✅ Using resolved synonym detection agent from enhanced ConfigBase system")
         
         # Only create agent using legacy method if no resolved agent available
         if not self.synonym_agent:
@@ -152,7 +149,6 @@ Always prioritize ICTV standard nomenclature when available.'''),
         """Create cache manager for synonym resolution data"""
         try:
             # Use simple file-based cache implementation instead of importing from other workflows
-            import os
             import json
             from datetime import datetime, timedelta
             
@@ -209,7 +205,6 @@ Always prioritize ICTV standard nomenclature when available.'''),
             Dict with virus_species, annotated_fasta, and protein_annotations
         """
         from pathlib import Path
-        import json
 
         cache_dir = Path(cache_directory)
 
@@ -306,7 +301,6 @@ Always prioritize ICTV standard nomenclature when available.'''),
         Returns:
             Dict with annotation mapping results
         """
-        import asyncio
         import socket
 
         hostname = socket.gethostname()
@@ -394,7 +388,7 @@ Always prioritize ICTV standard nomenclature when available.'''),
             if not species_name:
                 raise ValueError("species_name required when loading from cache_directory")
 
-            self.nb_logger.info(f"📂 Loading data from AlphavirusSpeciesDataAcquisitionStep cache")
+            self.nb_logger.info("📂 Loading data from AlphavirusSpeciesDataAcquisitionStep cache")
 
             # Load and transform cached data
             loaded_data = await self._load_from_species_cache(cache_directory, species_name)
@@ -522,7 +516,7 @@ Return only the JSON response.''')
             )
             
             if hasattr(self, 'nb_logger') and self.nb_logger:
-                self.nb_logger.info(f"🤖 Sending synonym resolution prompt to LLM")
+                self.nb_logger.info("🤖 Sending synonym resolution prompt to LLM")
             
             # Process using LLM agent
             response = await self.synonym_agent.process({
@@ -573,14 +567,14 @@ Return only the JSON response.''')
                         return ictv_standards, synonym_groups
                     else:
                         if hasattr(self, 'nb_logger') and self.nb_logger:
-                            self.nb_logger.warning(f"⚠️ Incomplete LLM response for synonym resolution")
+                            self.nb_logger.warning("⚠️ Incomplete LLM response for synonym resolution")
                         raise ValueError(
                             "Incomplete LLM response for synonym resolution. "
                             "Cannot proceed without complete ICTV standards and synonym groups."
                         )
                 else:
                     if hasattr(self, 'nb_logger') and self.nb_logger:
-                        self.nb_logger.warning(f"⚠️ Non-JSON response from LLM")
+                        self.nb_logger.warning("⚠️ Non-JSON response from LLM")
                     raise ValueError(
                         "Non-JSON response from LLM. "
                         "Cannot proceed without properly formatted synonym resolution data."

@@ -5,11 +5,10 @@ Specialized agent for generating and writing code files.
 """
 
 import logging
-from typing import Any, Dict, Optional, List
+from typing import Dict, Optional, List
 
 # Updated imports for nanobrain package structure  
 from nanobrain.core.agent import AgentConfig
-from nanobrain.core.logging_system import get_logger
 from .base import SpecializedAgentBase, SimpleSpecializedAgent, ConversationalSpecializedAgent
 
 logger = logging.getLogger(__name__)
@@ -756,7 +755,7 @@ File path: {file_path}"""
                 return result
             else:
                 self._track_specialized_operation("write_code_to_file", success=False)
-                return f"Error: Cannot write code to file - no processing method available"
+                return "Error: Cannot write code to file - no processing method available"
                 
         except Exception as e:
             self._track_specialized_operation("write_code_to_file", success=False)

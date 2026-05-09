@@ -16,7 +16,7 @@ import os
 import asyncio
 import threading
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional, List, Callable, Union
+from typing import Dict, Any, Optional, List, Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum

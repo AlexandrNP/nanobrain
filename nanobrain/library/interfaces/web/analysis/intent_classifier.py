@@ -10,7 +10,7 @@ Version: 1.0.0
 
 import logging
 import re
-from typing import Dict, Any, Optional, List, Set, Pattern
+from typing import Dict, Any, Optional, List, Pattern
 
 from nanobrain.core.component_base import FromConfigBase
 from nanobrain.core.config.config_base import ConfigBase

@@ -31,8 +31,6 @@ Usage:
           results: "analysis_results"
 """
 
-import asyncio
-import json
 import uuid
 from datetime import datetime, timezone
 from typing import Dict, List, Any, Optional, Union
@@ -124,7 +122,7 @@ class ElasticsearchIndexingStep(BaseStep):
         super().__init__(config, **kwargs)
         
         self.config = config
-        self.logger = get_logger(f"elasticsearch_indexing_step")
+        self.logger = get_logger("elasticsearch_indexing_step")
         
         # MCP client for Elasticsearch communication
         self.mcp_client: Optional[MCPClient] = None
@@ -221,7 +219,7 @@ class ElasticsearchIndexingStep(BaseStep):
                 "timestamp": datetime.now(timezone.utc).isoformat()
             }
             
-            self.logger.info(f"✅ Elasticsearch indexing completed")
+            self.logger.info("✅ Elasticsearch indexing completed")
             self.logger.info(f"   Proteins indexed: {self.indexed_proteins}")
             self.logger.info(f"   Results indexed: {self.indexed_results}")
             self.logger.info(f"   Errors: {self.indexing_errors}")

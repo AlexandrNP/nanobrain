@@ -5,15 +5,11 @@ Re-architected to inherit from NanoBrain Step base class.
 Steps 8-9: Run MMseqs2 clustering on all protein sequences.
 """
 
-import asyncio
 import time
 from typing import Dict, Any, List, Optional
-from collections import defaultdict
 from pathlib import Path
-import hashlib
 
 from nanobrain.core.step import Step, StepConfig
-from nanobrain.core.logging_system import get_logger
 
 
 class ClusteringStep(Step):
@@ -52,11 +48,11 @@ class ClusteringStep(Step):
         if self.clustering_mode == 'mmseqs2':
             self._initialize_mmseqs2_tool()
             self.nb_logger.info(
-                f"🧬 ClusteringStep initialized for MMseqs2 clustering")
+                "🧬 ClusteringStep initialized for MMseqs2 clustering")
         else:
             self.mmseqs2_tool = None
             self.nb_logger.info(
-                f"🧬 ClusteringStep initialized for product-based clustering")
+                "🧬 ClusteringStep initialized for product-based clustering")
 
         self.nb_logger.info(f"📊 Clustering mode: {self.clustering_mode}")
         self.nb_logger.info(f"📊 Minimum cluster size: {self.min_cluster_size}")
@@ -103,7 +99,7 @@ class ClusteringStep(Step):
 
             tool_config = MMseqs2Config(**mmseqs2_config_dict)
             self.mmseqs2_tool = MMseqs2Tool.from_config(tool_config)
-            self.nb_logger.info(f"✅ MMseqs2 tool initialized with step config")
+            self.nb_logger.info("✅ MMseqs2 tool initialized with step config")
 
         self.nb_logger.info(
             f"🧬 ClusteringStep initialized with tool: {type(self.mmseqs2_tool).__name__}")
@@ -144,11 +140,11 @@ class ClusteringStep(Step):
         if self.clustering_mode == 'mmseqs2':
             self._initialize_mmseqs2_tool()
             self.nb_logger.info(
-                f"🧬 ClusteringStep initialized for MMseqs2 clustering")
+                "🧬 ClusteringStep initialized for MMseqs2 clustering")
         else:
             self.mmseqs2_tool = None
             self.nb_logger.info(
-                f"🧬 ClusteringStep initialized for product-based clustering")
+                "🧬 ClusteringStep initialized for product-based clustering")
 
         self.nb_logger.info(f"📊 Clustering mode: {self.clustering_mode}")
         self.nb_logger.info(f"📊 Minimum cluster size: {self.min_cluster_size}")
@@ -169,7 +165,7 @@ class ClusteringStep(Step):
         if isinstance(result, dict):
             result['refactoring_status'] = 'phase_2_framework_compliant_structure'
 
-        self.nb_logger.info(f"✅ Clustering completed successfully")
+        self.nb_logger.info("✅ Clustering completed successfully")
         return result
 
     async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -769,7 +765,7 @@ Format the response in clean markdown with appropriate headers and bullet points
 
         if valid_sequences == 0:
             self.nb_logger.warning(
-                f"No valid sequences found for FASTA generation")
+                "No valid sequences found for FASTA generation")
             return ""
 
         fasta_content = "\n".join(fasta_lines)
@@ -826,12 +822,12 @@ Format the response in clean markdown with appropriate headers and bullet points
 
         if not clustering_report:
             self.nb_logger.warning(
-                f"No clustering report received from MMseqs2")
+                "No clustering report received from MMseqs2")
             return {}
 
         # Extract real cluster data from MMseqs2 ClusteringReport
         if not hasattr(clustering_report, 'total_clusters') or clustering_report.total_clusters == 0:
-            self.nb_logger.warning(f"MMseqs2 produced no clusters")
+            self.nb_logger.warning("MMseqs2 produced no clusters")
             return {}
 
         self.nb_logger.info(

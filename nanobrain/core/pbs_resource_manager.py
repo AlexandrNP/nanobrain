@@ -16,15 +16,13 @@ Without this, 70 workflows will crash the PBS system.
 import asyncio
 import json
 import os
-import subprocess
 import time
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, Optional, Set, Tuple
 import threading
 import logging
 
-from nanobrain.core.shared_resource import shared, get_worker_id
+from nanobrain.core.shared_resource import shared
 
 
 logger = logging.getLogger(__name__)
@@ -298,7 +296,7 @@ class PBSResourceManager:
             logger.info(f"   - Cores per workflow: {cores_per_workflow}")
             logger.info(f"   - Max concurrent workflows: {max_concurrent}")
             logger.info(f"   - Total available cores: {total_available}")
-            logger.info(f"   - Conservative allocation to prevent oversubscription")
+            logger.info("   - Conservative allocation to prevent oversubscription")
 
             return (cores_per_workflow, max_concurrent)
 

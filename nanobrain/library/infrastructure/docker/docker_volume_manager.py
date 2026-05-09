@@ -7,17 +7,14 @@ storage, data sharing, and backup/restore operations.
 """
 
 import os
-import shutil
-import tarfile
-from typing import Dict, List, Optional, Any, Union, ClassVar
+from typing import Dict, List, Optional, Any, ClassVar
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import docker
-from docker.errors import DockerException, APIError
+from docker.errors import DockerException
 
 from .container_config import DockerComponentConfig, DockerComponentBase
-from nanobrain.core.logging_system import get_logger
 from nanobrain.core.component_base import ComponentDependencyError
 
 

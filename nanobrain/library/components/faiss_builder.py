@@ -7,7 +7,6 @@ and comprehensive metadata for RAG applications.
 """
 
 import json
-import pickle
 import logging
 import numpy as np
 from pathlib import Path

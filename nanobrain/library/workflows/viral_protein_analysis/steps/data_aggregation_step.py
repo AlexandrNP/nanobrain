@@ -5,14 +5,11 @@ Aggregates and standardizes data from multiple workflow steps.
 Replaces the WorkflowData class logic from AlphavirusWorkflow.
 """
 
-import asyncio
 import time
-import json
 from datetime import datetime
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any
 
 from nanobrain.core.step import Step, StepConfig
-from nanobrain.core.logging_system import get_logger
 
 
 class DataAggregationStep(Step):
@@ -86,7 +83,7 @@ class DataAggregationStep(Step):
         """
         self.nb_logger.info("🔄 Processing data aggregation step")
         result = await self.execute(input_data)
-        self.nb_logger.info(f"✅ Data aggregation completed successfully")
+        self.nb_logger.info("✅ Data aggregation completed successfully")
         return result
         
     async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:

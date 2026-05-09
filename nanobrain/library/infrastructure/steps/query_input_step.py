@@ -25,16 +25,12 @@ Usage:
     await step.execute()
 """
 
-import asyncio
 import re
 import time
-from typing import Dict, Any, Optional, List
-from pathlib import Path
+from typing import Dict, Any, List
 
 from nanobrain.core.step import BaseStep, StepConfig
-from nanobrain.core.data_unit import DataUnitBase, DataUnitMemory
-from nanobrain.core.logging_system import get_logger, OperationType
-from nanobrain.core.component_base import ComponentConfigurationError
+from nanobrain.core.logging_system import OperationType
 
 
 class ProcessingError(Exception):
@@ -271,7 +267,7 @@ class QueryInputStep(BaseStep):
                     'timestamp': processing_end_time
                 }
                 
-                self.nb_logger.info(f"Query processing completed successfully",
+                self.nb_logger.info("Query processing completed successfully",
                                    original_query=raw_query,
                                    enhanced_query=enhanced_query,
                                    query_type=query_analysis.get('query_type'),

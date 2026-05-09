@@ -20,7 +20,7 @@ import asyncio
 import time
 import uuid
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Type, TypeVar, Generic, Callable, Union
+from typing import Any, Dict, List, Optional, TypeVar, Generic
 from datetime import datetime
 from dataclasses import dataclass, field
 from enum import Enum
@@ -30,7 +30,6 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', 'src'))
 
 from nanobrain.core.step import Step, StepConfig
-from nanobrain.core.agent import Agent
 from nanobrain.core.logging_system import get_logger
 
 

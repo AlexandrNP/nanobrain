@@ -4,12 +4,10 @@ Sequence Management for NanoBrain Bioinformatics Framework
 Provides comprehensive sequence handling, FASTA processing, and validation.
 """
 
-import asyncio
 import logging
 import re
-from typing import Any, Dict, Optional, List, Union, Tuple, Iterator
+from typing import Dict, Optional, List, Union, Tuple
 from pathlib import Path
-from io import StringIO
 from dataclasses import dataclass
 from enum import Enum
 
@@ -18,7 +16,7 @@ import aiofiles
 
 from .bioinformatics import (
     SequenceRegion, SequenceCoordinate, SequenceType, CoordinateSystem,
-    BioinformaticsConfig, create_sequence_region
+    BioinformaticsConfig
 )
 from .logging_system import get_logger, OperationType
 
@@ -246,7 +244,7 @@ class SequenceManager:
         """Load sequences from FASTA file into SequenceRegion objects."""
         async with self.nb_logger.async_execution_context(
             OperationType.DATA_TRANSFER,
-            f"load_sequences_from_fasta"
+            "load_sequences_from_fasta"
         ) as context:
             
             # Parse FASTA file
@@ -330,7 +328,7 @@ class SequenceManager:
         """Save sequence regions to FASTA file."""
         async with self.nb_logger.async_execution_context(
             OperationType.DATA_TRANSFER,
-            f"save_sequences_to_fasta"
+            "save_sequences_to_fasta"
         ) as context:
             
             # Convert regions to header-sequence pairs

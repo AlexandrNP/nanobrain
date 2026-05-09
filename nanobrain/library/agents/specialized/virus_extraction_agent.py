@@ -16,7 +16,7 @@ import json
 import logging
 from typing import Dict, Any, Optional
 
-from .base import SpecializedAgentBase, ConversationalSpecializedAgent
+from .base import ConversationalSpecializedAgent
 from nanobrain.core.agent import AgentConfig
 
 logger = logging.getLogger(__name__)

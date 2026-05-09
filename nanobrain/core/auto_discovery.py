@@ -8,11 +8,9 @@ to automatically discover available framework components.
 ITERATION 1: Basic config file scanning and class extraction
 """
 
-import os
 import yaml
-import json
 from pathlib import Path
-from typing import Dict, List, Set, Any, Optional
+from typing import Dict, List, Any, Optional
 import logging
 
 logger = logging.getLogger(__name__)
@@ -213,7 +211,7 @@ class ConfigDrivenDiscovery:
         """Log discovery statistics."""
         
         stats = self.stats
-        logger.info(f"Discovery Statistics:")
+        logger.info("Discovery Statistics:")
         logger.info(f"  Config files scanned: {stats['config_files_scanned']}")
         logger.info(f"  Config files failed: {stats['config_files_failed']}")
         logger.info(f"  Classes discovered: {stats['classes_discovered']}")

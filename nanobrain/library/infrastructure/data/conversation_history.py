@@ -5,7 +5,6 @@ Persistent conversation storage and retrieval with search capabilities.
 """
 
 import asyncio
-import sqlite3
 from datetime import datetime
 from typing import Any, Dict, Optional, List
 from dataclasses import dataclass, asdict

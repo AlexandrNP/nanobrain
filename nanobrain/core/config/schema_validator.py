@@ -6,9 +6,9 @@ Provides advanced validation capabilities for YAML configurations.
 
 import logging
 import re
-from typing import Any, Dict, List, Optional, Union, Callable, Type
+from typing import Any, Dict, List, Optional, Union, Callable
 from enum import Enum
-from pydantic import BaseModel, Field, ConfigDict, ValidationError, field_validator
+from pydantic import BaseModel, Field, ConfigDict, ValidationError
 from pathlib import Path
 import yaml
 

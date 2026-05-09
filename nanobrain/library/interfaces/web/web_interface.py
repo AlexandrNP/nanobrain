@@ -5,9 +5,8 @@ Main web interface class that provides REST API access to NanoBrain workflows.
 """
 
 from .middleware.logging_middleware import LoggingMiddleware
-from .middleware.cors_middleware import setup_cors
 from .api.frontend_router import frontend_router
-from .api.websocket_router import websocket_router, get_connection_manager
+from .api.websocket_router import websocket_router
 from .api.health_router import health_router, get_web_interface
 from .api.chat_router import chat_router, get_chat_workflow
 from .models.response_models import ErrorResponse
@@ -17,12 +16,10 @@ import os
 import asyncio
 from datetime import datetime
 from typing import Optional, Dict, Any
-from pathlib import Path
 
 # FastAPI imports
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
-from fastapi.exception_handlers import http_exception_handler
 import uvicorn
 
 # NanoBrain imports
@@ -990,7 +987,7 @@ class WebInterface(FromConfigBase):
             if self.start_time:
                 uptime = (datetime.utcnow() - self.start_time).total_seconds()
                 self.logger.info(
-                    f"Web interface shutdown complete", uptime_seconds=uptime)
+                    "Web interface shutdown complete", uptime_seconds=uptime)
 
             self.is_initialized = False
 

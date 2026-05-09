@@ -9,12 +9,9 @@ import re
 import tomllib
 import json
 from pathlib import Path
-from typing import Dict, List, Set, Tuple, Optional, Any
+from typing import Dict, List, Set, Tuple, Any
 from dataclasses import dataclass
 from packaging.requirements import Requirement
-from packaging.specifiers import SpecifierSet
-import subprocess
-import sys
 
 from .models import CleanupResult, ValidationResult
 
@@ -514,7 +511,7 @@ def check_feature_availability() -> dict:
                                     category=category
                                 )
             
-        except Exception as e:
+        except Exception:
             # Return empty dict on error, let caller handle
             pass
         

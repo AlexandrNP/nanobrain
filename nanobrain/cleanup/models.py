@@ -8,7 +8,6 @@ including results, configurations, and validation models.
 from dataclasses import dataclass
 from datetime import datetime
 from typing import List, Optional, Dict, Any
-from pathlib import Path
 
 
 @dataclass

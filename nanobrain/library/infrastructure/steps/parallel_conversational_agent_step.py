@@ -13,7 +13,7 @@ This module provides conversational agent-specific parallel processing:
 import time
 from typing import Any, Dict, List, Optional
 from datetime import datetime
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import sys
 import os

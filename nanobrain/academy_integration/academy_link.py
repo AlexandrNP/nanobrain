@@ -8,7 +8,7 @@ Nanobrain's data flow and Academy's action/message system.
 
 import asyncio
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 # Import real Nanobrain components
 try:
@@ -38,8 +38,6 @@ except ImportError:
             self._error_count = 0
 
 # Import REAL Academy components (no more fake bullshit)
-from academy.handle import Handle
-from academy.manager import Manager
 ACADEMY_AVAILABLE = True
 
 

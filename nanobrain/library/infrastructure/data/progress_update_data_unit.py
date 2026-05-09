@@ -27,16 +27,15 @@ Usage:
     })
 """
 
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 from datetime import datetime, timezone
-from pathlib import Path
 import uuid
 
 from nanobrain.core.data_unit import DataUnitBase
 from nanobrain.core.config.config_base import ConfigBase
 from nanobrain.core.logging_system import get_logger
 from nanobrain.core.component_base import ComponentConfigurationError
-from pydantic import Field, ConfigDict, validator
+from pydantic import Field, ConfigDict
 
 
 class ProgressUpdateDataUnitConfig(ConfigBase):

@@ -23,7 +23,6 @@ from pathlib import Path
 from string import Template
 from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
 
-from .logging_system import get_logger
 # Import new ConfigBase for constructor prohibition
 from .config.config_base import ConfigBase
 

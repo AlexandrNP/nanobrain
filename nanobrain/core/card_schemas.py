@@ -5,11 +5,9 @@ Implements mandatory Tool Cards and Agent Cards as required by the A2A (Agent-to
 Provides comprehensive metadata about tool and agent capabilities for discoverability and interoperability.
 """
 
-from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Union
 from enum import Enum
-from pydantic import BaseModel, Field, ConfigDict
 import json
 import yaml
 from pathlib import Path

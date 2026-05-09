@@ -19,17 +19,13 @@ Key Features:
 """
 
 import asyncio
-import json
 import time
 import logging
 import yaml
-import os
 from pathlib import Path
-from typing import Dict, List, Any, Optional, Union, Callable
+from typing import Dict, List, Any, Optional
 from dataclasses import dataclass, field
-from abc import ABC, abstractmethod
-from urllib.parse import urljoin, urlparse
-from datetime import datetime, timezone
+from urllib.parse import urljoin
 
 try:
     import aiohttp
@@ -38,7 +34,7 @@ except ImportError:
     AIOHTTP_AVAILABLE = False
 
 # Import NanoBrain components
-from nanobrain.core.logging_system import get_logger, OperationType
+from nanobrain.core.logging_system import get_logger
 from nanobrain.core.tool import ToolBase, ToolConfig
 from nanobrain.core.component_base import ComponentDependencyError
 
@@ -861,8 +857,8 @@ class MCPSupportMixin:
                 self.register_tool(mcp_tool)
                 self.mcp_logger.debug(f"Registered tool with agent registry: {tool_info.name}")
             else:
-                print(f"DEBUG: Agent does not have register_tool method")
-                self.mcp_logger.warning(f"Agent does not have register_tool method")
+                print("DEBUG: Agent does not have register_tool method")
+                self.mcp_logger.warning("Agent does not have register_tool method")
             
             # Store in MCP tools registry
             print(f"DEBUG: About to store {tool_info.name} in mcp_tools dict")

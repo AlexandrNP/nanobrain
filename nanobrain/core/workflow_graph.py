@@ -6,12 +6,11 @@ Extracted from workflow.py monolith to provide dedicated graph management
 functionality with debug/production error handling modes.
 """
 
-import os
 from typing import Dict, Set, List, Optional, Tuple, Any
 from .step import BaseStep
 from .link import LinkBase
 from .logging_system import get_logger
-from .workflow_progress import ErrorMode, get_error_mode, handle_error
+from .workflow_progress import handle_error
 
 
 class WorkflowGraph:

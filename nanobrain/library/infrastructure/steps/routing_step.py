@@ -1790,14 +1790,14 @@ class RoutingStep(BaseStep):
 
             # PSSM/Analysis routing logic - ONLY for explicit PSSM requests
             if has_pssm_keywords and intent == 'biological_analysis' and analysis_type == 'sequence_analysis':
-                self.logger.info(f"🔬 PSSM/Analysis detected - routing to viral analysis workflow")
+                self.logger.info("🔬 PSSM/Analysis detected - routing to viral analysis workflow")
                 self.logger.info(f"🔍 Keywords found: {[kw for kw in pssm_keywords if kw in user_query]}")
                 self.logger.info(f"🔍 Intent: {intent}, Analysis type: {analysis_type}")
                 await self.step_output_data_units['viral_analysis_input'].set(workflow_input)
 
             # Route based on selected workflow
             elif selected_workflow == 'viral_expert_workflow':
-                self.logger.info(f"🧠 Routing to viral expert workflow")
+                self.logger.info("🧠 Routing to viral expert workflow")
                 await self.step_output_data_units['viral_expert_input'].set(workflow_input)
 
             elif selected_workflow in ['viral_analysis_workflow', 'viral_protein_analysis']:
@@ -1822,7 +1822,7 @@ class RoutingStep(BaseStep):
                 }
                 await self.step_output_data_units['viral_expert_input'].set(fallback_input)
                 self.logger.info(
-                    f"✅ Fallback routing to viral expert workflow")
+                    "✅ Fallback routing to viral expert workflow")
             except Exception as fallback_error:
                 self.logger.error(
                     f"❌ Fallback routing also failed: {fallback_error}", exc_info=True)

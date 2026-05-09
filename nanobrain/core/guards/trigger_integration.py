@@ -9,7 +9,7 @@ to enable proper via_trigger wrapping when calling protected methods.
 ✅ EXACT PATTERN: Implements via_trigger wrapping from reference implementation
 """
 
-from typing import Any, Optional, Callable, Dict
+from typing import Any, Optional, Dict
 from ..trigger import TriggerBase, DataUnitChangeTrigger
 from .contextvar_core import via_trigger
 from .nanobrain_guard_mixin import TriggerGuardMixin

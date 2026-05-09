@@ -14,20 +14,18 @@ import os
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Union
+from typing import Dict, List, Optional, Any
 from pydantic import Field
 
 from nanobrain.core.external_tool import (
     ExternalTool,
     ToolResult,
     InstallationStatus,
-    DiagnosticReport,
     ToolInstallationError,
     ToolExecutionError,
     ExternalToolConfig
 )
 from nanobrain.core.progressive_scaling import ProgressiveScalingMixin
-from nanobrain.core.tool import ToolConfig
 from nanobrain.core.logging_system import get_logger
 
 

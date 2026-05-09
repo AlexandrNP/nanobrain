@@ -12,18 +12,17 @@ import time
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional, List, Union
 from pathlib import Path
-from pydantic import BaseModel, Field, ConfigDict, model_validator
+from pydantic import Field, ConfigDict, model_validator
 
 from .component_base import (
-    FromConfigBase, ComponentConfigurationError, ComponentDependencyError,
-    import_class_from_path
+    FromConfigBase, ComponentConfigurationError, import_class_from_path
 )
-from .executor import ExecutorBase, LocalExecutor, ExecutorConfig
-from .data_unit import DataUnitBase, DataUnitMemory, DataUnitConfig
-from .trigger import TriggerBase, DataUnitChangeTrigger, TriggerConfig
-from .link import LinkBase, DirectLink, LinkConfig
+from .executor import LocalExecutor, ExecutorConfig
+from .data_unit import DataUnitBase, DataUnitConfig
+from .trigger import TriggerBase, TriggerConfig
+from .link import LinkBase
 from .logging_system import (
-    NanoBrainLogger, get_logger, OperationType, trace_function_calls
+    get_logger, OperationType
 )
 # Import new ConfigBase for constructor prohibition
 from .config.config_base import ConfigBase
@@ -1036,7 +1035,6 @@ class BaseStep(FromConfigBase, ABC):
         # Create input data units
         input_configs = getattr(config, 'input_data_units', {})
         for unit_name, unit_config in input_configs.items():
-            from .data_unit import DataUnitConfig
 
             # ✅ from_config COMPLIANCE: All creation via proper pattern
             if isinstance(unit_config, DataUnitBase):
@@ -1064,7 +1062,6 @@ class BaseStep(FromConfigBase, ABC):
         # Create output data units
         output_configs = getattr(config, 'output_data_units', {})
         for unit_name, unit_config in output_configs.items():
-            from .data_unit import DataUnitConfig
 
             # ✅ from_config COMPLIANCE: All creation via proper pattern
             if isinstance(unit_config, DataUnitBase):
@@ -1099,7 +1096,6 @@ class BaseStep(FromConfigBase, ABC):
 
         # Import the DataUnit class and call its from_config method directly
         module_path, class_name = class_path.rsplit('.', 1)
-        import importlib
         module = importlib.import_module(module_path)
         data_unit_class = getattr(module, class_name)
 
@@ -1175,7 +1171,7 @@ class BaseStep(FromConfigBase, ABC):
         await self._register_automatic_output_triggers()
 
         self.nb_logger.info(
-            f"✅ Phase 2 Complete: All step data units initialized with automatic triggers")
+            "✅ Phase 2 Complete: All step data units initialized with automatic triggers")
 
     async def _resolve_and_bind_step_triggers(self) -> None:
         """
@@ -1229,7 +1225,6 @@ class BaseStep(FromConfigBase, ABC):
         - Uses DataUnitChangeTrigger for immediate event response
         - Does not bind to step execution (these are for link activation only)
         """
-        from .trigger import TriggerConfig
 
         step_output_units = step_context.get('step_output_data_units', {})
 
@@ -1289,14 +1284,14 @@ class BaseStep(FromConfigBase, ABC):
 
         # Initialize legacy output data unit (if any)
         if self.config.output_config:
-            self.nb_logger.debug(f"Initializing legacy output data unit")
+            self.nb_logger.debug("Initializing legacy output data unit")
             self.output_data_unit = self._create_data_unit(
                 self.config.output_config)
             await self.output_data_unit.initialize()
 
         # Initialize legacy trigger (if any)
         if self.config.trigger_config:
-            self.nb_logger.debug(f"Initializing legacy trigger")
+            self.nb_logger.debug("Initializing legacy trigger")
             self.trigger = self._create_trigger(self.config.trigger_config)
 
             # Set up trigger callback
@@ -1468,7 +1463,6 @@ class BaseStep(FromConfigBase, ABC):
 
         # Import the DataUnit class and call its from_config method directly
         module_path, class_name = class_path.rsplit('.', 1)
-        import importlib
         module = importlib.import_module(module_path)
         data_unit_class = getattr(module, class_name)
 
@@ -1526,7 +1520,7 @@ class BaseStep(FromConfigBase, ABC):
 
             # Execute step business logic through executor (not direct process call)
             async def execute_wrapper():
-                self.nb_logger.info(f"🔥 BRUTAL TRUTH: Inside triggered execute_wrapper, calling _execute_process")
+                self.nb_logger.info("🔥 BRUTAL TRUTH: Inside triggered execute_wrapper, calling _execute_process")
 
                 # FAIL-FAST: Add execution timeout protection
                 timeout_seconds = getattr(self.config, 'execution_timeout', 300)  # 5 minutes default
@@ -1654,7 +1648,7 @@ class BaseStep(FromConfigBase, ABC):
 
         # Store in step_output_data_units (property will make it accessible via output_data_units)
         self.output_data_unit = data_unit
-        self.nb_logger.info(f"Registered output data unit",
+        self.nb_logger.info("Registered output data unit",
                             data_unit_type=type(data_unit).__name__)
 
     def add_link(self, link_id: str, link: LinkBase) -> None:
@@ -1703,11 +1697,11 @@ class BaseStep(FromConfigBase, ABC):
                 self.nb_logger.info(f"🔥 BRUTAL TRUTH: About to call executor.execute() on {type(self.executor).__name__}")
 
                 async def execute_wrapper():
-                    self.nb_logger.info(f"🔥 BRUTAL TRUTH: Inside execute_wrapper, calling _execute_process")
+                    self.nb_logger.info("🔥 BRUTAL TRUTH: Inside execute_wrapper, calling _execute_process")
                     return await self._execute_process(input_data, **kwargs)
 
                 self.nb_logger.info(f"🔥 BRUTAL TRUTH: Calling {type(self.executor).__name__}.execute(execute_wrapper)")
-                self.nb_logger.info(f"🔥 BRUTAL TRUTH: About to await executor.execute() - THIS IS WHERE IT HANGS")
+                self.nb_logger.info("🔥 BRUTAL TRUTH: About to await executor.execute() - THIS IS WHERE IT HANGS")
 
                 # CRITICAL DEBUG: Try to identify the exact hang point
                 try:
@@ -1947,7 +1941,7 @@ class BaseStep(FromConfigBase, ABC):
                         logger.error(f"🔥 BRUTAL TRUTH: data_unit.set() FAILED for {unit_name}: {e}")
                         raise
                 else:
-                    logger.warning(f"🔥 BRUTAL TRUTH: Skipping data unit update - result_data is None")
+                    logger.warning("🔥 BRUTAL TRUTH: Skipping data unit update - result_data is None")
                     self.nb_logger.warning(
                         f"⚠️ Skipping output data unit update for {unit_name} - no valid data")
 
@@ -2047,7 +2041,6 @@ class BaseStep(FromConfigBase, ABC):
 
         # Create tool using direct from_config pattern
         module_path, class_name = tool_class.rsplit('.', 1)
-        import importlib
         module = importlib.import_module(module_path)
         tool_cls = getattr(module, class_name)
         return tool_cls.from_config(merged_config)
@@ -2055,7 +2048,6 @@ class BaseStep(FromConfigBase, ABC):
     def _load_config_file(self, config_file_path: str) -> Dict[str, Any]:
         """Load configuration from file"""
         import yaml
-        from pathlib import Path
 
         config_path = Path(config_file_path)
         if not config_path.is_absolute():
@@ -2312,10 +2304,10 @@ class BaseStep(FromConfigBase, ABC):
 
             return resolved_data
 
-        except RecursionError as e:
+        except RecursionError:
             if hasattr(self, 'nb_logger') and self.nb_logger:
                 self.nb_logger.error(
-                    f"❌ Clean data extraction failed: maximum recursion depth exceeded")
+                    "❌ Clean data extraction failed: maximum recursion depth exceeded")
             # Return empty dict to break recursion cycles
             return {}
         except Exception as e:
@@ -3153,7 +3145,7 @@ class AgentStep(BaseStep):
             mapped_result = agent_result
             self.nb_logger.warning("⚠️ No output data units configured for AgentStep, returning original result")
 
-        self.nb_logger.info(f"🔥 BRUTAL TRUTH: AgentStep result mapping complete")
+        self.nb_logger.info("🔥 BRUTAL TRUTH: AgentStep result mapping complete")
         self.nb_logger.info(f"   Original keys: {list(agent_result.keys())}")
         self.nb_logger.info(f"   Mapped keys: {list(mapped_result.keys())}")
 

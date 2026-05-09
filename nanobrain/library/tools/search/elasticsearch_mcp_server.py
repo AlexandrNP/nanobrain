@@ -36,11 +36,11 @@ Usage:
 
 import asyncio
 import json
+import sys  # used by sys.exit() in the __main__ block at file end
 import time
 import uuid
 import os
 import csv
-import io
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Union
@@ -91,7 +91,7 @@ except ImportError:
     AIOHTTP_AVAILABLE = False
 
 # NanoBrain imports
-from nanobrain.core.mcp_support import MCPServerConfig, MCPError
+from nanobrain.core.mcp_support import MCPError
 from nanobrain.core.external_tool import ExternalTool, ExternalToolConfig
 from nanobrain.core.logging_system import get_logger
 
@@ -268,7 +268,7 @@ class ElasticsearchMCPServer(ExternalTool):
         super().__init__(config, **kwargs)
         
         self.config = config
-        self.logger = get_logger(f"elasticsearch_mcp_server")
+        self.logger = get_logger("elasticsearch_mcp_server")
         
         # Check dependencies
         if not ELASTICSEARCH_AVAILABLE:
@@ -530,7 +530,7 @@ class ElasticsearchMCPServer(ExternalTool):
             
             self.is_running = True
             
-            self.logger.info(f"🚀 Elasticsearch MCP Server started")
+            self.logger.info("🚀 Elasticsearch MCP Server started")
             self.logger.info(f"   📍 MCP Endpoint: http://{self.config.mcp_host}:{self.config.mcp_port}")
             self.logger.info(f"   🔗 Elasticsearch: {self.config.elasticsearch_scheme}://{self.config.elasticsearch_host}:{self.config.elasticsearch_port}")
             self.logger.info(f"   🛠️  Available tools: {len(self.mcp_tools)}")

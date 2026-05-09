@@ -7,14 +7,10 @@ coordinate systems, and external tool integration.
 
 import asyncio
 import logging
-import os
 import tempfile
-import subprocess
-from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional, List, Union, Tuple
+from typing import Any, Dict, Optional, List
 from enum import Enum
 from pathlib import Path
-import json
 from pydantic import BaseModel, Field, ConfigDict, field_validator
 
 # Async file operations
@@ -209,7 +205,7 @@ class BioinformaticsDataUnit(DataUnitBase):
         """Store sequence regions with proper coordinate handling."""
         async with self.nb_logger.async_execution_context(
             OperationType.DATA_TRANSFER,
-            f"store_sequence_regions"
+            "store_sequence_regions"
         ) as context:
             
             # Convert regions to standardized format

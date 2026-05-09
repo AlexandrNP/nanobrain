@@ -6,7 +6,6 @@ Provides configurable email management with service-specific usage patterns,
 rate limiting, and environment-aware configuration.
 """
 
-import os
 import time
 import yaml
 import hashlib

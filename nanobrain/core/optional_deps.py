@@ -7,7 +7,7 @@ allowing the framework to function with reduced capabilities rather than failing
 
 import importlib
 import warnings
-from typing import Any, Optional, Callable
+from typing import Any, Callable
 from functools import wraps
 
 

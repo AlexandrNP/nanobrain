@@ -6,7 +6,6 @@ Configuration classes for the web interface component.
 
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass, field
-from pathlib import Path
 import yaml
 import os
 

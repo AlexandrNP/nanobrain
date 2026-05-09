@@ -9,7 +9,7 @@ import json
 import yaml
 import logging
 from pathlib import Path
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Optional
 
 from .config_manager import ConfigManager
 from .enhanced_config import EnhancedAgentConfig, EnhancedToolConfig
@@ -668,7 +668,7 @@ class EnhancedConfigManager(ConfigManager):
         
         # Log validation summary
         summary = validation_results["summary"]
-        logger.info(f"📊 Validation Summary:")
+        logger.info("📊 Validation Summary:")
         logger.info(f"   📋 Agents: {summary['valid_agents']}/{summary['total_agents']} valid")
         logger.info(f"   🔧 Tools: {summary['valid_tools']}/{summary['total_tools']} valid")
         

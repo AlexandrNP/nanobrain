@@ -75,11 +75,12 @@ jobs:
           pytest tests/unit/ -v --tb=short --cov=nanobrain --cov-report=term-missing
 
   lint:
-    name: ruff (read-only)
+    name: ruff (gating)
     runs-on: ubuntu-latest
-    # Advisory only — does not gate merges. Drop ``continue-on-error`` to
-    # turn lint failures into CI failures once the repo is ruff-clean.
-    continue-on-error: true
+    # Gating as of the 2026-05-09 deployment-validation chain: the
+    # repo is ruff-clean under the [tool.ruff] config in pyproject.toml.
+    # The ignored categories are documented in pyproject.toml; remove
+    # ignores there as those legacy rule classes get cleaned up.
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

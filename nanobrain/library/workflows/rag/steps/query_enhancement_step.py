@@ -6,7 +6,7 @@ AgentStep wrapper for QueryEnhancementAgent.
 
 from typing import Dict, Any
 
-from nanobrain.core.step import AgentStep, StepConfig
+from nanobrain.core.step import AgentStep
 from nanobrain.core.logging_system import get_logger
 
 logger = get_logger(__name__)

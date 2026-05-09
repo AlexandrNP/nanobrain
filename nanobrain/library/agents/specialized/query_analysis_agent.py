@@ -17,7 +17,7 @@ import logging
 from typing import Dict, Any, Optional
 from pydantic import Field
 
-from .base import SpecializedAgentBase, ConversationalSpecializedAgent
+from .base import ConversationalSpecializedAgent
 from nanobrain.core.agent import AgentConfig
 
 logger = logging.getLogger(__name__)
@@ -494,7 +494,7 @@ class QueryAnalysisAgent(ConversationalSpecializedAgent):
         super()._init_from_config(config, component_config, dependencies)
 
         # Debug logging to understand configuration loading
-        logger.info(f"🔍 DEBUG: QueryAnalysisAgent._init_from_config called")
+        logger.info("🔍 DEBUG: QueryAnalysisAgent._init_from_config called")
         logger.info(f"🔍 DEBUG: config type: {type(config)}")
         logger.info(
             f"🔍 DEBUG: config has confidence_threshold: {hasattr(config, 'confidence_threshold')}")

@@ -13,10 +13,9 @@ import logging
 from abc import ABC
 from pathlib import Path
 from typing import Any, Dict, Union, Optional, ClassVar, List, Set
-from pydantic import BaseModel, ConfigDict, Field, validator, root_validator
+from pydantic import BaseModel, ConfigDict, Field
 from dataclasses import dataclass
 from datetime import datetime
-from pydantic import ValidationError
 
 
 # Environment-variable interpolation for YAML configs (scope memo 08).

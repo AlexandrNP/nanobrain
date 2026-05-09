@@ -10,7 +10,6 @@ Framework-compliant test result constants following NanoBrain patterns:
 
 from enum import Enum
 from typing import Dict, Any
-from nanobrain.core.config.config_base import ConfigBase
 from nanobrain.core.component_base import FromConfigBase
 
 

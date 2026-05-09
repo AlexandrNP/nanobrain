@@ -54,10 +54,9 @@ import asyncio
 import hashlib
 import json
 import logging
-import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, ClassVar, Dict, List, Literal, Optional, Union
+from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import Field, model_validator
 
@@ -173,15 +172,15 @@ class _ProxyStoreStorage(_CheckpointStorage):
             if connector_kind == "file":
                 if not store_dir:
                     raise ComponentConfigurationError(
-                        f"FAIL-FAST: CheckpointStep proxystore file "
-                        f"connector requires store_dir"
+                        "FAIL-FAST: CheckpointStep proxystore file "
+                        "connector requires store_dir"
                     )
                 connector = FileConnector(store_dir)
             elif connector_kind == "redis":
                 if not redis_host or not redis_port:
                     raise ComponentConfigurationError(
-                        f"FAIL-FAST: CheckpointStep proxystore redis "
-                        f"connector requires redis_host + redis_port"
+                        "FAIL-FAST: CheckpointStep proxystore redis "
+                        "connector requires redis_host + redis_port"
                     )
                 try:
                     from proxystore.connectors.redis import RedisConnector
@@ -269,10 +268,10 @@ class _ProxyStoreStorage(_CheckpointStorage):
             # serialize the typed Key. Honest deferral: we cannot
             # resume legacy proxystore manifests cross-process.
             raise ComponentConfigurationError(
-                f"FAIL-FAST: ResumeStep proxystore backend: manifest is "
-                f"missing 'key_serialized' (legacy v1 manifest with "
-                f"key_repr only). Cross-process resume requires a "
-                f"manifest written by G5 Step 2-aware CheckpointStep."
+                "FAIL-FAST: ResumeStep proxystore backend: manifest is "
+                "missing 'key_serialized' (legacy v1 manifest with "
+                "key_repr only). Cross-process resume requires a "
+                "manifest written by G5 Step 2-aware CheckpointStep."
             )
         try:
             proxy_key = _deserialize_proxy_key(key_blob)
@@ -403,10 +402,10 @@ def _resolve_proxystore_storage(
                 )
 
     raise ComponentConfigurationError(
-        f"FAIL-FAST: cross-process proxystore resume needs connector "
-        f"hints in the manifest, but none were found (or were of an "
-        f"unknown connector_kind). The manifest may have been written "
-        f"by an older CheckpointStep that didn't persist connector hints."
+        "FAIL-FAST: cross-process proxystore resume needs connector "
+        "hints in the manifest, but none were found (or were of an "
+        "unknown connector_kind). The manifest may have been written "
+        "by an older CheckpointStep that didn't persist connector hints."
     )
 
 

@@ -8,11 +8,10 @@ Date: January 2025
 Version: 1.0.0
 """
 
-import asyncio
 import logging
 import importlib
 import inspect
-from typing import Dict, Any, Optional, List, Set, Type
+from typing import Dict, Any, Optional, List, Type
 from pathlib import Path
 from datetime import datetime
 import uuid
@@ -21,7 +20,7 @@ from nanobrain.core.component_base import FromConfigBase
 from nanobrain.core.config.config_base import ConfigBase
 from nanobrain.library.interfaces.web.models.universal_models import RequestAnalysis, WorkflowMatch
 from nanobrain.library.interfaces.web.models.workflow_models import (
-    WorkflowCapabilities, WorkflowRequirements, WorkflowDiscoveryResult,
+    WorkflowCapabilities, WorkflowDiscoveryResult,
     WorkflowValidationResult, WorkflowRegistryEntry, WorkflowCompatibilityScore,
     InputType, OutputType, InteractionPattern
 )

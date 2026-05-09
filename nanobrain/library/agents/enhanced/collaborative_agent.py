@@ -6,7 +6,6 @@ Multi-protocol collaborative agent with delegation and coordination capabilities
 
 import asyncio
 from typing import Any, Dict, List, Optional
-from nanobrain.core.component_base import FromConfigBase
 from nanobrain.core.logging_system import get_logger
 from nanobrain.core.agent import ConversationalAgent, AgentConfig
 from nanobrain.core.a2a_support import A2ASupportMixin

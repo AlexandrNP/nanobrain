@@ -9,7 +9,7 @@ import os
 import json
 import inspect
 from datetime import datetime
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, Optional
 from pathlib import Path
 
 from nanobrain.core.logging_system import get_logger

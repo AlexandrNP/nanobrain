@@ -6,8 +6,6 @@ A minimal version that uses only Python standard library.
 This is for testing in environments without pydantic/yaml.
 """
 
-import os
-import json
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 
@@ -82,7 +80,7 @@ class MinimalConfigDiscovery:
                     if '.' in class_value:
                         self._register_class_simple(class_value, file_path)
                         
-        except Exception as e:
+        except Exception:
             self.stats["files_failed"] += 1
     
     def _register_class_simple(self, class_path: str, source_file: Path) -> None:
@@ -170,13 +168,13 @@ def test_minimal_discovery():
     
     # Show results
     stats = discovery.get_stats()
-    print(f"\n📊 Results:")
+    print("\n📊 Results:")
     print(f"Files scanned: {stats['files_scanned']}")
     print(f"Files failed: {stats['files_failed']}")
     print(f"Classes found: {stats['classes_found']}")
     
     if discovered:
-        print(f"\n📂 Discovered classes:")
+        print("\n📂 Discovered classes:")
         categories = ["agent", "step", "executor", "data_unit", "link", "workflow", "tool", "unknown"]
         for category in categories:
             classes = discovery.get_classes_by_category(category)

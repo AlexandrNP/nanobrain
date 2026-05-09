@@ -42,9 +42,7 @@ for clean teardown.
 
 from __future__ import annotations
 
-import logging
 import os
-import uuid
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Dict, Optional, Union

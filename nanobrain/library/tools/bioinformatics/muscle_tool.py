@@ -5,13 +5,11 @@ This module provides a wrapper for MUSCLE multiple sequence alignment tool,
 used to prepare clustered sequences for PSSM generation in the Alphavirus workflow.
 """
 
-import asyncio
 import os
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
-from pydantic import Field
+from typing import Any, Dict, List, Optional
 
 # Async file operations
 import aiofiles
@@ -20,13 +18,9 @@ from nanobrain.core.external_tool import (
     ExternalTool,
     ToolResult,
     ToolExecutionError,
-    InstallationStatus,
-    DiagnosticReport,
-    ToolInstallationError,
     ExternalToolConfig
 )
 from nanobrain.core.progressive_scaling import ProgressiveScalingMixin
-from nanobrain.core.tool import ToolConfig
 from nanobrain.core.logging_system import get_logger
 
 

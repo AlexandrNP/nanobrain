@@ -36,20 +36,18 @@ Usage:
 import asyncio
 import time
 import uuid
-from typing import Dict, Any, Optional, List, Union
+from typing import Dict, Any, Optional, List
 from datetime import datetime, timezone
-from pathlib import Path
 
 from nanobrain.core.step import BaseStep, StepConfig
-from nanobrain.core.config.config_base import ConfigBase
-from nanobrain.core.component_base import ComponentConfigurationError, ComponentDependencyError
+from nanobrain.core.component_base import ComponentConfigurationError
 from nanobrain.core.logging_system import get_logger
 from nanobrain.core.data_unit import DataUnitBase, DataUnitMemory
 from nanobrain.core.trigger import TriggerBase
 from nanobrain.library.infrastructure.data.progress_update_data_unit import ProgressUpdateDataUnit
 from nanobrain.library.infrastructure.data.session_context_data_unit import SessionContextDataUnit
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import Field, ConfigDict
 
 
 class ProgressTrackingStepConfig(StepConfig):
@@ -306,7 +304,7 @@ class ProgressTrackingStep(BaseStep):
         self.allow_rollback = config.allow_progress_rollback
         
         self.logger.info(
-            f"ProgressTrackingStep initialized successfully",
+            "ProgressTrackingStep initialized successfully",
             extra={
                 "component_name": self.name,
                 "milestone_points": len(self.milestone_points),
@@ -370,7 +368,7 @@ class ProgressTrackingStep(BaseStep):
             }
             
             self.logger.debug(
-                f"ProgressTrackingStep processing completed",
+                "ProgressTrackingStep processing completed",
                 extra={
                     "current_progress": current_progress,
                     "milestone_reached": milestone_reached,
@@ -731,7 +729,7 @@ class ProgressTrackingStep(BaseStep):
     
     def cleanup(self) -> None:
         """Clean up progress tracking resources"""
-        self.logger.info(f"Cleaning up ProgressTrackingStep")
+        self.logger.info("Cleaning up ProgressTrackingStep")
         self.progress_history.clear()
         self.current_progress = 0.0
         self.start_time = None

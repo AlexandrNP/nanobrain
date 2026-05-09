@@ -8,13 +8,12 @@ including health checks, resource monitoring, and alerting.
 
 import asyncio
 import time
-from typing import Dict, List, Optional, Any, Callable, Union, ClassVar
+from typing import Dict, List, Optional, Any, Callable, ClassVar
 from dataclasses import dataclass, field
 from enum import Enum
 
 from .docker_manager import DockerManager
 from .container_config import HealthCheckConfig, DockerComponentConfig, DockerComponentBase
-from nanobrain.core.logging_system import get_logger
 from nanobrain.core.component_base import ComponentDependencyError
 
 

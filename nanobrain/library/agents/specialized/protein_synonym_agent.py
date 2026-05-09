@@ -5,7 +5,7 @@ Specialized agent for identifying protein product synonyms with dynamic ICTV sta
 Uses the core PromptTemplateManager for all prompt handling.
 """
 
-from typing import Dict, List, Tuple, Any, Optional, Set, Union
+from typing import Dict, List, Tuple, Any, Optional, Set
 from pathlib import Path
 import json
 import hashlib
@@ -790,7 +790,7 @@ class ProteinSynonymAgent(SimpleSpecializedAgent):
             with open(cache_file, 'w') as f:
                 json.dump(cache_data, f, indent=2)
                 
-            logger.info(f"💾 Cached ICTV standards for future use")
+            logger.info("💾 Cached ICTV standards for future use")
         except Exception as e:
             logger.warning(f"Failed to save ICTV cache: {e}")
     

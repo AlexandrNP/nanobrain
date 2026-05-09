@@ -9,8 +9,6 @@ not too complex (Academy agents). ProxyStore is purpose-built for this exact pro
 
 Created: 2025-12-03
 """
-import os
-import json
 from typing import Dict, Any, Optional, List
 from pathlib import Path
 import logging

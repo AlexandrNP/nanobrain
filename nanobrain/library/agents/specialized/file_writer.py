@@ -5,10 +5,9 @@ Specialized agent for file operations based on natural language descriptions.
 """
 
 import logging
-import os
 import re
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Optional
 
 # Async file operations
 import aiofiles

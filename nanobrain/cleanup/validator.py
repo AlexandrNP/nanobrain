@@ -13,10 +13,9 @@ import subprocess
 import tempfile
 import importlib.util
 from pathlib import Path
-from typing import Dict, List, Set, Tuple, Optional, Any
+from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 import yaml
-from urllib.parse import urlparse
 
 from .models import ValidationResult, CleanupResult
 
@@ -376,7 +375,7 @@ class Validator:
             rollback_commands = [
                 '#!/bin/bash',
                 f'# Rollback script for {phase_name}',
-                f'# Generated automatically during cleanup process',
+                '# Generated automatically during cleanup process',
                 '',
                 'set -e',  # Exit on error
                 '',

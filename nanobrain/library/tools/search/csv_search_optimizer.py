@@ -6,10 +6,9 @@ result caching, and performance optimization for CSV fuzzy search operations.
 """
 
 import hashlib
-import time
-from typing import Dict, List, Any, Optional, Tuple, Set
+from typing import Dict, List, Any, Optional
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 import logging
 import re
 

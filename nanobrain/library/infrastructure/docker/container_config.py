@@ -12,7 +12,6 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, List, Optional, Any, Union, ClassVar
-from pathlib import Path
 
 from nanobrain.core.logging_system import get_logger
 from nanobrain.core.component_base import FromConfigBase

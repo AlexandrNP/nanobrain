@@ -4,13 +4,11 @@ Sequence Curation Step
 Re-architected to inherit from NanoBrain Step base class.
 """
 
-import asyncio
 import time
 import numpy as np
 from typing import Dict, Any, List, Optional
 
 from nanobrain.core.step import Step, StepConfig
-from nanobrain.core.logging_system import get_logger
 
 
 class SequenceCurationStep(Step):
@@ -31,7 +29,7 @@ class SequenceCurationStep(Step):
         self.curation_config = step_config_dict.get('curation_config', {})
         self.step_config = step_config_dict
         
-        self.nb_logger.info(f"🧬 SequenceCurationStep initialized")
+        self.nb_logger.info("🧬 SequenceCurationStep initialized")
         
     async def process(self, input_data: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """
@@ -45,7 +43,7 @@ class SequenceCurationStep(Step):
         # Call the original execute method
         result = await self.execute(input_data)
         
-        self.nb_logger.info(f"✅ Sequence curation step completed successfully")
+        self.nb_logger.info("✅ Sequence curation step completed successfully")
         return result
 
     async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
