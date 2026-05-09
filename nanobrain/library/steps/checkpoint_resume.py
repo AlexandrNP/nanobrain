@@ -151,8 +151,12 @@ class _ProxyStoreStorage(_CheckpointStorage):
     """ProxyStore-backed storage. Each value is put() into a configured
     Store; the manifest records the typed Key."""
 
-    def __init__(self, store_name: str, connector_kind: str = "file",
-                 store_dir: Optional[str] = None):
+    def __init__(
+        self, store_name: str, connector_kind: str = "file",
+        store_dir: Optional[str] = None,
+        redis_host: Optional[str] = None,
+        redis_port: Optional[int] = None,
+    ):
         # Lazy import — proxystore is optional per G3.
         try:
             from proxystore.store import Store, register_store, get_store
@@ -173,10 +177,25 @@ class _ProxyStoreStorage(_CheckpointStorage):
                         f"connector requires store_dir"
                     )
                 connector = FileConnector(store_dir)
+            elif connector_kind == "redis":
+                if not redis_host or not redis_port:
+                    raise ComponentConfigurationError(
+                        f"FAIL-FAST: CheckpointStep proxystore redis "
+                        f"connector requires redis_host + redis_port"
+                    )
+                try:
+                    from proxystore.connectors.redis import RedisConnector
+                except ImportError as e:
+                    raise ComponentConfigurationError(
+                        f"FAIL-FAST: CheckpointStep proxystore redis "
+                        f"connector requires proxystore[redis] AND a "
+                        f"redis client (pip install redis). Original: {e}"
+                    ) from e
+                connector = RedisConnector(hostname=redis_host, port=redis_port)
             else:
                 raise ComponentConfigurationError(
                     f"FAIL-FAST: CheckpointStep proxystore connector "
-                    f"{connector_kind!r} not yet supported (v1: 'file')"
+                    f"{connector_kind!r} not supported (file|redis)"
                 )
             store = Store(store_name, connector)
             register_store(store)
@@ -188,6 +207,8 @@ class _ProxyStoreStorage(_CheckpointStorage):
         # pre-registration. We persist these per-entry in the manifest.
         self._connector_kind = connector_kind
         self._store_dir = store_dir
+        self._redis_host = redis_host
+        self._redis_port = redis_port
 
     async def write_value(self, value: Any, hint: str) -> Dict[str, Any]:
         if hasattr(value, "__aiter__") and not isinstance(value, (str, bytes, dict, list)):
@@ -219,11 +240,20 @@ class _ProxyStoreStorage(_CheckpointStorage):
             # G5 Step 2 — connector-rebuild hints for cross-process
             # resume. A different process (or the same process after
             # restart) consults these to re-register an equivalent
-            # FileConnector under the same store_name. RedisKey /
-            # EndpointKey would carry their own connector hints
-            # (host:port, etc.) when those backends are added.
+            # connector under the same store_name. Each connector kind
+            # carries its own hints (file: store_dir; redis: host+port;
+            # endpoint: host+port+UUID). Hints not relevant to the
+            # current connector_kind are omitted to keep the manifest
+            # tidy.
             "connector_kind": self._connector_kind,
-            "store_dir": self._store_dir,
+            **(
+                {"store_dir": self._store_dir}
+                if self._connector_kind == "file" else {}
+            ),
+            **(
+                {"redis_host": self._redis_host, "redis_port": self._redis_port}
+                if self._connector_kind == "redis" else {}
+            ),
             "content_hash": content_hash,
         }
 
@@ -349,23 +379,34 @@ def _resolve_proxystore_storage(
         if descriptor.get("backend") != "proxystore":
             continue
         connector_kind = descriptor.get("connector_kind", "file")
-        store_dir = descriptor.get("store_dir")
-        if connector_kind == "file" and store_dir:
-            # Resolve relative store_dir against manifest_path's parent.
-            sd = Path(store_dir)
-            if not sd.is_absolute():
-                sd = manifest_path.parent / sd
-            return _ProxyStoreStorage(
-                store_name=store_name,
-                connector_kind="file",
-                store_dir=str(sd),
-            )
+        if connector_kind == "file":
+            store_dir = descriptor.get("store_dir")
+            if store_dir:
+                # Resolve relative store_dir against manifest_path's parent.
+                sd = Path(store_dir)
+                if not sd.is_absolute():
+                    sd = manifest_path.parent / sd
+                return _ProxyStoreStorage(
+                    store_name=store_name,
+                    connector_kind="file",
+                    store_dir=str(sd),
+                )
+        elif connector_kind == "redis":
+            redis_host = descriptor.get("redis_host")
+            redis_port = descriptor.get("redis_port")
+            if redis_host and redis_port:
+                return _ProxyStoreStorage(
+                    store_name=store_name,
+                    connector_kind="redis",
+                    redis_host=redis_host,
+                    redis_port=int(redis_port),
+                )
 
     raise ComponentConfigurationError(
         f"FAIL-FAST: cross-process proxystore resume needs connector "
-        f"hints in the manifest, but none were found. The manifest may "
-        f"have been written by an older CheckpointStep that didn't "
-        f"persist connector_kind/store_dir."
+        f"hints in the manifest, but none were found (or were of an "
+        f"unknown connector_kind). The manifest may have been written "
+        f"by an older CheckpointStep that didn't persist connector hints."
     )
 
 
@@ -396,7 +437,17 @@ class CheckpointStepConfig(StepConfig):
         description="Filesystem dir for the proxystore file connector. "
                     "Required when backend='proxystore' and connector_kind='file'.",
     )
-    proxystore_connector_kind: Literal["file"] = "file"
+    proxystore_connector_kind: Literal["file", "redis"] = "file"
+    proxystore_redis_host: Optional[str] = Field(
+        default=None,
+        description="Hostname for the proxystore redis connector. "
+                    "Required when backend='proxystore' and connector_kind='redis'."
+    )
+    proxystore_redis_port: Optional[int] = Field(
+        default=None,
+        description="Port for the proxystore redis connector. "
+                    "Required when backend='proxystore' and connector_kind='redis'."
+    )
     capture: List[str] = Field(
         default_factory=lambda: ["*"],
         description="Input keys to capture. ['*'] = all keys. Otherwise "
@@ -414,11 +465,28 @@ class CheckpointStepConfig(StepConfig):
                 "FAIL-FAST: CheckpointStep backend='filesystem' requires "
                 "base_dir"
             )
-        if self.backend == "proxystore" and not self.proxystore_store_name:
-            raise ValueError(
-                "FAIL-FAST: CheckpointStep backend='proxystore' requires "
-                "proxystore_store_name"
-            )
+        if self.backend == "proxystore":
+            if not self.proxystore_store_name:
+                raise ValueError(
+                    "FAIL-FAST: CheckpointStep backend='proxystore' requires "
+                    "proxystore_store_name"
+                )
+            if self.proxystore_connector_kind == "file" and not self.proxystore_store_dir:
+                raise ValueError(
+                    "FAIL-FAST: CheckpointStep proxystore connector_kind="
+                    "'file' requires proxystore_store_dir"
+                )
+            if self.proxystore_connector_kind == "redis":
+                if not self.proxystore_redis_host:
+                    raise ValueError(
+                        "FAIL-FAST: CheckpointStep proxystore connector_kind="
+                        "'redis' requires proxystore_redis_host"
+                    )
+                if not self.proxystore_redis_port:
+                    raise ValueError(
+                        "FAIL-FAST: CheckpointStep proxystore connector_kind="
+                        "'redis' requires proxystore_redis_port"
+                    )
         if not self.manifest_path:
             raise ValueError(
                 "FAIL-FAST: CheckpointStep requires manifest_path"
@@ -467,6 +535,8 @@ class CheckpointStep(BaseStep):
                 config.proxystore_store_name,
                 connector_kind=config.proxystore_connector_kind,
                 store_dir=config.proxystore_store_dir,
+                redis_host=config.proxystore_redis_host,
+                redis_port=config.proxystore_redis_port,
             )
 
     async def process(self, input_data: Any, **kwargs) -> Dict[str, Any]:
