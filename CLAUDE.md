@@ -8,6 +8,21 @@ Nanobrain is an event-driven AI agent framework for distributed workflows. It's 
 
 ## Recent additions (2026-05-09)
 
+- **G10 Step 1 — gate-to-bottom semantics (mechanism)** shipped at
+  `nanobrain/core/link.py` + `nanobrain/core/trigger.py`:
+  `ConditionalLink.GATED_OFF_SENTINEL = "__nanobrain_gated_off__"`,
+  `LinkConfig.gate_semantics` and `TriggerConfig.gate_semantics`
+  fields (default `"publish_empty"` for legacy compat). Under
+  `gate_to_bottom`, a False ConditionalLink writes the sentinel to
+  the target; AllDataReceivedTrigger's new `_is_satisfied(payload)`
+  predicate counts the sentinel as satisfied AND excludes it from
+  the trigger payload — fan-in proceeds with N-1 keys instead of
+  deadlocking. User `process()` never sees the magic string. Step 2
+  (workflow-default propagation) and Step 3 (default-flip in v2)
+  remain pending. 16 unit tests at
+  `tests/unit/test_gate_to_bottom.py`, all green; G1+G2 regression
+  re-run: 73 passed, 1 skipped, 0 regressions.
+
 - **G5 — CheckpointStep + ResumeStep primitives** shipped at
   `nanobrain/library/steps/checkpoint_resume.py`: content-addressed
   filesystem snapshots (default backend) + manifest with code-identity

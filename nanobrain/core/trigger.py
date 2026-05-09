@@ -284,6 +284,24 @@ class TriggerConfig(ConfigBase):
                     "'{value}_layer.layer_result_output'."
     )
 
+    # G10 — gate-to-bottom semantics for AllDataReceivedTrigger. See
+    # `apecx-mcp-integration/docs/nanobrain_capability_gaps.md G10`.
+    # When 'publish_empty' (default; legacy), a payload of None blocks
+    # firing — the trigger waits indefinitely. When 'gate_to_bottom',
+    # the trigger ALSO recognizes the magic string
+    # ConditionalLink.GATED_OFF_SENTINEL as a "satisfied but absent"
+    # marker: the unit is counted as resolved AND excluded from the
+    # outgoing trigger payload, so the downstream step's process()
+    # never sees the magic string.
+    gate_semantics: str = Field(
+        default="publish_empty",
+        description="AllDataReceivedTrigger gating semantics. "
+                    "'publish_empty' (default; legacy) only counts non-None "
+                    "payloads as satisfied. 'gate_to_bottom' additionally "
+                    "treats ConditionalLink.GATED_OFF_SENTINEL as satisfied "
+                    "and excludes it from the trigger payload."
+    )
+
 
 class TriggerBase(FromConfigBase, ABC):
     """
@@ -1264,6 +1282,62 @@ class AllDataReceivedTrigger(TriggerBase):
             config, "expected_set_naming", "{value}") or "{value}"
         self._resolved_expected_set: Optional[set[str]] = None  # cached after first resolve
 
+        # G10 — gate-to-bottom semantics. When 'publish_empty' (default;
+        # legacy), only non-None payloads count as satisfied. When
+        # 'gate_to_bottom', the GATED_OFF_SENTINEL also counts as
+        # satisfied AND is excluded from the trigger payload.
+        gs = getattr(config, "gate_semantics", "publish_empty")
+        if gs not in ("publish_empty", "gate_to_bottom"):
+            raise ComponentConfigurationError(
+                f"FAIL-FAST: AllDataReceivedTrigger {self.name!r} "
+                f"gate_semantics must be 'publish_empty' or 'gate_to_bottom', "
+                f"got {gs!r}"
+            )
+        self.gate_semantics: str = gs
+
+    def _is_satisfied(self, payload: Any) -> tuple[bool, bool]:
+        """G10 satisfaction predicate for a single data unit's payload.
+
+        Returns:
+            (satisfied, include_in_payload) tuple.
+            - satisfied: True if this data unit counts toward
+              "all data received" for trigger firing.
+            - include_in_payload: True if the value should appear in
+              the dict forwarded to downstream consumers; False to
+              exclude (used to hide the gated-off sentinel from
+              user code, per G10).
+
+        Semantics:
+            - payload is None → (False, False): unsatisfied, would
+              not include either way.
+            - payload is the GATED_OFF_SENTINEL AND gate_semantics
+              is 'gate_to_bottom' → (True, False): counts as
+              satisfied for firing, but excluded from payload so
+              user process() never sees the magic string.
+            - payload is the GATED_OFF_SENTINEL AND gate_semantics
+              is 'publish_empty' → (False, False): legacy semantics
+              treat the sentinel as opaque user data the trigger
+              doesn't recognize. The condition is "not received"
+              because the magic string is not None — but legacy
+              code can't have written it intentionally either. We
+              treat it as unsatisfied to preserve the dominant
+              v1 deadlock-on-gate failure mode unless the operator
+              opts in.
+            - any other non-None payload → (True, True).
+        """
+        # Lazy import to avoid the trigger.py ↔ link.py cycle.
+        from .link import ConditionalLink
+
+        if payload is None:
+            return (False, False)
+
+        if payload == ConditionalLink.GATED_OFF_SENTINEL:
+            if self.gate_semantics == "gate_to_bottom":
+                return (True, False)
+            return (False, False)
+
+        return (True, True)
+
     async def _resolve_expected_set(
         self,
         source_data_unit: Any,
@@ -1394,7 +1468,14 @@ class AllDataReceivedTrigger(TriggerBase):
         logger.debug(f"AllDataReceivedTrigger {self.name} stopped monitoring")
 
     async def _monitor_all_data(self) -> None:
-        """Monitor until all data units have data."""
+        """Monitor until all data units have data.
+
+        G10 — uses ``_is_satisfied`` to recognize the GATED_OFF_SENTINEL
+        as a satisfaction signal under ``gate_semantics='gate_to_bottom'``.
+        Sentinel-bearing units are counted toward firing but excluded
+        from the outgoing payload so user ``process()`` never sees the
+        magic string.
+        """
         try:
             while self._is_active:
                 all_have_data = True
@@ -1402,10 +1483,12 @@ class AllDataReceivedTrigger(TriggerBase):
 
                 for i, data_unit in enumerate(self.data_units):
                     data = await data_unit.get()
-                    if data is None:
+                    satisfied, include = self._is_satisfied(data)
+                    if not satisfied:
                         all_have_data = False
                         break
-                    data_dict[f"input_{i}"] = data
+                    if include:
+                        data_dict[f"input_{i}"] = data
 
                 if all_have_data:
                     await self.trigger(data_dict)

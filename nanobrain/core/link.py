@@ -522,6 +522,28 @@ class LinkConfig(ConfigBase):
     timeout_seconds: int = Field(default=30, ge=1)
     retry_attempts: int = Field(default=3, ge=1)
 
+    # G10 — gate-to-bottom semantics for ConditionalLink. See
+    # `apecx-mcp-integration/docs/nanobrain_capability_gaps.md G10`.
+    # When 'publish_empty' (default; legacy), a ConditionalLink whose
+    # condition evaluates False is a no-op — the target data unit is
+    # left untouched. Downstream AllDataReceivedTrigger will deadlock
+    # unless the upstream step explicitly publishes an empty bundle.
+    # When 'gate_to_bottom', the ConditionalLink writes the magic
+    # string ConditionalLink.GATED_OFF_SENTINEL to the target. An
+    # AllDataReceivedTrigger configured with the same gate_semantics
+    # treats sentinel-bearing units as satisfied and excludes them
+    # from the trigger payload — fan-in proceeds with N-1 keys
+    # rather than waiting forever.
+    gate_semantics: str = Field(
+        default="publish_empty",
+        description="ConditionalLink gating semantics. "
+                    "'publish_empty' (default; legacy) is a no-op when the "
+                    "condition is False. 'gate_to_bottom' writes the "
+                    "ConditionalLink.GATED_OFF_SENTINEL marker to the target "
+                    "so downstream AllDataReceivedTrigger can fire without "
+                    "the upstream step publishing an empty bundle."
+    )
+
 
 class LinkBase(FromConfigBase, ABC):
     """
@@ -1953,14 +1975,35 @@ class ConditionalLink(LinkBase):
     """
     Link that transfers data only when condition is met.
     Enhanced with mandatory from_config pattern implementation.
+
+    G10 — gate-to-bottom semantics
+    ------------------------------
+    See ``apecx-mcp-integration/docs/nanobrain_capability_gaps.md G10``.
+    When ``gate_semantics == 'publish_empty'`` (default; legacy), a False
+    condition is a no-op — the target data unit is left untouched.
+    Downstream ``AllDataReceivedTrigger`` will deadlock unless the upstream
+    step explicitly publishes an empty bundle.
+
+    When ``gate_semantics == 'gate_to_bottom'``, a False condition writes
+    the magic string :attr:`GATED_OFF_SENTINEL` to the target. An
+    ``AllDataReceivedTrigger`` configured with the same flag treats
+    sentinel-bearing units as satisfied AND excludes them from the
+    payload it forwards — fan-in proceeds with N-1 keys rather than
+    waiting indefinitely. User ``process()`` code never sees the magic
+    string; only the trigger-satisfaction layer does.
     """
 
     COMPONENT_TYPE = "conditional_link"
     REQUIRED_CONFIG_FIELDS = ['link_type', 'condition']
     OPTIONAL_CONFIG_FIELDS = {
         'buffer_size': 100,
-        'data_mapping': None
+        'data_mapping': None,
+        'gate_semantics': 'publish_empty',
     }
+
+    # G10 sentinel. Distinct from None and any user payload. Reserved
+    # string; user code MUST NOT publish this value to a data unit.
+    GATED_OFF_SENTINEL = "__nanobrain_gated_off__"
 
     def __init__(self, *args, **kwargs):
         """Prevent direct instantiation - use from_config instead"""
@@ -2030,6 +2073,12 @@ class ConditionalLink(LinkBase):
     @classmethod
     def extract_component_config(cls, config: LinkConfig) -> Dict[str, Any]:
         """Extract ConditionalLink configuration"""
+        gate_semantics = getattr(config, 'gate_semantics', 'publish_empty')
+        if gate_semantics not in ('publish_empty', 'gate_to_bottom'):
+            raise ValueError(
+                f"FAIL-FAST: ConditionalLink gate_semantics must be "
+                f"'publish_empty' or 'gate_to_bottom', got {gate_semantics!r}"
+            )
         return {
             'source': config.source,
             'target': config.target,
@@ -2037,7 +2086,8 @@ class ConditionalLink(LinkBase):
             'condition': getattr(config, 'condition', None),
             'buffer_size': getattr(config, 'buffer_size', 100),
             'data_mapping': getattr(config, 'data_mapping', None),
-            'auto_transfer': getattr(config, 'auto_transfer', False)
+            'auto_transfer': getattr(config, 'auto_transfer', False),
+            'gate_semantics': gate_semantics,
         }
 
     @classmethod
@@ -2067,6 +2117,9 @@ class ConditionalLink(LinkBase):
 
         # Set ConditionalLink-specific attributes
         self.condition_func = dependencies['condition_func']
+        self.gate_semantics = component_config.get(
+            'gate_semantics', 'publish_empty'
+        )
 
     async def start(self) -> None:
         """Start the conditional link."""
@@ -2102,9 +2155,36 @@ class ConditionalLink(LinkBase):
                 await self._record_transfer(True)
                 logger.debug(
                     f"ConditionalLink {self.name} condition met, transferred data")
-            else:
+            elif self.gate_semantics == 'gate_to_bottom':
+                # G10: write the gated-off sentinel to the target so the
+                # downstream AllDataReceivedTrigger can fire without waiting
+                # indefinitely. The trigger's _is_satisfied helper recognizes
+                # the sentinel and excludes it from the payload it forwards.
+                sentinel = ConditionalLink.GATED_OFF_SENTINEL
+                if hasattr(self.target, 'input_data_units') and self.target.input_data_units:
+                    input_unit = self.target.input_data_units[0]
+                    await input_unit.set(sentinel)
+                elif hasattr(self.target, 'set_input'):
+                    await self.target.set_input(sentinel)
+                else:
+                    # The target is itself a data unit (no .set_input,
+                    # no .input_data_units list) — set on it directly.
+                    await self.target.set(sentinel)
+
+                await self._record_transfer(True)
                 logger.debug(
-                    f"ConditionalLink {self.name} condition not met, skipped transfer")
+                    f"ConditionalLink {self.name} condition not met, "
+                    f"wrote GATED_OFF_SENTINEL to target under gate_to_bottom"
+                )
+            else:
+                # Legacy 'publish_empty' semantics — silent no-op. The
+                # downstream AllDataReceivedTrigger will block until the
+                # upstream step publishes an empty bundle. This is the
+                # documented silent-failure shape that gate_to_bottom is
+                # designed to eliminate.
+                logger.debug(
+                    f"ConditionalLink {self.name} condition not met, skipped transfer "
+                    f"(gate_semantics='publish_empty')")
 
         except Exception as e:
             await self._record_transfer(False)
