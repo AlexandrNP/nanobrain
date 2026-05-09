@@ -360,3 +360,174 @@ class UnifiedToolDescriptor(ConfigBase):
         finally:
             for nested in nested_classes:
                 nested._allow_direct_instantiation = False
+
+    @classmethod
+    def from_python_callable(
+        cls,
+        fn: Any,
+        *,
+        descriptor_id: Optional[str] = None,
+        backend: str = "native",
+        version: str = "0.1.0",
+        provenance_class_path: Optional[str] = None,
+        side_effects: str = "none",
+        determinism: str = "R3",
+        resource_class: str = "cpu_light",
+        **overrides: Any,
+    ) -> "UnifiedToolDescriptor":
+        """Build a UTD by introspecting a Python callable.
+
+        Mirrors the convenience pattern Rhea / FastMCP use for tool
+        registration: the author writes a regular Python function with
+        type hints + docstring, and the framework derives the
+        machine-readable descriptor for free.
+
+        Resolution rules:
+
+        - ``inputs`` derived from ``inspect.signature(fn).parameters``.
+          Each non-``self``/``cls`` parameter becomes a ``UTDInputSpec``.
+          The ``type`` field uses ``typing.get_type_hints`` (falls back
+          to ``Any`` when an annotation is missing). ``required`` is
+          ``True`` iff the parameter has no default; the default value
+          (when present) is recorded in ``UTDInputSpec.default``.
+        - ``outputs`` derived from the return-type annotation. A single
+          named output ``"return"`` is generated; the type is the
+          return annotation's name (e.g. ``"dict"``, ``"str"``, or a
+          dotted class path).
+        - ``display_name`` defaults to ``fn.__qualname__``; first line
+          of the docstring becomes ``summary``; the rest becomes
+          ``long_description``.
+        - ``descriptor_id`` defaults to
+          ``"<backend>:<module>.<qualname>@<version>"`` (lowercased) so
+          the same callable always produces the same descriptor_id.
+        - ``provenance_pin.class_path`` defaults to
+          ``"<module>.<qualname>"`` so ``ToolBase.from_descriptor``
+          can locate the callable. Override via
+          ``provenance_class_path`` if the callable is bound to a
+          different importable path (test fixtures, dynamically
+          generated functions).
+
+        Override any auto-derived field via ``**overrides`` —
+        e.g. ``cost_estimate=UTDCostEstimate(estimated_seconds=120.0,
+        confidence='high')``.
+
+        Brutal limitations (documented honestly):
+        - Only basic type-name extraction. ``Dict[str, int]`` becomes
+          ``"Dict"`` not ``"Dict[str, int]"``. For richer schemas,
+          override ``inputs=`` / ``outputs=`` explicitly.
+        - The descriptor's ``determinism`` defaults to ``R3`` (least
+          assertive); the author should override to ``R0`` (deterministic)
+          if true. The framework cannot infer determinism from a
+          signature.
+        """
+        import inspect as _inspect
+
+        try:
+            sig = _inspect.signature(fn)
+        except (ValueError, TypeError) as exc:
+            raise ValueError(
+                f"FAIL-FAST: from_python_callable cannot introspect "
+                f"{fn!r}: {exc}"
+            ) from exc
+
+        # Type hints (best-effort; some annotations are PEP-604 unions
+        # or string forwards that get_type_hints can't resolve).
+        try:
+            hints = _inspect.get_annotations(fn, eval_str=True)
+        except Exception:  # noqa: BLE001
+            hints = getattr(fn, "__annotations__", {}) or {}
+
+        def _type_name(annotation: Any) -> str:
+            if annotation is _inspect.Parameter.empty:
+                return "Any"
+            # typing.X has __name__; classes have __name__; everything else str()
+            name = getattr(annotation, "__name__", None)
+            if name:
+                return name
+            origin = getattr(annotation, "__origin__", None)
+            if origin is not None:
+                origin_name = getattr(origin, "__name__", None)
+                if origin_name:
+                    return origin_name
+            return str(annotation).replace("typing.", "")
+
+        # Build inputs from non-self/cls parameters.
+        inputs: List[Dict[str, Any]] = []
+        for pname, param in sig.parameters.items():
+            if pname in ("self", "cls"):
+                continue
+            if param.kind in (_inspect.Parameter.VAR_POSITIONAL,
+                              _inspect.Parameter.VAR_KEYWORD):
+                # Skip *args / **kwargs — UTD has no concept of variadic
+                # inputs; authors should bind these explicitly.
+                continue
+            ann = hints.get(pname, param.annotation)
+            type_name = _type_name(ann)
+            has_default = param.default is not _inspect.Parameter.empty
+            inputs.append({
+                "name": pname,
+                "type": type_name,
+                "required": not has_default,
+                "default": param.default if has_default else None,
+                "description": "",
+            })
+
+        # Build outputs from return annotation.
+        return_ann = hints.get("return", sig.return_annotation)
+        if return_ann is _inspect.Parameter.empty:
+            output_type = "Any"
+        else:
+            output_type = _type_name(return_ann)
+        outputs = [{
+            "name": "return",
+            "type": output_type,
+            "description": "",
+        }]
+
+        # display_name + summary + long_description from qualname + docstring.
+        display_name = fn.__qualname__
+        doc = (fn.__doc__ or "").strip()
+        if doc:
+            doc_lines = doc.split("\n", 1)
+            summary = doc_lines[0].strip()
+            long_description = doc_lines[1].strip() if len(doc_lines) > 1 else ""
+        else:
+            summary = display_name
+            long_description = ""
+
+        # descriptor_id default — module.qualname for stability.
+        if descriptor_id is None:
+            module = getattr(fn, "__module__", "unknown") or "unknown"
+            tool_id = f"{module}.{fn.__qualname__}".lower()
+            # tool_id grammar in _DESCRIPTOR_ID_RE allows [a-z0-9_.] only,
+            # AND requires the FIRST character to be [a-z]. Replace
+            # disallowed chars with underscore; if the result doesn't
+            # start with [a-z], prefix ``fn_`` so module names like
+            # ``__main__`` produce a valid descriptor_id.
+            tool_id = re.sub(r"[^a-z0-9_.]", "_", tool_id)
+            if not tool_id or not tool_id[0].isalpha():
+                tool_id = "fn_" + tool_id.lstrip("_.")
+            descriptor_id = f"{backend}:{tool_id}@{version}"
+
+        # provenance_pin default — module.qualname.
+        if provenance_class_path is None:
+            module = getattr(fn, "__module__", "unknown") or "unknown"
+            provenance_class_path = f"{module}.{fn.__qualname__}"
+
+        # Compose the dict + delegate to from_dict for the nested-class
+        # admittance dance.
+        data: Dict[str, Any] = {
+            "descriptor_id": descriptor_id,
+            "display_name": display_name,
+            "summary": summary,
+            "long_description": long_description,
+            "inputs": inputs,
+            "outputs": outputs,
+            "side_effects": side_effects,
+            "determinism": determinism,
+            "resource_class": resource_class,
+            "provenance_pin": {"class_path": provenance_class_path},
+        }
+        # Apply overrides last — author-supplied fields trump defaults.
+        data.update(overrides)
+        return cls.from_dict(data)

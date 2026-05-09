@@ -106,14 +106,22 @@ class AcademyAgentHandle:
            is ``warning`` (not ``info``) so operators can't miss it.
         2. Registered real handle → dispatch via the real handle.
         3. Neither → raise ``AcademyNotImplementedError``.
+
+        Critical: the unregistered-agent FAIL-FAST is checked BEFORE
+        any Manager interaction. Pre-2026-05-09 the code entered the
+        Manager via ``_ensure_manager()`` first, which made the
+        placeholder-dispatch path leak a partially-initialized Manager
+        on raise — the next test in the same process then deadlocked
+        on ``Manager.__aenter__``. The reordering eliminates that
+        cross-test contamination shape.
         """
-        await self.manager_wrapper._ensure_manager()
-
-        self.logger.info(
-            f"🚀 Calling Academy agent {self.agent_name}.{action_name}()"
-        )
-
+        # FAST PATH 1: demo mode is opt-in via env var. No Manager
+        # interaction needed; the mock response uses purely local data.
         if os.environ.get("ACADEMY_DEMO_MODE") == "1":
+            self.logger.info(
+                f"🚀 Calling Academy agent {self.agent_name}.{action_name}() "
+                "(demo mode)"
+            )
             self.logger.warning(
                 f"⚠️  ACADEMY_DEMO_MODE=1: returning mock response for "
                 f"Academy agent {self.agent_name}.{action_name}(). "
@@ -123,6 +131,9 @@ class AcademyAgentHandle:
             )
             return self._generate_mock_response(action_name, args, kwargs)
 
+        # FAST PATH 2: placeholder handle (no real agent registered)
+        # MUST fail-fast WITHOUT touching the Manager — see the
+        # cross-test-contamination warning in the docstring above.
         if self.real_handle is None:
             raise AcademyNotImplementedError(
                 f"Academy agent {self.agent_name!r} has no real Handle "
@@ -131,6 +142,14 @@ class AcademyAgentHandle:
                 "to launch and register the agent, or set "
                 "ACADEMY_DEMO_MODE=1 to opt in to the mock."
             )
+
+        # Real path: Manager must be ensured for action dispatch via the
+        # underlying academy.handle.Handle.
+        await self.manager_wrapper._ensure_manager()
+
+        self.logger.info(
+            f"🚀 Calling Academy agent {self.agent_name}.{action_name}()"
+        )
 
         # Academy's Handle.__getattr__ returns a remote-method-call
         # wrapper for any name — so getattr always succeeds. An action
