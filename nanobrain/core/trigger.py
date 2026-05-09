@@ -10,7 +10,7 @@ import logging
 import time
 import weakref
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional, List, Callable, Set, Union
+from typing import Any, Dict, Literal, Optional, List, Callable, Set, Union
 from enum import Enum
 from pydantic import BaseModel, Field, ConfigDict
 from pathlib import Path
@@ -314,6 +314,28 @@ class TriggerConfig(ConfigBase):
                     "event bodies in EventTrigger.fire_event(). When set, "
                     "fire_event silently returns when the predicate is "
                     "False; when None, every event fires the trigger."
+    )
+
+    # G22 Step 3 — missed-schedule policy. Applies to triggers with a
+    # cadence (currently TimerTrigger). When the framework detects that
+    # one or more scheduled fires were missed (e.g., the process was
+    # restarted across a fire boundary), it consults this policy:
+    #   - 'skip' (default; legacy): forget missed fires; only fire on
+    #     the next regularly-scheduled tick.
+    #   - 'catch_up': fire N times in rapid succession, where N is the
+    #     count of missed intervals.
+    #   - 'merge': fire ONCE regardless of how many were missed.
+    # EventTrigger / DataUnitChangeTrigger / ManualTrigger ignore this
+    # field (no cadence to miss against).
+    on_missed: Literal["skip", "catch_up", "merge"] = Field(
+        default="skip",
+        description="G22 Step 3 missed-schedule policy for cadenced "
+                    "triggers (TimerTrigger). Determines what happens "
+                    "when the framework detects N missed fires after a "
+                    "process restart. 'skip' (default; legacy) forgets "
+                    "them; 'catch_up' fires N times rapidly; 'merge' "
+                    "fires once. Non-cadenced triggers ignore this "
+                    "field."
     )
 
 
@@ -1621,6 +1643,99 @@ class TimerTrigger(TriggerBase):
         super()._init_from_config(config, component_config, dependencies)
         self.interval_ms = dependencies.get('interval_ms', 1000)
         self._timer_task: Optional[asyncio.Task] = None
+
+        # G22 Step 3 — missed-schedule policy. Read from TriggerConfig;
+        # validated at the Pydantic layer (Literal["skip","catch_up","merge"]).
+        self.on_missed: str = getattr(config, "on_missed", "skip")
+        # The last-fire wall-clock time (UTC epoch seconds). Set by the
+        # restart-recovery hook; None means "no prior fire known".
+        self._last_fire_epoch_seconds: Optional[float] = None
+
+    async def replay_missed_fires(
+        self,
+        last_known_fire_epoch_seconds: float,
+        now_epoch_seconds: Optional[float] = None,
+    ) -> int:
+        """G22 Step 3 — apply ``on_missed`` policy after a restart.
+
+        Compute the number of missed fires between
+        ``last_known_fire_epoch_seconds`` (the wall-clock time at which
+        the trigger last fired before the restart, persisted by the
+        deployment) and ``now_epoch_seconds`` (defaults to current UTC
+        epoch). Then act per ``self.on_missed``:
+
+        - ``skip``    → return 0 (no fires).
+        - ``merge``   → fire ONCE if N >= 1, else 0; return 1 or 0.
+        - ``catch_up`` → fire N times in rapid succession; return N.
+
+        The returned int is the count of fires actually emitted. The
+        framework provides the LAST-FIRE persistence in Step 4 (durable
+        inner-trigger binding); this method is the policy-application
+        primitive that Step 4 builds on.
+
+        Caller responsibility: invoke this method ONCE at trigger
+        startup, before ``start_monitoring``. It does not own
+        persistence — it only consumes the persisted timestamp.
+
+        Returns:
+            int — number of fires emitted.
+
+        Raises:
+            ValueError if last_known_fire_epoch_seconds > now (clock
+            skew or bad input).
+        """
+        import time as _time
+
+        if now_epoch_seconds is None:
+            now_epoch_seconds = _time.time()
+
+        if last_known_fire_epoch_seconds > now_epoch_seconds:
+            raise ValueError(
+                f"FAIL-FAST: TimerTrigger {self.name!r} replay_missed_fires: "
+                f"last_known_fire_epoch_seconds ({last_known_fire_epoch_seconds}) "
+                f"is in the future relative to now ({now_epoch_seconds}); "
+                f"check clock skew or persistence bug"
+            )
+
+        if self.interval_ms <= 0:
+            return 0  # nothing meaningful to replay
+
+        # Integer-millisecond arithmetic dodges the
+        # ``1.0 / 0.1 == 9.999...`` floating-point trap. Round the
+        # elapsed window (not floor) so a boundary case like
+        # exactly-N-intervals counts as N.
+        elapsed_ms = round((now_epoch_seconds - last_known_fire_epoch_seconds) * 1000.0)
+        missed_count = elapsed_ms // self.interval_ms
+        if missed_count <= 0:
+            return 0
+
+        # Was active before? Restore for the replay window. Caller
+        # is responsible for the regular start_monitoring afterwards.
+        was_active = self._is_active
+        self._is_active = True
+        try:
+            if self.on_missed == "skip":
+                fires = 0
+            elif self.on_missed == "merge":
+                # Bypass rate-limit / debounce — catch-up replay is an
+                # explicit user opt-in, not a normal cadence fire.
+                await self._execute_callbacks(None)
+                fires = 1
+            elif self.on_missed == "catch_up":
+                for _ in range(missed_count):
+                    await self._execute_callbacks(None)
+                fires = missed_count
+            else:
+                # Defensive — Pydantic Literal should reject this earlier.
+                raise ComponentConfigurationError(
+                    f"FAIL-FAST: TimerTrigger {self.name!r} unknown "
+                    f"on_missed policy {self.on_missed!r}"
+                )
+        finally:
+            self._is_active = was_active
+
+        self._last_fire_epoch_seconds = now_epoch_seconds
+        return fires
 
     async def start_monitoring(self) -> None:
         """Start timer monitoring."""

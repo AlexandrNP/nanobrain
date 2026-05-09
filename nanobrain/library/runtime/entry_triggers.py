@@ -118,6 +118,24 @@ class WorkflowEntryTriggerConfig(ConfigBase):
                     "trigger's name."
     )
 
+    # G22 Step 3 — missed-schedule policy. Declared on the wrapper so a
+    # YAML author can express the policy at the wiring layer rather
+    # than reaching into the inner trigger's config (which is also a
+    # legal place — both are honored, with the wrapper-level setting
+    # winning when both are set, mirroring the framework's
+    # explicit > implicit principle for the wrapping layer).
+    #
+    # Effective only when the inner trigger is cadenced (TimerTrigger).
+    # On non-cadenced inners the field is recorded but unused.
+    on_missed: Literal["skip", "catch_up", "merge"] = Field(
+        default="skip",
+        description="G22 Step 3 missed-schedule policy. When set on a "
+                    "WorkflowEntryTrigger wrapping a TimerTrigger, this "
+                    "policy is applied at restart-recovery time via the "
+                    "inner trigger's replay_missed_fires hook. "
+                    "Non-cadenced inner triggers ignore the field."
+    )
+
     source_path: Optional[str] = Field(default=None, exclude=True)
     model_config = ConfigDict(extra="forbid")
 
@@ -283,6 +301,7 @@ class WorkflowEntryTrigger(FromConfigBase):
         self._autonomy_level = config.autonomy_level
         self._cost_envelope_template = config.cost_envelope_template
         self._task_id_prefix = config.task_id_prefix or config.name
+        self._on_missed = config.on_missed
 
         runner = dependencies.get("runner")
         if not isinstance(runner, WorkflowRunner):
@@ -366,6 +385,48 @@ class WorkflowEntryTrigger(FromConfigBase):
         # TriggerBase has no remove_callback API today; the inner trigger
         # owns its own lifecycle. Stop suffices to halt fire delivery.
         self._is_started = False
+
+    async def replay_missed_fires(
+        self,
+        last_known_fire_epoch_seconds: float,
+        now_epoch_seconds: Optional[float] = None,
+    ) -> int:
+        """G22 Step 3 — apply ``on_missed`` policy after a process restart.
+
+        Delegates to the inner trigger's ``replay_missed_fires`` if the
+        inner is cadenced (e.g., TimerTrigger). The inner trigger's
+        own ``on_missed`` is overridden by the wrapper's policy for the
+        duration of the replay — the wrapper-level setting wins so a
+        deployment author can configure restart behavior at the wiring
+        layer without editing the inner trigger's YAML.
+
+        For non-cadenced inner triggers (EventTrigger, ManualTrigger,
+        DataUnitChangeTrigger), there is no schedule to miss; this
+        method is a no-op and returns 0. Callers should not invoke
+        replay on event-driven workflows; if they do, the framework
+        does not silently fire phantom events.
+
+        Caller responsibility: the deployment must have persisted
+        ``last_known_fire_epoch_seconds`` from the prior run (Step 4
+        scope). Step 3 ships only the policy-application primitive.
+
+        Returns the count of fires emitted.
+        """
+        replay = getattr(self._inner, "replay_missed_fires", None)
+        if replay is None:
+            return 0
+        original_policy = getattr(self._inner, "on_missed", None)
+        try:
+            # Wrapper override: stamp the wrapper's policy on the inner
+            # for the duration of the replay window.
+            self._inner.on_missed = self._on_missed
+            return await replay(
+                last_known_fire_epoch_seconds=last_known_fire_epoch_seconds,
+                now_epoch_seconds=now_epoch_seconds,
+            )
+        finally:
+            if original_policy is not None:
+                self._inner.on_missed = original_policy
 
     async def _on_inner_fire(self, event_body: Any) -> None:
         """Callback registered with the inner trigger. Builds the payload
