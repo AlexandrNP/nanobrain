@@ -273,3 +273,161 @@ class TestWarnOnImplicitAutoTransfer:
         # No warning, no error — gracefully degraded.
         warnings = [r for r in caplog.records if r.levelname == "WARNING"]
         assert len(warnings) == 0
+
+
+# ---------------------------------------------------------------------------
+# G7 Step 3 — _apply_v2_link_defaults
+# Tests for the model_validator that injects auto_transfer=True into inline
+# link configs when config_version >= 2.
+# ---------------------------------------------------------------------------
+
+class TestV2LinkDefaultsApplied:
+    """Verify that v2 inline link configs gain auto_transfer=True
+    automatically while v1 preserves the historical False default."""
+
+    def _build(self, **kwargs):
+        WorkflowConfig._allow_direct_instantiation = True
+        try:
+            return WorkflowConfig(**kwargs)
+        finally:
+            WorkflowConfig._allow_direct_instantiation = False
+
+    def test_v1_does_not_mutate_inline_link(self):
+        """Step 3 must not affect v1 workflows — legacy semantics preserved."""
+        link_dict = {
+            "class": "nanobrain.core.link.DirectLink",
+            "source": "a.x",
+            "target": "b.x",
+        }
+        cfg = self._build(name="test", config_version=1, links={"l": link_dict})
+        # Field is absent (NOT injected) — would cause LinkConfig to use False.
+        assert "auto_transfer" not in cfg.links["l"]
+
+    def test_v2_injects_auto_transfer_flat_shape(self):
+        """Flat-shape inline link config (no nested 'config' key) gets the
+        injection at the top level."""
+        link_dict = {
+            "class": "nanobrain.core.link.DirectLink",
+            "source": "a.x",
+            "target": "b.x",
+        }
+        cfg = self._build(name="test", config_version=2, links={"l": link_dict})
+        assert cfg.links["l"]["auto_transfer"] is True
+
+    def test_v2_injects_auto_transfer_nested_shape(self):
+        """Nested-shape inline link config ({class, config: {...}}) gets
+        the injection inside the 'config' dict."""
+        link_dict = {
+            "class": "nanobrain.core.link.DirectLink",
+            "config": {"source": "a.x", "target": "b.x"},
+        }
+        cfg = self._build(name="test", config_version=2, links={"l": link_dict})
+        assert cfg.links["l"]["config"]["auto_transfer"] is True
+
+    def test_v2_does_not_override_explicit_true(self):
+        """Explicit True is left alone — setdefault is a no-op when the key exists."""
+        link_dict = {
+            "class": "nanobrain.core.link.DirectLink",
+            "source": "a.x", "target": "b.x",
+            "auto_transfer": True,
+        }
+        cfg = self._build(name="test", config_version=2, links={"l": link_dict})
+        assert cfg.links["l"]["auto_transfer"] is True
+
+    def test_v2_does_not_override_explicit_false(self):
+        """Explicit False is THE non-obvious case: an author wrote
+        auto_transfer: False intentionally and the v2 default must NOT
+        override that. setdefault is the right primitive precisely
+        because it preserves explicit values of any truthiness."""
+        link_dict = {
+            "class": "nanobrain.core.link.DirectLink",
+            "source": "a.x", "target": "b.x",
+            "auto_transfer": False,
+        }
+        cfg = self._build(name="test", config_version=2, links={"l": link_dict})
+        assert cfg.links["l"]["auto_transfer"] is False
+
+    def test_v2_skips_unknown_link_class(self):
+        """Unknown link classes (e.g., AcademyLink, custom) are not
+        mutated — Step 3 only touches the known auto_transfer-bearing
+        classes whitelisted by _link_class_needs_auto_transfer_check."""
+        link_dict = {
+            "class": "some.custom.UnknownLink",
+            "source": "a.x", "target": "b.x",
+        }
+        cfg = self._build(name="test", config_version=2, links={"l": link_dict})
+        assert "auto_transfer" not in cfg.links["l"]
+
+    def test_v2_skips_path_reference_config(self):
+        """When 'config' is a string (path to external YAML), Step 3
+        does NOT mutate — that is Step 4 scope (workspace-wide flip)."""
+        link_dict = {
+            "class": "nanobrain.core.link.DirectLink",
+            "config": "config/some_link.yml",
+        }
+        cfg = self._build(name="test", config_version=2, links={"l": link_dict})
+        # The string was not converted to a dict and 'auto_transfer' was
+        # not added at the top level either.
+        assert cfg.links["l"]["config"] == "config/some_link.yml"
+        assert "auto_transfer" not in cfg.links["l"]
+
+    def test_v2_handles_multiple_links_independently(self):
+        """Each link in the dict is processed independently; mixed-shape
+        links coexist."""
+        cfg = self._build(name="test", config_version=2, links={
+            "flat": {
+                "class": "nanobrain.core.link.DirectLink",
+                "source": "a.x", "target": "b.x",
+            },
+            "nested": {
+                "class": "nanobrain.core.link.TransformLink",
+                "config": {"source": "b.x", "target": "c.x",
+                           "transform_function": "x.y"},
+            },
+            "explicit_false": {
+                "class": "nanobrain.core.link.ConditionalLink",
+                "source": "c.x", "target": "d.x",
+                "condition": "true_only",
+                "auto_transfer": False,
+            },
+            "academy": {
+                "class": "nanobrain.academy_integration.academy_link.AcademyLink",
+                "source": "d.x", "target": "e.x",
+            },
+        })
+        assert cfg.links["flat"]["auto_transfer"] is True
+        assert cfg.links["nested"]["config"]["auto_transfer"] is True
+        assert cfg.links["explicit_false"]["auto_transfer"] is False
+        assert "auto_transfer" not in cfg.links["academy"]  # not whitelisted
+
+    def test_v2_with_empty_links_no_error(self):
+        cfg = self._build(name="test", config_version=2, links={})
+        assert cfg.links == {}
+
+    def test_v2_with_resolved_linkbase_in_dict_skipped(self):
+        """If 'links' contains an already-resolved object (programmatic),
+        we skip it gracefully."""
+        class FakeResolvedLink:
+            pass
+        cfg = self._build(name="test", config_version=2, links={
+            "resolved": FakeResolvedLink(),
+        })
+        assert isinstance(cfg.links["resolved"], FakeResolvedLink)
+
+
+class TestV2WarningSuppressed:
+    """When config_version >= 2, the deprecation WARNING is suppressed
+    because v2 has actively flipped the default; no recommendation needed."""
+
+    def test_v2_emits_no_warning_for_omission(self, caplog):
+        # An omitted-auto_transfer DirectLink under v2 must NOT warn.
+        links = {
+            "l": {
+                "class": "nanobrain.core.link.DirectLink",
+                "source": "a.x", "target": "b.x",
+            }
+        }
+        with caplog.at_level(logging.WARNING, logger="nanobrain.core.workflow"):
+            _warn_on_implicit_auto_transfer("test_wf", links, config_version=2)
+        warnings = [r for r in caplog.records if r.levelname == "WARNING"]
+        assert len(warnings) == 0

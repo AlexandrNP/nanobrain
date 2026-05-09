@@ -8,6 +8,19 @@ Nanobrain is an event-driven AI agent framework for distributed workflows. It's 
 
 ## Recent additions (2026-05-09)
 
+- **G7 Step 3 — v2 auto_transfer default flip (active)** shipped at
+  `nanobrain/core/workflow.py`: `WorkflowConfig._apply_v2_link_defaults`
+  Pydantic `model_validator(mode='after')` mutates inline link configs
+  to set `auto_transfer: True` when `config_version >= 2`. Both flat
+  (`{class, source, target, ...}`) and nested (`{class, config: {...}}`)
+  shapes are handled. Explicit values (True OR False) are preserved
+  via `setdefault`. Path-reference configs (where `config:` is a string
+  YAML path) are NOT mutated — that is Step 4 scope. AcademyLink and
+  unknown link classes are skipped (whitelist via
+  `_link_class_needs_auto_transfer_check`). 11 new tests at
+  `tests/unit/test_workflow_auto_transfer_warning.py` (40 total in
+  that file); full regression 518 passed, 1 skipped, 0 regressions.
+
 - **G10 Step 1 — gate-to-bottom semantics (mechanism)** shipped at
   `nanobrain/core/link.py` + `nanobrain/core/trigger.py`:
   `ConditionalLink.GATED_OFF_SENTINEL = "__nanobrain_gated_off__"`,

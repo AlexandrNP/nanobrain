@@ -14,7 +14,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Literal, Optional, Union, Set, Tuple, Callable
 from pathlib import Path
 
-from pydantic import BaseModel, Field, ConfigDict, field_validator
+from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
 import yaml
 import json
 from datetime import datetime, timezone
@@ -113,15 +113,17 @@ def _warn_on_implicit_auto_transfer(
     config_version: int,
 ) -> None:
     """Emit one WARNING per link that omits `auto_transfer`. v2 workflows
-    suppress the warning (the v2 default makes omission safe — though as
-    of 2026-05-09 v2 semantics are not yet implemented; declaring v2 today
-    silences the warning but does NOT change runtime behavior).
+    suppress the warning because the v2 default (G7 Step 3, shipped
+    2026-05-09) flips auto_transfer to True for inline link configs at
+    WorkflowConfig validation time — see ``_apply_v2_link_defaults``.
 
     Path-reference link configs cannot be statically inspected; we emit a
     softer DEBUG-level note for those so authors who care can find them.
+    Path-reference configs are NOT mutated by the v2 default — that is
+    Step 4 scope (workspace-wide default flip + external YAML rewriting).
     """
     if config_version >= 2:
-        return  # v2 promises auto_transfer=True default; no warning needed
+        return  # v2 default already flipped auto_transfer for inline configs
 
     if not isinstance(links_config, dict) or not links_config:
         return
@@ -183,21 +185,20 @@ class WorkflowConfig(StepConfig):
     """
 
     # G7 — config_version field. v1 (current) preserves the historical
-    # default of auto_transfer=False on links. v2 will flip the default
-    # (in a future release) to eliminate the dominant silent-failure shape.
+    # default of auto_transfer=False on links. v2 (active as of G7 Step 3,
+    # shipped 2026-05-09) flips the default for INLINE link configs at
+    # WorkflowConfig validation time — see ``_apply_v2_link_defaults``.
+    # Path-reference link configs are NOT mutated under v2; that requires
+    # the Step 4 workspace-wide default flip + external YAML rewriting.
     # See `apecx-mcp-integration/docs/nanobrain_capability_gaps.md G7`.
-    # Today this field is informational only — the loader uses it solely to
-    # decide whether to emit the auto_transfer deprecation WARNING (v1 emits
-    # the WARNING when DirectLinks omit the flag; v2 will not, because the
-    # new default makes omission safe).
     config_version: Literal[1, 2] = Field(
         default=1,
-        description="Workflow config schema version. v1 = legacy semantics; "
-                    "v2 = G7 auto_transfer-true default (NOT yet active in this "
-                    "release; declaring v2 today is reserved-for-future and "
-                    "currently behaves as v1 with no WARNING). Set v1 explicitly "
-                    "to suppress the auto_transfer deprecation WARNING for "
-                    "workflows you have intentionally audited."
+        description="Workflow config schema version. v1 = legacy semantics "
+                    "(auto_transfer defaults to False; deprecation WARNING "
+                    "emitted for inline links that omit the flag). v2 = G7 "
+                    "auto_transfer-true default for inline configs (Step 3). "
+                    "Set v1 explicitly to suppress the WARNING for workflows "
+                    "you have intentionally audited."
     )
 
     # Enhanced workflow configuration supporting class+config patterns
@@ -251,6 +252,48 @@ class WorkflowConfig(StepConfig):
         default_factory=dict,
         description="Instantiated agent objects from configuration"
     )
+
+    # G7 Step 3 — when config_version >= 2, inject auto_transfer=True into
+    # every inline link config that omits the field. Path-reference link
+    # configs (link_entry.config is a string path to an external YAML)
+    # are NOT mutated — that requires loading the external YAML, which is
+    # out-of-scope for Step 3 and deferred to Step 4 along with the
+    # workspace-wide default flip.
+    @model_validator(mode='after')
+    def _apply_v2_link_defaults(self) -> 'WorkflowConfig':
+        """Mutate self.links inline-config dicts to set auto_transfer=True
+        when config_version >= 2 and the field is absent.
+
+        Mutation is in-place on the same dict objects that LinkBase.from_config
+        will subsequently consume — see workflow_graph.add_link / loader code.
+        Explicit values (True or False) are NEVER overridden; only absent keys.
+        """
+        if self.config_version < 2:
+            return self
+        if not self.links or not isinstance(self.links, dict):
+            return self
+
+        for link_name, link_entry in self.links.items():
+            if not isinstance(link_entry, dict):
+                # Already-resolved LinkBase instance (e.g., programmatic
+                # construction); nothing to mutate.
+                continue
+            class_path = link_entry.get('class', '')
+            if not _link_class_needs_auto_transfer_check(class_path):
+                # AcademyLink (sets auto_transfer explicitly) or unknown class
+                # — leave alone.
+                continue
+
+            inner_config = link_entry.get('config')
+            if isinstance(inner_config, dict):
+                # Nested-config shape: {class: ..., config: {...inline...}}
+                inner_config.setdefault('auto_transfer', True)
+            elif inner_config is None:
+                # Flat shape: link_entry IS the config (no nested 'config' key)
+                link_entry.setdefault('auto_transfer', True)
+            # else: inner_config is a string path — out of scope for Step 3.
+
+        return self
 
 
 # WorkflowGraph imported from workflow_graph.py
