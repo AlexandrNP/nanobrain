@@ -369,6 +369,32 @@ class WorkflowRunnerConfig(ConfigBase):
     sqlite_db_path: Optional[str] = None
     max_concurrent_detached_tasks: int = Field(default=16, ge=1)
 
+    # G21 Step 3 — heartbeat watchdog. The runner spawns a background
+    # asyncio task that updates last_heartbeat_at on every running
+    # task at this interval, and reaps tasks whose last_heartbeat_at
+    # is older than `watchdog_stale_threshold_seconds`.
+    #
+    # Defaults from the gap proposal (autonomous_workflow_agent.md §5.2):
+    # 60s heartbeat, 600s stale threshold (10x the heartbeat). Set
+    # heartbeat_interval_seconds to 0 to DISABLE the watchdog entirely
+    # (useful for tests that want deterministic timestamps).
+    heartbeat_interval_seconds: float = Field(
+        default=60.0, ge=0.0,
+        description="How often the watchdog refreshes last_heartbeat_at "
+                    "for running tasks. Set to 0 to disable the watchdog "
+                    "entirely (last_heartbeat_at then only updates at "
+                    "task lifecycle transitions)."
+    )
+    watchdog_stale_threshold_seconds: float = Field(
+        default=600.0, ge=0.01,
+        description="A running task whose last_heartbeat_at is older "
+                    "than this threshold is reaped — its status is set "
+                    "to 'failed' with an explicit error string. Should "
+                    "be a multiple of heartbeat_interval_seconds (10x "
+                    "is the proposal default) to tolerate transient "
+                    "scheduling jitter."
+    )
+
     # Set by ConfigBase.from_config after load. Declared here so that
     # ``extra='forbid'`` does not reject the post-load setattr (the
     # parent ConfigBase has ``validate_assignment=True``, which routes
@@ -393,6 +419,20 @@ class WorkflowRunnerConfig(ConfigBase):
                     "task_store_backend='in_memory'; remove sqlite_db_path or "
                     "set backend to 'sqlite'"
                 )
+        # G21 Step 3 — sanity: stale threshold must exceed the heartbeat
+        # interval, otherwise the watchdog reaps healthy tasks. Skipped
+        # when heartbeat is disabled (interval == 0).
+        if self.heartbeat_interval_seconds > 0 and (
+            self.watchdog_stale_threshold_seconds
+            <= self.heartbeat_interval_seconds
+        ):
+            raise ValueError(
+                f"FAIL-FAST: watchdog_stale_threshold_seconds "
+                f"({self.watchdog_stale_threshold_seconds}) must exceed "
+                f"heartbeat_interval_seconds "
+                f"({self.heartbeat_interval_seconds}) — otherwise the "
+                f"watchdog reaps healthy tasks before they can refresh"
+            )
         return self
 
 
@@ -446,6 +486,14 @@ class WorkflowRunner(FromConfigBase):
         self._pause_signals: Dict[str, PauseSignal] = {}
         self._semaphore = asyncio.Semaphore(self._max_concurrent)
 
+        # G21 Step 3 — heartbeat watchdog. Lazily started; the first
+        # run_detached call brings it up so a runner that never runs a
+        # task pays no idle cost.
+        self._heartbeat_interval = config.heartbeat_interval_seconds
+        self._stale_threshold = config.watchdog_stale_threshold_seconds
+        self._watchdog_task: Optional[asyncio.Task] = None
+        self._watchdog_lock = asyncio.Lock()
+
     # ---- Public API ---------------------------------------------------
 
     async def run_detached(
@@ -466,6 +514,8 @@ class WorkflowRunner(FromConfigBase):
                 "FAIL-FAST: WorkflowRunner.run_detached: task_id must be a "
                 "non-empty string"
             )
+        # G21 Step 3 — lazy-start the watchdog on first detached run.
+        await self._maybe_start_watchdog()
         now = datetime.now(timezone.utc)
         handle = DetachedTaskHandle(
             task_id=task_id, status="queued", created_at=now,
@@ -495,6 +545,12 @@ class WorkflowRunner(FromConfigBase):
                         handle.status = "completed"
                         handle.result = result
                     except asyncio.CancelledError:
+                        # Discriminate watchdog-initiated cancel (store
+                        # already says 'failed') from external cancel:
+                        # don't stomp the watchdog's verdict.
+                        current = await self._store.get(task_id)
+                        if current is not None and current.status == "failed":
+                            raise
                         handle.status = "cancelled"
                         handle.completed_at = datetime.now(timezone.utc)
                         await self._store.update(handle)
@@ -661,3 +717,94 @@ class WorkflowRunner(FromConfigBase):
                 f"{task_id!r} was registered but the store returned None"
             )
         return handle
+
+    # ---- G21 Step 3 — heartbeat watchdog --------------------------------
+
+    async def _maybe_start_watchdog(self) -> None:
+        """Start the watchdog background task on first detached run.
+        No-op when ``heartbeat_interval_seconds == 0`` (disabled by config)
+        or when the watchdog is already running."""
+        if self._heartbeat_interval <= 0:
+            return
+        async with self._watchdog_lock:
+            if self._watchdog_task is not None and not self._watchdog_task.done():
+                return
+            self._watchdog_task = asyncio.create_task(
+                self._watchdog_loop(),
+                name=f"watchdog-{self.name}",
+            )
+
+    async def stop_watchdog(self) -> None:
+        """Stop the watchdog. Idempotent. Tests use this to ensure
+        the watchdog doesn't leak between cases."""
+        if self._watchdog_task is None:
+            return
+        self._watchdog_task.cancel()
+        try:
+            await self._watchdog_task
+        except (asyncio.CancelledError, Exception):  # noqa: BLE001
+            pass
+        self._watchdog_task = None
+
+    async def _watchdog_loop(self) -> None:
+        """Periodic heartbeat updater + stale-task reaper.
+
+        Wakes every ``heartbeat_interval_seconds`` and:
+        1. For every running task whose asyncio task is not done,
+           refresh ``last_heartbeat_at`` to now. This is the "I'm alive"
+           signal.
+        2. For every running task whose ``last_heartbeat_at`` is older
+           than ``stale_threshold_seconds`` AND whose asyncio task is
+           NOT done — reap it. The task's status flips to 'failed' with
+           an error string and the asyncio task is cancelled.
+        """
+        try:
+            while True:
+                await asyncio.sleep(self._heartbeat_interval)
+                await self._tick_watchdog()
+        except asyncio.CancelledError:
+            return
+        except Exception:  # noqa: BLE001
+            # Watchdog must never bring down the runner; log and exit.
+            # In production logging this would be a WARNING, but we
+            # avoid pulling in get_logger here (would couple the runner
+            # to the framework logging). Re-raising is wrong — this
+            # daemon should fail gracefully.
+            return
+
+    async def _tick_watchdog(self) -> None:
+        """One pass of heartbeat-refresh + stale-task reap. Public-ish
+        for testability (sub-second tests can drive this directly
+        instead of waiting for the periodic loop)."""
+        now_dt = datetime.now(timezone.utc)
+        active = await self._store.list_active()
+        for handle in active:
+            if handle.status != "running":
+                continue
+            asyncio_task = self._tasks.get(handle.task_id)
+            if asyncio_task is None or asyncio_task.done():
+                continue
+
+            stale = False
+            if handle.last_heartbeat_at is not None:
+                age = (now_dt - handle.last_heartbeat_at).total_seconds()
+                stale = age > self._stale_threshold
+
+            if stale:
+                # Reap. Mark status BEFORE cancelling so the task's own
+                # CancelledError handler doesn't overwrite to 'cancelled'.
+                handle.status = "failed"
+                handle.error = (
+                    f"WorkflowRunner watchdog reaped task: "
+                    f"last_heartbeat_at older than "
+                    f"watchdog_stale_threshold_seconds="
+                    f"{self._stale_threshold}s"
+                )
+                handle.completed_at = now_dt
+                await self._store.update(handle)
+                asyncio_task.cancel()
+                continue
+
+            # Healthy — refresh heartbeat.
+            handle.last_heartbeat_at = now_dt
+            await self._store.update(handle)
