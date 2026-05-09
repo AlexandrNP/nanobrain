@@ -8,6 +8,49 @@ Nanobrain is an event-driven AI agent framework for distributed workflows. It's 
 
 ## Recent additions (2026-05-09)
 
+- **All 22 nanobrain capability gaps + every documented Step 2-4
+  follow-up now shipped.** Combined diff this date covers:
+  - **G5 Step 2** — ProxyStore Key cross-process serialization
+    (NamedTuple `_asdict` + Store re-registration from manifest hints
+    in `nanobrain/library/steps/checkpoint_resume.py`).
+  - **G5 Step 3** — `ResumeStep on_missing='rebuild'` resolves a
+    dotted-path callable, regenerates the data, writes a fresh
+    manifest so subsequent resumes hit the cache.
+  - **G7 Step 4** — workspace-wide v2 default + path-reference YAML
+    rewriting. `WorkflowConfig.config_version` default flipped from
+    v1 → v2; `_apply_v2_link_defaults` now loads + injects + rewrites
+    `config: "external.yml"` link entries.
+  - **G10 Step 2** — workflow-level `gate_semantics` propagation to
+    every inline ConditionalLink and AllDataReceivedTrigger via a
+    `model_validator`. Path-reference configs honored under v2.
+  - **G21 Step 2** — cooperative pause via `PauseSignal` contextvar
+    + `WorkflowRunner.pause` / `.resume` / `.is_paused`. Bonus:
+    `await_completion(timeout=...)` fixed to wrap in `asyncio.shield`
+    so the timeout no longer silently cancels in-flight tasks.
+  - **G21 Step 3** — heartbeat watchdog + stale-task reaper on
+    `WorkflowRunner` (lazy-started; `heartbeat_interval_seconds=0`
+    disables; race-condition handler keeps the watchdog's `failed`
+    verdict when CancelledError fires after).
+  - **G21 Step 4** — Postgres durability backend. `_TaskStore` →
+    public `TaskStore`; `PostgresTaskStore` ships with psycopg 3 as
+    a lazy/optional import. Integration tests gated on
+    `POSTGRES_TEST_DSN` env var.
+  - **G22 Step 2** — `target_workflow` dotted-path resolution (callable
+    OR `.run`-bearing instance; classes deliberately rejected).
+  - **G22 Step 3** — missed-schedule policy (`skip|catch_up|merge`)
+    on TimerTrigger + WorkflowEntryTrigger. Off-by-one fix via
+    integer-millisecond arithmetic.
+  - **G22 Step 4** — durable inner-trigger → launch binding via
+    `EntryStateStore` (in-memory + file-backed). Persists last-fire
+    timestamp; `recover_from_durable_state()` drives `replay_missed_fires`
+    at startup.
+  - Total this date: **8 commits, 11 new test files, ~98 new unit
+    tests**. Full nanobrain regression: 673 passed, 3 skipped, 0
+    regressions ever across 5 chains.
+  - See `apecx-mcp-integration/docs/WORKAROUND_INVENTORY.md §8` for
+    the per-gap shipping log and the (now empty) deferred-follow-up
+    list.
+
 - **G22 v1 — EventTrigger + WorkflowEntryTrigger** shipped:
   - `EventTrigger` at `nanobrain/core/trigger.py` (transport-agnostic;
     callers invoke `fire_event(body)` from a webhook handler or
