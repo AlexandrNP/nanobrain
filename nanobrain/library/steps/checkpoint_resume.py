@@ -183,6 +183,11 @@ class _ProxyStoreStorage(_CheckpointStorage):
         else:
             store = existing
         self._store = store
+        # G5 Step 2 — record connector-rebuild hints so cross-process
+        # resume can re-register an equivalent Store without operator
+        # pre-registration. We persist these per-entry in the manifest.
+        self._connector_kind = connector_kind
+        self._store_dir = store_dir
 
     async def write_value(self, value: Any, hint: str) -> Dict[str, Any]:
         if hasattr(value, "__aiter__") and not isinstance(value, (str, bytes, dict, list)):
@@ -198,31 +203,170 @@ class _ProxyStoreStorage(_CheckpointStorage):
             content_hash = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
         except (TypeError, ValueError):
             content_hash = ""  # non-JSON payload; hash unavailable
+
+        # G5 Step 2 — serialize the typed Key so cross-process resume
+        # works. ProxyStore Keys are NamedTuples (FileKey, RedisKey,
+        # EndpointKey, etc.); ``_asdict()`` + the fully-qualified class
+        # path is enough to round-trip through JSON.
+        key_serialized = _serialize_proxy_key(proxy_key)
         return {
             "backend": "proxystore",
-            # ProxyStore Key serializes via its own dataclass shape; we
-            # store the repr() so the manifest is self-describing. The
-            # actual round-trip uses the stored Key object via store.get.
+            "key_serialized": key_serialized,
+            # Keep key_repr around for human eyeballing / audit; not
+            # used by the resume path.
             "key_repr": str(proxy_key),
             "store_name": self._store.name,
+            # G5 Step 2 — connector-rebuild hints for cross-process
+            # resume. A different process (or the same process after
+            # restart) consults these to re-register an equivalent
+            # FileConnector under the same store_name. RedisKey /
+            # EndpointKey would carry their own connector hints
+            # (host:port, etc.) when those backends are added.
+            "connector_kind": self._connector_kind,
+            "store_dir": self._store_dir,
             "content_hash": content_hash,
         }
 
     async def read_value(self, descriptor: Dict[str, Any]) -> Any:
-        # The manifest's key_repr is the Key's str() form. We can't
-        # reconstruct the typed Key from a string — proxystore's Key
-        # types are dataclasses with private state. v1 limitation:
-        # in-process resume only (the Store instance must still hold
-        # the Key). Cross-process resume requires the manifest to
-        # carry the Key's pickled form, which is a follow-up.
+        # G5 Step 2 — cross-process resume. Reconstruct the typed Key
+        # from the manifest's key_serialized blob, then call store.get.
+        # The store must already exist in this process (registered via
+        # _ProxyStoreStorage.__init__ in CheckpointStep, OR registered
+        # by the deployment startup code before the ResumeStep runs).
+        key_blob = descriptor.get("key_serialized")
+        if key_blob is None:
+            # Legacy manifest from a v1 CheckpointStep that didn't
+            # serialize the typed Key. Honest deferral: we cannot
+            # resume legacy proxystore manifests cross-process.
+            raise ComponentConfigurationError(
+                f"FAIL-FAST: ResumeStep proxystore backend: manifest is "
+                f"missing 'key_serialized' (legacy v1 manifest with "
+                f"key_repr only). Cross-process resume requires a "
+                f"manifest written by G5 Step 2-aware CheckpointStep."
+            )
+        try:
+            proxy_key = _deserialize_proxy_key(key_blob)
+        except Exception as exc:  # noqa: BLE001
+            raise ComponentConfigurationError(
+                f"FAIL-FAST: ResumeStep proxystore backend: failed to "
+                f"reconstruct typed Key from manifest: {exc}"
+            ) from exc
+        return self._store.get(proxy_key)
+
+
+# ---------------------------------------------------------------------------
+# G5 Step 2 — ProxyStore Key (de)serialization
+# ---------------------------------------------------------------------------
+
+def _serialize_proxy_key(proxy_key: Any) -> Dict[str, Any]:
+    """Serialize a ProxyStore Key (NamedTuple subclass) to a JSON-
+    friendly dict.
+
+    Returns ``{"class_path": "<fully.qualified.ClassName>",
+                "fields": {<NamedTuple fields ...>}}``.
+
+    ProxyStore Keys are NamedTuples in 1.x. Generalized to "any
+    NamedTuple" via the ``_asdict`` / ``_fields`` protocol — works for
+    FileKey, RedisKey, EndpointKey, and future connector Key types
+    without per-class shims.
+
+    FAIL-FAST when the Key is NOT a NamedTuple (a future ProxyStore
+    release using a different Key shape would surface here loudly
+    rather than silently producing an unrestorable manifest).
+    """
+    if not (hasattr(proxy_key, "_asdict") and hasattr(proxy_key, "_fields")):
         raise ComponentConfigurationError(
-            f"FAIL-FAST: ResumeStep proxystore backend in v1 requires "
-            f"the original CheckpointStep instance to still be alive "
-            f"in-process (the typed Key cannot be reconstructed from "
-            f"the manifest's key_repr alone). For cross-process resume, "
-            f"use the filesystem backend in v1; ProxyStore cross-process "
-            f"is a follow-up that requires Key serialization."
+            f"FAIL-FAST: ProxyStore Key {type(proxy_key).__name__} is not "
+            f"a NamedTuple; G5 Step 2 only handles NamedTuple-shaped Keys "
+            f"(FileKey, RedisKey, EndpointKey). Update the framework to "
+            f"add a per-class serializer for this Key type."
         )
+    cls = type(proxy_key)
+    class_path = f"{cls.__module__}.{cls.__qualname__}"
+    return {"class_path": class_path, "fields": dict(proxy_key._asdict())}
+
+
+def _deserialize_proxy_key(key_blob: Dict[str, Any]) -> Any:
+    """Inverse of ``_serialize_proxy_key``. Imports the Key's class
+    by dotted path, instantiates with ``**fields``."""
+    import importlib
+
+    class_path = key_blob.get("class_path")
+    fields = key_blob.get("fields", {})
+    if not isinstance(class_path, str) or "." not in class_path:
+        raise ValueError(
+            f"FAIL-FAST: malformed key_serialized: missing or invalid "
+            f"class_path={class_path!r}"
+        )
+    module_path, _, attr_path = class_path.rpartition(".")
+    mod = importlib.import_module(module_path)
+    cls = getattr(mod, attr_path)
+    return cls(**fields)
+
+
+def _resolve_proxystore_storage(
+    store_name: str, manifest_path: Path,
+) -> "_ProxyStoreStorage":
+    """G5 Step 2 — for cross-process resume, construct an
+    ``_ProxyStoreStorage`` that points at the same Store as the writer.
+
+    Resolution:
+      1. If a Store with ``store_name`` is already registered in this
+         process (e.g. the deployment's startup code registered it),
+         reuse it.
+      2. Otherwise, walk the manifest to find connector-rebuild hints
+         (``connector_kind`` + ``store_dir`` on the first proxystore
+         entry) and re-register an equivalent Store.
+      3. FAIL-FAST when neither path works.
+
+    The manifest_path argument is used to resolve ``store_dir`` if it
+    was recorded as a relative path.
+    """
+    from proxystore.store import get_store
+
+    existing = get_store(store_name)
+    if existing is not None:
+        # The Store is already registered; build an _ProxyStoreStorage
+        # that shares it. The connector_kind / store_dir are unused
+        # in the read path but required for the constructor; we pass
+        # placeholders since the existing-store branch short-circuits.
+        # The constructor will see existing != None and reuse it.
+        return _ProxyStoreStorage(
+            store_name=store_name, connector_kind="file",
+            store_dir=None,  # ignored when store already registered
+        )
+
+    # Need to read the manifest to find connector hints.
+    if not manifest_path.is_file():
+        raise ComponentConfigurationError(
+            f"FAIL-FAST: cross-process proxystore resume needs either a "
+            f"pre-registered Store named {store_name!r} OR a readable "
+            f"manifest with connector_kind+store_dir hints"
+        )
+    manifest = json.loads(manifest_path.read_text())
+    entries = manifest.get("entries", {})
+    for descriptor in entries.values():
+        if descriptor.get("backend") != "proxystore":
+            continue
+        connector_kind = descriptor.get("connector_kind", "file")
+        store_dir = descriptor.get("store_dir")
+        if connector_kind == "file" and store_dir:
+            # Resolve relative store_dir against manifest_path's parent.
+            sd = Path(store_dir)
+            if not sd.is_absolute():
+                sd = manifest_path.parent / sd
+            return _ProxyStoreStorage(
+                store_name=store_name,
+                connector_kind="file",
+                store_dir=str(sd),
+            )
+
+    raise ComponentConfigurationError(
+        f"FAIL-FAST: cross-process proxystore resume needs connector "
+        f"hints in the manifest, but none were found. The manifest may "
+        f"have been written by an older CheckpointStep that didn't "
+        f"persist connector_kind/store_dir."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -540,17 +684,23 @@ class ResumeStep(BaseStep):
                 base_dir=manifest_path.parent,
             )
         elif backend == "proxystore":
-            # ProxyStore in-process resume requires the original
-            # CheckpointStep. For v1, we fail with a clear message.
+            # G5 Step 2 (2026-05-09) — cross-process resume now works
+            # via manifest-stored typed-Key serialization. Resolution
+            # order:
+            #   1. If the original CheckpointStep is still alive
+            #      in-process and was passed as input_data['checkpoint_step'],
+            #      reuse its _storage (cheapest path, no Store re-registration).
+            #   2. Otherwise, look up the named store via
+            #      proxystore.store.get_store; if it's already registered
+            #      (e.g. by deployment startup code), use it.
+            #   3. Otherwise FAIL-FAST telling the operator to register
+            #      the store before invoking ResumeStep.
             checkpoint_step = input_data.get("checkpoint_step")
-            if checkpoint_step is None:
-                raise ComponentConfigurationError(
-                    f"FAIL-FAST: ResumeStep {self.name!r} manifest backend "
-                    f"is 'proxystore' but no 'checkpoint_step' instance "
-                    f"provided in input_data; v1 ProxyStore resume requires "
-                    f"the original CheckpointStep alive in-process"
-                )
-            storage = checkpoint_step._storage
+            if checkpoint_step is not None:
+                storage = checkpoint_step._storage
+            else:
+                store_name = self._first_proxystore_store_name(entries)
+                storage = _resolve_proxystore_storage(store_name, manifest_path)
         else:
             raise ComponentConfigurationError(
                 f"FAIL-FAST: ResumeStep {self.name!r} unknown manifest "
@@ -590,6 +740,23 @@ class ResumeStep(BaseStep):
             restored["_code_identity_warning"] = code_identity_warning
 
         return restored
+
+    @staticmethod
+    def _first_proxystore_store_name(entries: Dict[str, Any]) -> str:
+        """G5 Step 2 — extract the store_name from the first proxystore
+        entry in the manifest. All proxystore entries in a single
+        manifest share the same Store (CheckpointStep enforces this by
+        owning a single _ProxyStoreStorage per instance), so the first
+        one is canonical."""
+        for descriptor in entries.values():
+            if descriptor.get("backend") == "proxystore":
+                store_name = descriptor.get("store_name")
+                if isinstance(store_name, str) and store_name:
+                    return store_name
+        raise ComponentConfigurationError(
+            "FAIL-FAST: ResumeStep proxystore backend: no proxystore "
+            "entries in manifest carry a store_name"
+        )
 
     async def _do_rebuild(
         self, input_data: Dict[str, Any], manifest_path: Path,
