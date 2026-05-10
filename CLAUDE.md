@@ -6,6 +6,83 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Nanobrain is an event-driven AI agent framework for distributed workflows. It's currently in research preview and has dependencies on HPC systems and external frameworks. The framework uses a mandatory configuration-driven architecture where ALL components are created through the `from_config()` pattern.
 
+## Recent additions (2026-05-10 — eval_03 Tier 4 + G31 runner-side wiring + G27↔G21 design)
+
+This chain landed eval_03 Tier 4 (the final 4 deferred items) plus the
+G31 runner-side wiring follow-up (auto-install nested
+``WorkflowRunContext``) plus a recorded design doc for the G27↔G21
+runner-side integration (deferred pending operator decision on
+resume-from-start vs. resume-from-step semantics).
+
+**Tier 4 (4 items, all shipped)**:
+
+- **G34** — ``ConfigBase.model_config`` already had
+  ``str_strip_whitespace=False`` at ``config_base.py:684``; this chain
+  added a regression-pin test
+  (``tests/unit/test_g34_strip_whitespace_off.py``, 9 tests) so a
+  future refactor that flips it back to True surfaces immediately.
+  Paired with apecx-mcp-integration retiring the named-format-enum
+  workaround in ``composition/steps/file_readers.py``.
+- **G36** — Documented the two-stage whitelist defense (apecx-mcp
+  AST scanner = Stage 1 / pre-emit; nanobrain G20 ``import_whitelist``
+  = Stage 2 / YAML class-path load). New
+  ``apecx-mcp-integration/docs/whitelist_layering.md`` + cross-
+  references in both source files. "Folding into one is explicitly
+  out of scope" — different stages, different bypass classes.
+- **G38** — ``HTTPBackendAdapter`` (``BACKEND_NAME="http"``) at
+  ``library/tools/http_backend_adapter.py``. Generic httpx-backed
+  adapter for ToolExecutionStep. POST/GET/PUT, default + per-call
+  headers, run_context_namespace propagates as
+  ``X-Nanobrain-Run-Namespace`` header, JSON / non-JSON / error
+  parsing, owned vs. injected client lifecycle. 14 integration tests
+  against real httpx ASGITransport.
+- **G40** — ``locate_workflow_root`` + ``require_workflow_root`` at
+  ``library/runtime/workspace_root.py``. Walks upward looking for
+  default markers (``pyproject.toml``, ``.git``, ``setup.py``,
+  ``CLAUDE.md``, ``apecx-mcp-integration``); ``$NANOBRAIN_WORKSPACE_ROOT``
+  env-var override; returns CLOSEST matching ancestor (deepest, not
+  highest); custom marker lists supported. Replaces brittle
+  ``Path(__file__).parents[N]`` patterns. 10 unit tests.
+
+**G31 runner-side (follow-up to the primitive shipped earlier)**:
+
+- ``Workflow.run(..., nest_under_active_context=True)`` — explicit
+  kwarg (caller-explicit, no implicit auto-detect). When True AND an
+  outer ``WorkflowRunContext`` is active, derives the nested namespace
+  via ``derive_nested_namespace`` using this workflow's
+  ``namespace_strategy``, builds a nested context with
+  ``run_id=f"{parent}.{child}"`` for audit correlation, inherits
+  parent's ``capability_tokens`` (no privilege drop), activates for
+  the run, restores outer on exit. When True without outer context:
+  warns + falls through. When False (default): no behavior change.
+  7 unit tests pin every branch.
+
+**G27↔G21 wiring (design doc only, deferred)**:
+
+- ``nanobrain/docs/g27_g21_wiring_design.md`` records the choice
+  surface for runner-side suspend/resume on ``ApprovalPendingError``.
+  Two options analyzed (resume-from-start = deterministic re-run vs.
+  resume-from-step = G5 checkpoint integration); recommendation is
+  Option A v1 (operators compose with CheckpointStep manually for
+  Option B semantics). Solo-implementing one without operator review
+  would over-commit the project.
+
+**Files added this chain (register for future Claude sessions)**:
+- ``nanobrain/library/tools/http_backend_adapter.py`` — G38
+- ``nanobrain/library/runtime/workspace_root.py`` — G40
+- ``nanobrain/docs/g27_g21_wiring_design.md`` — G27 wiring design
+- ``apecx-mcp-integration/docs/whitelist_layering.md`` — G36 layering
+
+**SKILL files updated** (LLM-guidance for the new primitives):
+``nanobrain-workflow-authoring``, ``nanobrain-step-authoring``,
+``nanobrain-agents-tools``, ``nanobrain-data-units-triggers-links``,
+``nanobrain-config-yaml`` (5 of 9 skill files). Future Claude sessions
+loading any of these via the Skill tool see the new primitives.
+
+**Net regression status**: 40 new framework-side tests this chain
+(G34: 9, G38: 14, G40: 10, G31-runner: 7); 65+19+23+91 = 198 existing
+tests verified non-regressing.
+
 ## Recent additions (2026-05-09 — eval_03 Tier 0-3 chain: G4/G9/G11/G24-G28/G31/G33/G35/G37/G39/G43-G45)
 
 This chain landed the entire Tier 0-3 ship-out from
