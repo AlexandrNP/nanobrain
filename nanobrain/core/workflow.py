@@ -2435,6 +2435,7 @@ class Workflow(Step):
         timeout: float = 60.0,
         settle_ms: int = 50,
         raise_on_cascade_timeout: bool = False,
+        nest_under_active_context: bool = False,
         **kwargs,
     ) -> Dict[str, Any]:
         """G8 — canonical synchronous entry point for a workflow run.
@@ -2499,6 +2500,22 @@ class Workflow(Step):
         if input_data is None:
             input_data = {}
 
+        # G31 runner-side wiring (2026-05-09): when the caller is
+        # invoking us as a nested sub-workflow, install a nested
+        # WorkflowRunContext with a derived namespace BEFORE running.
+        # The contextvar restore is automatic via the with-block.
+        # Top-level callers (nest_under_active_context=False, default)
+        # see no behavior change.
+        if nest_under_active_context:
+            return await self._run_with_nested_context(
+                input_data,
+                await_cascade=await_cascade,
+                timeout=timeout,
+                settle_ms=settle_ms,
+                raise_on_cascade_timeout=raise_on_cascade_timeout,
+                **kwargs,
+            )
+
         process_result = await self.process(input_data, **kwargs)
 
         if not await_cascade:
@@ -2535,6 +2552,97 @@ class Workflow(Step):
             outputs["status"] = "completed"
 
         return outputs
+
+    async def _run_with_nested_context(
+        self,
+        input_data: Dict[str, Any],
+        *,
+        await_cascade: bool,
+        timeout: float,
+        settle_ms: int,
+        raise_on_cascade_timeout: bool,
+        **kwargs,
+    ) -> Dict[str, Any]:
+        """G31 — install a nested WorkflowRunContext for the duration
+        of this run, then delegate to ``run`` with
+        ``nest_under_active_context=False`` (already nested; don't
+        re-enter the wrapper).
+
+        Namespace derivation:
+          * If an outer context is active, derive_nested_namespace
+            from its proxystore_namespace + this workflow's name.
+          * If NO outer context is active, the helper logs a warning
+            and falls through to a non-nested run — the caller asked
+            for nesting but there's no parent to nest under, so we
+            cannot auto-construct a meaningful nested context. The
+            run still completes.
+          * The strategy comes from this workflow's
+            ``namespace_strategy`` field (P4+a default: ``"scoped"``).
+
+        The nested context is built via WorkflowRunContext.from_config
+        with an explicit ``run_id`` derived from the parent's run_id +
+        this workflow's name (so the parent + child run IDs are
+        co-derivable for audit). If the parent had capability_tokens,
+        the nested context inherits them (no privilege drop on the
+        way down — that's a separate authorization concern).
+        """
+        from nanobrain.library.orchestration.run_context import (
+            WorkflowRunContext,
+            current_run_context,
+        )
+
+        outer = current_run_context()
+        if outer is None:
+            # No parent — warn and fall through.
+            logger.warning(
+                "Workflow %r: nest_under_active_context=True but no "
+                "outer WorkflowRunContext is active; running without "
+                "nesting. (Caller likely meant to install an outer "
+                "context first.)",
+                self.name,
+            )
+            return await self.run(
+                input_data,
+                await_cascade=await_cascade,
+                timeout=timeout,
+                settle_ms=settle_ms,
+                raise_on_cascade_timeout=raise_on_cascade_timeout,
+                nest_under_active_context=False,
+                **kwargs,
+            )
+
+        # Derive nested namespace via the helper (G31 primitive).
+        strategy = (
+            getattr(self.config, "namespace_strategy", "scoped")
+            if getattr(self, "config", None) is not None
+            else "scoped"
+        )
+        nested_namespace = derive_nested_namespace(
+            parent_namespace=outer.proxystore_namespace,
+            child_workflow_name=self.name,
+            strategy=strategy,
+        )
+        nested_run_id = f"{outer.run_id}.{self.name}"
+        # The namespace_template's ``${run_id}`` placeholder MUST be
+        # honored — feed the pre-derived nested_namespace literally
+        # by using a template with no placeholders.
+        nested_ctx = WorkflowRunContext.from_config(
+            {
+                "run_id": nested_run_id,
+                "proxystore_namespace_template": nested_namespace,
+                "capability_tokens": list(outer.capability_tokens),
+            }
+        )
+        with nested_ctx.activate():
+            return await self.run(
+                input_data,
+                await_cascade=await_cascade,
+                timeout=timeout,
+                settle_ms=settle_ms,
+                raise_on_cascade_timeout=raise_on_cascade_timeout,
+                nest_under_active_context=False,
+                **kwargs,
+            )
 
     def aggregate_resource_envelope(self) -> "ResourceEnvelope":
         """G12 — aggregate per-step ResourceEnvelopes into one
