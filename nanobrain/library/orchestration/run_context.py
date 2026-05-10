@@ -71,6 +71,15 @@ class WorkflowRunContextConfig(ConfigBase):
                     "DataUnitProxyRef.namespace() returns when no static "
                     "namespace is configured on the data unit itself.",
     )
+    capability_tokens: list[str] = Field(
+        default_factory=list,
+        description="G28 — capability tokens granted to this run. The "
+                    "single source of truth for verify_capability(). "
+                    "The runner that creates the context populates this "
+                    "based on the operator / API caller / agent "
+                    "identity. Empty list = no capabilities granted; "
+                    "any tool requiring a token will FAIL-FAST.",
+    )
 
 
 class WorkflowRunContext(FromConfigBase):
@@ -128,6 +137,10 @@ class WorkflowRunContext(FromConfigBase):
         instance._run_id = config_object.run_id or uuid.uuid4().hex
         instance._namespace_template = config_object.proxystore_namespace_template
         instance._start_time = datetime.now(timezone.utc)
+        # G28 — capability tokens. List rather than set so a config
+        # round-trip preserves order (helpful for audit). Duplicate
+        # tokens are tolerated; verify_capability does set-membership.
+        instance._capability_tokens = list(config_object.capability_tokens)
         return instance
 
     @property
@@ -137,6 +150,20 @@ class WorkflowRunContext(FromConfigBase):
     @property
     def start_time(self) -> datetime:
         return self._start_time
+
+    @property
+    def capability_tokens(self) -> list[str]:
+        """G28 — the list of capability tokens granted to this run.
+        Used by ``verify_capability()`` (core/capabilities.py) at the
+        framework boundary. Returns a copy so callers cannot mutate
+        the run's grant set after the fact."""
+        return list(self._capability_tokens)
+
+    def has_capability(self, token: str) -> bool:
+        """Convenience check: is this token in the granted set?
+        Equivalent to ``token in ctx.capability_tokens`` but a method
+        is more discoverable + intentional at call sites."""
+        return token in self._capability_tokens
 
     @property
     def proxystore_namespace(self) -> str:

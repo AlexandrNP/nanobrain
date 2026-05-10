@@ -315,6 +315,22 @@ class ToolExecutionStep(BaseStep):
                 f"{type(input_data).__name__}"
             )
 
+        # G28 — capability-token verification at the framework boundary.
+        # The UTD's ``requires_capability`` list is enforced here against
+        # the active WorkflowRunContext.capability_tokens. Empty list =
+        # no capability required (no-op fast path). Missing token raises
+        # CapabilityNotGranted before the adapter is touched.
+        required_caps = list(getattr(self._utd, "requires_capability", []) or [])
+        if required_caps:
+            from nanobrain.core.capabilities import verify_capability
+
+            verify_capability(
+                required_caps,
+                target_name=getattr(
+                    self._utd, "descriptor_id", self.name
+                ),
+            )
+
         # Look up the backend adapter.
         adapter = ToolBackendRegistry.get(self.backend_name)
 
