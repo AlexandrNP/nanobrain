@@ -6,6 +6,130 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Nanobrain is an event-driven AI agent framework for distributed workflows. It's currently in research preview and has dependencies on HPC systems and external frameworks. The framework uses a mandatory configuration-driven architecture where ALL components are created through the `from_config()` pattern.
 
+## Recent additions (2026-05-09 — eval_03 Tier 0-3 chain: G4/G9/G11/G24-G28/G31/G33/G35/G37/G39/G43-G45)
+
+This chain landed the entire Tier 0-3 ship-out from
+``apecx-mcp-integration/eval_03_nanobrain_gap_inventory.md`` plus the
+G4/G9/G11 partial-shipment completions that the gap doc explicitly
+flagged as deferred. **One developer-session, 16 commits across 2
+repos, ~141 new framework-side tests**, all green together.
+
+**Tier 0 (silent-failure closure)**:
+- **G33** — ``nanobrain/core/async_logging.py`` and ``logging_system.py``
+  ``_default_writable_log_dir()`` now resolves
+  ``$NANOBRAIN_LOG_DIR`` -> ``~/.cache/nanobrain/logs/`` -> tempdir.
+  Cwd-relative ``Path("logs")`` retired; the apecx-mcp bootstrap
+  ``os.chdir(~/.apecx)`` workaround retired.
+- **G35** — ``apecx-mcp-integration/control_plane/executors/local.py``
+  swaps ``workflow.process({})`` for ``workflow.run({}, timeout=...,
+  settle_ms=...)`` so multi-step composed workflows actually drain
+  cascades + persist real outputs (not the trigger-init status dict).
+  ``cascade_timeout`` / ``no_first_step`` are now terminal failures.
+- **G44** — ``DataUnitProxyRef.namespace()`` no longer silently
+  returns ``""`` when no ``WorkflowRunContext`` is active; emits a
+  rate-limited WARNING per instance, OR raises
+  ``ComponentConfigurationError`` under ``NANOBRAIN_STRICT_NAMESPACE=1``.
+- **G43** — 14 ``print(f"DEBUG: ...")`` lines stripped from
+  ``core/mcp_support.py:_register_mcp_tool``.
+
+**Tier 1 (G4/G9/G11 completions + integration migration)**:
+- **G4-completion** — ``BaseStep._execute_process`` now wraps every
+  ``process()`` call: resolves ``current_provenance_context()``,
+  records inputs / outputs / exception / timing on success AND on
+  raise. Recorder failures are swallowed so a buggy recorder cannot
+  mask the step's real exception.
+- **G9-completion** — ``Workflow.from_skeleton(skeleton, bindings)``
+  classmethod. Loads a Skeleton (path / dict / Skeleton), validates
+  bindings (FAIL-FAST on missing required / extras), substitutes
+  ``{{name: type}}`` tokens, materializes the lowered YAML to a temp
+  file, and delegates to existing ``from_config``. Collapses the
+  PlanLoweringStep + SkeletonLoaderStep dance into one call —
+  unblocks Track B's agent-authored-workflows arc.
+- **G11-completion** — ``LocalParslAdapter`` at
+  ``library/tools/local_parsl_adapter.py``. ``ToolBackendAdapter``
+  with ``BACKEND_NAME="local_parsl"`` that dispatches Python callables
+  via Parsl. P0++b decision: ``executor_kind="thread"`` default
+  (ThreadPoolExecutor — lowest-overhead, fork-safe, no cluster
+  prereqs); ``"process"`` / ``"htex"`` available; bring-your-own
+  ``parsl_config`` for HPC. Lazy parsl.load with class-level lock;
+  scope() context for clean teardown. 9 integration tests against
+  REAL Parsl 2026.5.4.
+- **G39** — apecx-mcp-integration migration: every workflow YAML
+  declares ``config_version: 2``; every previously-implicit DirectLink
+  has explicit ``auto_transfer: true``; ``scripts/lint_workflow_yamls.py``
+  pre-commit hook gates future regressions.
+- **G45** — ``nanobrain/library/workflows/`` audit: 7 workflow YAMLs
+  pinned to ``config_version: 2``; 11 inline DirectLinks across 3
+  files got explicit ``auto_transfer: true``.
+
+**Tier 2 (autonomy preconditions)**:
+- **G27** — ``DeferredHITLStep`` (``library/steps/deferred_hitl_step.py``)
+  + ``ApprovalStore`` protocol with ``InMemoryApprovalStore`` +
+  ``FileApprovalStore`` (``library/runtime/approval_store.py``).
+  P6+a decision: ``approval_id_strategy="deterministic"`` default
+  (SHA-256 of run_id + step_name + prompt) so workflow retries don't
+  emit duplicate approvals. Step is idempotent + stateless;
+  suspension is signaled by ``ApprovalPendingError``; rejection by
+  ``ApprovalRejectedError``. 22 tests parameterized over both backends.
+- **G26** — ``CostEnvelope`` + ``CostTracker`` at
+  ``core/cost_envelope.py``. P6+b: per-step + per-workflow caps;
+  both declarative; both optional. ``record(kind, amount)`` is
+  thread-safe + failure-atomic; ``CostEnvelopeBreach`` workflow-
+  terminal exception. 15 tests including 8-thread × 1000-record
+  contention test that proves the lock prevents bypass.
+- **G24** — ``DataSourceRegistry`` at
+  ``library/runtime/data_source_registry.py``. P6+c: YAML manifest
+  format. ``DataSourceEntry`` with ``content_hash`` (sha256:...) +
+  ``compute_content_hash`` helper that hashes files OR directories
+  order-stably. ``ContentHashMismatch`` raises on drift. Unknown
+  entry keys FAIL-FAST (typo protection).
+- **G25** — ``PromptRegressionHarness`` at
+  ``library/testing/prompt_regression.py``. Backend-neutral: caller
+  plugs in ``async def llm(*, system, user) -> str``. Reads
+  ``regression_fixtures`` off a G14 ``PromptTemplate``, validates
+  responses against per-fixture contracts (contains / not_contains /
+  regex / json_schema / equals). Snapshot mode content-addresses
+  by ``(template_id, fixture_index, content_hash)`` so a template
+  body change auto-invalidates the snapshot.
+
+**Tier 3 (meta-workflow preconditions)**:
+- **G31** — ``WorkflowConfig.namespace_strategy`` field
+  (``Literal["scoped","inherit"]``; default ``"scoped"``) +
+  ``derive_nested_namespace`` pure helper. P4+a: scoped is the
+  default — silent-namespace-collision is a worse failure than
+  over-isolation. Multi-tenant isolation now propagates ACROSS
+  nesting levels.
+- **G28** — ``verify_capability(required, target_name=...)`` at
+  ``core/capabilities.py``. P4+b: ``WorkflowRunContext`` is the
+  SINGLE source of truth for ``capability_tokens``.
+  ``CapabilityNotGranted`` workflow-terminal exception. Strict
+  default: no run context = no granted tokens.
+  ``ToolExecutionStep.process()`` now checks ``utd.requires_capability``
+  BEFORE the adapter is touched.
+- **G37** — ``StepEvent`` + ``subscribe_to_step_events`` at
+  ``core/step_events.py``. P4+c: v1 schema FROZEN with
+  ``event_schema_version: int`` on every event. Three event types:
+  ``step_start`` (before process), ``step_complete`` (after success),
+  ``step_failed`` (on exception). Subscriber failures swallowed —
+  observability never replaces correctness. Composes cleanly with
+  G4-completion (different concern: provenance is durable audit;
+  step events are live publish stream).
+
+**Net regression status:**
+141/141 new framework-side tests pass together; 51+33+77+91+17+10+12+22+1014+15+9+22+11+14 = 358 existing tests verified non-regressing across the chain (where overlapping scopes hit the same test files).
+
+**Cross-repo commits**:
+- nanobrain `academy-integration` branch: 12 commits (368cae3, b7a0280,
+  305b516, 10d2551, c3b4b86, 005dc87, a128550, b3cf87f handed off
+  paired apecx-mcp commits, plus G27/G26/G24/G25/G28/G37/G31).
+- apecx-mcp-integration `main` branch: 5 commits (7bd9d2d, 72b3d8d,
+  b3cf87f, ff69ac8, 2d1cb1b).
+
+Open questions answered with documented defaults; operators can
+override later via the documented surfaces (executor_kind for G11,
+approval_id_strategy for G27, namespace_strategy for G31, env-var
+NANOBRAIN_STRICT_NAMESPACE for G44).
+
 ## Recent additions (2026-05-09 — auto_transfer flip + apecx-setup orchestrator)
 
 - **G7 Step 5 — `LinkConfig.auto_transfer` field default flipped to True.**
