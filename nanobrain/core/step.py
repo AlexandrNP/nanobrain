@@ -1801,6 +1801,18 @@ class BaseStep(FromConfigBase, ABC):
         runs to completion; the NEXT step's _execute_process is what
         blocks. This matches the gap proposal's "soft-pause; in-flight
         steps complete; no new steps started" semantics.
+
+        G4-completion (2026-05-09) — automatic ProvenanceContext
+        recording. When a ProvenanceContext is active (via
+        ``current_provenance_context()``), the framework records ONE
+        invocation per ``process()`` call, capturing inputs, outputs OR
+        exception, and timing. The recorder pipeline applies the
+        configured redaction list before sinking the record so secrets
+        cannot leak. When no context is active, recording is a fast
+        no-op — existing behavior preserved. Source:
+        ``apecx-mcp-integration/eval_03_nanobrain_gap_inventory.md``
+        Round 2 G4-completion;
+        ``apecx-mcp-integration/docs/development_roadmap.md`` 8.7.
         """
         await _await_pause_signal_if_present()
 
@@ -1813,7 +1825,53 @@ class BaseStep(FromConfigBase, ABC):
                 direction="input",
             )
 
-        result = await self.process(input_data, **kwargs)
+        # G4-completion — resolve the active ProvenanceContext (if any)
+        # and capture a wall-clock start so the recorded ``timing``
+        # field is meaningful. Lazy import keeps core/step.py from
+        # depending on core/provenance.py at import time.
+        prov_ctx = None
+        prov_started_at: Optional[float] = None
+        try:
+            from .provenance import current_provenance_context
+
+            prov_ctx = current_provenance_context()
+        except Exception:
+            prov_ctx = None
+        if prov_ctx is not None and getattr(prov_ctx, "enabled", False):
+            import time as _time
+
+            prov_started_at = _time.monotonic()
+        else:
+            prov_ctx = None  # disabled OR import failed → skip recording
+
+        try:
+            result = await self.process(input_data, **kwargs)
+        except Exception as exc:
+            # G4-completion — record the exception path BEFORE re-raise.
+            # Operators rely on the recorder seeing failures, otherwise
+            # a crash silently disappears from the audit trail.
+            if prov_ctx is not None:
+                import time as _time
+                import traceback as _tb
+
+                duration = _time.monotonic() - (prov_started_at or 0.0)
+                try:
+                    await prov_ctx.record_step_invocation(
+                        step_name=self.name,
+                        inputs=input_data if isinstance(input_data, dict) else {"_input": input_data},
+                        exception={
+                            "type": type(exc).__name__,
+                            "message": str(exc),
+                            "traceback": _tb.format_exc(limit=10),
+                        },
+                        timing={"duration_seconds": duration},
+                    )
+                except Exception:
+                    # The recorder MUST NOT mask the original exception.
+                    # If the recorder itself raises, swallow it and let
+                    # the original ``exc`` propagate.
+                    pass
+            raise
 
         output_schema = self._g6_resolved_output_schema()
         if output_schema is not None:
@@ -1823,6 +1881,25 @@ class BaseStep(FromConfigBase, ABC):
                 component_name=self.name,
                 direction="output",
             )
+
+        # G4-completion — record the success path. Outputs go through
+        # the redaction pipeline; operators who want size-bounded
+        # records configure ``redact: ['outputs']`` or similar.
+        if prov_ctx is not None:
+            import time as _time
+
+            duration = _time.monotonic() - (prov_started_at or 0.0)
+            try:
+                await prov_ctx.record_step_invocation(
+                    step_name=self.name,
+                    inputs=input_data if isinstance(input_data, dict) else {"_input": input_data},
+                    outputs=result if isinstance(result, dict) else {"_result": result},
+                    timing={"duration_seconds": duration},
+                )
+            except Exception:
+                # Recorder errors are non-fatal — never let provenance
+                # bookkeeping break the step's actual return path.
+                pass
 
         return result
 
