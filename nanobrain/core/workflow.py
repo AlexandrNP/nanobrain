@@ -1388,6 +1388,191 @@ class Workflow(Step):
         return workflow
 
     @classmethod
+    def from_skeleton(
+        cls,
+        skeleton: Union[str, Path, "Skeleton", Dict[str, Any]],
+        bindings: Optional[Dict[str, Any]] = None,
+    ) -> "Workflow":
+        """G9-completion (2026-05-09) — ergonomic skeleton-based workflow loader.
+
+        Pre-G9-completion the framework shipped a Skeleton + SkeletonRegistry
+        primitive (G9 v1) but the *ergonomic* loader the gap proposal named
+        as G9's whole point ("let an agent pick a skeleton and bind holes
+        without authoring a full YAML") was deferred. Agents authoring
+        workflows had to hand-assemble PlanLoweringStep + SkeletonLoaderStep
+        YAML to get from skeleton to runnable workflow — defeating the
+        skeleton ergonomic.
+
+        ``Workflow.from_skeleton(skeleton, bindings)`` collapses that dance:
+        one call, one Workflow instance.
+
+        Args:
+            skeleton: Skeleton input. Accepts:
+              * ``str`` / ``Path`` — file path to a Skeleton YAML config
+              * ``Skeleton`` — pre-loaded Skeleton instance
+              * ``dict`` — inline Skeleton config (programmatic / test path)
+            bindings: Mapping of hole_name → value. Required holes that
+                are not in this dict (and have no default) FAIL-FAST.
+                Extra keys not in skeleton.holes FAIL-FAST.
+
+        Returns:
+            Fully-initialized ``Workflow`` instance, identical to what
+            ``Workflow.from_config(<lowered_yaml_path>)`` would produce.
+
+        Failure modes (all FAIL-FAST):
+            - skeleton fails to load (wrong path / invalid YAML / schema)
+            - bindings missing a required hole
+            - bindings include a name not declared in skeleton.holes
+            - lowered YAML fails ``Workflow.from_config`` validation
+
+        Cross-reference:
+            - ``apecx-mcp-integration/eval_03_nanobrain_gap_inventory.md``
+              Round 2 G9-completion
+            - ``apecx-mcp-integration/docs/development_roadmap.md`` 8.7
+            - ``nanobrain/library/orchestration/skeleton.py`` (Skeleton primitive)
+            - ``nanobrain/library/orchestration/plan_lowering_step.py``
+              (the multi-step path that ``from_skeleton`` collapses)
+
+        Example::
+
+            wf = Workflow.from_skeleton(
+                'configs/skeletons/multi_source_discovery.yml',
+                bindings={'min_evidence': 3, 'corpus': 'pubmed_2025_q1'},
+            )
+            result = await wf.run({'query': 'EEEV vaccines'})
+        """
+        import json
+        import re
+        import tempfile
+        from pathlib import Path as _Path
+
+        from nanobrain.library.orchestration.skeleton import (
+            Skeleton,
+            SkeletonHole,
+        )
+        from nanobrain.core.component_base import ComponentConfigurationError
+
+        # 1. Resolve the input to a Skeleton instance.
+        if isinstance(skeleton, Skeleton):
+            sk = skeleton
+        elif isinstance(skeleton, (str, _Path)):
+            # Read the file and route through the dict path of
+            # Skeleton.from_config — that path pre-builds SkeletonHole
+            # nested instances via the framework backdoor. The file
+            # branch of Skeleton.from_config delegates to
+            # super().from_config which trips Pydantic's
+            # FromConfigBase guard on nested SkeletonHole construction.
+            import yaml as _yaml
+
+            sk_dict = _yaml.safe_load(_Path(skeleton).read_text())
+            if not isinstance(sk_dict, dict):
+                raise ComponentConfigurationError(
+                    f"FAIL-FAST: Workflow.from_skeleton skeleton file "
+                    f"{skeleton!r} did not parse to a YAML mapping; got "
+                    f"{type(sk_dict).__name__}"
+                )
+            sk = Skeleton.from_config(sk_dict)
+        elif isinstance(skeleton, dict):
+            sk = Skeleton.from_config(skeleton)
+        else:
+            raise ComponentConfigurationError(
+                f"FAIL-FAST: Workflow.from_skeleton expected str / Path / "
+                f"Skeleton / dict, got {type(skeleton).__name__}"
+            )
+
+        bindings = dict(bindings or {})
+
+        # 2. Binding validation — Gate 3 of agent_workflow_authoring.md §6.
+        declared = sk.holes
+        provided = set(bindings.keys())
+        declared_names = set(declared.keys())
+        missing_required = sorted(
+            name
+            for name, hole in declared.items()
+            if hole.required and name not in provided
+        )
+        if missing_required:
+            raise ComponentConfigurationError(
+                f"FAIL-FAST: Workflow.from_skeleton(skeleton_id="
+                f"{sk.skeleton_id!r}) missing required holes "
+                f"{missing_required}. Declared holes: "
+                f"{sorted(declared_names)}; provided bindings: "
+                f"{sorted(provided)}."
+            )
+        extras = sorted(provided - declared_names)
+        if extras:
+            raise ComponentConfigurationError(
+                f"FAIL-FAST: Workflow.from_skeleton(skeleton_id="
+                f"{sk.skeleton_id!r}) extra binding keys not declared "
+                f"in skeleton.holes: {extras}. Declared holes: "
+                f"{sorted(declared_names)}."
+            )
+
+        # 3. Build the binding summary (apply defaults for unprovided
+        # optional holes).
+        binding_summary: Dict[str, Any] = {}
+        for name, hole in declared.items():
+            if name in provided:
+                binding_summary[name] = bindings[name]
+            elif hole.default is not None:
+                binding_summary[name] = hole.default
+            elif not hole.required:
+                binding_summary[name] = None
+            # required+missing was already caught in step 2
+
+        # 4. Hole substitution. Mirrors PlanLoweringStep._substitute_holes
+        # behavior — same regex, same YAML-canonical scalar form.
+        token_pattern = re.compile(
+            r"\{\{\s*(?P<name>[a-zA-Z_][a-zA-Z0-9_]*)\s*:\s*"
+            r"(?P<type>string|integer|number|boolean|array|object|any|"
+            r"tool_descriptor_ref)"
+            r"(?:\s*\|\s*default\s*=\s*[^}]+?)?\s*\}\}"
+        )
+
+        def _yaml_scalar(value: Any) -> str:
+            if value is None:
+                return "null"
+            if isinstance(value, bool):
+                return "true" if value else "false"
+            if isinstance(value, (int, float)):
+                return json.dumps(value)
+            if isinstance(value, str):
+                return json.dumps(value)
+            return json.dumps(
+                value, sort_keys=isinstance(value, dict), default=str
+            )
+
+        def _replace(match: "re.Match[str]") -> str:
+            name = match.group("name")
+            if name not in binding_summary:
+                # Token in body but not in holes — skeleton.validate_against_schema
+                # should have caught it; defensively FAIL-FAST.
+                raise ComponentConfigurationError(
+                    f"FAIL-FAST: Workflow.from_skeleton skeleton "
+                    f"{sk.skeleton_id!r} body has token "
+                    f"{{{{ {name}: <type> }}}} not declared in skeleton.holes; "
+                    f"declared: {sorted(declared_names)}."
+                )
+            return _yaml_scalar(binding_summary[name])
+
+        lowered_yaml = token_pattern.sub(_replace, sk.body)
+
+        # 5. Materialize the lowered YAML to disk so the existing
+        # path-based ``from_config`` resolver can do its job (path
+        # resolution for nested ``config: "<file>.yml"`` references is
+        # tied to the YAML file's own directory).
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            suffix=".yml",
+            prefix=f"skeleton_{sk.skeleton_id}_",
+            delete=False,
+        ) as tmp:
+            tmp.write(lowered_yaml)
+            tmp_path = _Path(tmp.name)
+
+        return cls.from_config(tmp_path)
+
+    @classmethod
     def _requires_academy_integration(cls, config_path: Union[str, Path]) -> bool:
         """
         Check if workflow configuration contains Academy links
