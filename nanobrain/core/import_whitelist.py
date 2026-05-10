@@ -34,6 +34,19 @@ Threat model:
   ``import_module`` on attacker input. The whitelist must be
   applied transitively — that's a deployment audit task, not
   enforced by this module.
+
+Layering with apecx-mcp-integration's AST scanner (G36 closure, 2026-05-09):
+This module is **Stage 2** of a two-layer whitelist. Stage 1 is the
+integration's static AST scanner at
+``apecx-mcp-integration/src/apecx_integration/composition/sandbox.py``,
+which scans LLM-emitted PYTHON SOURCE before it becomes an Artifact.
+Stage 1 catches dynamic-import escapes (``importlib.import_module``,
+``exec``, ``eval``); Stage 2 catches malicious YAML ``class:`` paths
+at framework load time. The two layers are intentionally complementary —
+folding them into one would leave attack surfaces open at one of the
+two entry points (LLM-emit boundary OR YAML load boundary). See
+``apecx-mcp-integration/docs/whitelist_layering.md`` for the full
+contract + per-deployment audit checklist.
 """
 
 from __future__ import annotations
