@@ -514,7 +514,21 @@ class LinkConfig(ConfigBase):
     condition: Optional[Union[str, Dict[str, Any]]] = None
     file_path: Optional[str] = None
     data_mapping: Optional[Dict[str, str]] = None
-    auto_transfer: bool = Field(default=False)
+    # G7 Step 5 (2026-05-09) — field-level default flipped from
+    # False to True. Brutal truth: every link in the framework EXISTS
+    # to transfer data. ``auto_transfer=False`` means "this link is a
+    # no-op on every trigger fire" — the dominant silent-failure shape
+    # in the pre-G7 codebase. The False default required a four-step
+    # migration (G7 Step 1-4) to clean up; flipping the field default
+    # eliminates the trigger entirely.
+    #
+    # Authors who genuinely want a no-op link MUST declare
+    # ``auto_transfer: false`` explicitly. The G7 Step 3 model_validator
+    # (``WorkflowConfig._apply_v2_link_defaults``) is now redundant for
+    # the True case (setdefault on a key that's already True is a
+    # no-op) but is preserved as a safety net so v1 workflows still
+    # behave correctly under the new default.
+    auto_transfer: bool = Field(default=True)
 
     # Academy integration fields
     academy_agent_handle: Optional[str] = None
@@ -926,7 +940,7 @@ class LinkBase(FromConfigBase, ABC):
         'condition': None,
         'file_path': None,
         'data_mapping': None,
-        'auto_transfer': False
+        'auto_transfer': True  # G7 Step 5 — flipped from False
     }
 
     @classmethod
@@ -1370,7 +1384,7 @@ class DirectLink(LinkBase):
     OPTIONAL_CONFIG_FIELDS = {
         'buffer_size': 100,
         'data_mapping': None,
-        'auto_transfer': False
+        'auto_transfer': True  # G7 Step 5 — flipped from False
     }
 
     def __init__(self, *args, **kwargs):
@@ -1447,7 +1461,7 @@ class DirectLink(LinkBase):
             'link_type': config.link_type,
             'buffer_size': getattr(config, 'buffer_size', 100),
             'data_mapping': getattr(config, 'data_mapping', None),
-            'auto_transfer': getattr(config, 'auto_transfer', False)
+            'auto_transfer': getattr(config, 'auto_transfer', True)  # G7 Step 5 — flipped
         }
 
     @classmethod
@@ -1466,8 +1480,12 @@ class DirectLink(LinkBase):
         # Call parent _init_from_config
         super()._init_from_config(config, component_config, dependencies)
 
-        # Set auto_transfer from component configuration
-        self.auto_transfer = component_config.get('auto_transfer', False)
+        # Set auto_transfer from component configuration. G7 Step 5
+        # (2026-05-09) — fallback flipped from False to True so that
+        # extract_component_config providing the configured value (which
+        # is now True by default at the field level) and the fallback
+        # both agree.
+        self.auto_transfer = component_config.get('auto_transfer', True)
 
         # Debug logging to check configuration
         if self.enable_logging and self.nb_logger:
@@ -1896,7 +1914,8 @@ class TransformLink(LinkBase):
             'transform_function': getattr(config, 'transform_function', None),
             'buffer_size': getattr(config, 'buffer_size', 100),
             'data_mapping': getattr(config, 'data_mapping', None),
-            'auto_transfer': getattr(config, 'auto_transfer', False),
+            # G7 Step 5 — auto_transfer fallback flipped from False to True.
+            'auto_transfer': getattr(config, 'auto_transfer', True),
         }
 
     @classmethod
@@ -2086,7 +2105,8 @@ class ConditionalLink(LinkBase):
             'condition': getattr(config, 'condition', None),
             'buffer_size': getattr(config, 'buffer_size', 100),
             'data_mapping': getattr(config, 'data_mapping', None),
-            'auto_transfer': getattr(config, 'auto_transfer', False),
+            # G7 Step 5 — auto_transfer fallback flipped from False to True.
+            'auto_transfer': getattr(config, 'auto_transfer', True),
             'gate_semantics': gate_semantics,
         }
 

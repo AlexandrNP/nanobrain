@@ -317,22 +317,27 @@ class WorkflowConfig(StepConfig):
     """
 
     # G7 — config_version field. v1 (current) preserves the historical
-    # default of auto_transfer=False on links. v2 (active as of G7 Step 3,
-    # shipped 2026-05-09) flips the default for INLINE link configs at
-    # WorkflowConfig validation time — see ``_apply_v2_link_defaults``.
-    # Path-reference link configs are NOT mutated under v2; that requires
-    # the Step 4 workspace-wide default flip + external YAML rewriting.
-    # See `apecx-mcp-integration/docs/nanobrain_capability_gaps.md G7`.
+    # default of auto_transfer=False on links. As of G7 Step 5
+    # (2026-05-09), the LinkConfig.auto_transfer FIELD-LEVEL default is
+    # True, so v1 and v2 BOTH get auto_transfer=True automatically;
+    # explicit ``auto_transfer: false`` at the link level is the only
+    # way to get the no-op behavior. The v2 mutator
+    # (``_apply_v2_link_defaults``) is now redundant for the True case
+    # but is kept as a safety net for path-reference rewriting and
+    # future field-level changes. The deprecation WARNING for v1 is
+    # also redundant under the new field default (Pydantic supplies
+    # True for omitted keys before our warning runs); kept for
+    # documentation purposes.
     config_version: Literal[1, 2] = Field(
         default=2,
-        description="Workflow config schema version. v1 = legacy semantics "
-                    "(auto_transfer defaults to False; deprecation WARNING "
-                    "emitted for inline links that omit the flag). v2 = G7 "
-                    "auto_transfer-true default for inline AND path-reference "
-                    "configs (Step 4 — workspace-wide default flipped from "
-                    "v1 to v2 on 2026-05-09). Set 'config_version: 1' "
-                    "explicitly to preserve legacy auto_transfer-False "
-                    "behavior — no other migration step is required."
+        description="Workflow config schema version. As of G7 Step 5, "
+                    "BOTH v1 and v2 produce auto_transfer=True by default "
+                    "(the field-level default was flipped). v2 also "
+                    "rewrites path-reference link configs in-memory and "
+                    "propagates workflow-level defaults (gate_semantics, "
+                    "etc.) into nested links/triggers. Declare "
+                    "auto_transfer: false on a link explicitly when you "
+                    "want a no-op link."
     )
 
     # G10 Step 2 — workflow-level gate_semantics that propagates to every
