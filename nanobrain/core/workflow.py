@@ -301,6 +301,53 @@ def _warn_on_implicit_auto_transfer(
         )
 
 
+def derive_nested_namespace(
+    *,
+    parent_namespace: str,
+    child_workflow_name: str,
+    strategy: str = "scoped",
+) -> str:
+    """G31 — derive a nested workflow's namespace from its parent.
+
+    Args:
+        parent_namespace: The outer ``WorkflowRunContext.proxystore_namespace``
+            value (e.g., ``"run_abc"``).
+        child_workflow_name: The nested workflow's ``name`` field;
+            used as the suffix component under ``scoped`` strategy.
+        strategy: ``"scoped"`` (default) or ``"inherit"``.
+
+    Returns:
+        The derived namespace string for the nested workflow:
+          * scoped: ``"<parent_namespace>.<child_workflow_name>"``
+          * inherit: ``parent_namespace`` verbatim
+
+    Raises:
+        ValueError: on unknown strategy or empty child_workflow_name
+            under ``scoped`` (would produce an ambiguous namespace).
+
+    P4+a decision: ``scoped`` is the default because silent-namespace-
+    collision is a worse failure than over-isolation.
+    """
+    if strategy not in ("scoped", "inherit"):
+        raise ValueError(
+            f"FAIL-FAST: derive_nested_namespace strategy must be "
+            f"'scoped' or 'inherit'; got {strategy!r}"
+        )
+    if strategy == "inherit":
+        return parent_namespace
+    # scoped
+    if not child_workflow_name:
+        raise ValueError(
+            "FAIL-FAST: derive_nested_namespace 'scoped' strategy "
+            "requires a non-empty child_workflow_name; got empty."
+        )
+    if not parent_namespace:
+        # No parent namespace to nest under — the child becomes the
+        # full namespace verbatim. Equivalent to a top-level child
+        # but preserves the workflow's name as the namespace.
+        return child_workflow_name
+    return f"{parent_namespace}.{child_workflow_name}"
+
 
 class WorkflowConfig(StepConfig):
     """
@@ -338,6 +385,38 @@ class WorkflowConfig(StepConfig):
                     "etc.) into nested links/triggers. Declare "
                     "auto_transfer: false on a link explicitly when you "
                     "want a no-op link."
+    )
+
+    # G31 — namespace strategy for nested workflows (workflow-as-substep).
+    # When this Workflow is loaded as a CHILD step of an outer workflow,
+    # the strategy controls how its data-units / proxystore namespace
+    # is derived from the outer run context. Two strategies:
+    #
+    #   ``scoped`` (default, recommended): the nested workflow gets its
+    #     own namespace under the parent's (e.g., parent="run_abc",
+    #     child workflow named "subflow_x" -> child namespace
+    #     "run_abc.subflow_x"). Multi-tenant isolation is preserved
+    #     ACROSS levels, not just at the top.
+    #
+    #   ``inherit``: the nested workflow shares the parent's namespace
+    #     verbatim. Use when the nested workflow is logically part of
+    #     the parent's tenant scope and namespace collisions are
+    #     impossible by construction.
+    #
+    # Top-level workflows (no parent) ignore this field — the run
+    # context's own namespace_template is used directly. The field
+    # only takes effect when the workflow is nested.
+    #
+    # P4+a decision (eval_03 §8.9): scoped is the default because
+    # silent-namespace-collision is a worse failure than over-isolation.
+    namespace_strategy: Literal["scoped", "inherit"] = Field(
+        default="scoped",
+        description="G31 — how this workflow's namespace derives from "
+                    "an outer parent run context when loaded as a "
+                    "nested step. 'scoped' (default) appends the "
+                    "workflow name to the parent namespace; 'inherit' "
+                    "shares the parent namespace verbatim. Top-level "
+                    "(non-nested) workflows ignore this field.",
     )
 
     # G10 Step 2 — workflow-level gate_semantics that propagates to every
