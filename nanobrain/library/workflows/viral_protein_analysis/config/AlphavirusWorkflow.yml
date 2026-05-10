@@ -1,6 +1,8 @@
 name: AlphavirusWorkflow
 description: Comprehensive viral protein analysis workflow with enhanced ultra-precision data acquisition
 version: 5.1.0
+# G45 (2026-05-09): explicit schema v2 pin (paired with G7 Step 5).
+config_version: 2
 execution_strategy: event_driven
 error_handling: continue
 enable_monitoring: true

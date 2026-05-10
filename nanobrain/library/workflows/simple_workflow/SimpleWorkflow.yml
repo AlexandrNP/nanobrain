@@ -1,6 +1,8 @@
 name: SimpleWorkflow
 description: Simple workflow for UI builder demonstration
 version: 1.0.0
+# G45 (2026-05-09): explicit schema v2 pin (paired with G7 Step 5).
+config_version: 2
 execution_strategy: event_driven
 error_handling: continue
 enable_monitoring: true
@@ -74,21 +76,26 @@ links:
       name: initial_to_generator
       source: initial_input
       target: data_generator.seed_input
+      auto_transfer: true
   generator_to_processor:
     class: nanobrain.core.link.DirectLink
     config:
       name: generator_to_processor
       source: data_generator.generated_data
       target: data_processor.raw_data
+      auto_transfer: true
   processor_to_sub:
     class: nanobrain.core.link.DirectLink
     config:
       name: processor_to_sub
       source: data_processor.processed_data
       target: sub_workflow.workflow_input
+      auto_transfer: true
   sub_to_output:
     class: nanobrain.core.link.DirectLink
     config:
       name: sub_to_output
       source: sub_workflow.workflow_output
       target: final_output
+
+      auto_transfer: true

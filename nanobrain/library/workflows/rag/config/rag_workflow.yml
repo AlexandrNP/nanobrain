@@ -1,5 +1,7 @@
 name: RAGWorkflow
 description: General-purpose Retrieval-Augmented Generation workflow with single LLM component
+# G45 (2026-05-09): explicit schema v2 pin (paired with G7 Step 5).
+config_version: 2
 class: nanobrain.library.workflows.rag.rag_workflow.RAGWorkflow
 execution_strategy: event_driven
 enable_monitoring: true

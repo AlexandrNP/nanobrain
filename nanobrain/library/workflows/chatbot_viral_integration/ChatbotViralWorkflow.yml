@@ -1,6 +1,8 @@
 name: ChatbotViralWorkflow
 description: Intelligent chatbot integration with enhanced viral annotation backend
 version: 5.1.0
+# G45 (2026-05-09): explicit schema v2 pin (paired with G7 Step 5).
+config_version: 2
 execution_strategy: event_driven
 error_handling: continue
 enable_monitoring: true
@@ -79,6 +81,7 @@ links:
       target: query_classification.user_query
       description: Route user input to query classification
       enable_logging: true
+      auto_transfer: true
   classification_to_enhanced_virus_resolution:
     class: nanobrain.core.link.ConditionalLink
     config:
@@ -116,6 +119,7 @@ links:
       target: response_formatting.analysis_input
       description: Route enhanced viral analysis results to response formatting
       enable_logging: true
+      auto_transfer: true
   formatted_enhanced_analysis_to_workflow:
     class: nanobrain.core.link.DirectLink
     config:
@@ -125,6 +129,7 @@ links:
       target: chatbot_response
       description: Route formatted enhanced analysis response to workflow output
       enable_logging: true
+      auto_transfer: true
   classification_to_conversational_response:
     class: nanobrain.core.link.ConditionalLink
     config:
@@ -147,6 +152,7 @@ links:
       target: response_formatting.response_input
       description: Route conversational response to formatting
       enable_logging: true
+      auto_transfer: true
   formatted_conversational_to_workflow:
     class: nanobrain.core.link.DirectLink
     config:
@@ -156,6 +162,7 @@ links:
       target: chatbot_response
       description: Route formatted conversational response to workflow output
       enable_logging: true
+      auto_transfer: true
 triggers:
 - trigger_id: user_query_received
   class: nanobrain.core.trigger.DataUnitChangeTrigger

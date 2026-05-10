@@ -1,6 +1,8 @@
 name: ViralExpertWorkflow
 description: Expert conversational workflow for viral biology discussions
 version: 1.0.0
+# G45 (2026-05-09): explicit schema v2 pin (paired with G7 Step 5).
+config_version: 2
 execution_strategy: event_driven
 error_handling: continue
 enable_monitoring: true
@@ -37,12 +39,14 @@ links:
       source: user_query
       target: expert_conversation.conversation_input
       description: Route user query to conversation step
+      auto_transfer: true
   conversation_to_output:
     class: nanobrain.core.link.DirectLink
     config:
       source: expert_conversation.conversation_output
       target: expert_response
       description: Route conversation output to workflow response
+      auto_transfer: true
 triggers:
 - trigger_id: conversation_start
   class: nanobrain.core.trigger.DataUnitChangeTrigger

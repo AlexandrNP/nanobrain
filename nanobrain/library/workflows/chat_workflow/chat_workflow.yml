@@ -1,5 +1,7 @@
 name: ChatWorkflow
 description: Enhanced chat workflow with modular step architecture and proper interconnections
+# G45 (2026-05-09): explicit schema v2 pin (paired with G7 Step 5).
+config_version: 2
 class: ChatWorkflow
 metadata:
   biological_analogy: Distributed neural network processing
