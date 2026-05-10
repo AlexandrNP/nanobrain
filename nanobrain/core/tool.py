@@ -511,14 +511,15 @@ class ToolBase(FromConfigBase, ABC):
             ComponentConfigurationError: on bad UTD shape, unimportable
                 class_path, or insufficient capability.
         """
-        # Step 1: normalize to a typed UTD.
+        # Step 1: normalize to a typed UTD. Use ``from_dict`` (not the
+        # bare constructor) so nested classes — UTDProvenancePin,
+        # UTDInputSpec, UTDOutputSpec, etc. — are also opened for direct
+        # instantiation. Without this, any dict-form UTD with nested
+        # classes hits the FromConfigBase prohibition on the FIRST
+        # nested model and rejects the whole UTD.
         if isinstance(utd, dict):
             try:
-                UnifiedToolDescriptor._allow_direct_instantiation = True
-                try:
-                    utd_obj = UnifiedToolDescriptor(**utd)
-                finally:
-                    UnifiedToolDescriptor._allow_direct_instantiation = False
+                utd_obj = UnifiedToolDescriptor.from_dict(utd)
             except Exception as e:
                 raise ComponentConfigurationError(
                     f"FAIL-FAST: from_descriptor input failed UTD shape: {e}"
@@ -564,8 +565,11 @@ class ToolBase(FromConfigBase, ABC):
 
         # Step 4: delegate to from_config. Two cases:
         # - When provenance_pin.config_path is set, load that YAML.
-        # - When None, the descriptor IS the config: build an inline
-        #   minimal ToolConfig from the descriptor's name + tool_card=utd.
+        # - When None, the descriptor IS the config: write a tmp YAML
+        #   from the descriptor's name + tool_card=utd, then load it
+        #   via the canonical from_config path. ToolConfig.from_config
+        #   rejects raw dicts (the framework discipline is YAML-first),
+        #   so we materialize the dict to a tmp file just-in-time.
         config_path = utd_obj.provenance_pin.config_path
         if config_path:
             return ImplCls.from_config(
@@ -573,14 +577,73 @@ class ToolBase(FromConfigBase, ABC):
                 tool_card=utd_obj.model_dump(),
                 **kwargs,
             )
-        else:
-            # Inline minimal ToolConfig — the descriptor itself is the spec.
-            inline_config = {
-                "name": utd_obj.descriptor_id,
-                "description": utd_obj.summary,
-                "tool_card": utd_obj.model_dump(),
-            }
-            return ImplCls.from_config(inline_config, **kwargs)
+
+        # Inline minimal ToolConfig — the descriptor itself is the spec.
+        inline_config = {
+            "name": utd_obj.descriptor_id,
+            "description": utd_obj.summary,
+            "tool_card": utd_obj.model_dump(mode="json"),
+        }
+        import tempfile as _tempfile
+        import yaml as _yaml
+        with _tempfile.NamedTemporaryFile(
+            mode="w", suffix=".yml", delete=False, encoding="utf-8",
+        ) as f:
+            _yaml.safe_dump(inline_config, f)
+            tmp_path = f.name
+        try:
+            return ImplCls.from_config(tmp_path, **kwargs)
+        finally:
+            try:
+                from pathlib import Path as _Path
+                _Path(tmp_path).unlink(missing_ok=True)
+            except Exception:  # noqa: BLE001
+                pass
+
+    @classmethod
+    def from_python_callable(
+        cls,
+        fn: Callable[..., Any],
+        *,
+        backend: str = "native",
+        version: str = "0.1.0",
+        provenance_class_path: Optional[str] = None,
+        **utd_overrides: Any,
+    ) -> 'ToolBase':
+        """Build a ``ToolBase`` from a Python callable (the ergonomic
+        sibling of ``from_descriptor``).
+
+        See ``nanobrain.library.tools.python_callable_dispatcher`` for
+        the full behavior contract. The implementation is lazy-imported
+        to keep ``nanobrain.core.tool`` independent of the library
+        layer at import time.
+
+        Author writes a typed Python function with a docstring; the
+        framework derives a UTD via
+        ``UnifiedToolDescriptor.from_python_callable``, materializes a
+        ``PythonCallableDispatcher`` whose ``execute`` calls back into
+        ``fn``. Sync callables are offloaded to ``asyncio.to_thread``
+        so the loop stays responsive; async callables are awaited.
+
+        Args:
+            fn: The Python callable to wrap.
+            backend, version, provenance_class_path: forwarded to
+                ``UnifiedToolDescriptor.from_python_callable``.
+            **utd_overrides: any UTD field can be overridden
+                (display_name, summary, cost_estimate, side_effects, etc.).
+
+        Returns: a ``ToolBase`` instance ready for ``await tool.execute({...})``.
+        """
+        from nanobrain.library.tools.python_callable_dispatcher import (
+            build_tool_from_python_callable,
+        )
+        return build_tool_from_python_callable(
+            fn,
+            backend=backend,
+            version=version,
+            provenance_class_path=provenance_class_path,
+            **utd_overrides,
+        )
 
     @classmethod
     def extract_component_config(cls, config: ToolConfig) -> Dict[str, Any]:
