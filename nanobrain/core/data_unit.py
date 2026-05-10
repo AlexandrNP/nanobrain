@@ -7,6 +7,7 @@ Enhanced with mandatory from_config pattern implementation.
 
 import asyncio
 import logging
+import os
 from abc import ABC, abstractmethod
 from typing import Any, ClassVar, Dict, Optional, List, Tuple, Union, Callable
 from pydantic import Field, field_validator
@@ -2170,6 +2171,12 @@ class DataUnitProxyRef(DataUnitBase):
         self._materialized_value: Any = None
         self._materialized_for_key: Optional[str] = None
 
+        # G44 — once-per-instance flag to rate-limit the
+        # "unscoped namespace fallback" WARNING. namespace() can be
+        # called many times per run (every set/get/equality check); we
+        # warn on the first unscoped call per DataUnitProxyRef instance.
+        self._unscoped_warning_emitted: bool = False
+
     def key(self) -> Optional[str]:
         """Return the raw key string (or None if no value has been set yet)."""
         return self._key
@@ -2183,7 +2190,10 @@ class DataUnitProxyRef(DataUnitBase):
            always wins.
         2. The active ``WorkflowRunContext``'s ``proxystore_namespace``
            (if any). G13 contextvar-based per-run isolation.
-        3. Empty string — no namespace.
+        3. Empty string — no namespace. **G44**: this branch is the
+           silent-failure shape — multi-tenant isolation effectively
+           OFF, no exception. We WARN once per instance, and (when
+           ``NANOBRAIN_STRICT_NAMESPACE=1``) raise instead.
 
         The resolved value is captured into ``__eq__`` / ``__hash__`` so
         two refs sharing a key but in different run contexts are
@@ -2195,11 +2205,72 @@ class DataUnitProxyRef(DataUnitBase):
         try:
             from nanobrain.library.orchestration.run_context import current_run_context
         except ImportError:
+            self._warn_unscoped_namespace(
+                reason=(
+                    "nanobrain.library.orchestration.run_context not "
+                    "importable (likely a partial install or library "
+                    "subpackage missing)"
+                )
+            )
             return ""
         ctx = current_run_context()
         if ctx is not None:
             return ctx.proxystore_namespace
+        self._warn_unscoped_namespace(
+            reason="no active WorkflowRunContext"
+        )
         return ""
+
+    def _warn_unscoped_namespace(self, *, reason: str) -> None:
+        """G44 — emit a one-time WARNING (or raise under strict mode)
+        when ``namespace()`` falls back to the unscoped empty string.
+
+        Pre-G44 the fallback was silent: the data unit would write its
+        proxystore key under a global (un-namespaced) identity, and a
+        co-tenant run that happened to compute the same key would
+        collide on equality / hashing without anyone noticing. Same
+        shape as G7's ``auto_transfer=False`` silent failure.
+
+        Post-G44:
+          * default mode emits WARNING once per DataUnitProxyRef
+            instance, naming the data-unit's name + the reason
+            (no run context vs. library import failure)
+          * ``NANOBRAIN_STRICT_NAMESPACE=1`` flips this into a
+            ``ComponentConfigurationError`` so an integration suite
+            can FAIL-FAST when isolation is mandatory
+
+        Source: ``apecx-mcp-integration/eval_03_nanobrain_gap_inventory.md``
+        Round 5 G44; ``apecx-mcp-integration/docs/development_roadmap.md`` 8.6.
+        """
+        if self._unscoped_warning_emitted:
+            return
+        # Strict-mode opt-in: raise instead of warn. Operators can flip
+        # this in any deployment where multi-tenant isolation must hold
+        # (HPC bundles, shared-Redis ProxyStore, etc).
+        strict = os.environ.get("NANOBRAIN_STRICT_NAMESPACE", "").lower() in (
+            "1", "true", "yes", "on"
+        )
+        message = (
+            f"DataUnitProxyRef {self.name!r} resolved to UNSCOPED "
+            f"namespace (empty string): {reason}. The proxystore key "
+            f"will be written under the GLOBAL identity, not isolated "
+            f"per run. This is the G44 silent-failure shape; set "
+            f"``proxystore_namespace_prefix`` on the data unit, OR "
+            f"run inside a ``WorkflowRunContext``, OR set "
+            f"``NANOBRAIN_STRICT_NAMESPACE=1`` to FAIL-FAST."
+        )
+        if strict:
+            raise ComponentConfigurationError(
+                f"FAIL-FAST [NANOBRAIN_STRICT_NAMESPACE=1]: {message}"
+            )
+        # Use the framework's logger if available; otherwise fall back
+        # to the stdlib root logger so the warning is never lost.
+        try:
+            log = logging.getLogger(f"nanobrain.data_unit.{self.name}")
+            log.warning(message)
+        except Exception:
+            logging.warning(message)
+        self._unscoped_warning_emitted = True
 
     def as_proxy(self) -> Any:
         """Return a Proxy<T> over the current key for fan-out.
