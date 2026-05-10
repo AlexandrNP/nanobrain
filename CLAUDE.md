@@ -6,6 +6,30 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Nanobrain is an event-driven AI agent framework for distributed workflows. It's currently in research preview and has dependencies on HPC systems and external frameworks. The framework uses a mandatory configuration-driven architecture where ALL components are created through the `from_config()` pattern.
 
+## Recent additions (2026-05-09 — auto_transfer flip + apecx-setup orchestrator)
+
+- **G7 Step 5 — `LinkConfig.auto_transfer` field default flipped to True.**
+  The user's brutal-truth pushback was correct: the False default was
+  the original sin that required FOUR migration steps (G7 Step 1-4)
+  to clean up. Step 5 is the simpler answer — flip the field default;
+  authors who genuinely want a no-op link declare `auto_transfer:
+  false` explicitly. The four-step migration becomes a redundant
+  safety net (the v2 mutator's `setdefault` is now a no-op for
+  omitted keys but stays in place for path-reference rewriting).
+  Verified: 773 passed + 5 skipped (0 regressions); adversarial
+  probe loop still hits 300/300 zero-bug stop criterion.
+- **`apecx-setup` orchestrator** at
+  `apecx-mcp-integration/src/apecx_integration/cli/setup.py`. Single
+  entry that subsumes data-download + Docker container bring-up
+  (Postgres + Redis) + Ollama model pull + FAISS index build +
+  verification. Every subcommand idempotent. `apecx-setup verify`
+  prints a per-component health table. Container names prefixed
+  `apecx-` so they don't collide with test containers. We do NOT
+  install Docker/Ollama/gh ourselves — we tell the user exactly
+  what's missing and how to install.
+- Total this chain: **2 commits across nanobrain + apecx-mcp-integration.**
+  Full regression: 773 passed + 5 skipped, 0 regressions.
+
 ## Recent additions (2026-05-09 — T-RH-03 + ToolBase.from_python_callable + adversarial harness)
 
 - **T-RH-03 minimum: RheaMCPDispatcher** at
