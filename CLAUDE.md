@@ -6,6 +6,44 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Nanobrain is an event-driven AI agent framework for distributed workflows. It's currently in research preview and has dependencies on HPC systems and external frameworks. The framework uses a mandatory configuration-driven architecture where ALL components are created through the `from_config()` pattern.
 
+## Recent additions (2026-05-09 — T-RH-03 + ToolBase.from_python_callable + adversarial harness)
+
+- **T-RH-03 minimum: RheaMCPDispatcher** at
+  `nanobrain/library/tools/rhea_mcp_dispatcher.py`. ToolBase subclass
+  that materializes from a UTD pointing at it, manages an MCP HTTP
+  session against a Rhea worker, and dispatches tool calls via
+  JSON-RPC. End-to-end validated against a live Rhea container (12
+  tests pass). Two real `from_descriptor` bugs surfaced + fixed:
+  dict-input nested-class admittance and inline-config dict→YAML-file
+  materialization. **Closes the deferred dispatch loop** opened by
+  T-RH-02 in the previous chain.
+- **`ToolBase.from_python_callable`** at
+  `nanobrain/library/tools/python_callable_dispatcher.py` (lazy-
+  imported via the classmethod on `core/tool.py`). Wraps an in-process
+  Python callable as a ToolBase via auto-derived UTD. Sync callables
+  run in `asyncio.to_thread`; missing/extra payload keys FAIL-FAST.
+  15 unit tests.
+- **Adversarial probe harness** at
+  `tests/adversarial/probe_harness.py`. 14 categories generate
+  parameterized probes targeting UTD, ToolBase, WorkflowRunner,
+  CheckpointStep/ResumeStep, gate_semantics, lightweight builder,
+  TimerTrigger replay, EventTrigger filtering, AllDataReceivedTrigger
+  predicate, ConditionalLink predicates, RheaMCPDispatcher SSE parsing,
+  FileEntryStateStore CRUD. **Stop criterion satisfied: 300/300
+  consecutive zero-bug probes on TWO different seed offsets.** The
+  harness's first run surfaced 28 false-positives in MY probe-
+  generator (used `gpu_light` instead of `gpu_single|gpu_multi`); the
+  framework correctly FAIL-FAST'd; fixed the probe.
+- **E2E real-data validation** for the rag_e2e_synthesis pipeline:
+  31/32 pass against real Ollama + real FAISS + real VIOLIN/BV-BRC
+  CSVs. The single failure is LLM-output quality (synthesizer's
+  strict-citation gate refused an mistral-nemo response without
+  inline `[N]` markers); NOT a framework bug.
+- Total this chain: **1 commit, ~27 new tests, 1 critical
+  from_descriptor bug fixed (would have blocked anyone passing a
+  dict-form UTD with nested classes).** Full nanobrain regression with
+  Postgres + Redis + Rhea up: **777 passed, 1 skipped, 0 regressions.**
+
 ## Recent additions (2026-05-09 — Academy/Rhea/tool-wrapping chain)
 
 - **Academy lifecycle bug fixed** at
