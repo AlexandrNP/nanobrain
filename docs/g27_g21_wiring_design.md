@@ -1,0 +1,197 @@
+# G27 ↔ G21 wiring — design doc (deferred wiring)
+
+**Status:** **DEFERRED with explicit design recorded.** The G27 primitive
+(``DeferredHITLStep`` + ``ApprovalStore``) shipped 2026-05-09 in
+nanobrain commits leading up to ``c3b4b86``. The runner-side wiring
+that auto-suspends a detached run on ``ApprovalPendingError`` and
+auto-resumes on ``ApprovalStore.resolve(...)`` is recorded here but
+NOT implemented in this chain.
+
+**Why deferred:** the wiring requires choosing between two materially
+different resume semantics with different infrastructure costs.
+Solo-implementing one without recording the choice would commit the
+project to that semantic before review. This doc surfaces the choice
+so it can be made deliberately.
+
+---
+
+## Problem statement
+
+A workflow run inside ``WorkflowRunner.run_detached(...)`` may invoke
+a ``DeferredHITLStep`` mid-run. When it does, the step raises
+``ApprovalPendingError`` carrying ``approval_id`` + ``step_name`` +
+``prompt``. Today the runner's exception path treats this as a normal
+``failed`` lifecycle transition: the task lifetime ends, the operator
+sees a "failed" status, and the workflow does not resume on
+resolution.
+
+The desired behavior is **soft-suspend**: the runner sees
+``ApprovalPendingError``, transitions the task to a new
+``"suspended"`` state (NOT ``"failed"``), persists enough state to
+correlate the suspension with an external resolution event, and
+when the resolution arrives, transitions back to ``"running"`` and
+re-invokes the workflow.
+
+---
+
+## Two resume semantics
+
+### Option A — Resume-from-start (deterministic re-run)
+
+The runner's resume is a literal re-invocation of the original
+workflow with the original payload. The workflow runs deterministically
+to the same ``DeferredHITLStep`` invocation, the step finds its
+existing ``Approval`` in the store (deterministic ``approval_id`` per
+G27 P6+a default), sees it RESOLVED, and returns the decision.
+
+**Trade-offs:**
+- ✅ No new framework state. The ApprovalStore already holds
+  everything. The runner's `_run_until_done` just runs the
+  workflow callable again.
+- ✅ Idempotent by construction: the deterministic ``approval_id``
+  hash means re-runs hit the same record.
+- ❌ Steps BEFORE the deferred-HITL step run twice. Pure-compute
+  steps are fine; LLM-bound steps re-charge cost; side-effecting
+  steps (writes to a DB, posts to an API) double-fire.
+- ❌ Re-running a long pre-HITL pipeline is expensive — a workflow
+  that did 20 minutes of retrieval before hitting an approval gate
+  pays that 20 minutes again on every resume.
+
+**Required mitigation:** workflows that use deferred-HITL must
+gate side-effecting steps behind G5 checkpoints OR keep them
+post-approval. This is workflow-author discipline, not framework
+enforcement.
+
+### Option B — Resume-from-step (G5 checkpoint integration)
+
+The runner's resume continues from the step that suspended. Requires:
+
+1. The ``DeferredHITLStep`` write a G5 ``WorkflowCheckpoint`` immediately
+   before raising ``ApprovalPendingError`` (capturing all upstream data
+   units).
+2. The runner persist the suspension marker (approval_id ↔ checkpoint
+   handle) in a durable store (Postgres-backed; G21 Step 4 ships the
+   ``PostgresTaskStore``).
+3. On resume, the runner re-creates the workflow from the checkpoint
+   (G5's ``ResumeStep`` machinery), positions execution at the
+   suspended step, and re-invokes only that step (which now finds the
+   resolved approval and returns).
+
+**Trade-offs:**
+- ✅ No re-run of pre-HITL steps. Side-effecting steps fire once.
+  Long pipelines resume in seconds, not minutes.
+- ❌ Significant new state surface: every suspension produces a
+  checkpoint manifest that must be findable + valid + non-stale.
+- ❌ Cross-process resume: a task suspended in process A and
+  resumed in process B requires the checkpoint to live in shared
+  storage (Redis/Postgres) and the workflow class to be importable
+  in B (G5 already requires this; no new constraint).
+- ❌ "What if the workflow YAML changed between suspension and
+  resume?" is now a real concern — the checkpoint's content_hash
+  pins the workflow's identity, and a hash mismatch on resume is
+  fail-fast.
+
+---
+
+## Recommendation (pending operator review)
+
+**Ship Option A first** as the v1 wiring. Operators who want
+Option B's no-re-run semantic compose ``DeferredHITLStep`` with
+``CheckpointStep`` + ``ResumeStep`` (already shipped) by hand:
+
+```yaml
+steps:
+  big_retrieval:
+    class: my.RetrieveStep
+    config: {...}
+  checkpoint_before_approval:
+    class: nanobrain.library.steps.CheckpointStep
+    config: {...}
+  hitl_gate:
+    class: nanobrain.library.steps.DeferredHITLStep
+    config: {...}
+  apply_decision:
+    class: my.ApplyDecisionStep
+    config: {...}
+```
+
+A future Option B framework-side wiring can land as G27.2 after
+operator deployment data tells us re-run cost is the dominant
+pain point.
+
+## Concrete v1 (Option A) implementation sketch
+
+In ``nanobrain/library/runtime/workflow_runner.py``:
+
+1. Add lifecycle state ``"suspended"`` to ``_STATUS_VALID`` AND
+   ``_STATUS_ACTIVE`` tuples.
+
+2. In ``_run_workflow_to_completion`` (or wherever the asyncio
+   task body lives), wrap the workflow invocation:
+
+   ```python
+   try:
+       result = await workflow_callable(payload)
+   except ApprovalPendingError as exc:
+       # Soft-suspend: do NOT mark failed.
+       await self._task_store.update(
+           task_id,
+           status="suspended",
+           extra={
+               "suspension_kind": "deferred_hitl",
+               "approval_id": exc.approval_id,
+               "step_name": exc.step_name,
+               "prompt": exc.prompt,
+           },
+       )
+       return  # exit asyncio task; the runner will re-spawn on resolve
+   ```
+
+3. Add ``WorkflowRunner.resume(task_id)``:
+
+   ```python
+   def resume(self, task_id: str) -> None:
+       handle = self._handles[task_id]
+       if handle.status != "suspended":
+           raise ValueError(...)
+       # Re-invoke run_detached with the original payload. The
+       # ApprovalStore now has the resolved approval; the
+       # DeferredHITLStep will find it and return.
+       self._spawn_task(task_id, handle.workflow_callable, handle.payload)
+   ```
+
+4. Add an optional ``approval_store`` kwarg on ``run_detached`` so
+   the runner can subscribe to resolution events (or operators can
+   subscribe externally and call ``runner.resume(task_id)``).
+
+5. Tests:
+   - Suspend-on-pending: assert task status transitions to
+     ``"suspended"``, not ``"failed"``.
+   - Resume-after-resolve: asserts the post-approval payload
+     reaches the asyncio task's return.
+   - Re-run idempotency: side-effecting step in a pre-HITL position
+     fires twice (and the test names this as expected behavior under
+     Option A).
+
+---
+
+## Cross-references
+
+- ``nanobrain/library/steps/deferred_hitl_step.py`` — G27 primitive (shipped)
+- ``nanobrain/library/runtime/approval_store.py`` — ApprovalStore protocol + 2 backends
+- ``nanobrain/library/runtime/workflow_runner.py`` — G21 WorkflowRunner (no G27 hooks yet)
+- ``nanobrain/library/steps/checkpoint_resume.py`` — G5 CheckpointStep + ResumeStep
+- ``apecx-mcp-integration/eval_03_nanobrain_gap_inventory.md`` Round 3 G27
+- ``apecx-mcp-integration/docs/development_roadmap.md`` §8.8 (P6+a)
+
+## Decision needed
+
+Operator picks one:
+1. Ship Option A v1 (recommended; minimal new state).
+2. Wait for Option B (full G5-checkpoint integration); ship neither
+   until then.
+3. Both: A first, B as G27.2.
+
+This doc records the choice surface so the decision is deliberate
+when it's made. The G27 primitive is already shipped + tested; the
+runner-side wiring is the deferred half.
