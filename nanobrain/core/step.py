@@ -1844,17 +1844,49 @@ class BaseStep(FromConfigBase, ABC):
         else:
             prov_ctx = None  # disabled OR import failed → skip recording
 
+        # G37 — publish step_start event to any active subscribers.
+        # Independent of provenance recording: the contextvar lets
+        # subscribers consume events live (provenance is the durable
+        # audit trail; step events are the live publish stream).
+        # Lazy import to avoid circulars; the time stamp is always
+        # captured so step_complete / step_failed can compute duration.
+        import time as _time
+
+        _step_event_started_at = _time.monotonic()
+        try:
+            from .step_events import (
+                _make_step_complete_event,
+                _make_step_failed_event,
+                _make_step_start_event,
+                publish_step_event,
+            )
+
+            _step_events_enabled = True
+        except Exception:
+            _step_events_enabled = False
+        if _step_events_enabled:
+            run_id = self._g37_resolve_run_id()
+            publish_step_event(
+                _make_step_start_event(
+                    step_name=self.name,
+                    run_id=run_id,
+                    inputs=input_data
+                    if isinstance(input_data, dict)
+                    else {"_input": input_data},
+                )
+            )
+
         try:
             result = await self.process(input_data, **kwargs)
         except Exception as exc:
             # G4-completion — record the exception path BEFORE re-raise.
             # Operators rely on the recorder seeing failures, otherwise
             # a crash silently disappears from the audit trail.
-            if prov_ctx is not None:
-                import time as _time
-                import traceback as _tb
+            import time as _time
+            import traceback as _tb
 
-                duration = _time.monotonic() - (prov_started_at or 0.0)
+            failure_duration = _time.monotonic() - _step_event_started_at
+            if prov_ctx is not None:
                 try:
                     await prov_ctx.record_step_invocation(
                         step_name=self.name,
@@ -1864,13 +1896,27 @@ class BaseStep(FromConfigBase, ABC):
                             "message": str(exc),
                             "traceback": _tb.format_exc(limit=10),
                         },
-                        timing={"duration_seconds": duration},
+                        timing={"duration_seconds": failure_duration},
                     )
                 except Exception:
                     # The recorder MUST NOT mask the original exception.
                     # If the recorder itself raises, swallow it and let
                     # the original ``exc`` propagate.
                     pass
+            # G37 — publish step_failed event. Same fail-quiet
+            # contract: subscriber errors are swallowed inside
+            # publish_step_event so they cannot mask the original.
+            if _step_events_enabled:
+                publish_step_event(
+                    _make_step_failed_event(
+                        step_name=self.name,
+                        run_id=self._g37_resolve_run_id(),
+                        exception_type=type(exc).__name__,
+                        exception_message=str(exc),
+                        duration_seconds=failure_duration,
+                        traceback_text=_tb.format_exc(limit=10),
+                    )
+                )
             raise
 
         output_schema = self._g6_resolved_output_schema()
@@ -1885,23 +1931,49 @@ class BaseStep(FromConfigBase, ABC):
         # G4-completion — record the success path. Outputs go through
         # the redaction pipeline; operators who want size-bounded
         # records configure ``redact: ['outputs']`` or similar.
-        if prov_ctx is not None:
-            import time as _time
+        import time as _time
 
-            duration = _time.monotonic() - (prov_started_at or 0.0)
+        success_duration = _time.monotonic() - _step_event_started_at
+        if prov_ctx is not None:
             try:
                 await prov_ctx.record_step_invocation(
                     step_name=self.name,
                     inputs=input_data if isinstance(input_data, dict) else {"_input": input_data},
                     outputs=result if isinstance(result, dict) else {"_result": result},
-                    timing={"duration_seconds": duration},
+                    timing={"duration_seconds": success_duration},
                 )
             except Exception:
                 # Recorder errors are non-fatal — never let provenance
                 # bookkeeping break the step's actual return path.
                 pass
 
+        # G37 — publish step_complete event.
+        if _step_events_enabled:
+            publish_step_event(
+                _make_step_complete_event(
+                    step_name=self.name,
+                    run_id=self._g37_resolve_run_id(),
+                    outputs=result,
+                    duration_seconds=success_duration,
+                )
+            )
+
         return result
+
+    def _g37_resolve_run_id(self) -> Optional[str]:
+        """G37 helper — resolve the active WorkflowRunContext's run_id
+        for step-event tagging. Returns None when no context is active.
+        Lazy import keeps core/step.py from depending on library/."""
+        try:
+            from nanobrain.library.orchestration.run_context import (
+                current_run_context,
+            )
+        except ImportError:
+            return None
+        ctx = current_run_context()
+        if ctx is None:
+            return None
+        return getattr(ctx, "run_id", None)
 
     def _g6_resolved_input_schema(self) -> Optional["SchemaRef"]:
         """Resolve the StepConfig.step_input_schema to a SchemaRef instance.
