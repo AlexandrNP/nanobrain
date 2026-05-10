@@ -830,9 +830,7 @@ class MCPSupportMixin:
     
     async def _register_mcp_tool(self, tool_info: MCPToolInfo):
         """Register an MCP tool with the agent."""
-        print(f"DEBUG: _register_mcp_tool called for {tool_info.name}")
         try:
-            print(f"DEBUG: About to create tool config for {tool_info.name}")
             self.mcp_logger.debug(f"Attempting to register MCP tool: {tool_info.name}")
             
             # Create MCP tool wrapper
@@ -843,37 +841,25 @@ class MCPSupportMixin:
                 tool_type=ToolType.EXTERNAL
             )
             
-            print(f"DEBUG: Created tool config, about to create MCPTool for {tool_info.name}")
             mcp_tool = MCPTool.from_config(tool_config, tool_info=tool_info, mcp_client=self.mcp_client)
-            print(f"DEBUG: Created MCPTool, about to initialize for {tool_info.name}")
             await mcp_tool.initialize()
             
-            print(f"DEBUG: Initialized MCPTool for {tool_info.name}")
             self.mcp_logger.debug(f"Created and initialized MCP tool: {tool_info.name}")
             
             # Register with agent's tool registry
             if hasattr(self, 'register_tool'):
-                print(f"DEBUG: Agent has register_tool method, registering {tool_info.name}")
                 self.register_tool(mcp_tool)
                 self.mcp_logger.debug(f"Registered tool with agent registry: {tool_info.name}")
             else:
-                print("DEBUG: Agent does not have register_tool method")
                 self.mcp_logger.warning("Agent does not have register_tool method")
             
             # Store in MCP tools registry
-            print(f"DEBUG: About to store {tool_info.name} in mcp_tools dict")
-            print(f"DEBUG: mcp_tools before assignment: {self.mcp_tools}")
-            print(f"DEBUG: id(mcp_tools) before assignment: {id(self.mcp_tools)}")
             self.mcp_tools[tool_info.name] = mcp_tool
-            print(f"DEBUG: mcp_tools after assignment: {self.mcp_tools}")
-            print(f"DEBUG: id(mcp_tools) after assignment: {id(self.mcp_tools)}")
             
-            print(f"DEBUG: Successfully completed registration for {tool_info.name}")
             self.mcp_logger.info(f"Successfully registered MCP tool: {tool_info.name}", 
                                 server=tool_info.server_name)
         
         except Exception as e:
-            print(f"DEBUG: Exception in _register_mcp_tool for {tool_info.name}: {e}")
             self.mcp_logger.error(f"Failed to register MCP tool {tool_info.name}: {e}")
             import traceback
             traceback.print_exc()
