@@ -170,21 +170,45 @@ class HTTPBackendAdapter(ToolBackendAdapter):
             )
         per_call_headers = merged_headers
 
+        # G38 (refined 2026-05-11): use httpx's per-method helpers
+        # (.post / .get / .put / .patch / .delete) when available so
+        # mock clients that only override the per-method API (idiomatic
+        # httpx pattern; see probe-batch tests in apecx-mcp-integration)
+        # remain compatible. Falls back to .request() for non-standard
+        # methods (OPTIONS, HEAD, custom). Functionally identical to
+        # client.request(method, ...) inside httpx — these helpers are
+        # convenience wrappers — so the change is a contract refinement,
+        # not a semantic change.
         try:
+            common_kwargs: Dict[str, Any] = {
+                "timeout": timeout,
+                "headers": per_call_headers,
+            }
             if method == "GET":
                 response = await self._client.get(
-                    endpoint,
-                    params=inputs,
-                    timeout=timeout,
-                    headers=per_call_headers,
+                    endpoint, params=inputs, **common_kwargs,
+                )
+            elif method == "POST":
+                response = await self._client.post(
+                    endpoint, json=inputs, **common_kwargs,
+                )
+            elif method == "PUT":
+                response = await self._client.put(
+                    endpoint, json=inputs, **common_kwargs,
+                )
+            elif method == "PATCH":
+                response = await self._client.patch(
+                    endpoint, json=inputs, **common_kwargs,
+                )
+            elif method == "DELETE":
+                response = await self._client.delete(
+                    endpoint, **common_kwargs,
                 )
             else:
+                # OPTIONS / HEAD / custom verbs — fall through to the
+                # generic request() helper.
                 response = await self._client.request(
-                    method,
-                    endpoint,
-                    json=inputs,
-                    timeout=timeout,
-                    headers=per_call_headers,
+                    method, endpoint, json=inputs, **common_kwargs,
                 )
         except httpx.HTTPError as exc:
             raise RuntimeError(
