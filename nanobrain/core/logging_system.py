@@ -961,30 +961,84 @@ class NanoBrainLogger:
         self._tool_call_logs.clear()
         self._performance_metrics.clear()
     
-    # Convenience methods for different log levels
-    def trace(self, message: str, **kwargs):
-        """Log trace message."""
-        self._log_structured(LogLevel.TRACE, message, **kwargs)
-    
-    def debug(self, message: str, **kwargs):
-        """Log debug message."""
-        self._log_structured(LogLevel.DEBUG, message, **kwargs)
-    
-    def info(self, message: str, **kwargs):
-        """Log info message."""
-        self._log_structured(LogLevel.INFO, message, **kwargs)
-    
-    def warning(self, message: str, **kwargs):
-        """Log warning message."""
-        self._log_structured(LogLevel.WARNING, message, **kwargs)
-    
-    def error(self, message: str, **kwargs):
-        """Log error message."""
-        self._log_structured(LogLevel.ERROR, message, **kwargs)
-    
-    def critical(self, message: str, **kwargs):
-        """Log critical message."""
-        self._log_structured(LogLevel.CRITICAL, message, **kwargs)
+    # Convenience methods for different log levels.
+    #
+    # Calling convention: ``logger.LEVEL(message, *args, **kwargs)``.
+    # The ``*args`` parameter is %-format compatibility with the
+    # stdlib ``logging`` API — ``logger.info("got %d for %r", n, q)``
+    # works identically. Internally we materialize the formatted
+    # message before structured logging.
+    #
+    # Why accept stdlib %-args: code authored against ``logging``
+    # before learning NanoBrainLogger's f-string convention used to
+    # crash with a confusing ``TypeError`` on the LATE timeout / 0-
+    # results / error branch — silent-failure shape that masked the
+    # real diagnostic. Adoption of the framework requires that
+    # idiomatic stdlib calls work. The canonical pattern is still
+    # the f-string + kwargs form, but the %-args form is supported
+    # for backwards compatibility + ergonomic onboarding.
+    #
+    # Source: 2026-05-11 audit — found 4 latent sites
+    # (``core/trigger.py:192,217`` + ``library/tools/bioinformatics/pubmed_client.py:643,655``)
+    # that crashed under load. Fixed at the call sites AND made the
+    # bug shape impossible by accepting the stdlib API here.
+    def trace(self, message: str, *args: Any, **kwargs):
+        """Log trace message. Accepts stdlib-style %-format args."""
+        self._log_structured(
+            LogLevel.TRACE, self._format_message(message, args), **kwargs
+        )
+
+    def debug(self, message: str, *args: Any, **kwargs):
+        """Log debug message. Accepts stdlib-style %-format args."""
+        self._log_structured(
+            LogLevel.DEBUG, self._format_message(message, args), **kwargs
+        )
+
+    def info(self, message: str, *args: Any, **kwargs):
+        """Log info message. Accepts stdlib-style %-format args."""
+        self._log_structured(
+            LogLevel.INFO, self._format_message(message, args), **kwargs
+        )
+
+    def warning(self, message: str, *args: Any, **kwargs):
+        """Log warning message. Accepts stdlib-style %-format args."""
+        self._log_structured(
+            LogLevel.WARNING, self._format_message(message, args), **kwargs
+        )
+
+    def error(self, message: str, *args: Any, **kwargs):
+        """Log error message. Accepts stdlib-style %-format args."""
+        self._log_structured(
+            LogLevel.ERROR, self._format_message(message, args), **kwargs
+        )
+
+    def critical(self, message: str, *args: Any, **kwargs):
+        """Log critical message. Accepts stdlib-style %-format args."""
+        self._log_structured(
+            LogLevel.CRITICAL, self._format_message(message, args), **kwargs
+        )
+
+    @staticmethod
+    def _format_message(message: str, args: tuple) -> str:
+        """Materialize the stdlib %-args calling convention.
+
+        If ``args`` is empty, return the message verbatim — the
+        canonical f-string-already-formatted path. If non-empty,
+        attempt ``message % args``; on TypeError (mismatched format
+        specifiers / extra args / wrong types) fall back to a
+        safe concat that surfaces both the template and the args.
+        This is a logging primitive — it MUST NOT raise; a bad
+        format string should never crash the caller's real work.
+        """
+        if not args:
+            return message
+        try:
+            return message % args
+        except (TypeError, ValueError):
+            # Defensive fallback: don't crash the caller. Surface
+            # both the template and the args so the operator can fix
+            # the call site.
+            return f"{message} | unformattable-args={args!r}"
 
 
 # Global registry for loggers and system components

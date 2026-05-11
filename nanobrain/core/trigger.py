@@ -190,8 +190,8 @@ class AsyncTriggerExecutor:
             if remaining <= 0:
                 if self.background_tasks:
                     self.logger.warning(
-                        "Timeout waiting for %d background tasks",
-                        len(self.background_tasks),
+                        f"Timeout waiting for "
+                        f"{len(self.background_tasks)} background tasks"
                     )
                     return False
                 return True
@@ -215,8 +215,9 @@ class AsyncTriggerExecutor:
                 )
             except asyncio.TimeoutError:
                 self.logger.warning(
-                    "Timeout waiting for %d background tasks (cascading drain)",
-                    len(self.background_tasks),
+                    f"Timeout waiting for "
+                    f"{len(self.background_tasks)} background tasks "
+                    f"(cascading drain)"
                 )
                 return False
 

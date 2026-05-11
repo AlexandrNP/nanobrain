@@ -640,7 +640,7 @@ class PubMedClient(ExternalTool):
             pmids: List[str] = search_resp.json().get("esearchresult", {}).get("idlist", [])
 
             if not pmids:
-                self.logger.info("esearch returned 0 PMIDs for query %r", query)
+                self.logger.info(f"esearch returned 0 PMIDs for query {query!r}")
                 return []
 
             # Step 2: efetch — retrieve article XML (title, authors, year, abstract)
@@ -652,7 +652,10 @@ class PubMedClient(ExternalTool):
             fetch_resp.raise_for_status()
 
         results = _parse_pubmed_xml(fetch_resp.text)
-        self.logger.info("PubMed returned %d references for protein_type=%r", len(results), protein_type)
+        self.logger.info(
+            f"PubMed returned {len(results)} references for "
+            f"protein_type={protein_type!r}"
+        )
 
         if self.pubmed_config.cache_results:
             self.search_cache[cache_key] = results

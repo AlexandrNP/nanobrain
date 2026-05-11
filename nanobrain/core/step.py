@@ -2019,20 +2019,25 @@ class BaseStep(FromConfigBase, ABC):
         return resolved
 
     async def _update_output_data_units(self, result: Any) -> None:
-        """
-        Unified method to update output data units from step execution result.
+        """Unified method to update output data units from a step
+        execution result.
 
-        BRUTAL TRUTH: This method consolidates the output data unit update logic
-        that was duplicated across _execute_on_trigger and execute methods.
+        Routing per output unit:
+          - Named-key path: result is a dict carrying the unit's name as
+            a key — write ``result[unit_name]`` to the unit.
+          - Single-output fallback: result is a dict, the step has exactly
+            one output unit, and the unit's name is NOT in the dict —
+            write the full dict to that unit. Matches imperative-mode
+            parity (workflow.py line 2067-2071).
+          - Neither path matches: skip the unit. Previously this branch
+            was a silent no-op AND the named-key branch lacked its
+            write — a latent silent-failure shape closed 2026-05-11.
+
+        Workflow subclasses override this method to short-circuit the
+        status-dict shape (see ``Workflow._update_output_data_units``).
         """
         import logging
         logger = logging.getLogger(__name__)
-
-        print(f"🔥 BRUTAL TRUTH: _update_output_data_units ENTRY for step {self.name}")  # Force print
-
-        logger.info(f"🔥 BRUTAL TRUTH: About to update output data units for step {self.name}")
-        logger.info(f"🔥 BRUTAL TRUTH: Step output data units: {list(self.step_output_data_units.keys())}")
-        logger.info(f"🔥 BRUTAL TRUTH: Result keys: {list(result.keys()) if isinstance(result, dict) else 'Not a dict'}")
 
         # ✅ PARITY FIX (2026-05-05): when a step returns a dict that
         # does NOT contain the output data unit's name as a key, AND
@@ -2049,50 +2054,62 @@ class BaseStep(FromConfigBase, ABC):
         )
 
         for unit_name, data_unit in self.step_output_data_units.items():
-            logger.info(f"🔥 BRUTAL TRUTH: Processing output data unit: {unit_name}")
+            logger.info(f"🔥 Processing output data unit: {unit_name}")
+            # Determine which slice of the result lands in this unit:
+            #   - named-key path: result is a dict that explicitly carries
+            #     this unit's name as a key (multi-output case)
+            #   - single-output fallback: result is a dict but does NOT
+            #     mention this unit's name AND there's exactly one unit,
+            #     so the whole result becomes the unit's value
+            #   - neither: nothing to do for this unit (skip)
             if unit_name in result:
-                logger.info(f"🔥 BRUTAL TRUTH: Found {unit_name} in result, extracting data")
+                logger.info(f"🔥 Named-key path: extracting result[{unit_name!r}]")
                 result_data = result[unit_name]
             elif single_output_fallback:
                 logger.info(
-                    f"🔥 BRUTAL TRUTH: Single-output fallback — writing "
-                    f"full result dict to {unit_name}"
+                    f"🔥 Single-output fallback — writing full result dict "
+                    f"to {unit_name}"
                 )
                 result_data = result
+            else:
+                # No matching key + not the single-output case → skip this
+                # unit entirely (previously this branch was missing AND the
+                # write fell through silently — a latent silent-failure
+                # shape; 2026-05-11 audit).
+                continue
 
-                # ✅ CRITICAL FIX: Prevent storing DataUnit objects as data
-                if hasattr(result_data, '__class__') and 'DataUnit' in result_data.__class__.__name__:
-                    self.nb_logger.warning(
-                        f"⚠️ Preventing DataUnit object storage in {unit_name} - extracting actual data")
-                    # Extract the actual data from the DataUnit object
-                    if hasattr(result_data, '_data'):
-                        result_data = result_data._data
-                    elif hasattr(result_data, 'get'):
-                        try:
-                            result_data = await result_data.get()
-                        except Exception as e:
-                            self.nb_logger.error(f"Failed to extract data from DataUnit: {e}")
-                            result_data = None
-                    else:
-                        self.nb_logger.error(f"Cannot extract data from DataUnit object: {type(result_data)}")
-                        result_data = None
-
-                # Only set if we have valid data
-                logger.info(f"🔥 BRUTAL TRUTH: About to check if result_data is not None: {result_data is not None}")
-                if result_data is not None:
-                    logger.info(f"🔥 BRUTAL TRUTH: About to call data_unit.set() for {unit_name}")
+            # ✅ CRITICAL FIX: Prevent storing DataUnit objects as data
+            # (applies to both paths; a DataUnit instance is never the
+            # right value to .set() into another DataUnit — extract the
+            # underlying payload).
+            if hasattr(result_data, '__class__') and 'DataUnit' in result_data.__class__.__name__:
+                self.nb_logger.warning(
+                    f"⚠️ Preventing DataUnit object storage in {unit_name} - extracting actual data")
+                if hasattr(result_data, '_data'):
+                    result_data = result_data._data
+                elif hasattr(result_data, 'get'):
                     try:
-                        await data_unit.set(result_data)
-                        logger.info(f"🔥 BRUTAL TRUTH: data_unit.set() completed for {unit_name}")
-                        self.nb_logger.info(
-                            f"📤 Updated output data unit: {unit_name} with {type(result_data).__name__}")
+                        result_data = await result_data.get()
                     except Exception as e:
-                        logger.error(f"🔥 BRUTAL TRUTH: data_unit.set() FAILED for {unit_name}: {e}")
-                        raise
+                        self.nb_logger.error(f"Failed to extract data from DataUnit: {e}")
+                        result_data = None
                 else:
-                    logger.warning("🔥 BRUTAL TRUTH: Skipping data unit update - result_data is None")
-                    self.nb_logger.warning(
-                        f"⚠️ Skipping output data unit update for {unit_name} - no valid data")
+                    self.nb_logger.error(f"Cannot extract data from DataUnit object: {type(result_data)}")
+                    result_data = None
+
+            # Write — guard against None so cascade-not-fired branches
+            # don't blank a unit that already has a real value.
+            if result_data is not None:
+                try:
+                    await data_unit.set(result_data)
+                    self.nb_logger.info(
+                        f"📤 Updated output data unit: {unit_name} with {type(result_data).__name__}")
+                except Exception as e:
+                    logger.error(f"🔥 data_unit.set() FAILED for {unit_name}: {e}")
+                    raise
+            else:
+                self.nb_logger.warning(
+                    f"⚠️ Skipping output data unit update for {unit_name} - no valid data")
 
     async def _propagate_through_links(self, data: Any) -> None:
         """Propagate data through all links."""

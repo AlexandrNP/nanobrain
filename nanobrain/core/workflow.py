@@ -2699,6 +2699,48 @@ class Workflow(Step):
 
         return aggregate_resource_envelopes(envelopes)
 
+    async def _update_output_data_units(self, result: Any) -> None:
+        """Override BaseStep's single-output-fallback for Workflow.
+
+        Workflow.process() in data-driven mode returns a *status* dict
+        (``{"status": "data_flow_initiated", "workflow": ...,
+        "first_step": ..., "populated_units": N}``) — metadata about
+        what was initiated, not the workflow's actual output payload.
+        The workflow's output data units are populated by the trigger
+        cascade through child step Links, NOT by writing the status
+        dict.
+
+        BaseStep's ``_update_output_data_units`` applies a
+        single-output-fallback: when there's exactly one output data
+        unit and the result dict doesn't carry that unit's name as a
+        key, the full result dict gets written to the unit. For
+        Workflow, that fallback pollutes the workflow's lone output
+        with the status dict (regression test:
+        ``apecx-mcp-integration/tests/integration/test_iri_resolution_workflow.py::test_workflow_native_framework_cascade``).
+
+        Override: no-op for the data-driven status-dict shape. The
+        cascade is the data-flow mechanism; process()'s return is
+        observability metadata for the caller. Imperative / divergence
+        mode produces a different shape; those still bypass this
+        method because Workflow._process_with_divergence does its own
+        explicit output writes per step.
+
+        Source: 2026-05-11 audit (apecx-mcp integration test
+        surfaced the pollution after the trigger.py logger fix
+        removed the masking TypeError).
+        """
+        if isinstance(result, dict) and result.get("status") in (
+            "data_flow_initiated",
+            "no_first_step",
+            "no_steps",
+        ):
+            # Status dict — no propagation. Cascade does the real work.
+            return
+        # Any other Workflow.process() return shape (subclasses that
+        # legitimately compute a payload, divergence-mode aggregates,
+        # etc) gets the BaseStep behavior — preserve backwards compat.
+        await super()._update_output_data_units(result)
+
     async def _collect_workflow_output_data_units(self) -> Dict[str, Any]:
         """G8 helper — read every workflow-level output data unit's
         current value into a dict. Workflow-level outputs live on
