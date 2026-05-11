@@ -187,11 +187,88 @@ In ``nanobrain/library/runtime/workflow_runner.py``:
 ## Decision needed
 
 Operator picks one:
-1. Ship Option A v1 (recommended; minimal new state).
+1. Ship Option A v1 (recommended; minimal new state). **DONE
+   2026-05-11** — commit `abd41b5` (in-memory) + commit `3cb87c5`
+   (SQLite + Postgres serialization).
 2. Wait for Option B (full G5-checkpoint integration); ship neither
-   until then.
-3. Both: A first, B as G27.2.
+   until then. **REJECTED** in favor of Option A v1.
+3. Both: A first, B as G27.2. **CURRENT STATE** — A v1 is live;
+   B is evaluated below.
 
-This doc records the choice surface so the decision is deliberate
-when it's made. The G27 primitive is already shipped + tested; the
-runner-side wiring is the deferred half.
+The G27 primitive is already shipped + tested; Option A v1 is now
+also shipped + tested.
+
+## Option B evaluation framework (instrumentation, 2026-05-11)
+
+Premature implementation of Option B (G5-checkpoint integration) is
+speculative — operators decide whether Option A's re-run-from-start
+semantic is acceptable based on deployment data, not on theoretical
+re-run cost.
+
+This commit ships **instrumentation only**:
+
+### DetachedTaskHandle.resume_count
+
+A new integer field on the handle, incremented each time
+``WorkflowRunner.resume_suspended(task_id)`` re-spawns the workflow.
+Persisted in SQLite + Postgres TaskStores via the same migration
+that landed ``suspension_info_json``.
+
+### How operators measure Option B's value
+
+Combine ``resume_count`` with ``cost_actual`` (G26 tracking) to
+compute the load-bearing decision metric:
+
+```python
+# Pseudo-SQL against the Postgres task store
+SELECT
+  task_id,
+  resume_count,
+  cost_actual_json,
+  EXTRACT(EPOCH FROM (completed_at - created_at)) AS total_seconds
+FROM nanobrain_detached_tasks
+WHERE resume_count > 0
+ORDER BY resume_count DESC;
+```
+
+Per-task re-run cost is `resume_count × pre_hitl_step_cost`. The
+fraction of cumulative cost spent on re-runs vs. real work tells
+operators whether Option B's no-re-run semantic would pay back the
+G5 checkpoint integration's complexity cost.
+
+### Decision rule of thumb (recommendation)
+
+  * `resume_count × pre_hitl_step_seconds < 30s` per task: stick
+    with Option A. The re-run cost is dwarfed by other workflow
+    overhead.
+  * `resume_count × pre_hitl_step_seconds > 5 minutes` per task,
+    OR a meaningful fraction of users hit multi-resume cycles:
+    promote Option B to the next chain. The G5 checkpoint integration
+    is justified.
+  * In between: re-evaluate quarterly. Operators may discover the
+    pain point only after a particular workflow shape becomes
+    popular.
+
+### What Option B implementation would entail (for reference)
+
+When the operator chooses to implement Option B:
+
+  1. ``DeferredHITLStep`` writes a G5 ``WorkflowCheckpoint`` (via
+     CheckpointStep) IMMEDIATELY before raising ApprovalPendingError.
+     Captures all upstream DataUnits + the step's input.
+  2. ``WorkflowRunner.run_detached`` records the checkpoint manifest
+     handle in ``suspension_info["checkpoint_handle"]``.
+  3. ``resume_suspended`` re-creates the workflow from the manifest
+     (G5's ResumeStep machinery) at the suspended step boundary,
+     re-invokes ONLY that step (which now finds the resolved approval
+     and returns).
+  4. Workflow content_hash pin: if the workflow YAML changed between
+     suspend + resume, FAIL-FAST (already a G5 contract — the manifest
+     pins the workflow's identity).
+  5. New tests: a multi-step workflow with a non-trivial pre-HITL
+     pipeline. Assert pre-HITL steps fire exactly once across the
+     suspend + resume cycle.
+
+The G5 checkpoint primitive (``CheckpointStep`` +
+``ResumeStep``) is already shipped (commit `c84b510` lineage).
+Option B is composition work, not new framework primitives.

@@ -272,6 +272,73 @@ def test_non_approval_exception_still_fails():
     assert "RuntimeError" in handle.error
 
 
+def test_resume_count_increments_on_resume_suspended():
+    """G27 Option B evaluation instrumentation: resume_count is
+    incremented each time resume_suspended re-spawns the task.
+
+    Multi-resume cycle: suspend -> resume -> (multi-gate?) suspend
+    again -> resume again. Each resume_suspended() bumps the counter.
+    The persisted value lets operators compute re-run cost.
+    """
+
+    async def _run() -> int:
+        runner = _build_runner()
+        s = InMemoryApprovalStore()
+        step = _make_step(s)
+
+        async def _workflow(payload):
+            return await step.process(payload)
+
+        await runner.run_detached(_workflow, "task-rc-1", {"x": 1})
+        for _ in range(50):
+            h = await runner.get_handle("task-rc-1")
+            if h.status == "suspended":
+                break
+            await asyncio.sleep(0.02)
+        else:
+            raise TimeoutError
+
+        # First resume: pre-count is 0, post-count should be 1.
+        s.resolve(
+            h.suspension_info["approval_id"],
+            decision="approved",
+            decided_by="op",
+        )
+        await runner.resume_suspended("task-rc-1")
+        for _ in range(50):
+            h = await runner.get_handle("task-rc-1")
+            if h.status == "completed":
+                return h.resume_count
+            await asyncio.sleep(0.02)
+        raise TimeoutError
+
+    rc = asyncio.run(_run())
+    assert rc == 1, (
+        f"resume_count should be 1 after a single resume cycle; got {rc}"
+    )
+
+
+def test_resume_count_default_is_zero_for_fresh_tasks():
+    """Tasks that never resume have resume_count == 0. Documenting
+    invariant so operator queries can rely on it."""
+
+    async def _run():
+        runner = _build_runner()
+
+        async def _quick(payload):
+            return {"done": True}
+
+        await runner.run_detached(_quick, "task-zero-1", {})
+        for _ in range(50):
+            h = await runner.get_handle("task-zero-1")
+            if h.status == "completed":
+                return h.resume_count
+            await asyncio.sleep(0.02)
+        raise TimeoutError
+
+    assert asyncio.run(_run()) == 0
+
+
 def test_successful_completion_unchanged():
     """A workflow that completes normally (no ApprovalPendingError)
     reaches ``"completed"`` with the result — Option A is additive."""
