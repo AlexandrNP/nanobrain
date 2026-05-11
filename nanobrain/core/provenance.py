@@ -1,6 +1,6 @@
 """Step-level provenance threading (G4).
 
-Per ``apecx-mcp-integration/docs/nanobrain_capability_gaps.md G4``: the
+Per ``apecx-mcp-integration/docs/CONTRACTS.md#g4``: the
 framework wraps every ``process()`` call with a recorder that captures
 inputs, outputs, executor metadata, code identity, timing, and
 exceptions into a configurable sink (JSONL by default).

@@ -474,7 +474,7 @@ class ToolBase(FromConfigBase, ABC):
     ) -> 'ToolBase':
         """G15 — materialize a ToolBase from a UnifiedToolDescriptor.
 
-        Per ``apecx-mcp-integration/docs/nanobrain_capability_gaps.md G15``:
+        Per ``apecx-mcp-integration/docs/CONTRACTS.md#g15``:
         the catalogue-first entry path. Where ``from_config`` takes the
         implementation parameters (which API URL, which auth token),
         ``from_descriptor`` takes the contract description (input/output

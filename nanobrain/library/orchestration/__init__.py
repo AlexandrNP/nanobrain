@@ -1,7 +1,7 @@
 """Orchestration primitives for agent-authored workflows.
 
-Per ``apecx-mcp-integration/docs/nanobrain_alignment_audit.md §4.2`` and
-``apecx-mcp-integration/docs/agent_workflow_authoring.md``: the orchestrator
+Per ``apecx-mcp-integration/docs/CONTRACTS.md#alignment-§4.2`` and
+``apecx-mcp-integration/docs/CONTRACTS.md#workflow-lowering``: the orchestrator
 that composes analytical workflows is itself a nanobrain workflow. This
 package ships the framework-side primitives the orchestrator uses:
 

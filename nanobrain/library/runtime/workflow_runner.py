@@ -1,8 +1,8 @@
 """G21 — WorkflowRunner.run_detached: long-running workflow lifecycle.
 
-Per ``apecx-mcp-integration/docs/nanobrain_capability_gaps.md G21``.
+Per ``apecx-mcp-integration/docs/CONTRACTS.md#g21``.
 
-The autonomous-agent use case (``autonomous_workflow_agent.md``) needs
+The autonomous-agent use case (``CONTRACTS.md#autonomy-hitl``) needs
 an entry point that returns immediately with a ``task_id`` and continues
 running in a managed background context. ``Workflow.run()`` (G8) is
 synchronous and blocks the caller; this module adds the detached path.
@@ -715,7 +715,7 @@ class WorkflowRunnerConfig(ConfigBase):
     # task at this interval, and reaps tasks whose last_heartbeat_at
     # is older than `watchdog_stale_threshold_seconds`.
     #
-    # Defaults from the gap proposal (autonomous_workflow_agent.md §5.2):
+    # Defaults from the gap proposal (CONTRACTS.md#autonomy-heartbeat):
     # 60s heartbeat, 600s stale threshold (10x the heartbeat). Set
     # heartbeat_interval_seconds to 0 to DISABLE the watchdog entirely
     # (useful for tests that want deterministic timestamps).

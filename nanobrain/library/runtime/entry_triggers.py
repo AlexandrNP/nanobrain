@@ -1,7 +1,7 @@
 """G22 — WorkflowEntryTrigger: wrap any TriggerBase to start a detached
 workflow run via WorkflowRunner (G21).
 
-Per ``apecx-mcp-integration/docs/nanobrain_capability_gaps.md G22``.
+Per ``apecx-mcp-integration/docs/CONTRACTS.md#g22``.
 
 This module implements the *workflow-start* half of G22. The
 *event-source* half (``EventTrigger``) lives in

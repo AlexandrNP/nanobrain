@@ -37,7 +37,7 @@ implementation), and the **callable is passed as a kwarg** to
 
 - A different process can reconstruct the descriptor from JSON, but
   CANNOT reconstruct the live callable without the kwarg. Honest.
-- For HPC bundle replay (per ``hpc_reproducibility_spec.md``), the
+- For HPC bundle replay (per ``CONTRACTS.md#hpc-determinism``), the
   descriptor records the callable's importable path via the auto-
   derived ``UnifiedToolDescriptor.from_python_callable``'s
   ``provenance_class_path``-style hint — but that hint goes into

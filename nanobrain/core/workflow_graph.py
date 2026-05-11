@@ -212,7 +212,7 @@ class WorkflowGraph:
             return handle_error(e, "WorkflowGraph.has_cycles", False)
 
     # G18 Step 2 — bounded-cycle relaxation through LoopController nodes.
-    # See `apecx-mcp-integration/docs/nanobrain_capability_gaps.md G18`.
+    # See `apecx-mcp-integration/docs/CONTRACTS.md#g18`.
     # The integrity validator allows declared back-edges that route through
     # at least one node tagged with `COMPONENT_TYPE == "loop_controller"`.
     # Detection uses the COMPONENT_TYPE attribute (already on LoopController)

@@ -4,8 +4,8 @@ Prompt Template Manager for NanoBrain Framework
 Provides dynamic prompt loading and template variable substitution for agents.
 
 G14 — extended 2026-05-09 with the typed-template contract per
-``apecx-mcp-integration/docs/llm_prompt_contracts.md §3`` and
-``apecx-mcp-integration/docs/nanobrain_capability_gaps.md G14``. New fields
+``apecx-mcp-integration/docs/CONTRACTS.md#prompt-template-hole-grammar`` and
+``apecx-mcp-integration/docs/CONTRACTS.md#g14``. New fields
 are additive: existing PromptTemplate consumers continue to work
 unchanged. G14-compliant templates declare ``template_id``,
 ``content_hash``, ``model_constraint``, ``holes``, ``system_prompt``,
@@ -30,14 +30,14 @@ logger = logging.getLogger(__name__)
 
 
 # G14 — recognized hole types. Subset of JSON Schema's type vocabulary;
-# matches the skeleton hole grammar from agent_workflow_authoring.md §4.1.
+# matches the skeleton hole grammar from CONTRACTS.md#workflow-skeleton-holes.
 PromptHoleType = Literal["string", "integer", "number", "boolean", "array", "object", "any"]
 
 
 class PromptHole(BaseModel):
     """G14 — a typed parameter slot in a prompt template.
 
-    Per ``llm_prompt_contracts.md §3``: each hole declares its type,
+    Per ``CONTRACTS.md#prompt-template-hole-grammar``: each hole declares its type,
     whether it's required, an optional default for optional holes, and
     a human description. The PromptTemplateManager substitutes hole
     values at render time and FAIL-FASTs on missing required holes.
@@ -107,7 +107,7 @@ class PromptTemplate(BaseModel):
     2. **G14 contract**: ``template_id``, ``content_hash``,
        ``model_constraint``, ``holes``, ``system_prompt``,
        ``user_template``, ``output_schema_ref``, ``regression_fixtures``.
-       Per ``llm_prompt_contracts.md §3``: this is the
+       Per ``CONTRACTS.md#prompt-template-hole-grammar``: this is the
        provenance-anchored, content-hash-pinned, gate-bindable shape
        that production prompts SHOULD migrate to.
 

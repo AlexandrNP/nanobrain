@@ -1,6 +1,6 @@
 """WorkflowRunContext (G13) — per-run scope for multi-tenant isolation.
 
-Per ``apecx-mcp-integration/docs/nanobrain_capability_gaps.md G13``: when
+Per ``apecx-mcp-integration/docs/CONTRACTS.md#g13``: when
 multiple workflow runs share a ProxyStore (Redis-backed in production),
 keys from run A can collide with keys from run B without per-run scoping.
 ``WorkflowRunContext`` carries a ``run_id`` (UUIDv7 in production; any

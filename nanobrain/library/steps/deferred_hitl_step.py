@@ -5,7 +5,7 @@ eval_03 Round 3 G27: pre-G27, the framework had ``ApprovalStep`` and
 synchronously, but no first-class primitive for "the workflow needs
 to wait for a human decision, possibly minutes or hours, possibly
 across process restarts". The autonomy-mode design depends on this:
-``autonomous_workflow_agent.md §6`` describes a "pause for human input,
+``CONTRACTS.md#autonomy-hitl`` describes a "pause for human input,
 notify the operator, resume on resolution" flow that has no framework
 support.
 

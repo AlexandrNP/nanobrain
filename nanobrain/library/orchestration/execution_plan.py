@@ -1,7 +1,7 @@
 """ExecutionPlanConfig + ExecutionPlanDataUnit (G16).
 
-Per ``apecx-mcp-integration/docs/nanobrain_capability_gaps.md G16`` and
-``apecx-mcp-integration/docs/agent_workflow_authoring.md §3.1``: the
+Per ``apecx-mcp-integration/docs/CONTRACTS.md#g16`` and
+``apecx-mcp-integration/docs/CONTRACTS.md#workflow-execution-plan``: the
 typed Phase-0 output schema. The orchestrator agent's sole authoring
 artifact is an ExecutionPlan; this module defines the schema as a
 nanobrain primitive (Pydantic ConfigBase with extra='forbid') and the
@@ -14,7 +14,7 @@ Three workspace constraints honored:
    shape the design package was built to eliminate.
 2. **Cross-references the design doc, not the framework** for the
    semantic spec. This module owns the on-the-wire shape; ownership of
-   *what each field means* lives in `agent_workflow_authoring.md §3`.
+   *what each field means* lives in `CONTRACTS.md#workflow-execution-plan`.
 3. **Backward compatibility**: this module is purely additive. Apecx-mcp
    code that uses a hand-rolled ExecutionPlan dict continues to work
    until the consumer migrates to the typed primitive.
@@ -31,11 +31,11 @@ from nanobrain.core.config.config_base import ConfigBase
 from nanobrain.core.data_unit import DataUnitMemory
 
 
-# Strategy literal — matches agent_workflow_authoring.md §2.1 (A=skeleton
+# Strategy literal — matches CONTRACTS.md#workflow-strategies (A=skeleton
 # selection, B=composition, C=synthesis; D is forbidden by construction).
 ExecutionPlanStrategy = Literal["A", "B", "C"]
 
-# Layer types — matches workflow_output_contract.md §4.1.
+# Layer types — matches CONTRACTS.md#output-layer-types.
 ExecutionPlanLayerType = Literal[
     "sequence", "structural", "functional", "evidence", "cross_source", "design"
 ]
@@ -49,7 +49,7 @@ ExecutionPlanExecutorKind = Literal[
 class ExecutionPlanLayer(ConfigBase):
     """One layer in a plan's `layers` list.
 
-    Per `workflow_output_contract.md §3.2`. A layer pairs a layer_type
+    Per `CONTRACTS.md#output-layer`. A layer pairs a layer_type
     with the data sources to consult and a brief expected_contribution
     string.
     """
@@ -111,7 +111,7 @@ class ExecutionPlanInterSkeletonLink(ConfigBase):
 
 
 class ExecutionPlanResourceEnvelope(ConfigBase):
-    """Per `agent_workflow_authoring.md §3.1`. Pinned at plan emission so
+    """Per `CONTRACTS.md#workflow-execution-plan`. Pinned at plan emission so
     the cost/walltime gates (HITL §3.4 / §3.5) have an honest target."""
     model_config = ConfigDict(extra="forbid")
 
@@ -122,9 +122,9 @@ class ExecutionPlanResourceEnvelope(ConfigBase):
 
 
 class ExecutionPlanProvenanceSeed(ConfigBase):
-    """Provenance threading per `agent_workflow_authoring.md §3.1`. Every
+    """Provenance threading per `CONTRACTS.md#workflow-execution-plan`. Every
     step in the lowered workflow inherits this seed via the lowering
-    pipeline's Step 6 (per `agent_workflow_authoring.md §5`)."""
+    pipeline's Step 6 (per `CONTRACTS.md#workflow-lowering`)."""
     model_config = ConfigDict(extra="forbid")
 
     session_id: str
@@ -140,7 +140,7 @@ class ExecutionPlanConfig(ConfigBase):
     """G16 — typed Phase-0 ExecutionPlan.
 
     The orchestrator agent's authoring output. The full semantic spec
-    lives in `apecx-mcp-integration/docs/agent_workflow_authoring.md §3.1`;
+    lives in `apecx-mcp-integration/docs/CONTRACTS.md#workflow-execution-plan`;
     this class is the on-the-wire schema.
 
     Workspace discipline:

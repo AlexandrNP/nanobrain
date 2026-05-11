@@ -1,6 +1,6 @@
 """CheckpointStep + ResumeStep (G5).
 
-Per ``apecx-mcp-integration/docs/nanobrain_capability_gaps.md G5``: ship
+Per ``apecx-mcp-integration/docs/CONTRACTS.md#g5``: ship
 the runtime primitives that snapshot a partial workflow run and re-enter
 it. The workflow-runner-side "skip upstream execution" hook is a
 follow-up task; this module ships the primitives and the manifest

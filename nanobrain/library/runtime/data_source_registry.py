@@ -2,13 +2,13 @@
 
 eval_03 Round 3 G24: pre-G24 every consumer of an external data source
 (VIOLIN snapshots, BV-BRC pulls, FAISS indices, taxdumps, RAG corpora)
-rolled their own version-pin policy. ``data_layer_evolution.md §3-4``
+rolled their own version-pin policy. ``CONTRACTS.md#data-version-pin``
 describes 14 such sources for the integration; without a primitive,
 each consumer's pin policy drifted independently and reproducibility
 was per-consumer rather than per-workflow. R2/R3 reproducibility is
 non-negotiable for an audit-bound deployment.
 
-P6+c decision (open question §8.8 of development_roadmap):
+P6+c decision (open question CONTRACTS.md#decision-p6+a (decisions section)):
   * **YAML format** — matches every other nanobrain config; one file
     per registry; entries are dict-shaped.
 

@@ -257,7 +257,7 @@ class TriggerConfig(ConfigBase):
     name: str = ""
 
     # G2 — dynamic expected-set narrowing for AllDataReceivedTrigger.
-    # See `apecx-mcp-integration/docs/nanobrain_capability_gaps.md G2`.
+    # See `apecx-mcp-integration/docs/CONTRACTS.md#g2`.
     # All fields default to None; a trigger that doesn't set them uses the
     # historical static-list semantics. When set, the trigger reads
     # `expected_set_source` (a workflow-level data unit reference of the form
@@ -286,7 +286,7 @@ class TriggerConfig(ConfigBase):
     )
 
     # G10 — gate-to-bottom semantics for AllDataReceivedTrigger. See
-    # `apecx-mcp-integration/docs/nanobrain_capability_gaps.md G10`.
+    # `apecx-mcp-integration/docs/CONTRACTS.md#g10`.
     # When 'publish_empty' (default; legacy), a payload of None blocks
     # firing — the trigger waits indefinitely. When 'gate_to_bottom',
     # the trigger ALSO recognizes the magic string
@@ -1906,7 +1906,7 @@ class ManualTrigger(TriggerBase):
 class EventTrigger(TriggerBase):
     """G22 — externally-fired event trigger.
 
-    Per ``apecx-mcp-integration/docs/nanobrain_capability_gaps.md G22``.
+    Per ``apecx-mcp-integration/docs/CONTRACTS.md#g22``.
 
     Designed for HTTP webhooks and message-bus subscriptions. The
     framework-provided primitive is **transport-agnostic**: this class

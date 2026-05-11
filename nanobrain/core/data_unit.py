@@ -51,7 +51,7 @@ class DataUnitConfig(ConfigBase):
     initial_value: Optional[str] = None
 
     # G3 — DataUnitProxyRef configuration (all optional; only meaningful for
-    # DataUnitProxyRef class). See `nanobrain_capability_gaps.md G3`.
+    # DataUnitProxyRef class). See `CONTRACTS.md#g3`.
     proxystore_connector: Optional[str] = Field(
         default=None,
         description="ProxyStore connector kind: 'file' | 'redis' | 'globus' | 'endpoint'. "
@@ -1954,7 +1954,7 @@ class DataUnitStream(DataUnitBase):
 # G3 — DataUnitProxyRef (added 2026-05-09)
 # ---------------------------------------------------------------------------
 #
-# Per `apecx-mcp-integration/docs/nanobrain_capability_gaps.md G3`: a DataUnit
+# Per `apecx-mcp-integration/docs/CONTRACTS.md#g3`: a DataUnit
 # whose payload is a ProxyStore reference rather than the bytes themselves.
 # Producers write to the ProxyStore and the data unit holds only the key.
 # Consumers can resolve the key on demand (`.get()`), pass the proxy onward
@@ -2007,7 +2007,7 @@ def _import_proxystore():
 class DataUnitProxyRef(DataUnitBase):
     """DataUnit whose payload is a ProxyStore reference.
 
-    Guarantees per `nanobrain_capability_gaps.md G3`:
+    Guarantees per `CONTRACTS.md#g3`:
 
     - ``set(value)`` writes to the configured ProxyStore and keeps only the
       key. The trigger cascade fires on key-set (the change-event payload

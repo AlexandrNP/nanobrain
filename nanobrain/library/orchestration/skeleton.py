@@ -1,7 +1,7 @@
 """Skeleton (G9) — first-class workflow-skeleton primitive.
 
-Per ``apecx-mcp-integration/docs/nanobrain_capability_gaps.md G9`` and
-``apecx-mcp-integration/docs/agent_workflow_authoring.md §4``: a skeleton
+Per ``apecx-mcp-integration/docs/CONTRACTS.md#g9`` and
+``apecx-mcp-integration/docs/CONTRACTS.md#workflow-skeleton-holes``: a skeleton
 is a pre-validated nanobrain workflow YAML with typed *holes* — named
 placeholders that the orchestrator fills at authoring time. Holes are
 declared in a sibling ``skeleton.schema.json`` (or inline) with type,
@@ -17,7 +17,7 @@ This module ships the framework primitives:
 What this module does NOT do (deferred to G17):
 
 - ``PlanLoweringStep`` — applies the 7 lowering steps from
-  ``agent_workflow_authoring.md §5``. Lives in ``plan_lowering_step.py``.
+  ``CONTRACTS.md#workflow-lowering``. Lives in ``plan_lowering_step.py``.
 - ``SkeletonLoaderStep`` — wraps registry lookup as a workflow step.
 
 Workspace constraints honored:
@@ -45,7 +45,7 @@ from nanobrain.core.config.config_base import ConfigBase
 
 
 # Hole types — superset of G14 PromptHole types: adds tool_descriptor_ref
-# per agent_workflow_authoring.md §4.1 (the type triggers special handling
+# per CONTRACTS.md#workflow-skeleton-holes (the type triggers special handling
 # in the lowering pipeline that resolves the ref against the UTD catalogue).
 SkeletonHoleType = Literal[
     "string", "integer", "number", "boolean",
@@ -75,7 +75,7 @@ class SkeletonHole(ConfigBase):
     """A typed hole declared in skeleton.schema.json (or inline alongside
     the skeleton body).
 
-    Per ``agent_workflow_authoring.md §4.1``: each hole has a type, a
+    Per ``CONTRACTS.md#workflow-skeleton-holes``: each hole has a type, a
     required flag, an optional default for optional holes, and a human
     description. The lowering pipeline's Gate-3 validates parameter
     bindings against this shape.
@@ -114,7 +114,7 @@ class Skeleton(ConfigBase):
        bypasses the file-only rule.
     3. ``Skeleton.load_from_directory(skeleton_dir)`` — convenience for
        the canonical layout: ``skeleton.yml`` + ``skeleton.schema.json``
-       per ``agent_workflow_authoring.md §4.1``.
+       per ``CONTRACTS.md#workflow-skeleton-holes``.
     """
     model_config = ConfigDict(extra="forbid")
 
@@ -234,7 +234,7 @@ class Skeleton(ConfigBase):
         return result
 
     def validate_against_schema(self) -> List[str]:
-        """Per agent_workflow_authoring.md §4.1: cross-check that every
+        """Per CONTRACTS.md#workflow-skeleton-holes: cross-check that every
         inline ``{{...}}`` token in the body has a corresponding entry
         in the holes schema, and vice versa.
 
@@ -300,7 +300,7 @@ class Skeleton(ConfigBase):
         """Convenience: load a skeleton from
         ``<skeleton_dir>/skeleton.yml`` + ``<skeleton_dir>/skeleton.schema.json``.
 
-        The directory layout matches ``agent_workflow_authoring.md §4.1``:
+        The directory layout matches ``CONTRACTS.md#workflow-skeleton-holes``:
 
         .. code-block:: text
 

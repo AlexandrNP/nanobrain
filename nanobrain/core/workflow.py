@@ -33,12 +33,12 @@ logger = logging.getLogger(__name__)
 # G7 Step 2 — auto_transfer deprecation WARNING (added 2026-05-09)
 # ---------------------------------------------------------------------------
 #
-# Per `apecx-mcp-integration/docs/nanobrain_capability_gaps.md G7`: the
+# Per `apecx-mcp-integration/docs/CONTRACTS.md#g7`: the
 # `LinkBase.auto_transfer` field defaults to False, meaning a `DirectLink`
 # (or subclass) without an explicit `auto_transfer: true` in YAML silently
 # no-ops on every trigger fire. The workflow loads cleanly, every step
 # runs, no exception is raised — but no data ever transfers. This is the
-# dominant silent-failure shape documented in `architecture.md §13`
+# dominant silent-failure shape documented in `CONTRACTS.md#arch-brutal-#3`
 # brutal-truth #3.
 #
 # Step 2 of the G7 migration plan is to emit a deprecation WARNING at
@@ -283,7 +283,7 @@ def _warn_on_implicit_auto_transfer(
             "to every DirectLink/TransformLink/ConditionalLink/FileLink/QueueLink "
             "in your YAML, OR set `config_version: 2` on this workflow once "
             "G7 v2 semantics ship to opt into the new default. "
-            "See nanobrain_capability_gaps.md G7 + architecture.md §13 brutal-truth #3.",
+            "See CONTRACTS.md#g7 + CONTRACTS.md#arch-brutal-#3.",
             workflow_name,
             len(implicit_links),
             ", ".join(implicit_links),
@@ -426,7 +426,7 @@ class WorkflowConfig(StepConfig):
     # (the default), the framework leaves each component on its own
     # default (``publish_empty`` for legacy compat).
     #
-    # See ``apecx-mcp-integration/docs/nanobrain_capability_gaps.md G10``.
+    # See ``apecx-mcp-integration/docs/CONTRACTS.md#g10``.
     gate_semantics: Optional[Literal["publish_empty", "gate_to_bottom"]] = Field(
         default=None,
         description="Workflow-level default gate_semantics. When set, this "
@@ -1561,7 +1561,7 @@ class Workflow(Step):
 
         bindings = dict(bindings or {})
 
-        # 2. Binding validation — Gate 3 of agent_workflow_authoring.md §6.
+        # 2. Binding validation — Gate 3 of CONTRACTS.md#workflow-gates.
         declared = sk.holes
         provided = set(bindings.keys())
         declared_names = set(declared.keys())
@@ -2276,8 +2276,8 @@ class Workflow(Step):
         # DirectLinks (or subclasses) whose YAML omits auto_transfer.
         # Without auto_transfer: true the link silently no-ops on every
         # trigger fire — the dominant silent-failure shape in the codebase
-        # (architecture.md §13 brutal-truth #3).
-        # See `apecx-mcp-integration/docs/nanobrain_capability_gaps.md G7`.
+        # (CONTRACTS.md#arch-brutal-#3).
+        # See `apecx-mcp-integration/docs/CONTRACTS.md#g7`.
         _warn_on_implicit_auto_transfer(
             workflow_name=getattr(config, 'name', '<unnamed>'),
             links_config=getattr(config, 'links', {}) or {},
@@ -2445,7 +2445,7 @@ class Workflow(Step):
         returns immediately while triggers fire in background tasks. That
         shape is correct for trigger-driven event flow but is the
         load-bearing source of the "the workflow loaded; nothing happened;
-        no error" silent-failure shape (architecture.md §13 brutal-truth #1).
+        no error" silent-failure shape (CONTRACTS.md#arch-brutal-#3 brutal-truth #1).
 
         ``run()`` is the canonical synchronous wrapper: invoke ``process()``,
         await the cascade until quiet, then collect the workflow-level
@@ -2495,7 +2495,7 @@ class Workflow(Step):
             answer = result['final_answer']  # whatever the workflow's
                                               # output data unit is named
 
-        Cross-reference: ``apecx-mcp-integration/docs/nanobrain_capability_gaps.md G8``.
+        Cross-reference: ``apecx-mcp-integration/docs/CONTRACTS.md#g8``.
         """
         if input_data is None:
             input_data = {}
@@ -2664,7 +2664,7 @@ class Workflow(Step):
         - HITL cost gate (checks workflow envelope against per-user
           threshold before executing).
 
-        See ``apecx-mcp-integration/docs/nanobrain_capability_gaps.md G12``.
+        See ``apecx-mcp-integration/docs/CONTRACTS.md#g12``.
         """
         from .step import ResourceEnvelope, aggregate_resource_envelopes
 

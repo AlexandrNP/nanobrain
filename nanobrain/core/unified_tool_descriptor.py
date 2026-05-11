@@ -1,13 +1,13 @@
 """UnifiedToolDescriptor (G15) — typed tool-card primitive.
 
-Per ``apecx-mcp-integration/docs/nanobrain_capability_gaps.md G15`` and
-``apecx-mcp-integration/docs/tool_descriptor_contract.md §2``: a typed
+Per ``apecx-mcp-integration/docs/CONTRACTS.md#g15`` and
+``apecx-mcp-integration/docs/CONTRACTS.md#td-vocab``: a typed
 shape that EVERY tool backend (Rhea, native nanobrain, GalaxyMCP) speaks.
 Promotes the ``ToolConfig.tool_card`` field from a free-form dict to a
 content-hash-pinned, capability-aware primitive.
 
 This module owns the on-the-wire schema; the semantic spec lives in
-``tool_descriptor_contract.md``. New tool authors should subclass
+``CONTRACTS.md#td-vocab``. New tool authors should subclass
 ToolBase as before; opting into the UTD path means populating
 ``tool_card`` with a UTD instance (or YAML dict in the UTD shape).
 
@@ -41,7 +41,7 @@ from .config.config_base import ConfigBase
 
 
 # ---------------------------------------------------------------------------
-# Enum-like literals — match tool_descriptor_contract.md §2 vocabulary.
+# Enum-like literals — match CONTRACTS.md#td-vocab vocabulary.
 # ---------------------------------------------------------------------------
 
 # SideEffectClass — what touching the tool does to the world. Used by
@@ -55,7 +55,7 @@ SideEffectClass = Literal[
     "destructive",         # may delete or overwrite irreversibly
 ]
 
-# DeterminismClass — per hpc_reproducibility_spec.md three-tier model.
+# DeterminismClass — per CONTRACTS.md#hpc-determinism three-tier model.
 # R1 = bit-exact reproducible; R2 = reproducible up to floating-point;
 # R3 = stochastic (e.g. LLM completion).
 DeterminismClass = Literal["R1", "R2", "R3"]
@@ -213,9 +213,9 @@ class UnifiedToolDescriptor(ConfigBase):
     uniformly across backends.
 
     Cross-references:
-    - ``apecx-mcp-integration/docs/tool_descriptor_contract.md §2`` —
+    - ``apecx-mcp-integration/docs/CONTRACTS.md#td-vocab`` —
       semantic spec.
-    - ``apecx-mcp-integration/docs/nanobrain_capability_gaps.md G15`` —
+    - ``apecx-mcp-integration/docs/CONTRACTS.md#g15`` —
       gap proposal.
     """
     model_config = ConfigDict(extra="forbid")

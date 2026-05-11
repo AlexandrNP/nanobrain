@@ -1,7 +1,7 @@
 """PlanLoweringStep (G17 part 2).
 
-Per ``apecx-mcp-integration/docs/nanobrain_capability_gaps.md G17`` and
-``apecx-mcp-integration/docs/agent_workflow_authoring.md §5``: the
+Per ``apecx-mcp-integration/docs/CONTRACTS.md#g17`` and
+``apecx-mcp-integration/docs/CONTRACTS.md#workflow-lowering``: the
 deterministic transformation that takes a (Skeleton, ExecutionPlan)
 pair and produces a content-addressed lowered workflow YAML.
 
@@ -185,7 +185,7 @@ class PlanLoweringStep(BaseStep):
         skeleton: Skeleton,
         bindings: Dict[str, Any],
     ) -> Dict[str, Any]:
-        """Per agent_workflow_authoring.md §6 Gate 3:
+        """Per CONTRACTS.md#workflow-gates:
         - Missing required holes FAIL-FAST.
         - Extra binding keys not declared in schema FAIL-FAST.
         - Defaults for optional holes are applied.
@@ -247,7 +247,7 @@ class PlanLoweringStep(BaseStep):
         """Replace ``{{<name>: <type>}}`` tokens in the body with their
         bound values.
 
-        Per agent_workflow_authoring.md §5 Step 3: the substitution must
+        Per CONTRACTS.md#workflow-lowering: the substitution must
         preserve YAML structural correctness. We use a simple regex
         replacement on the body string with the scalar value's
         YAML-canonical representation.
@@ -394,7 +394,7 @@ class PlanLoweringStep(BaseStep):
     # ------------------------------------------------------------------
 
     def _compute_lowered_yaml_hash(self, body: str) -> str:
-        """Per agent_workflow_authoring.md §5 Step 7: serialize the
+        """Per CONTRACTS.md#workflow-lowering: serialize the
         body in canonical form and SHA-256 it.
 
         Canonical form:

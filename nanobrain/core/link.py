@@ -46,7 +46,7 @@ def get_nested_value(data: Any, field_path: str) -> Any:
         Returns None on miss to preserve backwards compatibility with the legacy
         dict-condition path. NEW code (G1 PredicateConfig evaluator) uses
         ``get_nested_value_strict`` below, which FAIL-FASTs on miss to eliminate
-        the silent-failure shape (per ``nanobrain_capability_gaps.md G1``).
+        the silent-failure shape (per ``CONTRACTS.md#g1``).
     """
     try:
         current = data
@@ -93,7 +93,7 @@ def get_nested_value_strict(data: Any, field_path: str) -> Any:
 # G1 — Declarative predicate DSL for ConditionalLink
 # ---------------------------------------------------------------------------
 #
-# Per ``nanobrain_capability_gaps.md G1``: a fixed vocabulary of predicate
+# Per ``CONTRACTS.md#g1``: a fixed vocabulary of predicate
 # operators that an LLM (or human) can author safely in YAML, without needing
 # to synthesize a Python callable + import path. The evaluator is pure (no
 # side effects) and FAIL-FASTs on dotted-path miss when ``op != "exists"``.
@@ -134,7 +134,7 @@ class PredicateConfig(ConfigBase):
     field <path> missing in payload")`` for ``op != "exists"`` (where
     ``"exists"`` is itself the presence check).
 
-    Cross-reference ``nanobrain_capability_gaps.md G1``.
+    Cross-reference ``CONTRACTS.md#g1``.
     """
     model_config = ConfigDict(extra="forbid")
 
@@ -341,7 +341,7 @@ def parse_condition_from_config(condition_config: Union[str, Dict[str, Any], "Pr
     if isinstance(condition_config, str):
         logger.warning(
             "ConditionalLink condition: bare-string form is deprecated; "
-            "migrate to a declarative predicate per nanobrain_capability_gaps.md G1, "
+            "migrate to a declarative predicate per CONTRACTS.md#g1, "
             "e.g. {op: contains, field: <path>, value: %r}",
             condition_config,
         )
@@ -355,7 +355,7 @@ def parse_condition_from_config(condition_config: Union[str, Dict[str, Any], "Pr
         logger.warning(
             "ConditionalLink condition: legacy field/operator/value form is "
             "deprecated; migrate to a declarative predicate per "
-            "nanobrain_capability_gaps.md G1 (use 'op' key with vocabulary "
+            "CONTRACTS.md#g1 (use 'op' key with vocabulary "
             "eq/ne/in/contains/exists/all/any/not). Got config: %r",
             condition_config,
         )
@@ -537,7 +537,7 @@ class LinkConfig(ConfigBase):
     retry_attempts: int = Field(default=3, ge=1)
 
     # G10 — gate-to-bottom semantics for ConditionalLink. See
-    # `apecx-mcp-integration/docs/nanobrain_capability_gaps.md G10`.
+    # `apecx-mcp-integration/docs/CONTRACTS.md#g10`.
     # When 'publish_empty' (default; legacy), a ConditionalLink whose
     # condition evaluates False is a no-op — the target data unit is
     # left untouched. Downstream AllDataReceivedTrigger will deadlock
@@ -1997,7 +1997,7 @@ class ConditionalLink(LinkBase):
 
     G10 — gate-to-bottom semantics
     ------------------------------
-    See ``apecx-mcp-integration/docs/nanobrain_capability_gaps.md G10``.
+    See ``apecx-mcp-integration/docs/CONTRACTS.md#g10``.
     When ``gate_semantics == 'publish_empty'`` (default; legacy), a False
     condition is a no-op — the target data unit is left untouched.
     Downstream ``AllDataReceivedTrigger`` will deadlock unless the upstream

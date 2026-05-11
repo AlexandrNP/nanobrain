@@ -1,7 +1,7 @@
 """ToolExecutionStep (G11) — tool-step taxonomy.
 
-Per ``apecx-mcp-integration/docs/nanobrain_capability_gaps.md G11`` and
-``apecx-mcp-integration/docs/external_tool_integration.md``: tool dispatch
+Per ``apecx-mcp-integration/docs/CONTRACTS.md#g11`` and
+``apecx-mcp-integration/docs/CONTRACTS.md#ext-tool-dispatch``: tool dispatch
 is a Step concern (not an Agent concern — see audit finding F-4).
 ``ToolExecutionStep`` is the BaseStep subclass that consumes a UTD
 reference (G15) and dispatches to a registered backend adapter.

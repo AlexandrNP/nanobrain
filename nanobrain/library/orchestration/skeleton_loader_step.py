@@ -1,11 +1,11 @@
 """SkeletonLoaderStep (G17 part 1).
 
-Per ``apecx-mcp-integration/docs/nanobrain_capability_gaps.md G17`` and
-``apecx-mcp-integration/docs/agent_workflow_authoring.md §5``: resolves
+Per ``apecx-mcp-integration/docs/CONTRACTS.md#g17`` and
+``apecx-mcp-integration/docs/CONTRACTS.md#workflow-lowering``: resolves
 ``skeleton_id + skeleton_version`` against a SkeletonRegistry and emits
 the resolved Skeleton's body + holes for the downstream PlanLoweringStep.
 
-This is Step 1 of the lowering pipeline (per agent_workflow_authoring.md §5):
+This is Step 1 of the lowering pipeline (per CONTRACTS.md#workflow-lowering):
 "Skeleton resolution. Resolve skeleton_id + skeleton_version against the
 content-addressed registry. Fetch skeleton.yml and skeleton.schema.json.
 If the version is a semver tag, resolve it to a digest now and record

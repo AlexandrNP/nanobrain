@@ -856,7 +856,7 @@ class ConfigManager:
             'development': {
                 # DEFAULT FLIPPED 2026-04-23 (T14 mocks-policy): was True.
                 # See workspace 2026-04-21 mocks policy + audit at
-                # apecx-mcp-integration/docs/nanobrain_mock_audit.md §2-D1.
+                # apecx-mcp-integration/docs/CONTRACTS.md#mock-§2-d1.
                 # Operators who want mock clients set it explicitly.
                 'use_mock_clients': False,
                 'validate_schema': True,
@@ -1109,7 +1109,7 @@ class ConfigManager:
                 "Real LLM / A2A / Academy clients may be replaced with mock "
                 "responses. Unset `development.use_mock_clients` in your "
                 "config file for production. See T14 audit at "
-                "apecx-mcp-integration/docs/nanobrain_mock_audit.md §2-D1."
+                "apecx-mcp-integration/docs/CONTRACTS.md#mock-§2-d1."
             )
             self._dev_mode_warning_emitted = True
         return is_dev

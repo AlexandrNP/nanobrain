@@ -5,7 +5,7 @@ eval_03 Round 3 G28: G15 (UnifiedToolDescriptor) shipped with a
 existed at the workflow loader / step dispatcher boundary. Tool
 authors who declared ``requires_capability: ["hpc.submit"]`` got a
 free-form attribute that no caller checked — the safety surface in
-``hitl_safety_gates.md §7`` and ``tool_descriptor_contract.md §6``
+``CONTRACTS.md#hitl-gate-cap`` and ``CONTRACTS.md#td-capability``
 was paper-only.
 
 Post-G28 the framework ships:

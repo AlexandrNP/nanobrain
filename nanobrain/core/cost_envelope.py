@@ -2,10 +2,10 @@
 
 eval_03 Round 3 G26: pre-G26 the framework had ``ResourceEnvelope``
 (G12 — declarative per-step + workflow-level resource declarations)
-but no *enforcement* primitive. ``hitl_safety_gates.md §8`` GATE-R1
+but no *enforcement* primitive. ``CONTRACTS.md#hitl-gate-cost-r1`` GATE-R1
 describes "halt the task when its cumulative cost exceeds the cap";
 that halt did not exist. The per-deployment-per-day ceiling that
-``autonomous_workflow_agent.md §8`` calls out cannot stop a single
+``CONTRACTS.md#autonomy-cost`` calls out cannot stop a single
 runaway task.
 
 Post-G26 the framework ships:
@@ -18,7 +18,7 @@ Post-G26 the framework ships:
     clients, tool calls, and any other cost-emitting code path
     consult this and call ``record(kind, amount)`` to charge cost
 
-P6+b decision (open question §8.8 of development_roadmap):
+P6+b decision (open question CONTRACTS.md#decision-p6+a (decisions section)):
   * **Per-step cap AND per-workflow cap, both declarative.** The
     workflow's CostEnvelope is the OUTER cap (cumulative across
     every step's record()). Per-step caps live on StepConfig and are

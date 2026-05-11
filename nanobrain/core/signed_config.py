@@ -1,7 +1,7 @@
 """SignedConfig loader (G19).
 
-Per ``apecx-mcp-integration/docs/nanobrain_capability_gaps.md G19`` and
-``apecx-mcp-integration/docs/security_threat_model.md §6.1``: detached
+Per ``apecx-mcp-integration/docs/CONTRACTS.md#g19`` and
+``apecx-mcp-integration/docs/CONTRACTS.md#td-signing``: detached
 ed25519 signature verification for YAML configs. HPC bundles ship signed
 ``.yml.sig`` files so a replay can verify the YAML hasn't been tampered
 with between export and replay.
@@ -19,7 +19,7 @@ Threat model:
 Implementation notes:
 
 - Uses ``cryptography`` library (already a transitive dep via proxystore).
-- ``ed25519`` per the ``apecx-mcp-integration/docs/tool_descriptor_contract.md §10.2``
+- ``ed25519`` per the ``apecx-mcp-integration/docs/CONTRACTS.md#td-signing``
   signing protocol — small keys, fast, post-quantum-friendly.
 - Signature is over the canonical bytes of the file (the EXACT bytes
   on disk, not a re-serialization). This means trailing newlines and

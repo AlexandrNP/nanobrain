@@ -2,7 +2,7 @@
 
 eval_03 Round 3 G25: G14 (PromptTemplate primitive) shipped, but the
 harness that catches the AC1-breaking class of regressions did not.
-``llm_prompt_contracts.md §1`` documents two AC1-breaking regressions
+``CONTRACTS.md#prompt-ac1-regressions`` documents two AC1-breaking regressions
 on 2026-04-22 from prose-level edits to ``system.md``; without G25,
 G14 is an incomplete cure (the data-model is pinned, but no automated
 regression check runs the prompt against its declared fixtures).

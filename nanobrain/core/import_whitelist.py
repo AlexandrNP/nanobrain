@@ -1,7 +1,7 @@
 """Class-path import whitelist (G20).
 
-Per ``apecx-mcp-integration/docs/nanobrain_capability_gaps.md G20`` and
-``apecx-mcp-integration/docs/security_threat_model.md §5.8 T-CL-1``: the
+Per ``apecx-mcp-integration/docs/CONTRACTS.md#g20`` and
+``apecx-mcp-integration/docs/CONTRACTS.md#threat-t-cl-1``: the
 framework's ``class:`` field accepts any dotted Python path and the
 loader imports it. A malicious skeleton or UTD with
 ``class: attacker.module.Backdoor`` triggers arbitrary code at workflow
@@ -190,6 +190,6 @@ def check_class_import_allowed(
         f"To allow this class, add a matching prefix to the whitelist "
         f"via set_class_import_whitelist(...) OR pass it via the "
         f"workflow's class_import_whitelist option. "
-        f"See nanobrain_capability_gaps.md G20 + security_threat_model.md "
+        f"See CONTRACTS.md#g20 + CONTRACTS.md#threat-t-cl-1 "
         f"§5.8 T-CL-1."
     )

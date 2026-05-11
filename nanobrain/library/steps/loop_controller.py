@@ -1,6 +1,6 @@
 """LoopController — bounded-cycle relaxation primitive for nanobrain workflows.
 
-Per ``apecx-mcp-integration/docs/nanobrain_capability_gaps.md G18``: a Step
+Per ``apecx-mcp-integration/docs/CONTRACTS.md#g18``: a Step
 that owns the iteration counter for a back-edge through the workflow DAG.
 Without an iteration cap, a workflow with a back-edge becomes an infinite
 loop. The framework's existing cycle detector rejects all cycles by default;
@@ -10,7 +10,7 @@ back-edges with a hard iteration cap.
 Use case
 --------
 The motivating use case is the agent-authored workflow repair loop
-(``agent_workflow_authoring.md §7``): when validation rejects an
+(``CONTRACTS.md#workflow-repair-loop``): when validation rejects an
 ``ExecutionPlan``, the orchestrator routes the rejection back to
 ``Phase0PlanningStep`` for repair. The repair loop has a hard cap of
 **two repair attempts** (per the spec); after the cap, the agent
@@ -56,9 +56,9 @@ What this primitive does NOT do
   thread that state through the back-edge payload itself.
 
 Cross-references:
-- ``apecx-mcp-integration/docs/nanobrain_capability_gaps.md G18`` — gap proposal
-- ``apecx-mcp-integration/docs/agent_workflow_authoring.md §7`` — the repair loop
-- ``apecx-mcp-integration/docs/reasoning_patterns_library.md P7`` — retry-with-feedback
+- ``apecx-mcp-integration/docs/CONTRACTS.md#g18`` — gap proposal
+- ``apecx-mcp-integration/docs/CONTRACTS.md#workflow-repair-loop`` — the repair loop
+- ``apecx-mcp-integration/docs/CONTRACTS.md#reasoning-p7`` — retry-with-feedback
 """
 
 from __future__ import annotations

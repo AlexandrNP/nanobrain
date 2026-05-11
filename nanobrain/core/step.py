@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 # G6 — Typed step input/output schemas (added 2026-05-09)
 # ---------------------------------------------------------------------------
 #
-# Per `apecx-mcp-integration/docs/nanobrain_capability_gaps.md G6`: every
+# Per `apecx-mcp-integration/docs/CONTRACTS.md#g6`: every
 # step's `process()` may declare an input + output schema. The framework
 # validates payloads at the wire boundary: input on the way in, output on
 # the way out. The dominant motivation is the silent-failure shape where
@@ -162,7 +162,7 @@ class SchemaRef(ConfigBase):
     `Cls.model_validate(payload)`; for JSON Schema, it uses `jsonschema`
     (already a transitive dependency of the framework via several extras).
 
-    Cross-reference `apecx-mcp-integration/docs/nanobrain_capability_gaps.md G6`.
+    Cross-reference `apecx-mcp-integration/docs/CONTRACTS.md#g6`.
     """
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
@@ -362,7 +362,7 @@ class StepConfig(ConfigBase):
 
     # G6 — typed input/output schemas (additive; default None preserves
     # historical no-validation behavior).
-    # See `apecx-mcp-integration/docs/nanobrain_capability_gaps.md G6`.
+    # See `apecx-mcp-integration/docs/CONTRACTS.md#g6`.
     step_input_schema: Optional[Union[Dict[str, Any], 'SchemaRef']] = Field(
         default=None,
         description="G6 — declarative schema for the dict passed to process(). "
@@ -381,7 +381,7 @@ class StepConfig(ConfigBase):
     # G12 — declarative resource envelope (additive; default None preserves
     # historical un-bounded behavior). Used by HPC bundle exporter + cost
     # gate (HITL §3.4) to project workflow resource needs before execution.
-    # See `apecx-mcp-integration/docs/nanobrain_capability_gaps.md G12`.
+    # See `apecx-mcp-integration/docs/CONTRACTS.md#g12`.
     resource_envelope: Optional[Union[Dict[str, Any], 'ResourceEnvelope']] = Field(
         default=None,
         description="G12 — coarse resource projection: walltime_minutes, "
