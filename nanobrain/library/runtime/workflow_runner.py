@@ -958,6 +958,14 @@ class WorkflowRunner(FromConfigBase):
                                     exc, "step_name", None
                                 ),
                                 "prompt": getattr(exc, "prompt", None),
+                                # G27 Option B: when the suspending step
+                                # is configured with checkpoint_dir, a
+                                # G5 manifest path rides on the
+                                # exception. Forward it so resume can
+                                # hand it back to the workflow callable.
+                                "checkpoint_manifest_handle": getattr(
+                                    exc, "checkpoint_manifest_handle", None
+                                ),
                             }
                             # Do NOT set completed_at; the task is
                             # waiting for resolve(), not done.
@@ -1144,6 +1152,21 @@ class WorkflowRunner(FromConfigBase):
                 f"same-process resume only."
             )
 
+        # G27 Option B (2026-05-11) — when the suspending step recorded
+        # a checkpoint manifest handle on suspension_info, forward it
+        # to the resumed workflow_callable via a reserved payload key.
+        # Workflow authors check ``__resume_checkpoint_handle__`` and
+        # short-circuit pre-HITL steps (e.g., feed the manifest into a
+        # ``ResumeStep``). When the suspending step ran in Option A
+        # mode (no checkpoint_dir), the handle is None and the resumed
+        # payload is identical to the original — Option A behavior is
+        # preserved bit-for-bit.
+        suspension = handle.suspension_info or {}
+        manifest_handle = suspension.get("checkpoint_manifest_handle")
+        if manifest_handle is not None and isinstance(payload, dict):
+            payload = dict(payload)  # do not mutate the stored original
+            payload["__resume_checkpoint_handle__"] = manifest_handle
+
         # Clear suspension_info + re-spawn the asyncio task with the
         # original args. Use a fresh PauseSignal — the prior one's
         # event-loop scope ends with the prior _runner.
@@ -1191,6 +1214,9 @@ class WorkflowRunner(FromConfigBase):
                                     exc, "step_name", None
                                 ),
                                 "prompt": getattr(exc, "prompt", None),
+                                "checkpoint_manifest_handle": getattr(
+                                    exc, "checkpoint_manifest_handle", None
+                                ),
                             }
                             await self._store.update(handle)
                             return

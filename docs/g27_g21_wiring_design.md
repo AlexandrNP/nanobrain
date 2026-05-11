@@ -192,11 +192,22 @@ Operator picks one:
    (SQLite + Postgres serialization).
 2. Wait for Option B (full G5-checkpoint integration); ship neither
    until then. **REJECTED** in favor of Option A v1.
-3. Both: A first, B as G27.2. **CURRENT STATE** — A v1 is live;
-   B is evaluated below.
+3. Both: A first, B as G27.2. **DONE 2026-05-11** — Option B opt-in
+   composition shipped alongside Option A v1. DeferredHITLStep
+   accepts ``checkpoint_dir``; when set, writes a G5-compatible
+   manifest of ``input_data`` before raising; the manifest path
+   propagates through ``ApprovalPendingError.checkpoint_manifest_handle``
+   → ``suspension_info["checkpoint_manifest_handle"]`` → the resumed
+   payload's reserved key ``__resume_checkpoint_handle__``. Workflow
+   authors thread the handle into ``ResumeStep`` to skip pre-HITL
+   work. The framework does NOT auto-skip steps — opaque
+   workflow_callable bodies make that fundamentally non-framework-
+   native; composition with G5 primitives is the supported path.
 
 The G27 primitive is already shipped + tested; Option A v1 is now
-also shipped + tested.
+also shipped + tested; Option B opt-in composition is now also
+shipped + tested (8 new tests in
+``tests/unit/test_g27_option_b_checkpoint.py``).
 
 ## Option B evaluation framework (instrumentation, 2026-05-11)
 
@@ -249,26 +260,35 @@ G5 checkpoint integration's complexity cost.
     pain point only after a particular workflow shape becomes
     popular.
 
-### What Option B implementation would entail (for reference)
+### What Option B implementation entailed (shipped 2026-05-11)
 
-When the operator chooses to implement Option B:
+The concrete diff that landed Option B:
 
-  1. ``DeferredHITLStep`` writes a G5 ``WorkflowCheckpoint`` (via
-     CheckpointStep) IMMEDIATELY before raising ApprovalPendingError.
-     Captures all upstream DataUnits + the step's input.
-  2. ``WorkflowRunner.run_detached`` records the checkpoint manifest
-     handle in ``suspension_info["checkpoint_handle"]``.
-  3. ``resume_suspended`` re-creates the workflow from the manifest
-     (G5's ResumeStep machinery) at the suspended step boundary,
-     re-invokes ONLY that step (which now finds the resolved approval
-     and returns).
-  4. Workflow content_hash pin: if the workflow YAML changed between
-     suspend + resume, FAIL-FAST (already a G5 contract — the manifest
-     pins the workflow's identity).
-  5. New tests: a multi-step workflow with a non-trivial pre-HITL
-     pipeline. Assert pre-HITL steps fire exactly once across the
-     suspend + resume cycle.
+  1. ``DeferredHITLStep`` config gains optional ``checkpoint_dir``.
+     When set, ``process()`` writes a G5-schema-compatible manifest
+     of ``input_data`` to ``<checkpoint_dir>/<approval_id>.manifest.json``
+     immediately before raising ``ApprovalPendingError``. The
+     deterministic ``approval_id`` keeps re-suspensions on the same
+     gate idempotent (same manifest path).
+  2. ``ApprovalPendingError`` gains ``checkpoint_manifest_handle:
+     Optional[str]`` — None when ``checkpoint_dir`` is absent
+     (Option A bit-for-bit), the manifest path otherwise.
+  3. ``WorkflowRunner._runner`` and ``_resumed_runner`` forward the
+     handle into ``suspension_info["checkpoint_manifest_handle"]``.
+  4. ``resume_suspended`` injects the handle back into the resumed
+     payload via the reserved key ``__resume_checkpoint_handle__``.
+     Workflow authors check this key and feed it into a
+     ``ResumeStep`` upstream of the HITL gate to short-circuit
+     pre-HITL work. The framework does NOT introspect the workflow
+     callable to "skip steps" — that would break the opaque-callable
+     contract that ``run_detached`` depends on. Composition with G5
+     primitives is the supported path.
+  5. Tests: 8 new in ``tests/unit/test_g27_option_b_checkpoint.py``,
+     including a load-bearing end-to-end test that the manifest
+     written by DeferredHITLStep is consumable by ``ResumeStep``
+     (round-trip works).
 
-The G5 checkpoint primitive (``CheckpointStep`` +
-``ResumeStep``) is already shipped (commit `c84b510` lineage).
-Option B is composition work, not new framework primitives.
+The G5 checkpoint primitive (``CheckpointStep`` + ``ResumeStep``)
+already shipped (commit `c84b510` lineage); Option B is genuinely
+composition work — the only new framework surface is the optional
+config field + the reserved payload key.
