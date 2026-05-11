@@ -41,10 +41,32 @@ from nanobrain.library.steps import (
 
 _REDIS_HOST = os.environ.get("REDIS_TEST_HOST")
 _REDIS_PORT = os.environ.get("REDIS_TEST_PORT")
+
+
+def _redis_client_importable() -> bool:
+    """The proxystore Redis connector requires the ``redis`` Python
+    client AND ``proxystore[redis]``. CI runners may ship the server
+    container but not the Python deps; tests must skip cleanly in
+    that case rather than erroring at fixture-setup time.
+    Silent-failure-prevention check — guards against the 2026-05-11
+    CI failure where ``REDIS_TEST_HOST`` was set but ``redis`` was
+    not pip-installed."""
+    try:
+        import redis  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
 _redis_skip = pytest.mark.skipif(
-    not (_REDIS_HOST and _REDIS_PORT),
-    reason="REDIS_TEST_HOST + REDIS_TEST_PORT not set; run a local "
-           "redis + set the env vars to enable Redis integration tests",
+    not (_REDIS_HOST and _REDIS_PORT and _redis_client_importable()),
+    reason=(
+        "Redis tests skipped — need REDIS_TEST_HOST + REDIS_TEST_PORT "
+        "env vars AND `pip install redis` (Python client). CI ships "
+        "the Redis server container but does not pip-install the "
+        "client by default; add ``redis`` to your install "
+        "(e.g. ``pip install redis proxystore[redis]``) to enable."
+    ),
 )
 
 

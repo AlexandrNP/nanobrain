@@ -199,9 +199,9 @@ class CostTracker:
         # similarly even though the cap check happens to catch it.
         if math.isnan(amount):
             raise ValueError(
-                f"FAIL-FAST: CostTracker.record amount must be a "
-                f"finite number; got NaN. NaN silently corrupts the "
-                f"ledger because every NaN comparison returns False."
+                "FAIL-FAST: CostTracker.record amount must be a "
+                "finite number; got NaN. NaN silently corrupts the "
+                "ledger because every NaN comparison returns False."
             )
         if math.isinf(amount):
             raise ValueError(
