@@ -1,0 +1,43 @@
+# Pre-commit hooks for nanobrain.
+#
+# Mirrors the CI workflow's gating checks at
+# ``.github/workflows/tests.yml`` so any failure CI would catch fires
+# locally on commit instead. Before this file existed (added 2026-05-11
+# after the 8fbfca6 push series exposed ruff F541 in CI), there was no
+# local gate — pre-commit on apecx-mcp-integration's worktree only
+# touched that repo's own src/, not nanobrain's.
+#
+# To activate locally:
+#
+#   pip install pre-commit
+#   pre-commit install
+#
+# After install, every ``git commit`` runs these hooks; a failure
+# blocks the commit. Bypass (use sparingly!) with ``--no-verify``.
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: check-yaml
+      - id: check-merge-conflict
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-added-large-files
+        args: ["--maxkb=500"]
+
+  # Matches the CI ``lint`` job exactly:
+  #   ``ruff check nanobrain/`` against the [tool.ruff] config in
+  #   pyproject.toml. The ``--fix`` arg auto-fixes safe issues during
+  #   commit — if files changed, pre-commit re-prompts so the
+  #   developer sees what was fixed before the commit lands.
+  #
+  # Pin the ruff version (v0.15.11) so a fresh-laptop install gets
+  # the same version CI's ``pip install ruff`` resolves at install
+  # time. When CI's pip-resolved version drifts past this pin,
+  # update here in lockstep so the gate stays honest.
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.11
+    hooks:
+      - id: ruff
+        args: [--fix]
