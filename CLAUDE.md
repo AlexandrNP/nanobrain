@@ -6,6 +6,81 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Nanobrain is an event-driven AI agent framework for distributed workflows. It's currently in research preview and has dependencies on HPC systems and external frameworks. The framework uses a mandatory configuration-driven architecture where ALL components are created through the `from_config()` pattern.
 
+## Recent additions (2026-05-11 — eval_03 arc finalization: adversarial probes + G27 Option B + Rec 4 migration)
+
+This chain finalizes the eval_03 arc opened on 2026-05-09. The
+recommendations from the prior session's status report were:
+Rec 1 (deploy + collect Option B data — operator action; shipped
+framework-native equivalent as an evaluation TOOL), Rec 2 (G27
+Option B framework-side wiring), Rec 4 (migrate apecx-mcp's
+``_workspace.py`` to nanobrain's G40 helper), plus adversarial
+probes for critical bugs.
+
+**Adversarial probes**: 3 silent-failure bugs found + fixed:
+
+- ``CostTracker.record`` accepted NaN — NaN slipped past ``< 0``
+  AND ``> cap`` checks (every NaN comparison returns False), silently
+  corrupting the ledger. Fixed: explicit ``math.isnan`` + ``math.isinf``
+  guards raise ``ValueError`` before any state mutation. Source:
+  ``nanobrain/core/cost_envelope.py``.
+- ``_subscriber_stack`` contextvar default was a mutable list — a
+  tripwire for cross-context mutation bugs. Fixed: default is now
+  ``()``; mutation attempts raise ``AttributeError`` immediately.
+  Source: ``nanobrain/core/step_events.py``.
+- ``WorkflowRunner.resume_suspended`` had a concurrent-call race —
+  two callers passing the status check could spawn duplicate asyncio
+  tasks for the same task_id. Fixed: guard via ``self._tasks`` dict
+  in-flight detection. Source:
+  ``nanobrain/library/runtime/workflow_runner.py``.
+
+All three fixes ship with regression tests in
+``tests/unit/test_g_arc_adversarial_probes.py`` (9 tests).
+
+**G27 Option B** — opt-in G5 checkpoint integration on
+``DeferredHITLStep``:
+
+- ``DeferredHITLStep`` config gains optional ``checkpoint_dir``.
+  When set, ``process()`` writes a G5-compatible filesystem manifest
+  of ``input_data`` to ``<checkpoint_dir>/<approval_id>.manifest.json``
+  before raising ``ApprovalPendingError``.
+- ``ApprovalPendingError`` gains ``checkpoint_manifest_handle:
+  Optional[str]``. The handle propagates through
+  ``suspension_info["checkpoint_manifest_handle"]`` and into the
+  resumed workflow's payload via reserved key
+  ``__resume_checkpoint_handle__``.
+- Workflow authors thread the handle into ``ResumeStep`` to
+  short-circuit pre-HITL work — Option B becomes genuine composition
+  with the already-shipped G5 primitives. The framework does NOT
+  introspect the opaque ``workflow_callable`` to auto-skip steps.
+- Behavior preservation: when ``checkpoint_dir`` is absent (default),
+  Option A's behavior is bit-for-bit identical — no manifest written,
+  handle is None, no reserved key in resumed payload.
+- 8 new tests in ``tests/unit/test_g27_option_b_checkpoint.py``,
+  including a load-bearing round-trip test against ``ResumeStep``.
+
+**Rec 1 framework-native equivalent — G27 Option B evaluation tool**:
+
+- ``nanobrain/scripts/g27_option_b_eval.py``. Operator-facing CLI tool
+  that reads SQLite/Postgres TaskStore and emits a recommendation
+  (``stick_with_A`` / ``inconclusive`` / ``promote_B``) based on
+  ``max_resume_count × pre_hitl_step_seconds`` vs. configurable
+  thresholds. Supports ``--json`` for machine-readable output. 9
+  tests in ``tests/unit/test_g27_option_b_eval_tool.py``.
+
+**Rec 4 — apecx-mcp migration to nanobrain G40 helper**:
+
+- ``apecx-mcp-integration/src/apecx_integration/_workspace.py`` now
+  delegates to ``nanobrain.library.runtime.workspace_root.locate_workflow_root``,
+  retiring G40-WA-1 from the workaround inventory. The
+  ``$APECX_WORKSPACE_ROOT`` env var is forwarded to G40's
+  ``env_var`` parameter for parity with the prior behavior.
+
+**Net regression status this chain**: 8 new framework-side tests
+(Option B) + 9 new framework-side tests (adversarial probes) + 9 new
+framework-side tests (Option B eval tool); ``939 passed, 7 skipped,
+0 regressions`` for nanobrain unit suite; ``51 passed, 4 skipped``
+for nanobrain integration suite.
+
 ## Recent additions (2026-05-10 — eval_03 Tier 4 + G31 runner-side wiring + G27↔G21 design)
 
 This chain landed eval_03 Tier 4 (the final 4 deferred items) plus the
