@@ -303,6 +303,9 @@ class SqliteTaskStore(TaskStore):
     Multi-process / cross-restart resume is Step 4 scope.
     """
 
+    # G27 wiring (2026-05-11): ``suspension_info_json`` column added
+    # for soft-suspend persistence. Existing databases get the column
+    # via the idempotent ALTER below.
     _SCHEMA = """
         CREATE TABLE IF NOT EXISTS detached_tasks (
             task_id TEXT PRIMARY KEY,
@@ -312,7 +315,8 @@ class SqliteTaskStore(TaskStore):
             completed_at TEXT,
             result_json TEXT,
             error TEXT,
-            cost_actual_json TEXT
+            cost_actual_json TEXT,
+            suspension_info_json TEXT
         )
     """
 
@@ -320,6 +324,17 @@ class SqliteTaskStore(TaskStore):
         self._conn = sqlite3.connect(db_path, isolation_level=None,
                                      check_same_thread=False)
         self._conn.execute(self._SCHEMA)
+        # G27 wiring — additive ALTER for tables created before this
+        # column existed. SQLite raises "duplicate column name" when
+        # the column is already present; we swallow that specific
+        # error class so the migration is idempotent.
+        try:
+            self._conn.execute(
+                "ALTER TABLE detached_tasks ADD COLUMN suspension_info_json TEXT"
+            )
+        except sqlite3.OperationalError as exc:
+            if "duplicate column name" not in str(exc).lower():
+                raise
         self._lock = asyncio.Lock()
 
     @staticmethod
@@ -333,6 +348,7 @@ class SqliteTaskStore(TaskStore):
             json.dumps(h.result) if h.result is not None else None,
             h.error,
             json.dumps(h.cost_actual) if h.cost_actual else None,
+            json.dumps(h.suspension_info) if h.suspension_info else None,
         )
 
     @staticmethod
@@ -352,13 +368,18 @@ class SqliteTaskStore(TaskStore):
             result=json.loads(r[5]) if r[5] else None,
             error=r[6],
             cost_actual=json.loads(r[7]) if r[7] else None,
+            # G27 wiring — column may be absent on rows written by a
+            # pre-migration build (len(r) == 8). Tolerate both shapes.
+            suspension_info=(
+                json.loads(r[8]) if len(r) > 8 and r[8] else None
+            ),
         )
 
     async def insert(self, handle: DetachedTaskHandle) -> None:
         async with self._lock:
             try:
                 self._conn.execute(
-                    "INSERT INTO detached_tasks VALUES (?,?,?,?,?,?,?,?)",
+                    "INSERT INTO detached_tasks VALUES (?,?,?,?,?,?,?,?,?)",
                     self._to_row(handle),
                 )
             except sqlite3.IntegrityError as exc:
@@ -370,7 +391,8 @@ class SqliteTaskStore(TaskStore):
         async with self._lock:
             self._conn.execute(
                 "UPDATE detached_tasks SET status=?, last_heartbeat_at=?, "
-                "completed_at=?, result_json=?, error=?, cost_actual_json=? "
+                "completed_at=?, result_json=?, error=?, cost_actual_json=?, "
+                "suspension_info_json=? "
                 "WHERE task_id=?",
                 (
                     handle.status,
@@ -379,6 +401,7 @@ class SqliteTaskStore(TaskStore):
                     json.dumps(handle.result) if handle.result is not None else None,
                     handle.error,
                     json.dumps(handle.cost_actual) if handle.cost_actual else None,
+                    json.dumps(handle.suspension_info) if handle.suspension_info else None,
                     handle.task_id,
                 ),
             )
@@ -387,7 +410,8 @@ class SqliteTaskStore(TaskStore):
         async with self._lock:
             cursor = self._conn.execute(
                 "SELECT task_id, status, created_at, last_heartbeat_at, "
-                "completed_at, result_json, error, cost_actual_json "
+                "completed_at, result_json, error, cost_actual_json, "
+                "suspension_info_json "
                 "FROM detached_tasks WHERE task_id=?",
                 (task_id,),
             )
@@ -398,7 +422,8 @@ class SqliteTaskStore(TaskStore):
             placeholders = ",".join(["?"] * len(_STATUS_ACTIVE))
             rows = self._conn.execute(
                 f"SELECT task_id, status, created_at, last_heartbeat_at, "
-                f"completed_at, result_json, error, cost_actual_json "
+                f"completed_at, result_json, error, cost_actual_json, "
+                f"suspension_info_json "
                 f"FROM detached_tasks WHERE status IN ({placeholders})",
                 _STATUS_ACTIVE,
             ).fetchall()
@@ -450,6 +475,9 @@ class PostgresTaskStore(TaskStore):
       subclass and swap in psycopg's AsyncConnectionPool.
     """
 
+    # G27 wiring (2026-05-11): ``suspension_info_json`` column added
+    # for soft-suspend persistence. Existing databases get the column
+    # via the idempotent ALTER in ``initialize()``.
     _SCHEMA = """
         CREATE TABLE IF NOT EXISTS nanobrain_detached_tasks (
             task_id TEXT PRIMARY KEY,
@@ -459,7 +487,8 @@ class PostgresTaskStore(TaskStore):
             completed_at TEXT,
             result_json TEXT,
             error TEXT,
-            cost_actual_json TEXT
+            cost_actual_json TEXT,
+            suspension_info_json TEXT
         )
     """
 
@@ -491,6 +520,15 @@ class PostgresTaskStore(TaskStore):
             await cur.execute(self._SCHEMA.replace(
                 "nanobrain_detached_tasks", self._table,
             ))
+            # G27 wiring — additive ALTER for tables created before
+            # this column existed. Postgres supports ``IF NOT EXISTS``
+            # on ADD COLUMN since 9.6 (a 2016 minimum); the integration
+            # already requires psycopg 3 which depends on a much later
+            # server. Idempotent + safe across re-initialize().
+            await cur.execute(
+                f"ALTER TABLE {self._table} "
+                f"ADD COLUMN IF NOT EXISTS suspension_info_json TEXT"
+            )
         self._initialized = True
 
     async def close(self) -> None:
@@ -510,6 +548,7 @@ class PostgresTaskStore(TaskStore):
             json.dumps(h.result) if h.result is not None else None,
             h.error,
             json.dumps(h.cost_actual) if h.cost_actual else None,
+            json.dumps(h.suspension_info) if h.suspension_info else None,
         )
 
     @staticmethod
@@ -529,6 +568,10 @@ class PostgresTaskStore(TaskStore):
             result=json.loads(r[5]) if r[5] else None,
             error=r[6],
             cost_actual=json.loads(r[7]) if r[7] else None,
+            # G27 wiring — tolerate rows that predate the column.
+            suspension_info=(
+                json.loads(r[8]) if len(r) > 8 and r[8] else None
+            ),
         )
 
     async def insert(self, handle: DetachedTaskHandle) -> None:
@@ -539,7 +582,8 @@ class PostgresTaskStore(TaskStore):
             try:
                 async with self._conn.cursor() as cur:
                     await cur.execute(
-                        f"INSERT INTO {self._table} VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
+                        f"INSERT INTO {self._table} "
+                        f"VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)",
                         self._to_row(handle),
                     )
             except psycopg.errors.UniqueViolation as exc:
@@ -555,7 +599,8 @@ class PostgresTaskStore(TaskStore):
                 await cur.execute(
                     f"UPDATE {self._table} SET status=%s, last_heartbeat_at=%s, "
                     f"completed_at=%s, result_json=%s, error=%s, "
-                    f"cost_actual_json=%s WHERE task_id=%s",
+                    f"cost_actual_json=%s, suspension_info_json=%s "
+                    f"WHERE task_id=%s",
                     (
                         handle.status,
                         handle.last_heartbeat_at.isoformat() if handle.last_heartbeat_at else None,
@@ -563,6 +608,7 @@ class PostgresTaskStore(TaskStore):
                         json.dumps(handle.result) if handle.result is not None else None,
                         handle.error,
                         json.dumps(handle.cost_actual) if handle.cost_actual else None,
+                        json.dumps(handle.suspension_info) if handle.suspension_info else None,
                         handle.task_id,
                     ),
                 )
@@ -574,7 +620,8 @@ class PostgresTaskStore(TaskStore):
             async with self._conn.cursor() as cur:
                 await cur.execute(
                     f"SELECT task_id, status, created_at, last_heartbeat_at, "
-                    f"completed_at, result_json, error, cost_actual_json "
+                    f"completed_at, result_json, error, cost_actual_json, "
+                    f"suspension_info_json "
                     f"FROM {self._table} WHERE task_id=%s",
                     (task_id,),
                 )
@@ -588,7 +635,8 @@ class PostgresTaskStore(TaskStore):
             async with self._conn.cursor() as cur:
                 await cur.execute(
                     f"SELECT task_id, status, created_at, last_heartbeat_at, "
-                    f"completed_at, result_json, error, cost_actual_json "
+                    f"completed_at, result_json, error, cost_actual_json, "
+                    f"suspension_info_json "
                     f"FROM {self._table} WHERE status IN ({placeholders})",
                     _STATUS_ACTIVE,
                 )
