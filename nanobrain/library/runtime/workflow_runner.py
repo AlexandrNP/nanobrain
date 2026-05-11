@@ -95,12 +95,23 @@ _VALID_STATUSES: Tuple[str, ...] = (
     "queued",
     "running",
     "paused",
+    # G27 Option A v1 (2026-05-11) — soft-suspend on
+    # ApprovalPendingError. Distinct from 'paused' which is a
+    # cooperative-pause signal at step boundaries; 'suspended' means
+    # the workflow ITSELF raised ApprovalPendingError and the run is
+    # waiting for an external approval resolution. ``resume(task_id)``
+    # re-spawns the asyncio task with the original callable + payload;
+    # the deterministic approval_id (G27 P6+a default) means the
+    # re-run finds the now-resolved Approval and returns.
+    "suspended",
     "completed",
     "cancelled",
     "failed",
 )
 
-_STATUS_ACTIVE: Tuple[str, ...] = ("queued", "running", "paused")
+_STATUS_ACTIVE: Tuple[str, ...] = (
+    "queued", "running", "paused", "suspended",
+)
 
 
 # ---------------------------------------------------------------------------
@@ -159,6 +170,23 @@ def current_pause_signal() -> Optional[PauseSignal]:
     return _current_pause_signal.get()
 
 
+def _is_approval_pending(exc: BaseException) -> bool:
+    """G27 Option A — duck-type detect ApprovalPendingError without
+    importing the deferred_hitl_step module at workflow_runner import
+    time. Two signals must both hold:
+
+      * the exception class is exactly named ``ApprovalPendingError``
+      * the exception carries an ``approval_id`` attribute
+
+    Both conditions guard against false positives if another package
+    ships a same-named exception with different semantics.
+    """
+    return (
+        type(exc).__name__ == "ApprovalPendingError"
+        and hasattr(exc, "approval_id")
+    )
+
+
 # ---------------------------------------------------------------------------
 # DetachedTaskHandle — value object returned to callers
 # ---------------------------------------------------------------------------
@@ -181,6 +209,10 @@ class DetachedTaskHandle:
     result: Optional[Any] = None
     error: Optional[str] = None
     cost_actual: Optional[Dict[str, Any]] = None
+    # G27 Option A v1 — populated when status == "suspended".
+    # Carries approval_id + step_name + prompt so external resolvers
+    # know what to look up in the ApprovalStore.
+    suspension_info: Optional[Dict[str, Any]] = None
 
 
 # ---------------------------------------------------------------------------
@@ -798,6 +830,16 @@ class WorkflowRunner(FromConfigBase):
         signal = PauseSignal()
         self._pause_signals[task_id] = signal
 
+        # G27 Option A v1 — record callable + payload so resume() can
+        # re-spawn the asyncio task with the original args. In-memory
+        # only; cross-process resume requires Option B (G5 checkpoint
+        # integration). See nanobrain/docs/g27_g21_wiring_design.md.
+        if not hasattr(self, "_suspended_callables"):
+            self._suspended_callables = {}
+            self._suspended_payloads = {}
+        self._suspended_callables[task_id] = workflow_callable
+        self._suspended_payloads[task_id] = payload
+
         async def _runner() -> None:
             # Publish the pause signal as a contextvar BEFORE entering
             # the workflow callable so any nested process() that calls
@@ -824,6 +866,27 @@ class WorkflowRunner(FromConfigBase):
                         await self._store.update(handle)
                         raise
                     except Exception as exc:  # noqa: BLE001
+                        # G27 Option A v1 — soft-suspend on
+                        # ApprovalPendingError. Lazy import keeps
+                        # workflow_runner from depending on
+                        # library/steps/ at import time. Other
+                        # exceptions fall through to the failed branch.
+                        if _is_approval_pending(exc):
+                            handle.status = "suspended"
+                            handle.suspension_info = {
+                                "kind": "deferred_hitl",
+                                "approval_id": getattr(
+                                    exc, "approval_id", None
+                                ),
+                                "step_name": getattr(
+                                    exc, "step_name", None
+                                ),
+                                "prompt": getattr(exc, "prompt", None),
+                            }
+                            # Do NOT set completed_at; the task is
+                            # waiting for resolve(), not done.
+                            await self._store.update(handle)
+                            return  # exit _runner; resume() re-spawns
                         handle.status = "failed"
                         handle.error = f"{type(exc).__name__}: {exc}"
                     handle.completed_at = datetime.now(timezone.utc)
@@ -936,6 +999,112 @@ class WorkflowRunner(FromConfigBase):
         if signal is None:
             return False
         return signal.is_paused()
+
+    async def resume_suspended(self, task_id: str) -> None:
+        """G27 Option A v1 (2026-05-11) — re-spawn a soft-suspended task.
+
+        Distinct from ``resume`` (which clears the cooperative G21
+        pause signal); this method handles the new ``"suspended"``
+        lifecycle state introduced for deferred-HITL gates.
+
+        Semantics (Option A — see ``nanobrain/docs/g27_g21_wiring_design.md``):
+          * The original workflow callable + payload are re-invoked.
+          * The deterministic ``approval_id`` (G27 P6+a default)
+            ensures the re-running DeferredHITLStep finds the now-
+            resolved Approval and returns its decision payload.
+          * Steps BEFORE the DeferredHITLStep run again. Pure-compute
+            steps fine; LLM-bound steps re-charge cost; side-effecting
+            steps double-fire. Operators who want Option B's
+            no-re-run semantic compose with CheckpointStep manually.
+
+        Raises:
+            ComponentConfigurationError: when ``task_id`` is unknown
+                OR the task is not in ``"suspended"`` state.
+
+        Returns when the asyncio task has been re-scheduled. The
+        caller observes progress via ``get_handle`` / ``await_completion``.
+        """
+        handle = await self._store.get(task_id)
+        if handle is None:
+            raise ComponentConfigurationError(
+                f"FAIL-FAST: WorkflowRunner.resume_suspended: task_id "
+                f"{task_id!r} is not registered with this runner"
+            )
+        if handle.status != "suspended":
+            raise ComponentConfigurationError(
+                f"FAIL-FAST: WorkflowRunner.resume_suspended: task_id "
+                f"{task_id!r} is in status={handle.status!r}, not "
+                f"'suspended'. Use cancel() or wait for completion."
+            )
+
+        callable_ = getattr(self, "_suspended_callables", {}).get(task_id)
+        payload = getattr(self, "_suspended_payloads", {}).get(task_id)
+        if callable_ is None or payload is None:
+            raise ComponentConfigurationError(
+                f"FAIL-FAST: WorkflowRunner.resume_suspended: cannot "
+                f"resume task_id {task_id!r} — the original workflow "
+                f"callable + payload are missing from the runner's "
+                f"in-memory store. Cross-process resume requires "
+                f"Option B (G5 checkpoint integration); v1 supports "
+                f"same-process resume only."
+            )
+
+        # Clear suspension_info + re-spawn the asyncio task with the
+        # original args. Use a fresh PauseSignal — the prior one's
+        # event-loop scope ends with the prior _runner.
+        handle.suspension_info = None
+        handle.status = "queued"
+        await self._store.update(handle)
+
+        signal = PauseSignal()
+        self._pause_signals[task_id] = signal
+
+        async def _resumed_runner() -> None:
+            token = _current_pause_signal.set(signal)
+            try:
+                async with self._semaphore:
+                    handle.status = "running"
+                    handle.last_heartbeat_at = datetime.now(timezone.utc)
+                    await self._store.update(handle)
+                    try:
+                        result = await callable_(payload)
+                        handle.status = "completed"
+                        handle.result = result
+                    except asyncio.CancelledError:
+                        current = await self._store.get(task_id)
+                        if current is not None and current.status == "failed":
+                            raise
+                        handle.status = "cancelled"
+                        handle.completed_at = datetime.now(timezone.utc)
+                        await self._store.update(handle)
+                        raise
+                    except Exception as exc:  # noqa: BLE001
+                        # If the re-run hits a NEW ApprovalPendingError
+                        # (multi-gate workflow), soft-suspend again.
+                        if _is_approval_pending(exc):
+                            handle.status = "suspended"
+                            handle.suspension_info = {
+                                "kind": "deferred_hitl",
+                                "approval_id": getattr(
+                                    exc, "approval_id", None
+                                ),
+                                "step_name": getattr(
+                                    exc, "step_name", None
+                                ),
+                                "prompt": getattr(exc, "prompt", None),
+                            }
+                            await self._store.update(handle)
+                            return
+                        handle.status = "failed"
+                        handle.error = f"{type(exc).__name__}: {exc}"
+                    handle.completed_at = datetime.now(timezone.utc)
+                    await self._store.update(handle)
+            finally:
+                _current_pause_signal.reset(token)
+
+        self._tasks[task_id] = asyncio.create_task(
+            _resumed_runner(), name=f"detached-{task_id}-resumed",
+        )
 
     async def get_handle(self, task_id: str) -> Optional[DetachedTaskHandle]:
         """Return the current handle from the store, or None if
