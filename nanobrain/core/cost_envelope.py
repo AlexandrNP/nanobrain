@@ -64,6 +64,7 @@ Round 3 G26;
 from __future__ import annotations
 
 import contextvars
+import math
 import threading
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -189,6 +190,25 @@ class CostTracker:
         and compare to the cap BEFORE writing it back. A breach leaves
         the ledger in its pre-record state (failure-atomic).
         """
+        # Adversarial-probe finding (2026-05-11): NaN passes ``< 0``
+        # checks (every comparison with NaN returns False). Without
+        # an explicit math.isnan guard, NaN values silently propagate
+        # into the cumulative ledger AND bypass the cap check
+        # downstream (``NaN > cap`` is also False). isinf check is
+        # added for symmetry — record(inf) would corrupt the ledger
+        # similarly even though the cap check happens to catch it.
+        if math.isnan(amount):
+            raise ValueError(
+                f"FAIL-FAST: CostTracker.record amount must be a "
+                f"finite number; got NaN. NaN silently corrupts the "
+                f"ledger because every NaN comparison returns False."
+            )
+        if math.isinf(amount):
+            raise ValueError(
+                f"FAIL-FAST: CostTracker.record amount must be finite; "
+                f"got {amount}. Infinity would lock the ledger into a "
+                f"breach state regardless of subsequent records."
+            )
         if amount < 0:
             raise ValueError(
                 f"FAIL-FAST: CostTracker.record amount must be >= 0; "

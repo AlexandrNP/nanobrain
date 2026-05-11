@@ -1112,6 +1112,25 @@ class WorkflowRunner(FromConfigBase):
                 f"{task_id!r} is in status={handle.status!r}, not "
                 f"'suspended'. Use cancel() or wait for completion."
             )
+        # Adversarial-probe finding (2026-05-11): two concurrent
+        # resume_suspended callers both pass the status check (no
+        # atomic compare-and-swap), both re-spawn the asyncio task,
+        # two _runner instances race to write the terminal status.
+        # Guard via the existing ``_tasks`` dict: if there's already
+        # an asyncio Task registered for this task_id AND it is not
+        # done, refuse the second resume. The first resume's _runner
+        # transitions status from suspended -> queued -> running, so
+        # by the time a second caller wins the lookup, the existing
+        # task is observably in-flight.
+        existing_task = self._tasks.get(task_id)
+        if existing_task is not None and not existing_task.done():
+            raise ComponentConfigurationError(
+                f"FAIL-FAST: WorkflowRunner.resume_suspended: task_id "
+                f"{task_id!r} already has an in-flight asyncio task "
+                f"(name={existing_task.get_name()!r}). A concurrent "
+                f"resume is racing with this call. Wait for the first "
+                f"resume to complete, then check status."
+            )
 
         callable_ = getattr(self, "_suspended_callables", {}).get(task_id)
         payload = getattr(self, "_suspended_payloads", {}).get(task_id)

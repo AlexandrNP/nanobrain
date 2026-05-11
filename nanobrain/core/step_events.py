@@ -87,9 +87,17 @@ StepEventSubscriber = Callable[[StepEvent], None]
 # Contextvar holding the active subscriber stack. Each subscribe()
 # call appends; the context manager pops on exit. Concurrent asyncio
 # tasks see their own stack (PEP 567).
+#
+# Adversarial-probe note (2026-05-11): the default is an EMPTY TUPLE,
+# not an empty list. Mutable defaults on contextvars are a tripwire —
+# if any code path mutated ``_subscriber_stack.get()`` in place
+# (rather than copying via ``list(current) + [sub]``), the mutation
+# would be shared across every context that hadn't explicitly
+# ``.set()``-ed. The tuple default makes that bug class
+# impossible — mutation raises ``AttributeError`` immediately.
 _subscriber_stack: contextvars.ContextVar[
-    List[StepEventSubscriber]
-] = contextvars.ContextVar("step_event_subscribers", default=[])
+    "tuple[StepEventSubscriber, ...]"
+] = contextvars.ContextVar("step_event_subscribers", default=())
 
 
 @contextmanager
@@ -111,7 +119,9 @@ def subscribe_to_step_events(
     pattern) — the framework will not wait for the subscriber.
     """
     current = _subscriber_stack.get()
-    new_stack = list(current) + [subscriber]
+    # Build an immutable tuple — see _subscriber_stack docstring on
+    # why the default is a tuple, not a list.
+    new_stack = tuple(current) + (subscriber,)
     token = _subscriber_stack.set(new_stack)
     try:
         yield subscriber
