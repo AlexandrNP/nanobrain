@@ -443,19 +443,38 @@ class SubworkflowStep(BaseStep):
     ) -> Dict[str, Any]:
         """Auto-wrap input_data under the first step's input data unit.
 
-        Logic:
-          - If the inner workflow has exactly ONE first-step input
-            data unit AND input_data does NOT already contain that
-            key, deposit input_data under that key.
-          - Otherwise, pass through unchanged (multi-input first step
-            or caller already keyed correctly).
+        Two shapes the caller might use:
+          1. **Direct payload** — ``{"code_spec": "...", "function_name": "..."}``
+             (test or programmatic caller).
+          2. **Framework-wrapped** — the cascade-driven path. When the
+             outer workflow's framework invokes ``SubworkflowStep.process``,
+             it constructs ``input_data`` as ``{<my_own_input_du_name>:
+             <payload>}``. We must unwrap that BEFORE re-wrapping
+             for the inner workflow's first-step input DU — otherwise
+             we double-wrap and the inner step receives ``{<my_du>:
+             <real_payload>}`` instead of just ``<real_payload>``.
 
-        Why this exists: ``Workflow.run()``'s docstring says it
-        routes by workflow-level data unit name, but the framework's
-        actual initiator routes by FIRST-STEP data unit name (see
-        the rag_e2e_synthesis tests which work around this). This
-        shim hides the gap from SubworkflowStep callers.
+        Algorithm:
+          a. If input_data has exactly one key AND that key is the name
+             of one of THIS step's input data units, unwrap.
+          b. Then, if the inner workflow has exactly one first-step
+             input DU AND input_data does NOT already contain that
+             key, wrap under that DU.
         """
+        # Step (a): unwrap the framework's outer wrapping.
+        my_input_dus = getattr(self, "step_input_data_units", None) or {}
+        if (
+            isinstance(input_data, dict)
+            and len(input_data) == 1
+            and len(my_input_dus) > 0
+        ):
+            sole_key = next(iter(input_data.keys()))
+            if sole_key in my_input_dus and isinstance(
+                input_data[sole_key], dict
+            ):
+                input_data = input_data[sole_key]
+
+        # Step (b): wrap for the inner's first-step input DU.
         try:
             first_step = next(iter(self._inner_workflow.child_steps.values()))
         except StopIteration:
@@ -508,17 +527,39 @@ class SubworkflowStep(BaseStep):
             await asyncio.sleep(poll_interval)
 
     async def _collect_last_step_outputs(self) -> Dict[str, Any]:
-        """Read the last child step's output data units into a dict.
+        """Collect the inner workflow's RESULT — preferring workflow-
+        level output data units, falling back to the last step's
+        outputs.
 
-        For sub-workflows with a single linear pipeline (the common
-        case), the last step's outputs are the workflow's outputs.
-        Operators with branching topologies should override.
+        Inner workflows commonly route MULTIPLE step outputs into
+        workflow-level data units via DirectLinks (e.g.,
+        code_reflection_workflow has code_source / function_name_verified
+        / review_verdict all wired from steps into workflow-level
+        outputs). The last step alone wouldn't see code_source.
+        Workflow-level output_data_units, in contrast, see EVERY
+        link target — so prefer those.
+
+        Falls back to the last step's outputs when the workflow
+        declares no output_data_units (legacy / single-output
+        workflows).
         """
+        # Prefer workflow-level outputs.
+        wf_outputs = getattr(self._inner_workflow, "step_output_data_units", None)
+        if wf_outputs:
+            collected: Dict[str, Any] = {}
+            for name, du in wf_outputs.items():
+                try:
+                    collected[name] = await du.get()
+                except Exception as e:
+                    collected[name] = None
+                    collected.setdefault("_errors", {})[name] = str(e)
+            return collected
+
         if not self._inner_workflow.child_steps:
             return {}
         last_step = list(self._inner_workflow.child_steps.values())[-1]
         output_dus = getattr(last_step, "step_output_data_units", None) or {}
-        collected: Dict[str, Any] = {}
+        collected = {}
         for name, du in output_dus.items():
             try:
                 collected[name] = await du.get()
