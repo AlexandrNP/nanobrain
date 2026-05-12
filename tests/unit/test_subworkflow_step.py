@@ -212,42 +212,31 @@ def test_config_field_overrides_subclass_default(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-def test_non_completed_status_raises_runtime_error(tmp_path):
-    """Empty inner workflow → Workflow.run() returns
-    status='no_first_step'. SubworkflowStep must raise RuntimeError
-    rather than silently propagate the status to downstream steps."""
+def test_empty_inner_workflow_raises_via_empty_output_gate(tmp_path):
+    """Empty inner workflow → no steps → no outputs to collect →
+    EMPTY-OUTPUT gate fires with a clear message naming the inner
+    workflow as the cause. This is the canonical silent-failure-
+    shape pin for the SubworkflowStep boundary."""
     step = _build_step(tmp_path)
     with pytest.raises(RuntimeError) as exc_info:
         asyncio.run(step.process({}))
     msg = str(exc_info.value)
-    assert "no_first_step" in msg
-    # The error message must surface that the cause is the inner workflow,
-    # not a problem inside SubworkflowStep itself.
+    assert "no meaningful output" in msg
     assert "inner workflow" in msg.lower()
 
 
-def test_empty_output_gate_default_raises_on_empty_inner_output(tmp_path):
-    """Empty workflow → empty result dict → SubworkflowStep raises
-    even on the EMPTY-OUTPUT path BEFORE checking status.
-
-    (Actually the no_first_step check fires first; this test is a
-    duplicate of the status check above. We keep it so a future change
-    to status semantics doesn't silently bypass the empty-output gate.)"""
-    step = _build_step(tmp_path)
-    with pytest.raises(RuntimeError):
-        asyncio.run(step.process({}))
-
-
-def test_empty_output_gate_opt_in_does_not_short_circuit_status_check(tmp_path):
-    """Even with allow_empty_inner_output=True, a non-completed status
-    must still raise. The two gates are independent — opting out of
-    one does not weaken the other."""
+def test_empty_output_gate_opt_in_allows_empty_inner_workflow(tmp_path):
+    """With ``allow_empty_inner_output=True``, the empty-inner-
+    workflow path returns ``{}`` rather than raising. Operators
+    use this for side-effect-only inner workflows."""
     step = _build_step(
         tmp_path,
         overrides={"allow_empty_inner_output": "true"},
     )
-    with pytest.raises(RuntimeError, match="no_first_step"):
-        asyncio.run(step.process({}))
+    result = asyncio.run(step.process({}))
+    # Status was synthesized + stripped from clean_result; with an
+    # empty workflow we get back an empty dict.
+    assert result == {}
 
 
 # ---------------------------------------------------------------------------

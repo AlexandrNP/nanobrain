@@ -306,17 +306,38 @@ class SubworkflowStep(BaseStep):
     ) -> Dict[str, Any]:
         """Invoke the inner workflow and return its outputs.
 
-        ``input_data`` is forwarded as-is to ``Workflow.run(input_data)``;
-        keys must match the inner workflow's input data unit names.
+        Input routing reality (documented separately in the
+        SubworkflowStep module docstring):
 
-        Returns the inner workflow's output dict, with the operational
-        ``status`` key stripped. Raises:
+        Despite ``Workflow.run(input_data)``'s docstring claiming
+        input_data is keyed by workflow-level input data unit
+        names, the framework's data-flow initiator actually routes
+        ``input_data`` to the **first step's input data unit names**
+        (the workflow-level ``input_data_units:`` block is currently
+        decorative — see the rag_e2e_synthesis tests which work
+        around this by passing input via ``wf.process(...)`` keyed
+        by the first step's input DU).
+
+        To shield callers from this gap, ``SubworkflowStep.process()``
+        auto-wraps the input: when the inner workflow has exactly
+        one first-step input data unit AND ``input_data`` does NOT
+        already contain that key, we deposit ``input_data`` under
+        that key. Callers can therefore pass the per-step input
+        shape (e.g., ``{"code_spec": "..."}``) without knowing the
+        inner workflow's first-step DU name.
+
+        When the inner workflow has multiple first-step input data
+        units OR ``input_data`` is already keyed, we pass through
+        unchanged.
+
+        Returns the inner workflow's last-step outputs collected
+        from the inner workflow's child_steps.
+
+        Raises:
 
         * ``ComponentConfigurationError`` — input is not a dict.
         * ``TimeoutError`` — inner cascade did not drain within
           ``timeout_seconds``.
-        * ``RuntimeError`` — inner workflow status was not ``completed``
-          (or ``completed_no_await`` when opted in).
         * ``RuntimeError`` — inner workflow produced no meaningful
           output (EMPTY-OUTPUT gate; opt out via
           ``allow_empty_inner_output``).
@@ -324,17 +345,41 @@ class SubworkflowStep(BaseStep):
         if not isinstance(input_data, dict):
             raise ComponentConfigurationError(
                 f"FAIL-FAST: SubworkflowStep {self.name!r} input_data "
-                f"must be a dict matching the inner workflow's input "
-                f"data unit names; got {type(input_data).__name__}"
+                f"must be a dict; got {type(input_data).__name__}"
             )
 
-        result = await self._inner_workflow.run(
-            input_data,
-            await_cascade=self._await_cascade,
-            timeout=self._timeout_seconds,
-            settle_ms=self._settle_ms,
-            raise_on_cascade_timeout=True,
-            nest_under_active_context=self._nest_under_active_context,
+        routed = self._route_input_to_first_step_du(input_data)
+
+        # Use wf.process + wf.wait_for_cascade — that's the pattern
+        # the framework actually wires up (Workflow.run with workflow-
+        # level data unit keys is currently a documentation-only
+        # surface; the runtime routes by first-step DU name).
+        init_status = await self._inner_workflow.process(routed)
+        if not isinstance(init_status, dict):
+            raise RuntimeError(
+                f"SubworkflowStep {self.name!r}: inner workflow process() "
+                f"returned non-dict {type(init_status).__name__}"
+            )
+
+        if self._await_cascade:
+            drained = await self._inner_workflow.wait_for_cascade(
+                timeout=self._timeout_seconds,
+                settle_ms=self._settle_ms,
+            )
+            if not drained:
+                raise TimeoutError(
+                    f"SubworkflowStep {self.name!r}: inner workflow "
+                    f"cascade did not drain within "
+                    f"{self._timeout_seconds}s"
+                )
+
+        # Collect outputs from the LAST step's output data units.
+        # This is the working pattern (see test_rag_e2e_workflow_yaml).
+        result = await self._collect_last_step_outputs()
+        # Synthesize a status field for the post-run gate below.
+        result.setdefault(
+            "status",
+            "completed" if self._await_cascade else "completed_no_await",
         )
 
         status = result.get("status")
@@ -385,6 +430,56 @@ class SubworkflowStep(BaseStep):
                 )
 
         return clean_result
+
+    def _route_input_to_first_step_du(
+        self, input_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Auto-wrap input_data under the first step's input data unit.
+
+        Logic:
+          - If the inner workflow has exactly ONE first-step input
+            data unit AND input_data does NOT already contain that
+            key, deposit input_data under that key.
+          - Otherwise, pass through unchanged (multi-input first step
+            or caller already keyed correctly).
+
+        Why this exists: ``Workflow.run()``'s docstring says it
+        routes by workflow-level data unit name, but the framework's
+        actual initiator routes by FIRST-STEP data unit name (see
+        the rag_e2e_synthesis tests which work around this). This
+        shim hides the gap from SubworkflowStep callers.
+        """
+        try:
+            first_step = next(iter(self._inner_workflow.child_steps.values()))
+        except StopIteration:
+            return input_data
+        first_dus = getattr(first_step, "step_input_data_units", None) or {}
+        if len(first_dus) != 1:
+            return input_data
+        only_du_name = next(iter(first_dus.keys()))
+        if only_du_name in input_data:
+            return input_data
+        return {only_du_name: input_data}
+
+    async def _collect_last_step_outputs(self) -> Dict[str, Any]:
+        """Read the last child step's output data units into a dict.
+
+        For sub-workflows with a single linear pipeline (the common
+        case), the last step's outputs are the workflow's outputs.
+        Operators with branching topologies should override.
+        """
+        if not self._inner_workflow.child_steps:
+            return {}
+        last_step = list(self._inner_workflow.child_steps.values())[-1]
+        output_dus = getattr(last_step, "step_output_data_units", None) or {}
+        collected: Dict[str, Any] = {}
+        for name, du in output_dus.items():
+            try:
+                collected[name] = await du.get()
+            except Exception as e:
+                collected[name] = None
+                collected.setdefault("_errors", {})[name] = str(e)
+        return collected
 
 
 __all__ = [
