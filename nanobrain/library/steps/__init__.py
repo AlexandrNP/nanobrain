@@ -20,6 +20,10 @@ from .checkpoint_resume import (
     ResumeStep,
     ResumeStepConfig,
 )
+from .subworkflow_step import (
+    SubworkflowStep,
+    SubworkflowStepConfig,
+)
 
 __all__ = [
     'DataGeneratorStep',
@@ -37,4 +41,6 @@ __all__ = [
     'CheckpointStepConfig',
     'ResumeStep',
     'ResumeStepConfig',
+    'SubworkflowStep',
+    'SubworkflowStepConfig',
 ]
