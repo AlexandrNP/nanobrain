@@ -1065,15 +1065,39 @@ class DataUnitBase(FromConfigBase, ABC):
                                 error=str(e)
                             )
 
-                # BRUTAL TRUTH: Wait for ALL listener tasks to complete
+                # 2026-05-12 NESTED-CASCADE FIX:
+                # Previously this `gather` AWAITED listener completion
+                # synchronously. That blocked the asyncio event loop
+                # while the listener tasks were running — which is
+                # fine for shallow workflows but DEADLOCKS under any
+                # nested cascade (SubworkflowStep wrapping a workflow
+                # that itself spawns trigger-driven tasks). The
+                # current task can't yield to let the listener tasks
+                # progress, OR vice versa.
+                #
+                # Fix: the listener tasks are ALREADY registered in
+                # ``async_executor.background_tasks`` (line ~1044)
+                # with a ``discard`` done-callback. The framework's
+                # ``Workflow.wait_for_cascade`` / ``AsyncTriggerExecutor.
+                # wait_for_all_tasks`` already iterates that set to
+                # drain the cascade — so the synchronous ``gather``
+                # here was redundant. Yielding control once (so any
+                # listener that runs synchronously up to its first
+                # await gets a chance to start) is sufficient.
+                #
+                # Source: 2026-05-12 nested-cascade investigation
+                # (apecx-mcp-integration friction-log #29).
                 if tasks:
                     if self.enable_logging and self.nb_logger:
-                        self.nb_logger.info(f"🔗 BRUTAL TRUTH: Awaiting {len(tasks)} listener tasks for {self.name}")
-
-                    await asyncio.gather(*tasks, return_exceptions=True)
-
-                    if self.enable_logging and self.nb_logger:
-                        self.nb_logger.info(f"🔗 BRUTAL TRUTH: All {len(tasks)} listener tasks completed for {self.name}")
+                        self.nb_logger.info(
+                            f"🔗 Spawned {len(tasks)} listener tasks for "
+                            f"{self.name} (tracked in "
+                            f"AsyncTriggerExecutor.background_tasks; "
+                            f"drained by wait_for_cascade)"
+                        )
+                    # Yield once so any synchronous-leading listener
+                    # body starts executing before set() returns.
+                    await asyncio.sleep(0)
 
             except Exception as e:
                 if self.enable_logging and self.nb_logger:
