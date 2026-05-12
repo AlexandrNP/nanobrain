@@ -128,30 +128,55 @@ class WorkflowBuilder:
     
     def add_step(self, step_name: str, component_class: str, **kwargs) -> 'WorkflowBuilder':
         """
-        Add a step to the workflow using a discovered component.
-        
+        Add a step to the workflow.
+
         Args:
             step_name: Name for this step
-            component_class: Class name (e.g., "EnhancedCollaborativeAgent")
+            component_class: Either a discovered class short name (e.g.,
+                ``"EnhancedCollaborativeAgent"``) OR a fully-qualified
+                dotted import path (e.g.,
+                ``"my.package.steps.MyStep"``). The dotted-path form
+                lets you use the builder with custom classes that have
+                not yet been registered via the YAML-scan discovery —
+                the import is resolved at workflow load time, not at
+                add_step time.
             **kwargs: Additional configuration parameters
-        
+
         Returns:
             Self for method chaining
+
+        Raises:
+            ValueError: when ``component_class`` is neither a known
+                discovery short-name NOR a dotted path (no ``.``).
         """
-        
-        # Validate component exists
-        if component_class not in self.discovered_classes:
+
+        # Resolve to a full class_path.
+        # 1. Discovery short-name: look up in discovered_classes.
+        # 2. Dotted path (contains "."): treat as already-resolved.
+        # The actual import resolution happens at Workflow.from_config
+        # time; the builder does NOT eagerly import here so a fresh
+        # session can construct workflows without dragging in every
+        # dependency.
+        if component_class in self.discovered_classes:
+            class_path = self.discovered_classes[component_class]["class_path"]
+            display_name = component_class
+        elif "." in component_class:
+            class_path = component_class
+            display_name = component_class.rsplit(".", 1)[-1]
+        else:
             available = list(self.discovered_classes.keys())
-            raise ValueError(f"Unknown component '{component_class}'. Available: {available}")
-        
-        # Get component info
-        component_info = self.discovered_classes[component_class]
-        
+            raise ValueError(
+                f"Unknown component '{component_class}'. "
+                f"Either pass a discovered short-name (available: "
+                f"{available}) OR a fully-qualified dotted import path "
+                f"(e.g., 'my.package.steps.MyStep')."
+            )
+
         # Build step configuration
         step_config = {
             "name": step_name,
-            "class": component_info["class_path"],
-            "description": kwargs.get("description", f"Step using {component_class}")
+            "class": class_path,
+            "description": kwargs.get("description", f"Step using {display_name}"),
         }
         
         # Add user-provided parameters

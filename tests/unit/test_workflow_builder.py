@@ -227,6 +227,52 @@ class TestAddTriggerFailures:
 
 
 # ---------------------------------------------------------------------------
+# add_step dotted-path fallback (framework expansion 2026-05-12)
+# ---------------------------------------------------------------------------
+
+
+class TestAddStepDottedPathFallback:
+    """Pins the dotted-path fallback in ``add_step``.
+
+    The builder previously rejected component_class strings that
+    weren't in the YAML-scanned discovery set. That blocked
+    programmatic workflow construction with new custom step classes
+    until at least one example YAML referenced them. The fallback
+    accepts any string containing a ``.`` as a fully-qualified
+    dotted import path; resolution happens at Workflow.from_config
+    time, not at add_step time.
+    """
+
+    def test_dotted_path_accepted_as_fully_qualified_class(self):
+        b = WorkflowBuilder("dotted_path_test")
+        b.add_step(
+            "my_custom_step",
+            "my.package.steps.MyCustomStep",
+        )
+        steps = b.get_config()["steps"]
+        assert steps["my_custom_step"]["class"] == "my.package.steps.MyCustomStep"
+
+    def test_short_name_unknown_AND_no_dot_still_fails_fast(self):
+        b = WorkflowBuilder("t")
+        with pytest.raises(ValueError, match="Unknown component"):
+            b.add_step("x", "DefinitelyNotARealStep")
+
+    def test_discovered_short_name_takes_precedence_over_dotted_fallback(self):
+        """If the short name IS in discovery, use it. Don't accidentally
+        treat 'Foo.Bar' as a dotted path when 'Foo.Bar' happens to be
+        a discovered short name (no real-world clash; pin it anyway)."""
+        b = WorkflowBuilder("t")
+        # Pick any discovered step class for the pin.
+        discovered = list(b.discovered_classes.keys())
+        if not discovered:
+            pytest.skip("no discovered classes available for this pin")
+        name = discovered[0]
+        expected_path = b.discovered_classes[name]["class_path"]
+        b.add_step("via_discovery", name)
+        assert b.get_config()["steps"]["via_discovery"]["class"] == expected_path
+
+
+# ---------------------------------------------------------------------------
 # 7. _resolve_class_path discovery fallback
 # ---------------------------------------------------------------------------
 
