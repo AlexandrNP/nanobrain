@@ -532,16 +532,28 @@ class SubworkflowStep(BaseStep):
         outputs.
 
         Inner workflows commonly route MULTIPLE step outputs into
-        workflow-level data units via DirectLinks (e.g.,
-        code_reflection_workflow has code_source / function_name_verified
-        / review_verdict all wired from steps into workflow-level
-        outputs). The last step alone wouldn't see code_source.
-        Workflow-level output_data_units, in contrast, see EVERY
-        link target — so prefer those.
+        workflow-level data units via DirectLinks. The last step alone
+        wouldn't see all of them. Workflow-level output_data_units see
+        EVERY link target — so prefer those.
 
         Falls back to the last step's outputs when the workflow
         declares no output_data_units (legacy / single-output
         workflows).
+
+        **2026-05-12 nested-cascade fix**: when the inner workflow
+        declares exactly ONE workflow-level output AND its value is
+        a dict (the common case for "wrap a workflow as a step"), we
+        FLATTEN — return that dict directly rather than ``{<single
+        output name>: <dict>}``. Otherwise the wrapper key
+        accumulates as cascades nest, eventually defeating the
+        downstream step's single-level unwrap logic and producing
+        spurious ``input_data["code_source"] == None`` errors.
+
+        For multi-output inner workflows, we keep the dict-of-outputs
+        shape — downstream readers either unwrap by name OR pull the
+        full bundle. Operators chaining a multi-output sub-workflow
+        into a step that expects a flat shape should compose an
+        intermediate adapter step.
         """
         # Prefer workflow-level outputs.
         wf_outputs = getattr(self._inner_workflow, "step_output_data_units", None)
@@ -553,6 +565,14 @@ class SubworkflowStep(BaseStep):
                 except Exception as e:
                     collected[name] = None
                     collected.setdefault("_errors", {})[name] = str(e)
+            # Single-output flatten: if exactly one workflow-level
+            # output AND its value is a dict, return the dict
+            # directly. Otherwise return the dict-of-outputs.
+            real_keys = [k for k in collected if k != "_errors"]
+            if len(real_keys) == 1:
+                sole_value = collected[real_keys[0]]
+                if isinstance(sole_value, dict):
+                    return sole_value
             return collected
 
         if not self._inner_workflow.child_steps:
@@ -566,6 +586,12 @@ class SubworkflowStep(BaseStep):
             except Exception as e:
                 collected[name] = None
                 collected.setdefault("_errors", {})[name] = str(e)
+        # Same single-output flatten for the last-step fallback path.
+        real_keys = [k for k in collected if k != "_errors"]
+        if len(real_keys) == 1:
+            sole_value = collected[real_keys[0]]
+            if isinstance(sole_value, dict):
+                return sole_value
         return collected
 
 
