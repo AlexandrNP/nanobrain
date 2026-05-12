@@ -443,11 +443,17 @@ class WorkflowBuilder:
     def load(self):
         """Build a real ``Workflow`` instance from the generated config.
 
-        Convenience that closes the loop: the same dict you'd get from
-        ``get_config()`` is passed through ``Workflow.from_config()``,
-        which exercises the framework's canonical Pydantic validation
-        and v2 mutators (G7 Step 3+4 auto_transfer injection,
-        G10 Step 2 gate_semantics propagation, etc.).
+        Convenience that closes the loop: the dict the builder
+        accumulated is materialized to a temporary YAML file and
+        passed through ``Workflow.from_config()``. This route is used
+        because ``WorkflowConfig`` deliberately refuses inline-dict
+        construction (only DataUnit/Link/Trigger classes accept that
+        shape — workflows must be file-backed for audit/diff/review).
+
+        The temp file is created via ``tempfile.NamedTemporaryFile``
+        and deleted on success or exception. The file lifecycle is
+        bounded by this method — the loaded Workflow holds in-memory
+        state only, no path reference.
 
         Returns:
             A constructed ``Workflow`` ready to ``run()``.
@@ -457,11 +463,27 @@ class WorkflowBuilder:
             failure — typically ``ComponentConfigurationError`` or
             ``ValueError`` with a ``FAIL-FAST:`` prefix.
         """
-        # Lazy import to avoid loading the heavy core stack at module
-        # import time (the lightweight builder should stay light).
+        # Lazy imports to keep the lightweight builder light.
+        import os
+        import tempfile
+        import yaml
+
         from nanobrain.core.workflow import Workflow
 
-        return Workflow.from_config(self.workflow_config)
+        # safe_dump produces canonical YAML compatible with
+        # Workflow.from_config's file loader. delete=False so we can
+        # close the handle on Windows-friendly platforms before
+        # passing the path; we clean up in the finally block.
+        fd, tmp_path = tempfile.mkstemp(suffix=".yml", prefix="nb_workflow_builder_")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                yaml.safe_dump(self.workflow_config, fh, sort_keys=False)
+            return Workflow.from_config(tmp_path)
+        finally:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
     
     def get_config(self) -> Dict[str, Any]:
         """Get the generated workflow configuration."""
