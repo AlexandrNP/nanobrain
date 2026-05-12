@@ -362,16 +362,23 @@ class SubworkflowStep(BaseStep):
             )
 
         if self._await_cascade:
-            drained = await self._inner_workflow.wait_for_cascade(
-                timeout=self._timeout_seconds,
-                settle_ms=self._settle_ms,
-            )
-            if not drained:
-                raise TimeoutError(
-                    f"SubworkflowStep {self.name!r}: inner workflow "
-                    f"cascade did not drain within "
-                    f"{self._timeout_seconds}s"
-                )
+            # Cannot use inner_workflow.wait_for_cascade here when this
+            # step is itself running inside another cascade: the
+            # framework's AsyncTriggerExecutor is a process-wide
+            # singleton (see workflow.py:wait_for_cascade), so the
+            # inner drain-detection sees our OWN task in the queue
+            # and waits indefinitely for itself to finish. Classic
+            # shared-executor re-entrance deadlock.
+            #
+            # Workaround: poll the inner workflow's last step's output
+            # data units until they're populated. The asyncio.sleep
+            # yields control so the inner cascade's tasks can actually
+            # run. When fan-out lands (inner cascade with multiple last
+            # steps), this loop needs the polling-of-each-output
+            # extension; for the linear case this is sufficient.
+            #
+            # Source: 2026-05-12 nested-cascade deadlock investigation.
+            await self._poll_inner_workflow_until_drained()
 
         # Collect outputs from the LAST step's output data units.
         # This is the working pattern (see test_rag_e2e_workflow_yaml).
@@ -460,6 +467,45 @@ class SubworkflowStep(BaseStep):
         if only_du_name in input_data:
             return input_data
         return {only_du_name: input_data}
+
+    async def _poll_inner_workflow_until_drained(self) -> None:
+        """Poll the inner workflow's last step's output data units
+        until they're populated, OR raise TimeoutError.
+
+        See the comment in ``process()`` for why this can't use
+        ``wait_for_cascade`` (singleton-executor deadlock under
+        nested cascades).
+        """
+        if not self._inner_workflow.child_steps:
+            return  # Nothing to wait on; let collect step return {}.
+
+        last_step = list(self._inner_workflow.child_steps.values())[-1]
+        output_dus = getattr(last_step, "step_output_data_units", None) or {}
+        if not output_dus:
+            return
+
+        deadline = asyncio.get_event_loop().time() + self._timeout_seconds
+        poll_interval = max(self._settle_ms / 1000.0, 0.05)
+        last_du = next(iter(output_dus.values()))
+        while True:
+            try:
+                value = await last_du.get()
+            except Exception:
+                value = None
+            if value is not None:
+                # Last step has emitted; give the cascade one more
+                # settle cycle to propagate transitive updates.
+                await asyncio.sleep(poll_interval)
+                return
+            if asyncio.get_event_loop().time() >= deadline:
+                raise TimeoutError(
+                    f"SubworkflowStep {self.name!r}: inner workflow's "
+                    f"last step output not populated within "
+                    f"{self._timeout_seconds}s. Inner workflow may "
+                    f"have an internal step-process failure that was "
+                    f"swallowed by the trigger executor."
+                )
+            await asyncio.sleep(poll_interval)
 
     async def _collect_last_step_outputs(self) -> Dict[str, Any]:
         """Read the last child step's output data units into a dict.
