@@ -2805,7 +2805,32 @@ class Workflow(Step):
         Two execution modes:
         1. Data-driven (default): Populate first step, let triggers handle flow
         2. Imperative (divergence_enabled=True): Execute steps sequentially, check for divergence
+
+        Auto-initializes when the workflow has not yet been initialized
+        AND has at least one executable first step. Prior to this fix,
+        callers had to ``await wf.initialize()`` explicitly before
+        ``await wf.process(...)`` — the deposit landed on data units
+        whose triggers were not yet bound (Phase 3 of ``initialize``
+        binds the listeners), so the cascade silently no-op'd.
+
+        The "has a first step" guard preserves prior behavior for empty
+        workflows (``steps: {}``) used by namespace / nesting / status
+        tests that deliberately call ``process()`` without a runnable
+        cascade. Real workflows with steps now Just Work without the
+        operator having to know about the two-call protocol.
+
+        Source: 2026-05-12 trigger-binding investigation.
         """
+        if not getattr(self, "_is_initialized", False):
+            if self._get_first_step() is not None:
+                if hasattr(self, "nb_logger") and self.nb_logger:
+                    self.nb_logger.info(
+                        f"Workflow {self.name}.process(): auto-initializing "
+                        "(prior to 2026-05-12, callers had to invoke "
+                        "initialize() explicitly before process())"
+                    )
+                await self.initialize()
+
         # Check if divergence is enabled
         divergence_enabled = getattr(self.config, 'divergence_enabled', False)
 
