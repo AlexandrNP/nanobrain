@@ -24,6 +24,10 @@ from .subworkflow_step import (
     SubworkflowStep,
     SubworkflowStepConfig,
 )
+from .globus_transfer_step import (
+    GlobusTransferStep,
+    GlobusTransferStepConfig,
+)
 
 __all__ = [
     'DataGeneratorStep',
@@ -43,4 +47,6 @@ __all__ = [
     'ResumeStepConfig',
     'SubworkflowStep',
     'SubworkflowStepConfig',
+    'GlobusTransferStep',
+    'GlobusTransferStepConfig',
 ]

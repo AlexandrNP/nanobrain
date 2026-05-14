@@ -2221,6 +2221,12 @@ class Workflow(Step):
                         from .executor import ProcessExecutor
                         executor = ProcessExecutor.from_config(executor_config)
                         logger.info(f"✅ Created ProcessExecutor from workflow config: {executor_config_path}")
+                    elif executor_config.executor_type.value == 'globus_compute':
+                        # Lazy import so non-Globus workflows never load the
+                        # globus libraries.
+                        from .distributed.globus_compute_executor import GlobusComputeExecutor
+                        executor = GlobusComputeExecutor.from_config(executor_config)
+                        logger.info(f"✅ Created GlobusComputeExecutor from workflow config: {executor_config_path}")
                     else:
                         # Default to LocalExecutor
                         executor = LocalExecutor.from_config(executor_config)

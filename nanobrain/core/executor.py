@@ -25,6 +25,7 @@ class ExecutorType(Enum):
     PARSL = "parsl"
     THREAD = "thread"
     PROCESS = "process"
+    GLOBUS_COMPUTE = "globus_compute"
 
 
 class ExecutorConfig(ConfigBase):
@@ -40,6 +41,13 @@ class ExecutorConfig(ConfigBase):
     timeout: Optional[float] = None
     parsl_config: Optional[Dict[str, Any]] = None
     default_resource_specification: Optional[Dict[str, Any]] = None
+    # Globus Compute executor configuration. Kept as a plain optional
+    # dict here (mirroring `parsl_config`) so `core/executor.py` never
+    # imports any globus library; the dict is validated by
+    # `GlobusComputeConfig` inside
+    # `core/distributed/globus_compute_executor.py` only when an actual
+    # GlobusComputeExecutor is built.
+    globus_compute: Optional[Dict[str, Any]] = None
 
 
 class ExecutorBase(FromConfigBase, ABC):
@@ -1964,4 +1972,59 @@ def create_executor(executor_type: Union[ExecutorType, str],
         return instance
         
     except Exception as e:
-        raise ValueError(f"Failed to create executor '{executor_type}' via from_config: {e}") 
+        raise ValueError(f"Failed to create executor '{executor_type}' via from_config: {e}")
+
+
+def build_executor_from_config(executor_config: "ExecutorConfig") -> "ExecutorBase":
+    """Build an ExecutorBase from a parsed ExecutorConfig, dispatching on executor_type.
+
+    Single source of truth for the ``executor_type -> executor class`` dispatch
+    used by BOTH the workflow-level executor factory
+    (``Workflow.resolve_dependencies``) and the step-level executor binding
+    (``BaseStep.resolve_dependencies``). Keeping the dispatch here means a new
+    executor type is wired in one place.
+
+    ``GlobusComputeExecutor`` is imported lazily (inside the branch) so a
+    workflow / step that never selects ``globus_compute`` never imports the
+    globus libraries — identical to the lazy-import pattern in
+    ``Workflow.resolve_dependencies``.
+
+    FAIL-LOUD: an unrecognized ``executor_type`` raises
+    ``ComponentConfigurationError`` — it never silently falls back to Local.
+    A ``globus_compute`` config whose ``globus_compute`` block fails
+    ``GlobusComputeConfig`` validation raises ``ComponentConfigurationError``
+    from inside ``GlobusComputeExecutor._init_from_config``.
+
+    Args:
+        executor_config: A parsed ``ExecutorConfig`` (NOT a path, NOT a dict).
+
+    Returns:
+        An ``ExecutorBase`` instance created via the target class's
+        ``from_config``.
+
+    Raises:
+        ComponentConfigurationError: unknown executor type, or invalid
+            executor-type-specific config.
+    """
+    from .component_base import ComponentConfigurationError
+
+    executor_type = executor_config.executor_type
+    type_value = executor_type.value if hasattr(executor_type, "value") else str(executor_type)
+
+    if type_value == "local":
+        return LocalExecutor.from_config(executor_config)
+    if type_value == "thread":
+        return ThreadExecutor.from_config(executor_config)
+    if type_value == "process":
+        return ProcessExecutor.from_config(executor_config)
+    if type_value == "parsl":
+        return ParslExecutor.from_config(executor_config)
+    if type_value == "globus_compute":
+        # Lazy import so non-Globus steps/workflows never load globus libs.
+        from .distributed.globus_compute_executor import GlobusComputeExecutor
+        return GlobusComputeExecutor.from_config(executor_config)
+
+    raise ComponentConfigurationError(
+        f"FAIL-FAST: unknown executor_type {type_value!r} in executor_config. "
+        f"Supported types: local, thread, process, parsl, globus_compute."
+    )

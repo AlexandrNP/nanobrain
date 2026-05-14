@@ -804,6 +804,14 @@ class BaseStep(FromConfigBase, ABC):
             if field_name not in component_config:
                 component_config[field_name] = field_value
 
+        # Re-attach the PARSED executor_config object. model_dump() above
+        # flattens it to a plain dict (executor_type -> string, nested blocks
+        # -> dicts); resolve_dependencies needs the live ExecutorConfig so it
+        # can dispatch on the typed `executor_type` enum and hand the object
+        # straight to the target executor's from_config. See
+        # BaseStep.resolve_dependencies precedence #2.
+        component_config['executor_config'] = getattr(config, 'executor_config', None)
+
         return component_config
 
     @classmethod
@@ -811,20 +819,55 @@ class BaseStep(FromConfigBase, ABC):
         """
         Resolve BaseStep dependencies with step-level executor priority
 
-        Priority order:
-        1. Step-level configured executor (from step config file)
-        2. Workflow-level executor (passed via kwargs)
-        3. Default LocalExecutor (fallback)
+        Priority order (highest first):
+        1. A pre-built ``executor`` object in component_config (programmatic
+           override) — used as-is.
+        2. The step's own ``executor_config`` (a parsed ExecutorConfig from
+           the step YAML) — built here via the shared
+           ``build_executor_from_config`` dispatch (local / thread / process /
+           parsl / globus_compute). FAIL-LOUD on an unknown executor_type or
+           an invalid executor-type-specific config block.
+        3. Workflow-level executor (passed via kwargs).
+        4. Default LocalExecutor (fallback).
         """
-        # Check if step has a configured executor (highest priority)
+        # Priority 1: a pre-built executor object on the component_config.
         step_executor = component_config.get('executor')
         if step_executor is not None:
-            # Step has its own configured executor - use it
+            # Step has its own pre-built executor object - use it.
             return {
                 'executor': step_executor
             }
 
-        # Fall back to workflow-level executor
+        # Priority 2: the step's own executor_config block (parsed
+        # ExecutorConfig). When present, build + bind that executor using the
+        # SAME dispatch the workflow-level factory uses. This is the wiring
+        # that makes `executor_config:` in a step YAML actually take effect.
+        step_executor_config = component_config.get('executor_config')
+        if step_executor_config is not None:
+            from .executor import ExecutorConfig, build_executor_from_config
+            # `executor_config` may arrive as a parsed ExecutorConfig (the
+            # normal path, re-attached by extract_component_config) or, for
+            # robustness, as a dict. build_executor_from_config requires the
+            # parsed object, so coerce a dict via a temp YAML file (the same
+            # file-only-config constraint ExecutorConfig enforces).
+            if not isinstance(step_executor_config, ExecutorConfig):
+                import tempfile
+                import os
+                import yaml
+                with tempfile.NamedTemporaryFile(
+                        mode='w', suffix='.yml', delete=False) as f:
+                    yaml.dump(step_executor_config, f)
+                    _tmp_path = f.name
+                try:
+                    step_executor_config = ExecutorConfig.from_config(_tmp_path)
+                finally:
+                    os.unlink(_tmp_path)
+            executor = build_executor_from_config(step_executor_config)
+            return {
+                'executor': executor
+            }
+
+        # Priority 3: workflow-level executor.
         executor = kwargs.get('executor')
         if executor is None:
             # Import here to avoid circular imports
