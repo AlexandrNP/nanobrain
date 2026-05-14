@@ -47,6 +47,23 @@ distributed = [
 ]
 academy = [
 ]
+globus = [
+    # Globus distributed execution + auth. All three are lazy-imported
+    # (FAIL-LOUD if absent) by core/distributed/{globus_auth,
+    # globus_compute_executor,globus_credentials}.py and
+    # library/steps/globus_transfer_step.py — a workflow that uses
+    # neither the GlobusComputeExecutor, the GlobusTransferStep, nor the
+    # keyring credential store never needs this extra. Grouped here so
+    # `pip install nanobrain[globus]` provisions the whole Globus path.
+    "globus-sdk>=3.40",
+    "globus-compute-sdk>=2.20",
+    # keyring — G30 secure credential store
+    # (core/distributed/globus_credentials.py). The OS Keychain /
+    # Credential Locker / Secret Service backend that ships with the
+    # platform satisfies the secure-backend guard; headless Linux needs
+    # a Secret Service provider + the `secretstorage` package.
+    "keyring>=24.0",
+]
 rag = [
     "sentence-transformers>=2.2.2,<3.0.0",
     "faiss-cpu>=1.7.4",
@@ -74,7 +91,7 @@ test = [
     # explicitly here.
 ]
 all = [
-    "nanobrain[llm,distributed,academy,rag,dev]",
+    "nanobrain[llm,distributed,academy,globus,rag,dev]",
 ]
 
 [tool.setuptools.packages.find]

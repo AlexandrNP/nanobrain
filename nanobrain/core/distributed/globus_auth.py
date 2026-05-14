@@ -15,11 +15,27 @@ Auth modes
 ----------
 ``client_credentials`` (default — the workspace's primary mode)
     Builds a ``globus_sdk.ClientApp`` from a confidential-client
-    ``client_id`` + ``client_secret`` pair. Credentials come from the
-    explicit arguments, else from the environment variables
-    ``$GLOBUS_COMPUTE_CLIENT_ID`` / ``$GLOBUS_COMPUTE_CLIENT_SECRET``
-    (the names ``globus_compute_sdk`` itself reads). If either is
-    missing this raises ``ComponentConfigurationError`` with a
+    ``client_id`` + ``client_secret`` pair. Credentials are resolved in
+    a strict 3-tier precedence, highest first:
+
+      1. **Explicit arguments** — ``client_id`` / ``client_secret``
+         passed to :func:`build_globus_app`.
+      2. **Environment variables** — ``$GLOBUS_COMPUTE_CLIENT_ID`` /
+         ``$GLOBUS_COMPUTE_CLIENT_SECRET`` (the names
+         ``globus_compute_sdk`` itself reads).
+      3. **OS secure credential store (keyring)** — whatever
+         ``globus_credentials.load_credentials()`` returns from the OS
+         Keychain / Credential Locker / Secret Service. This is the
+         lowest tier; it is only consulted when both tiers above came
+         up empty. The ``keyring`` import is lazy: a caller who passes
+         explicit credentials or sets the env vars never needs
+         ``keyring`` installed, and a missing-``keyring`` ImportError
+         is swallowed at this tier so it cannot mask the real
+         "credentials not found" error below.
+
+    Each of ``client_id`` and ``client_secret`` is resolved
+    independently through the three tiers. If either is still missing
+    after all three, this raises ``ComponentConfigurationError`` with a
     ``FAIL-FAST:`` message — a confidential client with no secret is
     never silently downgraded to interactive login.
 
@@ -79,6 +95,34 @@ def _import_globus_sdk() -> "Any":
             f"use neither never reach this code path. Underlying error: {exc}"
         ) from exc
     return globus_sdk
+
+
+def _load_keyring_credentials() -> "tuple[Optional[str], Optional[str]]":
+    """Tier-3 credential lookup: the OS secure store, via ``globus_credentials``.
+
+    This is the lowest-precedence resolution tier. The ``keyring``
+    dependency is intentionally soft here: a caller who supplies
+    explicit credentials or sets the environment variables must never
+    be forced to install ``keyring``. So a missing-``keyring``
+    ImportError (surfaced as ``ComponentConfigurationError`` by
+    ``globus_credentials._import_keyring``) is swallowed at this tier —
+    it MUST NOT mask the real "credentials not found in any tier"
+    FAIL-LOUD that fires downstream when args + env are also empty.
+
+    The import of ``globus_credentials`` itself is local so that
+    importing this module never pulls it in.
+    """
+    try:
+        from nanobrain.core.distributed import globus_credentials
+    except ImportError:  # pragma: no cover - module is in-tree
+        return None, None
+    try:
+        return globus_credentials.load_credentials()
+    except ComponentConfigurationError:
+        # keyring not installed — tier-3 simply contributes nothing.
+        return None, None
+    except Exception:  # noqa: BLE001 - a broken keyring must not block tiers 1-2
+        return None, None
 
 
 def _scope_resource_server(scope: str) -> str:
@@ -165,8 +209,16 @@ def build_globus_app(
     scope_requirements = _build_scope_requirements(globus_sdk, scopes)
 
     if auth_mode == "client_credentials":
+        # 3-tier precedence: explicit args -> env vars -> keyring.
+        # The keyring tier is only consulted when something is still
+        # missing after args + env, so the lazy keyring import is
+        # avoided entirely on the common (args/env) paths.
         resolved_id = client_id or os.environ.get(ENV_CLIENT_ID)
         resolved_secret = client_secret or os.environ.get(ENV_CLIENT_SECRET)
+        if not resolved_id or not resolved_secret:
+            keyring_id, keyring_secret = _load_keyring_credentials()
+            resolved_id = resolved_id or keyring_id
+            resolved_secret = resolved_secret or keyring_secret
         missing = []
         if not resolved_id:
             missing.append(f"client_id (or ${ENV_CLIENT_ID})")
@@ -189,10 +241,13 @@ def build_globus_app(
         )
 
     # auth_mode == "native": interactive browser login. globus_sdk's
-    # UserApp requires a client_id (it cannot be derived). Fall back to
-    # $GLOBUS_COMPUTE_CLIENT_ID so a developer who set it for the Globus
-    # Compute CLI does not need to set anything new; FAIL-LOUD if absent.
+    # UserApp requires a client_id (it cannot be derived). Resolve it
+    # through the same 3-tier precedence: explicit arg -> env var ->
+    # keyring. (native mode needs no client_secret.) FAIL-LOUD if absent.
     resolved_id = client_id or os.environ.get(ENV_CLIENT_ID)
+    if not resolved_id:
+        keyring_id, _ = _load_keyring_credentials()
+        resolved_id = resolved_id or keyring_id
     if not resolved_id:
         raise ComponentConfigurationError(
             "FAIL-FAST: build_globus_app auth_mode='native' requires a "

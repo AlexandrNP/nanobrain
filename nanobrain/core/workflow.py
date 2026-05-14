@@ -2196,50 +2196,45 @@ class Workflow(Step):
     @classmethod
     def resolve_dependencies(cls, component_config: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """Resolve Workflow dependencies including custom executor configuration"""
-        # Check for workflow-level executor configuration
+        # Priority 1: a pre-built executor passed programmatically wins.
         executor = kwargs.get('executor')
         if executor is None:
-            # Import here to avoid circular imports
-            from .executor import ExecutorConfig, ParslExecutor
-
-            # Try to use workflow-level executor_config
+            # Try to use workflow-level executor_config.
             executor_config_path = component_config.get('executor_config')
             if executor_config_path:
+                # Import here to avoid circular imports.
+                from .executor import ExecutorConfig, build_executor_from_config
+                from .component_base import ComponentConfigurationError
+
+                # FAIL-LOUD: a workflow that DECLARED an executor and cannot
+                # build it must stop — it must NOT silently relocate the work
+                # onto a default LocalExecutor. (Catastrophic for remote
+                # execution: the user thinks their code ran on Aurora; it ran
+                # on their laptop.) The shared dispatch helper is the single
+                # source of truth for executor_type -> executor class.
                 try:
-                    # Load executor configuration from file
                     executor_config = ExecutorConfig.from_config(executor_config_path)
-
-                    # Create appropriate executor based on type
-                    if executor_config.executor_type.value == 'parsl':
-                        executor = ParslExecutor.from_config(executor_config)
-                        logger.info(f"✅ Created ParslExecutor from workflow config: {executor_config_path}")
-                    elif executor_config.executor_type.value == 'thread':
-                        from .executor import ThreadExecutor
-                        executor = ThreadExecutor.from_config(executor_config)
-                        logger.info(f"✅ Created ThreadExecutor from workflow config: {executor_config_path}")
-                    elif executor_config.executor_type.value == 'process':
-                        from .executor import ProcessExecutor
-                        executor = ProcessExecutor.from_config(executor_config)
-                        logger.info(f"✅ Created ProcessExecutor from workflow config: {executor_config_path}")
-                    elif executor_config.executor_type.value == 'globus_compute':
-                        # Lazy import so non-Globus workflows never load the
-                        # globus libraries.
-                        from .distributed.globus_compute_executor import GlobusComputeExecutor
-                        executor = GlobusComputeExecutor.from_config(executor_config)
-                        logger.info(f"✅ Created GlobusComputeExecutor from workflow config: {executor_config_path}")
-                    else:
-                        # Default to LocalExecutor
-                        executor = LocalExecutor.from_config(executor_config)
-                        logger.info(f"✅ Created LocalExecutor from workflow config: {executor_config_path}")
-
+                    executor = build_executor_from_config(executor_config)
                 except Exception as e:
-                    logger.warning(f"⚠️ Failed to load workflow executor config {executor_config_path}: {e}")
-                    logger.info("🔄 Falling back to default LocalExecutor")
-                    # Fall back to default behavior
-                    executor = None
-
-            # If no executor config or loading failed, use default from parent
-            if executor is None:
+                    raise ComponentConfigurationError(
+                        f"FAIL-FAST: workflow-level executor_config "
+                        f"{executor_config_path!r} could not be built: {e}. "
+                        f"A workflow that declares an executor_config must be "
+                        f"able to build it — the framework does NOT silently "
+                        f"fall back to LocalExecutor (that would run remote "
+                        f"work locally without warning). Fix the executor "
+                        f"config (missing dependency, bad endpoint, malformed "
+                        f"YAML, or unknown executor_type) or remove the "
+                        f"executor_config declaration to use the default "
+                        f"LocalExecutor."
+                    ) from e
+                logger.info(
+                    f"✅ Built workflow-level executor from config: "
+                    f"{executor_config_path}")
+            else:
+                # No executor_config declared — fall through to the parent
+                # default (LocalExecutor). A workflow that asks for nothing
+                # correctly gets Local.
                 base_deps = super().resolve_dependencies(component_config, **kwargs)
                 executor = base_deps['executor']
 
