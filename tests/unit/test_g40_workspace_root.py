@@ -174,3 +174,113 @@ def test_default_markers_set_includes_canonical_signals():
     workspace-root signals. If somebody removes one, this fires."""
     assert "pyproject.toml" in DEFAULT_MARKERS
     assert ".git" in DEFAULT_MARKERS
+
+
+# ---------------------------------------------------------------------------
+# fallback_depth — added 2026-05-16 (G77) so apecx-mcp-integration could
+# retire its _workspace.py shim. Tests pin every branch of the new behavior.
+# ---------------------------------------------------------------------------
+
+
+def test_fallback_depth_fires_when_no_marker_no_env(tmp_path, monkeypatch):
+    """Walk exhausts without a marker → parents[fallback_depth] returned."""
+    monkeypatch.delenv("NANOBRAIN_WORKSPACE_ROOT", raising=False)
+    nested = tmp_path / "a" / "b" / "c" / "d" / "e" / "f.py"
+    nested.parent.mkdir(parents=True)
+    nested.write_text("# stub\n")
+
+    out = locate_workflow_root(
+        start=nested, markers=["nonexistent_marker"], fallback_depth=3
+    )
+    expected = nested.resolve().parents[3]
+    assert out == expected, (
+        f"fallback_depth=3 should return parents[3] from {nested}; got {out}"
+    )
+
+
+def test_env_var_still_wins_over_fallback_depth(tmp_path, monkeypatch):
+    """Resolution order is env > marker > fallback_depth.
+
+    Detection signal: a refactor that re-orders the branches would let
+    a configured operator override be ignored when the caller passed a
+    fallback_depth — silent footgun.
+    """
+    target = tmp_path / "explicit_root"
+    target.mkdir()
+    monkeypatch.setenv("NANOBRAIN_WORKSPACE_ROOT", str(target))
+
+    nested = tmp_path / "a" / "b" / "c" / "f.py"
+    nested.parent.mkdir(parents=True)
+    nested.write_text("")
+    out = locate_workflow_root(
+        start=nested, markers=["nope"], fallback_depth=1
+    )
+    assert out == target, (
+        f"env var must win over fallback_depth; got {out}, expected {target}"
+    )
+
+
+def test_marker_walk_still_wins_over_fallback_depth(tmp_path, monkeypatch):
+    """Marker hit short-circuits before fallback_depth is consulted."""
+    monkeypatch.delenv("NANOBRAIN_WORKSPACE_ROOT", raising=False)
+
+    root = tmp_path / "ws_root"
+    (root / "deeply" / "nested").mkdir(parents=True)
+    (root / "marker.txt").touch()
+
+    start = root / "deeply" / "nested" / "module.py"
+    start.write_text("")
+
+    out = locate_workflow_root(
+        start=start, markers=["marker.txt"], fallback_depth=1
+    )
+    assert out == root.resolve(), (
+        f"marker walk must short-circuit; got {out}, expected {root.resolve()}"
+    )
+
+
+def test_fallback_depth_oob_returns_none_and_warns(monkeypatch, caplog):
+    """Caller-provided fallback_depth exceeds parents chain → None + WARNING.
+
+    Honest failure beats silent IndexError. Caller sees None and the
+    log warning explains why (e.g., file path is at root '/').
+    """
+    monkeypatch.delenv("NANOBRAIN_WORKSPACE_ROOT", raising=False)
+    import logging
+
+    caplog.set_level(logging.WARNING)
+    out = locate_workflow_root(
+        start=Path("/tmp/x.py"), markers=[], fallback_depth=999
+    )
+    assert out is None
+    assert any(
+        "fallback_depth=999 exceeds parents list" in rec.message
+        for rec in caplog.records
+    ), "expected a WARNING about OOB fallback_depth"
+
+
+def test_start_accepts_file_path(tmp_path, monkeypatch):
+    """``start=`` can be a file path — walk uses the file's parent dir.
+
+    Most callers pass ``__file__`` directly; the helper handles the
+    file-vs-dir distinction so callers don't have to do
+    ``Path(__file__).parent`` manually.
+    """
+    monkeypatch.delenv("NANOBRAIN_WORKSPACE_ROOT", raising=False)
+    root = tmp_path / "ws"
+    (root / "sub").mkdir(parents=True)
+    (root / "marker.txt").touch()
+    module_file = root / "sub" / "module.py"
+    module_file.write_text("")
+    out = locate_workflow_root(start=module_file, markers=["marker.txt"])
+    assert out == root.resolve()
+
+
+def test_fallback_depth_none_is_no_op(monkeypatch):
+    """``fallback_depth=None`` (the default) means no fallback — old
+    behavior preserved. Returns None when no marker + no env."""
+    monkeypatch.delenv("NANOBRAIN_WORKSPACE_ROOT", raising=False)
+    out = locate_workflow_root(
+        start=Path("/tmp/some/path.py"), markers=["nope"]
+    )
+    assert out is None
