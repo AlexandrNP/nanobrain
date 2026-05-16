@@ -314,19 +314,41 @@ class WorkflowBuilder:
 
         name = link_name or f"link_{len(self.workflow_config['links'])}"
 
-        link_config: Dict[str, Any] = {
-            "name": name,
-            "class": link_class_path,
+        # Emit the NESTED-shape link entry that LinkBase.from_config
+        # expects: ``{name, class, config: {link_type, source, target,
+        # condition?, gate_semantics?, transform_function?, **kwargs}}``.
+        #
+        # Earlier versions emitted a FLAT entry (source/target/etc.
+        # at the top level). It loaded cleanly through
+        # ``WorkflowConfig`` (and the G7 auto_transfer mutator handles
+        # both shapes), but ``LinkBase.from_config`` only accepts the
+        # nested shape. A workflow built via the lightweight builder
+        # would load with N steps and 0 functional links — every link
+        # silently dropped during graph construction, the cascade
+        # never advancing past the first step. That was apecx-mcp-
+        # integration friction-log #26 and required a call-side
+        # ``_rewrap_link_entries_nested`` workaround in every
+        # downstream consumer. Fixed at the source 2026-05-15: the
+        # builder now emits the same nested shape as hand-authored
+        # YAML, so the rewrap workaround becomes a no-op everywhere.
+        nested_config: Dict[str, Any] = {
+            "link_type": link_type,
             "source": source,
             "target": target,
         }
         if condition is not None:
-            link_config["condition"] = condition
+            nested_config["condition"] = condition
         if gate_semantics is not None:
-            link_config["gate_semantics"] = gate_semantics
+            nested_config["gate_semantics"] = gate_semantics
         if transform_function is not None:
-            link_config["transform_function"] = transform_function
-        link_config.update(kwargs)
+            nested_config["transform_function"] = transform_function
+        nested_config.update(kwargs)
+
+        link_config: Dict[str, Any] = {
+            "name": name,
+            "class": link_class_path,
+            "config": nested_config,
+        }
 
         self.workflow_config["links"][name] = link_config
         return self

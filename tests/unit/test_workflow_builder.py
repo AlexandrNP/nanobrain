@@ -76,9 +76,16 @@ class TestAddLink:
         b = WorkflowBuilder("t")
         b.add_link("a.x", "b.x", link_type="direct")
         link = b.get_config()["links"]["link_0"]
+        # Top-level keeps name + class (the loader's `class:` resolves
+        # the subclass). Source / target / link_type / etc. live in the
+        # nested `config:` block — same shape as hand-authored YAML.
+        # Pre-2026-05-15 the builder emitted these at the TOP level
+        # which loaded cleanly through WorkflowConfig but was silently
+        # dropped by LinkBase.from_config during graph construction.
         assert link["class"] == "nanobrain.core.link.DirectLink"
-        assert link["source"] == "a.x"
-        assert link["target"] == "b.x"
+        assert link["config"]["link_type"] == "direct"
+        assert link["config"]["source"] == "a.x"
+        assert link["config"]["target"] == "b.x"
 
     def test_conditional_link(self):
         b = WorkflowBuilder("t")
@@ -88,7 +95,7 @@ class TestAddLink:
         )
         link = b.get_config()["links"]["link_0"]
         assert link["class"] == "nanobrain.core.link.ConditionalLink"
-        assert link["condition"] == {"op": "exists", "field": "val"}
+        assert link["config"]["condition"] == {"op": "exists", "field": "val"}
 
     def test_transform_link(self):
         b = WorkflowBuilder("t")
@@ -98,7 +105,7 @@ class TestAddLink:
         )
         link = b.get_config()["links"]["link_0"]
         assert link["class"] == "nanobrain.core.link.TransformLink"
-        assert link["transform_function"] == "json.dumps"
+        assert link["config"]["transform_function"] == "json.dumps"
 
     def test_file_link(self):
         b = WorkflowBuilder("t")
@@ -114,7 +121,7 @@ class TestAddLink:
             gate_semantics="gate_to_bottom",
         )
         link = b.get_config()["links"]["link_0"]
-        assert link["gate_semantics"] == "gate_to_bottom"
+        assert link["config"]["gate_semantics"] == "gate_to_bottom"
 
     def test_explicit_link_name(self):
         b = WorkflowBuilder("t")
@@ -327,13 +334,17 @@ class TestEndToEnd:
         finally:
             WorkflowConfig._allow_direct_instantiation = False
 
+        # As of 2026-05-15 the builder emits NESTED-shape link entries
+        # ({name, class, config: {...}}). The G7 auto_transfer and G10
+        # gate_semantics mutators handle both shapes and deposit their
+        # values inside ``config`` for nested entries.
         # G7 Step 3: auto_transfer-True injected on every inline link
-        assert wcfg.links["link_0"]["auto_transfer"] is True
-        assert wcfg.links["link_1"]["auto_transfer"] is True
+        assert wcfg.links["link_0"]["config"]["auto_transfer"] is True
+        assert wcfg.links["link_1"]["config"]["auto_transfer"] is True
         # G10 Step 2: gate_semantics injected on the ConditionalLink
         # but NOT on the DirectLink (only ConditionalLink reads it).
-        assert wcfg.links["link_1"]["gate_semantics"] == "gate_to_bottom"
-        assert "gate_semantics" not in wcfg.links["link_0"]
+        assert wcfg.links["link_1"]["config"]["gate_semantics"] == "gate_to_bottom"
+        assert "gate_semantics" not in wcfg.links["link_0"]["config"]
 
     def test_save_and_reload(self):
         """The dict round-trips through json.dump → json.load → builder

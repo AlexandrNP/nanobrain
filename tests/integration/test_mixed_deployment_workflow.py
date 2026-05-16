@@ -301,13 +301,18 @@ class TestLightweightBuilderMixedDeployment:
             wcfg = WorkflowConfig(**cfg)
         finally:
             WorkflowConfig._allow_direct_instantiation = False
-        # Both inline links got auto_transfer-True (G7 Step 3)
-        assert wcfg.links["link_0"]["auto_transfer"] is True
-        assert wcfg.links["link_1"]["auto_transfer"] is True
+        # As of 2026-05-15 the builder emits NESTED-shape link entries
+        # ({name, class, config: {...}}) — same shape as hand-authored
+        # YAML — so the G7 auto_transfer mutator and G10 gate_semantics
+        # mutator both deposit their values inside ``config``. The
+        # mutators handle both shapes (see workflow.py:_inject_field),
+        # so this test simply reads from the nested location now.
+        assert wcfg.links["link_0"]["config"]["auto_transfer"] is True
+        assert wcfg.links["link_1"]["config"]["auto_transfer"] is True
         # The conditional link got gate_semantics injected (G10 Step 2)
-        assert wcfg.links["link_1"]["gate_semantics"] == "gate_to_bottom"
+        assert wcfg.links["link_1"]["config"]["gate_semantics"] == "gate_to_bottom"
         # The DirectLink got nothing for gate_semantics (only ConditionalLink reads it)
-        assert "gate_semantics" not in wcfg.links["link_0"]
+        assert "gate_semantics" not in wcfg.links["link_0"]["config"]
 
 
 # ---------------------------------------------------------------------------
