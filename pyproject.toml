@@ -46,6 +46,14 @@ distributed = [
     "parsl>=2024.6.10",
 ]
 academy = [
+    # academy-py 0.4 unified RemoteHandle + UnboundRemoteHandle into
+    # a single Handle class with an optional ``exchange`` field;
+    # nanobrain/academy_integration/academy_agent_step.py already uses
+    # the unified API. Pinned to `<0.5` because academy-py breaks APIs
+    # at minor bumps (0.2→0.3 dropped RemoteHandle, 0.3→0.4 introduced
+    # the unified Handle's ``exchange=`` kwarg) — bumping is a
+    # deliberate re-verification.
+    "academy-py>=0.4,<0.5",
 ]
 globus = [
     # Globus distributed execution + auth. All three are lazy-imported
