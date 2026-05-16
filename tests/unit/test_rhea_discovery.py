@@ -1,0 +1,205 @@
+"""Unit tests for RheaMCPDiscovery — the codegen-as-MCP-client mechanism.
+
+Runs UNCONDITIONALLY against a fake MCP server (httpx MockTransport).
+The live-Rhea discovery path is exercised by the gated integration
+test (apecx-mcp-integration tests/integration/test_open_rosalind_rhea_workflow.py,
+skipped unless $RHEA_MCP_URL is set).
+
+Key contract assertions:
+* Discovered MCP tools convert to UTD dicts that actually parse via
+  UnifiedToolDescriptor.from_dict (the round-trip the codegen depends on).
+* MCP tool names that violate the UTD tool_id grammar are sanitized
+  in the descriptor_id BUT preserved verbatim in
+  provenance_pin.mcp_support.rhea_tool_name (so dispatch still works).
+* An empty tools list FAILS LOUD — never a silent zero-tool catalog.
+
+The MockTransport is installed via the ``discovery.transport.client``
+test seam (RheaMCPDiscovery delegates the MCP wire protocol to the
+shared MCPTransport).
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+
+import httpx
+import pytest
+from nanobrain.core.component_base import ComponentConfigurationError
+from nanobrain.core.unified_tool_descriptor import UnifiedToolDescriptor
+from nanobrain.library.tools.rhea_discovery import RheaMCPDiscovery
+
+
+def _sse(obj: dict) -> str:
+    return "event: message\ndata: " + json.dumps(obj) + "\n"
+
+
+def _make_handler(tools: list[dict] | None, *, tools_key_present: bool = True):
+    """Fake MCP server: initialize -> session; tools/list -> tools."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        method = body.get("method")
+        if method == "initialize":
+            return httpx.Response(
+                200,
+                text=_sse({"jsonrpc": "2.0", "id": 1, "result": {}}),
+                headers={"mcp-session-id": "sess-1"},
+            )
+        if method == "notifications/initialized":
+            return httpx.Response(202, text="")
+        if method == "tools/list":
+            result: dict = {}
+            if tools_key_present:
+                result["tools"] = tools if tools is not None else []
+            return httpx.Response(
+                200, text=_sse({"jsonrpc": "2.0", "id": 2, "result": result})
+            )
+        return httpx.Response(400, text="unexpected method")
+
+    return handler
+
+
+def _discovery_with_mock(handler) -> RheaMCPDiscovery:
+    disco = RheaMCPDiscovery(mcp_url="http://fake/mcp/", timeout_seconds=5.0)
+    disco.transport.client = httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), timeout=5.0
+    )
+    return disco
+
+
+_SAMPLE_TOOLS = [
+    {
+        "name": "sequence.analyze",
+        "description": "Analyze a biological sequence.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "sequence": {"type": "string", "description": "the input sequence"},
+            },
+            "required": ["sequence"],
+        },
+    },
+    {
+        "name": "UniProt-Search",  # violates UTD tool_id grammar -> sanitized
+        "description": "Search UniProt for a protein.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string"},
+                "limit": {"type": "integer", "default": 5},
+            },
+            "required": ["query"],
+        },
+    },
+]
+
+
+def test_from_env_fails_loud_without_var(monkeypatch):
+    monkeypatch.delenv("RHEA_MCP_URL", raising=False)
+    with pytest.raises(ComponentConfigurationError, match="RHEA_MCP_URL"):
+        RheaMCPDiscovery.from_env()
+
+
+def test_construction_rejects_empty_url():
+    with pytest.raises(ComponentConfigurationError, match="non-empty mcp_url"):
+        RheaMCPDiscovery(mcp_url="")
+
+
+def test_discover_returns_parseable_utds():
+    disco = _discovery_with_mock(_make_handler(_SAMPLE_TOOLS))
+    utds = asyncio.run(disco.discover())
+    asyncio.run(disco.aclose())
+    assert len(utds) == 2
+    # The load-bearing assertion: every discovered dict parses as a UTD.
+    parsed = [UnifiedToolDescriptor.from_dict(u) for u in utds]
+    ids = {p.descriptor_id for p in parsed}
+    assert "rhea:sequence.analyze@1.0.0" in ids
+    # 'UniProt-Search' sanitized into the tool_id grammar.
+    assert "rhea:uniprot_search@1.0.0" in ids
+
+
+def test_discover_preserves_original_mcp_name_for_dispatch():
+    disco = _discovery_with_mock(_make_handler(_SAMPLE_TOOLS))
+    utds = asyncio.run(disco.discover())
+    asyncio.run(disco.aclose())
+    by_id = {u["descriptor_id"]: u for u in utds}
+    # The sanitized one must keep the ORIGINAL name for RheaAdapter dispatch.
+    sanitized = by_id["rhea:uniprot_search@1.0.0"]
+    assert sanitized["provenance_pin"]["mcp_support"]["rhea_tool_name"] == "UniProt-Search"
+
+
+def test_discover_maps_input_schema():
+    disco = _discovery_with_mock(_make_handler(_SAMPLE_TOOLS))
+    utds = asyncio.run(disco.discover())
+    asyncio.run(disco.aclose())
+    by_id = {u["descriptor_id"]: u for u in utds}
+    uniprot = by_id["rhea:uniprot_search@1.0.0"]
+    input_names = {i["name"] for i in uniprot["inputs"]}
+    assert input_names == {"query", "limit"}
+    query_input = next(i for i in uniprot["inputs"] if i["name"] == "query")
+    assert query_input["required"] is True
+    limit_input = next(i for i in uniprot["inputs"] if i["name"] == "limit")
+    assert limit_input["required"] is False  # not in 'required' array
+    assert limit_input["default"] == 5
+
+
+def test_discover_provenance_pin_points_at_rhea_adapter():
+    disco = _discovery_with_mock(_make_handler(_SAMPLE_TOOLS))
+    utds = asyncio.run(disco.discover())
+    asyncio.run(disco.aclose())
+    for u in utds:
+        assert (
+            u["provenance_pin"]["class_path"]
+            == "nanobrain.library.tools.rhea_adapter.RheaAdapter"
+        )
+
+
+def test_discover_empty_tool_list_fails_loud():
+    """An empty tools list must FAIL LOUD — a codegen handed zero tools
+    would generate an empty/no-op workflow (silent-failure shape)."""
+    disco = _discovery_with_mock(_make_handler([]))
+    with pytest.raises(ComponentConfigurationError, match="empty tools list"):
+        asyncio.run(disco.discover())
+    asyncio.run(disco.aclose())
+
+
+def test_discover_missing_tools_key_fails_loud():
+    disco = _discovery_with_mock(_make_handler(None, tools_key_present=False))
+    with pytest.raises(ComponentConfigurationError, match="no 'tools' array"):
+        asyncio.run(disco.discover())
+    asyncio.run(disco.aclose())
+
+
+def test_discover_jsonrpc_error_fails_loud():
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        if body.get("method") == "initialize":
+            return httpx.Response(
+                200,
+                text=_sse({"jsonrpc": "2.0", "id": 1, "result": {}}),
+                headers={"mcp-session-id": "s1"},
+            )
+        if body.get("method") == "notifications/initialized":
+            return httpx.Response(202, text="")
+        return httpx.Response(
+            200,
+            text=_sse(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 2,
+                    "error": {"code": -32601, "message": "tools/list not supported"},
+                }
+            ),
+        )
+
+    disco = _discovery_with_mock(handler)
+    with pytest.raises(ComponentConfigurationError, match="tools/list not supported"):
+        asyncio.run(disco.discover())
+    asyncio.run(disco.aclose())
+
+
+def test_sanitize_tool_id_grammar():
+    # leading non-alpha gets a 't_' prefix.
+    assert RheaMCPDiscovery._sanitize_tool_id("3prime-utr") == "t_3prime_utr"
+    assert RheaMCPDiscovery._sanitize_tool_id("Sequence.Analyze") == "sequence.analyze"

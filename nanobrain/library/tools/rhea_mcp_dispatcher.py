@@ -61,15 +61,15 @@ nanobrain-side speak the same wire format and stay decoupled.
 
 from __future__ import annotations
 
-import asyncio
-import json
 import logging
-from typing import Any, Dict, List, Optional, Union
-
-import httpx
+from typing import Any, Dict
 
 from nanobrain.core.component_base import ComponentConfigurationError
 from nanobrain.core.tool import ToolBase, ToolConfig
+from nanobrain.library.tools._mcp_transport import (
+    MCPTransport,
+    parse_tool_call_result,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -117,17 +117,16 @@ class RheaMCPDispatcher(ToolBase):
 
         self._mcp_url: str = mcp_url
         self._rhea_tool_name: str = rhea_tool_name
-        self._timeout_seconds: float = float(
-            dependencies.get("timeout_seconds", 30.0)
-        )
-        self._extra_headers: Dict[str, str] = dict(
-            dependencies.get("extra_headers", {})
-        )
 
-        # Lazily-created session state
-        self._client: Optional[httpx.AsyncClient] = None
-        self._session_id: Optional[str] = None
-        self._client_lock = asyncio.Lock()
+        # MCP wire protocol is delegated to the shared MCPTransport
+        # (nanobrain.library.tools._mcp_transport) — single source of
+        # truth shared with RheaAdapter + RheaMCPDiscovery.
+        self._transport = MCPTransport(
+            mcp_url=mcp_url,
+            timeout_seconds=float(dependencies.get("timeout_seconds", 30.0)),
+            extra_headers=dict(dependencies.get("extra_headers", {})),
+            client_name="nanobrain-rhea-dispatcher",
+        )
 
     @classmethod
     def resolve_dependencies(
@@ -172,196 +171,15 @@ class RheaMCPDispatcher(ToolBase):
                 f"{type(payload).__name__}"
             )
 
-        await self._ensure_session()
-        return await self._dispatch_tool_call(payload, _retry_on_session=True)
+        raw = await self._transport.call(
+            "tools/call",
+            {"name": self._rhea_tool_name, "arguments": payload},
+        )
+        return parse_tool_call_result(raw, self._rhea_tool_name)
 
     async def aclose(self) -> None:
-        """Close the underlying httpx client. Idempotent."""
-        if self._client is not None:
-            await self._client.aclose()
-            self._client = None
-            self._session_id = None
+        """Close the underlying MCP transport. Idempotent."""
+        await self._transport.aclose()
 
-    # ---- Internals ------------------------------------------------------
 
-    async def _ensure_session(self) -> None:
-        """Open the httpx client + perform the MCP initialize handshake.
-
-        Idempotent + asyncio.Lock-serialized so concurrent ``execute``
-        calls don't race on session creation.
-        """
-        async with self._client_lock:
-            if self._client is None:
-                self._client = httpx.AsyncClient(timeout=self._timeout_seconds)
-            if self._session_id is not None:
-                return
-
-            init_resp = await self._client.post(
-                self._mcp_url,
-                headers=self._request_headers(include_session=False),
-                json={
-                    "jsonrpc": "2.0",
-                    "id": 1,
-                    "method": "initialize",
-                    "params": {
-                        "protocolVersion": "2024-11-05",
-                        "capabilities": {},
-                        "clientInfo": {
-                            "name": "nanobrain-rhea-dispatcher",
-                            "version": "0.1.0",
-                        },
-                    },
-                },
-            )
-            if init_resp.status_code != 200:
-                raise ComponentConfigurationError(
-                    f"FAIL-FAST: MCP initialize at {self._mcp_url} returned "
-                    f"{init_resp.status_code}: {init_resp.text[:300]}"
-                )
-            session_id = init_resp.headers.get("mcp-session-id")
-            if not session_id:
-                raise ComponentConfigurationError(
-                    f"FAIL-FAST: MCP initialize at {self._mcp_url} did not "
-                    f"return an 'mcp-session-id' header — server may not be "
-                    f"speaking the MCP streamable-HTTP protocol"
-                )
-            self._session_id = session_id
-
-            # Required initialized notification.
-            await self._client.post(
-                self._mcp_url,
-                headers=self._request_headers(include_session=True),
-                json={
-                    "jsonrpc": "2.0",
-                    "method": "notifications/initialized",
-                },
-            )
-
-    def _request_headers(self, *, include_session: bool) -> Dict[str, str]:
-        """Build request headers; optionally include the session id."""
-        headers = {
-            "Accept": "application/json,text/event-stream",
-            "Content-Type": "application/json",
-            **self._extra_headers,
-        }
-        if include_session and self._session_id:
-            headers["mcp-session-id"] = self._session_id
-        return headers
-
-    async def _dispatch_tool_call(
-        self, payload: Dict[str, Any], *, _retry_on_session: bool,
-    ) -> Any:
-        """Send the tools/call JSON-RPC request and parse the response.
-
-        On session-invalid errors (4xx with explicit "session" mention),
-        clears the cached session and retries ONCE — protects against
-        Rhea-side server restarts mid-session.
-        """
-        assert self._client is not None  # _ensure_session should set it
-        resp = await self._client.post(
-            self._mcp_url,
-            headers=self._request_headers(include_session=True),
-            json={
-                "jsonrpc": "2.0",
-                "id": 2,
-                "method": "tools/call",
-                "params": {
-                    "name": self._rhea_tool_name,
-                    "arguments": payload,
-                },
-            },
-        )
-
-        if resp.status_code in (400, 401, 404) and _retry_on_session:
-            # Session may have expired (server restart). Clear + retry once.
-            text_lower = resp.text.lower()
-            if "session" in text_lower:
-                logger.warning(
-                    "MCP session %s invalid (HTTP %d); re-initializing + "
-                    "retrying once", self._session_id, resp.status_code,
-                )
-                self._session_id = None
-                await self._ensure_session()
-                return await self._dispatch_tool_call(
-                    payload, _retry_on_session=False,
-                )
-
-        if resp.status_code != 200:
-            raise ComponentConfigurationError(
-                f"FAIL-FAST: MCP tools/call '{self._rhea_tool_name}' at "
-                f"{self._mcp_url} returned HTTP {resp.status_code}: "
-                f"{resp.text[:300]}"
-            )
-
-        return self._parse_mcp_result(resp.text)
-
-    def _parse_mcp_result(self, body: str) -> Any:
-        """Parse an MCP streamable-HTTP response body.
-
-        Format: ``event: message\\ndata: <json>\\n\\n`` — possibly with
-        multiple data lines. We extract the FIRST ``data:`` whose payload
-        contains a ``result`` field.
-
-        Raises ``ComponentConfigurationError`` if:
-        - No parseable ``data:`` line found
-        - JSON-RPC ``error`` object returned
-        - Result shape is unexpected
-        """
-        result_payload = None
-        for line in body.splitlines():
-            if not line.startswith("data: "):
-                continue
-            try:
-                payload = json.loads(line[len("data: "):])
-            except json.JSONDecodeError:
-                continue
-            if "error" in payload:
-                err = payload["error"]
-                raise ComponentConfigurationError(
-                    f"FAIL-FAST: MCP tools/call '{self._rhea_tool_name}' "
-                    f"JSON-RPC error: code={err.get('code')!r} "
-                    f"message={err.get('message')!r}"
-                )
-            if "result" in payload:
-                result_payload = payload["result"]
-                break
-
-        if result_payload is None:
-            raise ComponentConfigurationError(
-                f"FAIL-FAST: MCP tools/call '{self._rhea_tool_name}' "
-                f"response had no parseable 'data:' line with a result "
-                f"field. Body head: {body[:300]!r}"
-            )
-
-        # MCP wraps tool output in result.content (list of content items).
-        # The shape contract:
-        #   {"content": [{"type": "text", "text": "..."}, ...],
-        #    "structuredContent": {...},
-        #    "isError": bool}
-        if not isinstance(result_payload, dict):
-            return result_payload
-
-        if result_payload.get("isError"):
-            raise ComponentConfigurationError(
-                f"FAIL-FAST: MCP tool '{self._rhea_tool_name}' returned "
-                f"isError=True. Content: {result_payload.get('content')!r}"
-            )
-
-        # Prefer structuredContent if present (MCP spec for typed outputs)
-        if "structuredContent" in result_payload:
-            return result_payload["structuredContent"]
-
-        content = result_payload.get("content")
-        if not isinstance(content, list) or not content:
-            return result_payload  # unknown shape — return raw
-
-        # Single text item — try to JSON-parse it for caller convenience
-        if len(content) == 1 and isinstance(content[0], dict):
-            item = content[0]
-            text = item.get("text")
-            if isinstance(text, str):
-                try:
-                    return json.loads(text)
-                except (TypeError, json.JSONDecodeError):
-                    return text
-        return content
+__all__ = ["RheaMCPDispatcher"]

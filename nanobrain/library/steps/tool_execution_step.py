@@ -14,12 +14,12 @@ This module ships the framework primitives:
 
 What this module does NOT do:
 
-- Concrete backend adapters (RheaAdapter, GalaxyAdapter, LocalParslAdapter)
-  live elsewhere — Rhea adapter is shipped from the Rhea fork
-  (Track C T-RH-04); Galaxy is deferred until availability; LocalParsl
-  is implementation work that depends on the workflow's executor
-  configuration. We ship the protocol; concrete adapters land
-  separately.
+- Concrete backend adapters live in ``nanobrain.library.tools`` —
+  ``HTTPBackendAdapter`` (G38), ``LocalParslAdapter`` (G11-completion),
+  and ``RheaAdapter`` (the ``rhea`` backend; ``library/tools/rhea_adapter.py``).
+  Galaxy is deferred until availability. This module ships the
+  protocol (:class:`ToolBackendAdapter` + :class:`ToolBackendRegistry`);
+  concrete adapters land separately.
 
 Workspace constraints:
 
@@ -300,11 +300,60 @@ class ToolExecutionStep(BaseStep):
         """Convenience: extract the backend prefix from the UTD."""
         return self._utd.descriptor_backend
 
+    def _unwrap_trigger_envelope(self, input_data: dict) -> dict:
+        """Strip the ``{<input_du_name>: payload}`` trigger envelope.
+
+        When a ``ToolExecutionStep`` is wired into a workflow and fed
+        through a ``DirectLink`` + ``DataUnitChangeTrigger``, the
+        framework delivers its input wrapped in a single-key
+        ``{<input_du_name>: <utd_inputs_dict>}`` envelope. A direct
+        ``process({utd_input: value})`` call is NOT wrapped. This step
+        must accept both shapes, so it unwraps only when the shape is
+        unambiguously an envelope.
+
+        Discriminator (UTD-aware, not a bare heuristic): a single-key
+        dict whose key is NOT a declared UTD input name, and whose
+        value is itself a dict, is the trigger envelope — the key is
+        the input data unit's name. A single-key dict whose key DOES
+        match a declared UTD input is a genuine 1-input call (even when
+        that input's value is itself a dict), so it passes through
+        untouched. Multi-key dicts are already in UTD-inputs shape.
+
+        The one pathological case this cannot disambiguate is a
+        single-input UTD whose input data unit was named identically
+        to the UTD input itself; in practice input-DU names
+        (``sequence_tool_input``) never collide with UTD field names
+        (``sequence``).
+        """
+        if len(input_data) != 1:
+            return input_data
+        (only_key,) = input_data.keys()
+        value = input_data[only_key]
+        if not isinstance(value, dict):
+            return input_data
+        declared_inputs = {
+            getattr(i, "name", None)
+            if not isinstance(i, dict)
+            else i.get("name")
+            for i in (getattr(self._utd, "inputs", None) or [])
+        }
+        if only_key in declared_inputs:
+            return input_data
+        logger.debug(
+            "ToolExecutionStep %r: unwrapped trigger envelope key %r",
+            self.name,
+            only_key,
+        )
+        return value
+
     async def process(self, input_data: Any, **kwargs) -> Dict[str, Any]:
         """Dispatch the tool call.
 
         ``input_data`` is the dict of UTD inputs (keyed by UTD input
-        names). The adapter validates required inputs are present.
+        names) — either delivered directly or inside a single-key
+        ``{<input_du_name>: ...}`` trigger envelope, which this step
+        unwraps (see :meth:`_unwrap_trigger_envelope`). The adapter
+        validates required inputs are present.
 
         Returns the adapter's result dict, keyed by UTD output names.
         """
@@ -314,6 +363,8 @@ class ToolExecutionStep(BaseStep):
                 f"must be dict (UTD input names → values), got "
                 f"{type(input_data).__name__}"
             )
+
+        input_data = self._unwrap_trigger_envelope(input_data)
 
         # G28 — capability-token verification at the framework boundary.
         # The UTD's ``requires_capability`` list is enforced here against

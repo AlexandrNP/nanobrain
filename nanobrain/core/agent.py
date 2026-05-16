@@ -1559,8 +1559,12 @@ class Agent(FromConfigBase, ABC):
             # Log LLM interaction details
             first_choice = response_dict["choices"][0] if response_dict["choices"] else {
             }
+            # A pure tool-call message correctly carries content: null.
+            # ``.get("content", "")`` returns None (not "") when the key
+            # exists with a None value — coalesce so the logging path
+            # below never sees None.
             message_content = first_choice.get(
-                "message", {}).get("content", "")
+                "message", {}).get("content") or ""
             duration_ms = (time.time() - start_time) * 1000
 
             self.agent_logger.log_llm_call(

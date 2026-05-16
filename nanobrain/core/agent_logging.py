@@ -158,13 +158,15 @@ class AgentLogger:
         if not self._is_concrete_instance or not self.logger:
             return
 
+        # response_content is None for a pure tool-call LLM message
+        # (content: null) — tolerate it; logging must never crash.
         self.logger.info("LLM call completed",
                          agent_name=self.agent_name,
                          model=model,
                          messages_count=messages_count,
                          response_preview=self._truncate_for_logging(
                              response_content, 200),
-                         response_length=len(response_content),
+                         response_length=len(response_content or ""),
                          tokens_used=tokens_used,
                          finish_reason=finish_reason,
                          duration_ms=duration_ms)
@@ -234,7 +236,18 @@ class AgentLogger:
         }
 
     def _truncate_for_logging(self, text: str, max_length: int) -> str:
-        """Truncate text for logging while preserving readability."""
+        """Truncate text for logging while preserving readability.
+
+        Tolerates ``None`` / non-str input: a pure tool-call LLM
+        message correctly carries ``content: null`` (no assistant
+        text), and several callers pass the raw message content
+        straight through. Logging must never crash on that — it is
+        observability, not correctness.
+        """
+        if text is None:
+            return ""
+        if not isinstance(text, str):
+            text = str(text)
         if len(text) <= max_length:
             return text
         return text[:max_length] + f"... [truncated, total: {len(text)} chars]"
