@@ -24,6 +24,21 @@ import builtins
 
 import pytest
 
+# The whole module exercises the keyring-backed credential store via
+# real keyring API (an in-memory test backend, not a mock). Without
+# the ``keyring`` package installed there is no useful test surface —
+# skip the whole file via the standard pytest gate instead of letting
+# per-test fixture ``import keyring`` raise during setup. ``keyring``
+# is declared in the apecx-mcp-integration ``hpc`` extra; framework
+# users not on the HPC/Globus path don't install it.
+pytest.importorskip(
+    "keyring",
+    reason=(
+        "keyring not installed — globus_credentials store requires it. "
+        "Install with: pip install keyring  (or via the apecx hpc extra)."
+    ),
+)
+
 from nanobrain.core.component_base import ComponentConfigurationError
 from nanobrain.core.distributed import globus_credentials
 from nanobrain.core.distributed.globus_credentials import (
