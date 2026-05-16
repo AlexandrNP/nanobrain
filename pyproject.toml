@@ -89,6 +89,21 @@ test = [
     # G5 Step 2 RedisKey — proxystore[redis] pulls in the redis client
     # transitively; if that ever stops being true, add ``redis>=5.0``
     # explicitly here.
+    # 2026-05-15 — ddgs is the duckduckgo backend for WebSearchTool
+    # (default backend). WebSearchTool itself lazy-imports it FAIL-LOUD,
+    # so production code paths work without ddgs when the operator
+    # chooses tavily or registers a custom backend. But CI's
+    # tests/unit/test_web_search_tool.py exercises the duckduckgo
+    # construction path and would FAIL-LOUD without ddgs. Adding ddgs
+    # to ``test`` keeps the suite green; package weight is small.
+    "ddgs>=0.9",
+    # 2026-05-15 — keyring is the credential backend for Globus
+    # credential store (G30). test_globus_credentials.py uses
+    # module-level pytest.importorskip("keyring") so the file's tests
+    # skip cleanly without it; declaring it here makes CI actually
+    # exercise the store/load/clear round-trip against the in-memory
+    # test backend instead of perma-skipping.
+    "keyring>=24.0",
 ]
 all = [
     "nanobrain[llm,distributed,academy,globus,rag,dev]",
