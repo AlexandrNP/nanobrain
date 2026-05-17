@@ -305,6 +305,42 @@ class WorkflowGraph:
             if not any(self._node_is_loop_controller(node) for node in scc)
         ]
 
+    def _get_cycles_info(self) -> str:
+        """Return a human-readable description of every cycle in the
+        graph, formatted for inclusion in operator-facing log lines.
+
+        Used by ``validate_graph`` to log WHICH cycles were detected
+        (and either allowed via ``allow_cycles`` or bounded by a
+        LoopController via G18 Step 2). Before this method existed,
+        the validator referenced ``self._get_cycles_info()`` but the
+        symbol was undefined — the resulting ``AttributeError`` was
+        swallowed by ``handle_error`` and turned validation success
+        into a false ``(False, ['Graph validation failed'])`` return.
+        Net effect: every cycle-bearing workflow with LoopController
+        bounding was incorrectly rejected at runtime (the cycle was
+        ALLOWED but the logger crashed, the error handler reported
+        validation failure, and the workflow refused to run). Source:
+        2026-05-17 G99 TDR-as-YAML integration test surfaced this.
+
+        Returns a string of the shape::
+
+            "['step_a -> step_b -> step_a', 'step_c -> step_d -> step_c']"
+
+        Empty cycles → ``"[]"``.
+        """
+        sccs = self._get_strongly_connected_components()
+        if not sccs:
+            return "[]"
+        cycle_descriptions: List[str] = []
+        for scc in sccs:
+            # Self-loop (size-1 SCC with a self-edge): render as "node -> node".
+            # Multi-node SCC: render as "a -> b -> c -> a".
+            if len(scc) == 1:
+                cycle_descriptions.append(f"{scc[0]} -> {scc[0]}")
+            else:
+                cycle_descriptions.append(" -> ".join(scc + [scc[0]]))
+        return str(cycle_descriptions)
+
     def get_execution_order(self) -> List[str]:
         """Get topological execution order using Kahn's algorithm."""
         try:

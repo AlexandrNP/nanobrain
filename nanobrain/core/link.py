@@ -2135,6 +2135,19 @@ class ConditionalLink(LinkBase):
         # Call parent _init_from_config
         super()._init_from_config(config, component_config, dependencies)
 
+        # G7 Step 5 — propagate auto_transfer to the instance attribute
+        # that LinkBase._setup_automatic_transfer_if_possible reads via
+        # ``getattr(self, 'auto_transfer', False)``. Before this fix,
+        # ConditionalLink never set the attribute on self, so the
+        # getattr-with-False-fallback in the base class silently
+        # treated EVERY ConditionalLink as a no-op link — the
+        # downstream target was never written to even when the
+        # predicate matched. extract_component_config already pulls
+        # auto_transfer from the LinkConfig (with True as the v2
+        # default per G7 Step 5); _init_from_config now binds it.
+        # Source: 2026-05-17 G99 TDR-as-YAML integration test.
+        self.auto_transfer = component_config.get('auto_transfer', True)
+
         # Set ConditionalLink-specific attributes
         self.condition_func = dependencies['condition_func']
         self.gate_semantics = component_config.get(
@@ -2171,6 +2184,19 @@ class ConditionalLink(LinkBase):
                     await input_unit.set(data)
                 elif hasattr(self.target, 'set_input'):
                     await self.target.set_input(data)
+                else:
+                    # The target is itself a data unit (no .set_input,
+                    # no .input_data_units list) — set on it directly.
+                    # Parity fix with the gate_to_bottom branch below
+                    # (which always had this fallback). Without it,
+                    # ConditionalLinks whose target resolves to a
+                    # workflow-level data unit OR a step's input
+                    # data unit silently no-op'd on every fire even
+                    # when the predicate matched — the cycle saw the
+                    # link "transfer complete" log but no actual
+                    # downstream write. Source: 2026-05-17 G99
+                    # TDR-as-YAML integration test.
+                    await self.target.set(data)
 
                 await self._record_transfer(True)
                 logger.debug(

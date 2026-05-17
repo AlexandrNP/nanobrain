@@ -180,7 +180,29 @@ class LoopController(BaseStep):
 
         The ``input_data`` payload is echoed under ``payload_passthrough_key``
         so downstream steps can route it without losing it.
+
+        Framework trigger-envelope unwrap (mirrors CodeWriteStep +
+        IsolatedPyExecStep): when invoked through the data-driven
+        cascade, the framework delivers ``{<input_data_unit_name>:
+        <actual payload>}``. Without unwrapping, the controller passes
+        the WRAPPED dict through as ``payload``, and downstream Steps
+        consuming the controller output via a back-edge receive
+        doubly-wrapped data they can't decode. Source: 2026-05-17 G99
+        TDR-as-YAML integration test surfaced this — TDR's
+        TdrIterationStep saw ``{loop_gate_input: <envelope>}`` instead
+        of ``<envelope>`` on each loop iteration.
         """
+        # Unwrap trigger envelope. The controller's input data unit
+        # name is the single key under self.step_input_data_units;
+        # match it conservatively (only unwrap when the input shape is
+        # exactly ``{<our_input_unit_name>: <dict>}``).
+        if isinstance(input_data, dict) and len(input_data) == 1:
+            single_key = next(iter(input_data))
+            single_val = input_data[single_key]
+            input_units = getattr(self, "step_input_data_units", {}) or {}
+            if single_key in input_units and isinstance(single_val, dict):
+                input_data = single_val
+
         cap = self._loop_config.max_iterations
         passthrough_key = self._loop_config.payload_passthrough_key
         pre_count = self._iteration_count
