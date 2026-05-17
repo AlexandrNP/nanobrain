@@ -266,6 +266,10 @@ from .workflow import (
     Workflow, WorkflowConfig, WorkflowGraph, create_workflow
 )
 
+from .prompt_template import (
+    PromptTemplate, PromptTemplateConfig
+)
+
 from .agent import (
     Agent, SimpleAgent, ConversationalAgent, AgentConfig, create_agent
 )
@@ -333,6 +337,7 @@ __all__ = [
 
     # Workflows
     'Workflow', 'WorkflowConfig', 'WorkflowGraph', 'ConfigLoader',
+    'PromptTemplate', 'PromptTemplateConfig',
     'ExecutionStrategy', 'ErrorHandlingStrategy', 'create_workflow',
 
     # Agents
