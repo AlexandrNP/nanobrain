@@ -1702,6 +1702,29 @@ class AllDataReceivedTrigger(TriggerBase):
 
         # Legacy polling fallback (for test-doubles + any data unit
         # that doesn't implement register_change_listener).
+        #
+        # G123-follow-up (2026-05-18) — emit a loud WARNING so anyone
+        # hitting this path in production (vs in a test fixture) sees
+        # the polling-vs-cascade-settle race surface. Every real
+        # DataUnit subclass inherits ``register_change_listener`` from
+        # ``DataUnitBase``; if you land here, one of your data units
+        # is a stub/double that should add a no-op
+        # ``register_change_listener`` to opt into the event-driven
+        # path.
+        offenders = [
+            type(du).__name__
+            for du in self.data_units
+            if not hasattr(du, "register_change_listener")
+        ]
+        logger.warning(
+            f"AllDataReceivedTrigger {self.name!r} falling back to "
+            f"polling because {len(offenders)} of {len(self.data_units)} "
+            f"data units lack register_change_listener: {offenders}. "
+            f"The polling path is timing-flaky for fast nested cascades "
+            f"(may settle before the poller detects both inputs). "
+            f"Fix: add a no-op register_change_listener to your data "
+            f"unit doubles, or subclass DataUnitBase."
+        )
         self._monitoring_task = asyncio.create_task(self._monitor_all_data())
         # G119 untag (still applies under the polling fallback).
         try:
