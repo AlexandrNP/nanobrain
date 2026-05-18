@@ -911,6 +911,25 @@ class TriggerBase(FromConfigBase, ABC):
                                         callback, '__name__', str(callback)),
                                     internal_state=self._get_internal_state())
 
+    def bind_action(self, action_func: Callable) -> None:
+        """G123 (2026-05-18) — default sync binding that routes through
+        ``_callbacks``. Subclasses with their own ``bound_actions`` list
+        (DataUnitChangeTrigger / AllDataReceivedTrigger / ManualTrigger)
+        override this method to register in both lists.
+
+        Required so ``step.py`` can call ``trigger_instance.bind_action(...)``
+        on ANY trigger subclass (TimerTrigger, EventTrigger, future
+        triggers) without an ``AttributeError`` at step-trigger-init.
+        """
+        if action_func not in self._callbacks:
+            self._callbacks.append(action_func)
+
+    def unbind_action(self, action_func: Callable) -> None:
+        """G123 (2026-05-18) — default sync unbinding symmetric with
+        :meth:`bind_action`."""
+        if action_func in self._callbacks:
+            self._callbacks.remove(action_func)
+
     async def trigger(self, data: Any = None) -> None:
         """Execute trigger with rate limiting and debouncing."""
         current_time = asyncio.get_event_loop().time()
