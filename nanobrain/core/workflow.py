@@ -2887,20 +2887,71 @@ class Workflow(Step):
                         "⚠️ No first step found - no data flow initiated")
                 return {"status": "no_first_step", "workflow": self.name}
 
-            # Populate input data units of the FIRST STEP only
+            # G122 (2026-05-18): deposit to BOTH workflow-level input
+            # data units AND the first step's input data units, matching
+            # by name. Prior behavior deposited ONLY to the first step
+            # by name match, silently no-op'ing if the caller passed
+            # a workflow-level input name. That's a major UX silent-
+            # failure: declaring `input_data_units:` at the workflow
+            # level signals "this is where I want the data to land",
+            # but the framework ignored it. Now both targets are
+            # matched. The link from workflow_input → first_step.input
+            # (when present) propagates via the cascade as expected.
+            #
+            # FAIL-LOUD when a caller passes a key that doesn't match
+            # ANY data unit name (neither workflow-level nor first
+            # step). The prior silent-skip was a dominant
+            # "workflow loads, cascade never fires" complaint.
             populated_units = 0
-            if hasattr(first_step, 'step_input_data_units'):
-                for unit_name, data_unit in first_step.step_input_data_units.items():
-                    if unit_name in input_data:
-                        await data_unit.set(input_data[unit_name])
-                        populated_units += 1
-                        if hasattr(self, 'nb_logger') and self.nb_logger:
-                            self.nb_logger.info(
-                                f"📥 Populated {unit_name} in first step: {first_step.name}")
+            populated_keys: set[str] = set()
+            workflow_inputs = getattr(self, 'step_input_data_units', {}) or {}
+            first_step_inputs = (
+                getattr(first_step, 'step_input_data_units', {}) or {}
+            )
+
+            for unit_name, value in input_data.items():
+                landed_somewhere = False
+                # Workflow-level deposit first (so links to first-step
+                # inputs fire via the cascade).
+                if unit_name in workflow_inputs:
+                    await workflow_inputs[unit_name].set(value)
+                    populated_units += 1
+                    landed_somewhere = True
+                    if hasattr(self, 'nb_logger') and self.nb_logger:
+                        self.nb_logger.info(
+                            f"📥 Populated workflow-level input {unit_name}"
+                        )
+                # First-step deposit (legacy behavior; still supported
+                # for callers that pass the first-step input name
+                # directly, OR for workflows that don't declare
+                # workflow-level inputs).
+                if unit_name in first_step_inputs:
+                    await first_step_inputs[unit_name].set(value)
+                    populated_units += 1
+                    landed_somewhere = True
+                    if hasattr(self, 'nb_logger') and self.nb_logger:
+                        self.nb_logger.info(
+                            f"📥 Populated {unit_name} in first step: {first_step.name}"
+                        )
+                if not landed_somewhere:
+                    # G122 FAIL-LOUD: caller passed a key that doesn't
+                    # match any data unit. Better to crash here than
+                    # have the cascade silently never fire.
+                    valid = sorted(set(workflow_inputs.keys()) | set(first_step_inputs.keys()))
+                    raise ValueError(
+                        f"FAIL-FAST: Workflow {self.name!r}.process: "
+                        f"input key {unit_name!r} does not match any "
+                        f"workflow-level input ({sorted(workflow_inputs.keys())}) "
+                        f"nor first-step input ({sorted(first_step_inputs.keys())}). "
+                        f"Valid keys: {valid}"
+                    )
+                populated_keys.add(unit_name)
 
             if hasattr(self, 'nb_logger') and self.nb_logger:
                 self.nb_logger.info(
-                    f"✅ Data flow initiated - populated {populated_units} data units in first step")
+                    f"✅ Data flow initiated - {populated_units} deposits "
+                    f"across {len(populated_keys)} input key(s)"
+                )
 
             return {
                 "status": "data_flow_initiated",
