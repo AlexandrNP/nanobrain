@@ -1635,33 +1635,78 @@ class AllDataReceivedTrigger(TriggerBase):
         return self._resolved_expected_set
 
     async def start_monitoring(self) -> None:
-        """Start monitoring for all data received."""
+        """Start monitoring for all data received.
+
+        G120 (2026-05-18) — replaces the legacy polling monitor with an
+        event-driven approach: register as a change-listener on each
+        data unit. When ANY input changes, re-check whether ALL units
+        have data; if so, fire the trigger ONCE and unregister.
+
+        Why event-driven matters: the polling monitor (100ms tick) was
+        timing-flaky for fast nested cascades — when the upstream work
+        completed in <100ms, ``wait_for_cascade`` settled BEFORE the
+        poller could detect both inputs, and the fan-in step silently
+        failed to fire. Event-driven fires synchronously with the
+        last-arriving input's set(), eliminating the race.
+
+        The polling path is preserved (commented out) for diagnostic
+        rollback; the new path is the default. ``_monitoring_task``
+        stays None under event-driven mode — no long-running task to
+        track, no need for the G119 untag workaround.
+        """
         if self._is_active:
             return
 
         self._is_active = True
+
+        # G120 event-driven path: register on each data unit's
+        # change-listener chain. Requires that all data units expose
+        # ``register_change_listener``. When ANY unit lacks it (e.g.,
+        # test doubles, mock data units), fall back to the legacy
+        # polling path so existing fixtures keep working.
+        all_event_capable = all(
+            hasattr(du, "register_change_listener") for du in self.data_units
+        )
+        if all_event_capable and self.data_units:
+            for data_unit in self.data_units:
+                data_unit.register_change_listener(self._on_any_input_changed)
+            logger.debug(
+                f"AllDataReceivedTrigger {self.name} started monitoring "
+                f"(event-driven, {len(self.data_units)} inputs)"
+            )
+            # Also fire an immediate check: if all inputs already have
+            # data (e.g., units pre-populated before start_monitoring),
+            # we need to fire NOW because no future change events will
+            # come for already-populated units.
+            asyncio.create_task(self._on_any_input_changed(None))
+            return
+
+        # Legacy polling fallback (for test-doubles + any data unit
+        # that doesn't implement register_change_listener).
         self._monitoring_task = asyncio.create_task(self._monitor_all_data())
-        # G119 (2026-05-18): the monitor task is a long-running poller
-        # (sleeps 100ms between checks). It is NOT transient cascade
-        # work, so wait_for_cascade should NOT block on it. Explicitly
-        # untag it from the G115 workflow scope by setting
-        # ``_nb_workflow_id = None`` — wait_for_all_tasks's scope filter
-        # treats untagged tasks as foreign-to-the-scope and skips them.
-        # Without this, every nested Workflow.run that uses an
-        # AllDataReceivedTrigger inside its cascade deadlocks: the
-        # inner wait sees the monitor task tagged with inner_id (via
-        # ContextVar inheritance), the monitor never completes, the
-        # wait never drains.
+        # G119 untag (still applies under the polling fallback).
         try:
             self._monitoring_task._nb_workflow_id = None  # type: ignore[attr-defined]
         except Exception:
             pass
-        logger.debug(f"AllDataReceivedTrigger {self.name} started monitoring")
+        logger.debug(
+            f"AllDataReceivedTrigger {self.name} started monitoring "
+            f"(polling fallback, {len(self.data_units)} inputs)"
+        )
 
     async def stop_monitoring(self) -> None:
-        """Stop monitoring."""
+        """Stop monitoring (event-driven path)."""
         self._is_active = False
+        # Unregister from each input data unit's listener chain.
+        for data_unit in self.data_units:
+            try:
+                if hasattr(data_unit, "remove_change_listener"):
+                    data_unit.remove_change_listener(self._on_any_input_changed)
+            except Exception:
+                pass
 
+        # Legacy: cancel the polling task if it's still running (e.g.,
+        # tests that swap to polling mode).
         if self._monitoring_task and not self._monitoring_task.done():
             self._monitoring_task.cancel()
             try:
@@ -1670,6 +1715,41 @@ class AllDataReceivedTrigger(TriggerBase):
                 pass
 
         logger.debug(f"AllDataReceivedTrigger {self.name} stopped monitoring")
+
+    async def _on_any_input_changed(self, change_event: Any) -> None:
+        """G120 (2026-05-18) — event-driven check-and-fire.
+
+        Re-checks all data units; fires the trigger ONCE when every
+        input is satisfied (per ``_is_satisfied``). After firing,
+        deactivates so subsequent input changes don't re-fire (matches
+        the polling-mode semantics of ``break`` after the first fire).
+        """
+        if not self._is_active:
+            return
+        try:
+            data_dict: Dict[str, Any] = {}
+            for i, data_unit in enumerate(self.data_units):
+                data = await data_unit.get()
+                satisfied, include = self._is_satisfied(data)
+                if not satisfied:
+                    return  # not all inputs ready yet
+                if include:
+                    data_dict[f"input_{i}"] = data
+
+            # All inputs ready — fire once + deactivate.
+            self._is_active = False
+            await self.trigger(data_dict)
+            # Best-effort unregister so we don't keep getting called.
+            for du in self.data_units:
+                try:
+                    if hasattr(du, "remove_change_listener"):
+                        du.remove_change_listener(self._on_any_input_changed)
+                except Exception:
+                    pass
+        except Exception as e:
+            logger.error(
+                f"Error in AllDataReceivedTrigger {self.name} event handler: {e}"
+            )
 
     async def _monitor_all_data(self) -> None:
         """Monitor until all data units have data.
