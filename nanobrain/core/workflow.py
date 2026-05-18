@@ -2434,7 +2434,7 @@ class Workflow(Step):
         *,
         await_cascade: bool = True,
         timeout: float = 60.0,
-        settle_ms: int = 50,
+        settle_ms: int = 500,  # G124 — was 50; bumped for safe-floor parity with wait_for_cascade
         raise_on_cascade_timeout: bool = False,
         nest_under_active_context: bool = False,
         **kwargs,
@@ -2773,10 +2773,20 @@ class Workflow(Step):
                 outputs.setdefault("_errors", {})[unit_name] = repr(e)
         return outputs
 
+    # G124 (2026-05-18) — safe-floor for the settle_ms heuristic.
+    # Empirical: against real-LLM workloads (~500ms per call), a
+    # settle_ms < 500 trips a silent-failure shape where the cascade-
+    # completion heuristic returns drained BEFORE downstream listener
+    # tasks have fired. We can't fix the race window in the heuristic
+    # itself without a deeper redesign, but we CAN make the failure
+    # mode loud: warn whenever a caller passes a too-tight settle.
+    # See apecx-mcp-integration/docs/CODEGEN_CANARY_AND_PARITY.md.
+    _SETTLE_MS_SAFE_FLOOR: int = 500
+
     async def wait_for_cascade(
         self,
         timeout: float = 30.0,
-        settle_ms: int = 50,
+        settle_ms: int = 500,
     ) -> bool:
         """Block until the trigger cascade drains.
 
@@ -2795,6 +2805,19 @@ class Workflow(Step):
         Returns ``True`` when the cascade is quiet for ``settle_ms``
         milliseconds; ``False`` on timeout.
 
+        **G124 (2026-05-18) — ``settle_ms`` default bumped from 50ms
+        to 500ms** after a multi-week silent failure in the
+        ``apecx-mcp-integration`` codegen adapter where the previous
+        50ms calibration intermittently returned drained BEFORE the
+        cascade had propagated all listener-task writes. The 500ms
+        floor is calibrated for real-LLM workloads; callers passing
+        ``settle_ms < 500`` get a ``WARNING`` log every call. Suppress
+        the warning by passing ``settle_ms=500`` explicitly OR by
+        opting into the legacy behavior via the env var
+        ``NANOBRAIN_ALLOW_SHORT_SETTLE_MS=1`` (intended for short
+        pure-compute test fixtures where the 500ms overhead is
+        prohibitive).
+
         Example::
 
             wf = Workflow.from_config('my_workflow.yml')
@@ -2803,6 +2826,25 @@ class Workflow(Step):
             assert ok, 'cascade did not drain in time'
             output = await wf.last_output_data_unit().get()
         """
+        import os as _os
+
+        if (
+            settle_ms < self._SETTLE_MS_SAFE_FLOOR
+            and _os.environ.get("NANOBRAIN_ALLOW_SHORT_SETTLE_MS") != "1"
+        ):
+            logger.warning(
+                "Workflow %r: wait_for_cascade(settle_ms=%d) is below the "
+                "safe-floor of %dms. Real-LLM workloads have intermittently "
+                "returned drained BEFORE the cascade propagated all "
+                "listener-task writes at settle_ms < 500. See "
+                "apecx-mcp-integration/docs/CODEGEN_CANARY_AND_PARITY.md. "
+                "Pass settle_ms>=500 OR set NANOBRAIN_ALLOW_SHORT_SETTLE_MS=1 "
+                "to suppress this warning.",
+                self.name,
+                settle_ms,
+                self._SETTLE_MS_SAFE_FLOOR,
+            )
+
         from .trigger import AsyncTriggerExecutor
 
         executor = await AsyncTriggerExecutor.get_instance()
