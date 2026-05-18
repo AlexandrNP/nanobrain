@@ -1,0 +1,38 @@
+# RecursiveSubworkflowStep config for the G110 integration test.
+#
+# Per the framework's inline-config rule, complex Step configs must
+# live in a separate YAML file. The outer workflow YAML references
+# this via ``config: "recurse_step.yml"``.
+
+class: "nanobrain.library.steps.recursive_subworkflow_step.RecursiveSubworkflowStep"
+name: recurse_step
+description: "Self-referencing recursion gate for G110 integration test."
+
+# SELF-REFERENCE: points back to the same workflow YAML that
+# instantiates this step. The lazy-load behavior in
+# RecursiveSubworkflowStep.process() prevents infinite recursion at
+# config time. Relative path resolves against THIS YAML's directory
+# (the first resolution path in RecursiveSubworkflowStep._resolve_path).
+inner_workflow_path: "recursive_self_workflow.yml"
+max_recursion_depth: 3
+input_data_unit_name: "recurse_input"
+output_data_unit_name: "final_output"
+timeout_seconds: 60.0
+
+input_data_units:
+  recurse_input:
+    class: "nanobrain.core.data_unit.DataUnitMemory"
+    name: recurse_input
+    description: "Envelope input to the recursion gate."
+    persistent: false
+
+output_data_units:
+  recurse_output:
+    class: "nanobrain.core.data_unit.DataUnitMemory"
+    name: recurse_output
+    description: "Either the recursion's inner output OR the terminal envelope."
+    persistent: false
+
+triggers:
+  - class: "nanobrain.core.trigger.DataUnitChangeTrigger"
+    data_unit: "recurse_input"

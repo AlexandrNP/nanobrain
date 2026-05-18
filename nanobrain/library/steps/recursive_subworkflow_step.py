@@ -74,6 +74,12 @@ class RecursiveSubworkflowStepConfig(StepConfig):
     For SELF-reference, set this to the same workflow YAML that
     contains this step.
 
+    Relative paths are resolved against (in order):
+      1. The step's own YAML directory (via the framework's
+         source_path tracking) — typical case for sibling YAMLs.
+      2. The workspace root via the G40 ``locate_workflow_root`` helper.
+      3. The current working directory.
+
     Optional knobs:
 
     * ``max_recursion_depth`` — hard cap. Reaching this emits a
@@ -226,9 +232,12 @@ class RecursiveSubworkflowStep(BaseStep):
         # Resolve the inner path to absolute at init time — fails
         # fast if the path doesn't exist. We DON'T load the workflow
         # here; that happens per process() call to support
-        # self-reference.
+        # self-reference. source_path (the step's own YAML location)
+        # is consulted FIRST so sibling-YAML self-references resolve
+        # without needing a workspace_root marker.
         self._inner_workflow_path: Path = self._resolve_path(
-            component_config["inner_workflow_path"]
+            component_config["inner_workflow_path"],
+            source_path=getattr(config, "source_path", None),
         )
         self._max_depth: int = int(component_config["max_recursion_depth"])
         self._depth_field: str = str(component_config["depth_field_name"])
@@ -243,9 +252,17 @@ class RecursiveSubworkflowStep(BaseStep):
         )
 
     @staticmethod
-    def _resolve_path(path_str: str) -> Path:
+    def _resolve_path(path_str: str, source_path: Optional[str] = None) -> Path:
         """Resolve to an absolute path that exists. FAIL-FAST if not.
-        Reuses the same resolution pattern as SubworkflowStep."""
+
+        Resolution order:
+          1. If absolute path → use as-is.
+          2. If source_path provided (the step's own YAML location) →
+             try resolving relative to that YAML's directory. This is
+             the typical case for sibling-YAML self-references.
+          3. Workspace root via the G40 ``locate_workflow_root`` helper.
+          4. Current working directory.
+        """
         p = Path(path_str)
         if p.is_absolute() and p.is_file():
             return p
@@ -254,26 +271,34 @@ class RecursiveSubworkflowStep(BaseStep):
                 f"FAIL-FAST: RecursiveSubworkflowStep inner_workflow_path "
                 f"{path_str!r} is absolute but does not exist on disk"
             )
-        # Try workspace root via G40 helper.
+        tried: list[str] = []
+        # 1. Step's own YAML directory.
+        if source_path:
+            sibling = (Path(source_path).resolve().parent / p).resolve()
+            tried.append(str(sibling))
+            if sibling.is_file():
+                return sibling
+        # 2. Workspace root via G40 helper.
         try:
             from nanobrain.library.runtime.workspace_root import locate_workflow_root
 
             root = locate_workflow_root()
             if root is not None:
                 candidate = (root / p).resolve()
+                tried.append(str(candidate))
                 if candidate.is_file():
                     return candidate
         except ImportError:
             pass
-        # Try cwd.
+        # 3. Cwd.
         cwd_candidate = (Path.cwd() / p).resolve()
+        tried.append(str(cwd_candidate))
         if cwd_candidate.is_file():
             return cwd_candidate
         raise ComponentConfigurationError(
             f"FAIL-FAST: RecursiveSubworkflowStep inner_workflow_path "
-            f"{path_str!r} could not be resolved. Tried: workspace_root, "
-            f"cwd ({Path.cwd()}). Provide an absolute path or set "
-            f"$NANOBRAIN_WORKSPACE_ROOT."
+            f"{path_str!r} could not be resolved. Tried: {tried}. "
+            f"Provide an absolute path or set $NANOBRAIN_WORKSPACE_ROOT."
         )
 
     async def process(
@@ -285,6 +310,20 @@ class RecursiveSubworkflowStep(BaseStep):
                 f"RecursiveSubworkflowStep {self.name!r}: input_data must be "
                 f"a dict, got {type(input_data).__name__}"
             )
+
+        # Unwrap the trigger envelope. ``BaseStep._execute_on_trigger``
+        # collects step inputs as ``{<unit_name>: <payload>}`` and passes
+        # that wrapper to ``process()``. Without unwrapping, the depth
+        # field lookup reads the wrapper (key miss → defaults to 0) and
+        # the recursion never terminates — fresh inner workflows spawn
+        # at trigger rate, busy-looping until the cascade timeout fires.
+        # Same silent-failure shape as G99's LoopController fix.
+        if (
+            len(input_data) == 1
+            and self._input_du_name in input_data
+            and isinstance(input_data[self._input_du_name], dict)
+        ):
+            input_data = input_data[self._input_du_name]
 
         depth = int(input_data.get(self._depth_field, 0))
 

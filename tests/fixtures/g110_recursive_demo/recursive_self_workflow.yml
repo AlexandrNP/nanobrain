@@ -1,0 +1,87 @@
+# G110 integration test fixture (2026-05-17).
+#
+# A trivial workflow that uses RecursiveSubworkflowStep to invoke
+# ITSELF. Demonstrates that:
+#   1. The workflow loads cleanly despite the self-reference
+#      (lazy inner-workflow load — no infinite recursion at config time)
+#   2. Per-call inner-workflow construction works (state isolation)
+#   3. The depth cap fires correctly at runtime
+#   4. The terminal envelope routes through the framework's
+#      ConditionalLink predicates as expected
+#
+# Topology (single-recursion, no fan-out — matches G110's design;
+# fan-out would need a separate primitive):
+#
+#     workflow_input
+#         │
+#         │ DirectLink (initial)
+#         ▼
+#     recurse_step (RecursiveSubworkflowStep)
+#         │
+#         │ DirectLink
+#         ▼
+#     final_output
+#
+# Behavior: the RecursiveSubworkflowStep checks ``_recursion_depth``;
+# below cap (default 3), invokes the inner workflow (which is THIS
+# workflow); at cap, emits ``{_recursion_terminated: true, ...}``.
+# The terminal envelope is propagated through final_output as-is —
+# no ConditionalLink branching in this trivial demo.
+#
+# For a full HD-RSS-style pattern, additional steps would wrap the
+# recursion (atomicity-judge → decompose → recurse → compose). The
+# trivial demo isolates the recursion mechanism so a regression in
+# RecursiveSubworkflowStep surfaces clearly.
+
+name: g110_recursive_self_workflow
+description: >
+  Trivial self-referencing workflow that exercises
+  RecursiveSubworkflowStep's lazy-load + depth-cap behavior end-to-end.
+version: "1.0.0"
+config_version: 2
+
+input_data_units:
+  workflow_input:
+    class: "nanobrain.core.data_unit.DataUnitMemory"
+    name: workflow_input
+    description: >
+      Initial envelope. Carries a ``payload`` field that gets
+      threaded through each recursion level + the ``_recursion_depth``
+      field (default 0) that the step increments.
+    persistent: false
+
+output_data_units:
+  final_output:
+    class: "nanobrain.core.data_unit.DataUnitMemory"
+    name: final_output
+    description: >
+      The terminal envelope emitted at depth cap, or the result
+      of the deepest inner workflow's run.
+    persistent: false
+
+steps:
+  recurse_step:
+    class: "nanobrain.library.steps.recursive_subworkflow_step.RecursiveSubworkflowStep"
+    config: "tests/fixtures/g110_recursive_demo/recurse_step.yml"
+
+links:
+  input_to_recurse:
+    class: "nanobrain.core.link.DirectLink"
+    config:
+      link_type: direct
+      source: "workflow_input"
+      target: "recurse_step.recurse_input"
+      auto_transfer: true
+
+  recurse_to_final:
+    class: "nanobrain.core.link.DirectLink"
+    config:
+      link_type: direct
+      source: "recurse_step.recurse_output"
+      target: "final_output"
+      auto_transfer: true
+
+execution:
+  timeout: 120
+  retry_attempts: 0
+  parallel_execution: false
