@@ -1347,10 +1347,61 @@ class AllDataReceivedTrigger(TriggerBase):
     """
 
     @classmethod
-    def from_config(cls, config: TriggerConfig, **kwargs) -> 'AllDataReceivedTrigger':
-        """Mandatory from_config implementation for AllDataReceivedTrigger"""
+    def from_config(
+        cls,
+        config: Union[str, Path, TriggerConfig, Dict[str, Any]],
+        **kwargs,
+    ) -> 'AllDataReceivedTrigger':
+        """Mandatory from_config implementation for AllDataReceivedTrigger.
+
+        G118 (2026-05-18): added dict + path normalization mirroring
+        DataUnitChangeTrigger's input shape support. Before this fix,
+        a YAML-authored AllDataReceivedTrigger (dict shape from the
+        step's trigger config) raised ``'dict' object has no attribute
+        'trigger_type'`` inside ``validate_config_schema`` and the
+        trigger was silently dropped, breaking fan-in workflows.
+        """
         logger = get_logger(f"{cls.__name__}.from_config")
         logger.info(f"Creating {cls.__name__} from configuration")
+
+        # Step 1: Normalize input to TriggerConfig object (mirrors
+        # DataUnitChangeTrigger.from_config's dict/path/instance
+        # discrimination). ``data_units`` and ``class`` are not
+        # TriggerConfig fields — pop them before constructing the
+        # config object; they are passed through kwargs / consumed
+        # by the caller (step.py G118 lift).
+        if isinstance(config, (str, Path)):
+            config_object = TriggerConfig.from_config(config, **kwargs)
+        elif isinstance(config, dict):
+            normalized_config = {
+                k: v for k, v in config.items()
+                if k not in ("class", "data_units")
+            }
+            try:
+                TriggerConfig._allow_direct_instantiation = True
+                config_object = TriggerConfig(**normalized_config)
+            finally:
+                TriggerConfig._allow_direct_instantiation = False
+        elif isinstance(config, TriggerConfig):
+            config_object = config
+        else:
+            if hasattr(config, 'model_dump'):
+                config_dict = config.model_dump()
+            elif hasattr(config, 'dict'):
+                config_dict = config.dict()
+            else:
+                raise ValueError(f"Unsupported config type: {type(config)}")
+            for k in ("class", "data_units"):
+                config_dict.pop(k, None)
+            try:
+                TriggerConfig._allow_direct_instantiation = True
+                config_object = TriggerConfig(**config_dict)
+            finally:
+                TriggerConfig._allow_direct_instantiation = False
+
+        # Step 1.5: Validate configuration schema (now always a
+        # TriggerConfig instance)
+        config = config_object
 
         # Step 1: Validate configuration schema
         cls.validate_config_schema(config)
@@ -1385,6 +1436,11 @@ class AllDataReceivedTrigger(TriggerBase):
         super()._init_from_config(config, component_config, dependencies)
         self.data_units = dependencies.get('data_units', [])
         self._monitoring_task: Optional[asyncio.Task] = None
+        # G118 (2026-05-18): align with DataUnitChangeTrigger's
+        # bind_action surface so step.py's per-step trigger init
+        # (line ~1238) works for both trigger types. Without this,
+        # the framework raises AttributeError + the step init fails.
+        self.bound_actions: List[Callable] = []
 
         # G2 — dynamic expected-set fields. Cached at trigger init; resolved
         # against a source data unit on first activation via
@@ -1410,6 +1466,23 @@ class AllDataReceivedTrigger(TriggerBase):
                 f"got {gs!r}"
             )
         self.gate_semantics: str = gs
+
+    def bind_action(self, action_func: Callable) -> None:
+        """Bind action to trigger for execution when all data received.
+        Mirrors ``DataUnitChangeTrigger.bind_action`` so the framework's
+        per-step trigger initialization handles both shapes uniformly.
+        Also adds to ``_callbacks`` so the inherited ``_execute_callbacks``
+        picks it up when ``_monitor_all_data`` calls ``self.trigger(data_dict)``."""
+        if action_func not in self.bound_actions:
+            self.bound_actions.append(action_func)
+        if action_func not in self._callbacks:
+            self._callbacks.append(action_func)
+
+    def unbind_action(self, action_func: Callable) -> None:
+        if action_func in self.bound_actions:
+            self.bound_actions.remove(action_func)
+        if action_func in self._callbacks:
+            self._callbacks.remove(action_func)
 
     def _is_satisfied(self, payload: Any) -> tuple[bool, bool]:
         """G10 satisfaction predicate for a single data unit's payload.
@@ -1568,6 +1641,21 @@ class AllDataReceivedTrigger(TriggerBase):
 
         self._is_active = True
         self._monitoring_task = asyncio.create_task(self._monitor_all_data())
+        # G119 (2026-05-18): the monitor task is a long-running poller
+        # (sleeps 100ms between checks). It is NOT transient cascade
+        # work, so wait_for_cascade should NOT block on it. Explicitly
+        # untag it from the G115 workflow scope by setting
+        # ``_nb_workflow_id = None`` — wait_for_all_tasks's scope filter
+        # treats untagged tasks as foreign-to-the-scope and skips them.
+        # Without this, every nested Workflow.run that uses an
+        # AllDataReceivedTrigger inside its cascade deadlocks: the
+        # inner wait sees the monitor task tagged with inner_id (via
+        # ContextVar inheritance), the monitor never completes, the
+        # wait never drains.
+        try:
+            self._monitoring_task._nb_workflow_id = None  # type: ignore[attr-defined]
+        except Exception:
+            pass
         logger.debug(f"AllDataReceivedTrigger {self.name} started monitoring")
 
     async def stop_monitoring(self) -> None:

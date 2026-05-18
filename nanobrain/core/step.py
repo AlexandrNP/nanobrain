@@ -1365,6 +1365,25 @@ class BaseStep(FromConfigBase, ABC):
         ✅ FRAMEWORK COMPLIANT: Create trigger via from_config with step-scope resolution
         """
         try:
+            # G118 (2026-05-18) — extract YAML-declared ``data_units``
+            # list from the trigger config BEFORE construction. The
+            # framework's TriggerBase.resolve_dependencies reads
+            # ``kwargs.get('data_units', [])`` only — so the config-side
+            # list must be lifted into kwargs OR the AllDataReceivedTrigger
+            # ends up with an empty data_units list and never fires
+            # (the dominant YAML-AllDataReceivedTrigger silent-failure
+            # before this fix). Resolution from string → DataUnit
+            # happens after construction below.
+            yaml_data_units: Optional[List[str]] = None
+            if isinstance(trigger_config, dict):
+                raw_units = trigger_config.get('data_units')
+                if isinstance(raw_units, list) and raw_units:
+                    yaml_data_units = list(raw_units)
+            elif hasattr(trigger_config, 'data_units'):
+                raw_units = getattr(trigger_config, 'data_units', None)
+                if isinstance(raw_units, list) and raw_units:
+                    yaml_data_units = list(raw_units)
+
             # Phase 3A: Create trigger instance via from_config
             if hasattr(trigger_config, '__class__') and hasattr(trigger_config, 'bind_action'):
                 # Already instantiated trigger from ConfigBase resolution
@@ -1372,9 +1391,17 @@ class BaseStep(FromConfigBase, ABC):
             else:
                 # Create trigger via from_config pattern
                 trigger_class = self._get_trigger_class(trigger_config)
+                # G118: pass the lifted data_units as a kwarg so
+                # resolve_dependencies picks it up. Strings are still
+                # strings here — we resolve to DataUnit instances below.
+                from_config_kwargs: Dict[str, Any] = {
+                    "step_context": step_context,
+                }
+                if yaml_data_units is not None:
+                    from_config_kwargs["data_units"] = yaml_data_units
                 trigger_instance = trigger_class.from_config(
                     trigger_config,
-                    step_context=step_context  # Pass step-local context
+                    **from_config_kwargs,
                 )
 
             # Phase 3B: Resolve data unit references within step scope
@@ -1390,6 +1417,38 @@ class BaseStep(FromConfigBase, ABC):
                 else:
                     raise ValueError(
                         f"❌ Data unit '{trigger_instance.data_unit}' not found in step scope")
+
+            # G118 (2026-05-18): AllDataReceivedTrigger uses ``data_units``
+            # (LIST), not ``data_unit``. Resolve every string in the list
+            # to the corresponding DataUnit instance from step scope.
+            # Without this, a YAML-authored AllDataReceivedTrigger ends up
+            # with an empty resolved list (the original kwargs.get fallback)
+            # and the trigger NEVER FIRES — silent failure. Authors had
+            # to work around it by using a single-input DataUnitChangeTrigger
+            # on the last-arriving input, which is less expressive.
+            data_units_attr = getattr(trigger_instance, 'data_units', None)
+            if isinstance(data_units_attr, list) and data_units_attr:
+                resolved_units: List[Any] = []
+                for ref in data_units_attr:
+                    if isinstance(ref, str):
+                        resolved = self._resolve_step_data_unit_reference(
+                            ref, step_context
+                        )
+                        if resolved is None:
+                            raise ValueError(
+                                f"❌ AllDataReceivedTrigger data unit "
+                                f"{ref!r} not found in step scope for "
+                                f"step {self.name!r}"
+                            )
+                        resolved_units.append(resolved)
+                    else:
+                        # Already an instance (rare; pass through).
+                        resolved_units.append(ref)
+                trigger_instance.data_units = resolved_units
+                self.nb_logger.debug(
+                    f"✅ Resolved {len(resolved_units)} trigger data_units "
+                    f"({', '.join(u.name for u in resolved_units)})"
+                )
 
             return trigger_instance
 
@@ -1428,7 +1487,37 @@ class BaseStep(FromConfigBase, ABC):
     def _get_trigger_class(self, trigger_config: Any):
         """
         ✅ FRAMEWORK COMPLIANT: Get trigger class for from_config creation
+
+        G118-companion (2026-05-18): also recognize the ``class:`` field
+        (dotted class path) when ``trigger_type:`` is absent. Previously
+        the framework silently fell back to ``DataUnitChangeTrigger``
+        when authors used the more-Pythonic ``class:`` form without
+        ``trigger_type:`` — producing an instance of the wrong trigger
+        type that never fires correctly. The dotted-path lookup keeps
+        the legacy ``trigger_type`` field working AND fixes the
+        ``class:``-only YAML pattern.
         """
+        # First-priority: ``class:`` field (dotted path). Lets YAML
+        # authors use the canonical ``class:`` form without forcing
+        # ``trigger_type:`` to be specified.
+        class_path: Optional[str] = None
+        if isinstance(trigger_config, dict):
+            class_path = trigger_config.get('class')
+        elif hasattr(trigger_config, 'class_'):
+            class_path = getattr(trigger_config, 'class_', None)
+        if isinstance(class_path, str) and '.' in class_path:
+            try:
+                module_path, class_name = class_path.rsplit('.', 1)
+                import importlib
+
+                module = importlib.import_module(module_path)
+                resolved = getattr(module, class_name, None)
+                if resolved is not None:
+                    return resolved
+            except Exception:
+                # Fall through to the legacy trigger_type lookup.
+                pass
+
         # Determine trigger type from configuration
         trigger_type = None
         if isinstance(trigger_config, dict):
@@ -1546,7 +1635,16 @@ class BaseStep(FromConfigBase, ABC):
         logger = logging.getLogger(__name__)
         logger.info(f"🔥 BRUTAL TRUTH: _execute_on_trigger called for step {self.name}")
         try:
-            logger.info(f"🔥 Step {self.name} triggered by {trigger_event['trigger_id']}")
+            # G118 (2026-05-18): tolerate trigger event shapes that
+            # don't carry ``trigger_id`` (notably AllDataReceivedTrigger,
+            # which fires with a raw ``data_dict``). The step doesn't
+            # use the trigger_id beyond logging — gracefully degrade.
+            trigger_id_label = (
+                trigger_event.get('trigger_id', self.name + '_anon_trigger')
+                if isinstance(trigger_event, dict)
+                else f"{self.name}_unknown_trigger"
+            )
+            logger.info(f"🔥 Step {self.name} triggered by {trigger_id_label}")
 
             # Get input data from triggered data unit
             logger.info(f"🔥 BRUTAL TRUTH: About to collect input data for step {self.name}")
