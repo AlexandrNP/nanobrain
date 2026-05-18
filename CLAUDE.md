@@ -6,6 +6,199 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Nanobrain is an event-driven AI agent framework for distributed workflows. It's currently in research preview and has dependencies on HPC systems and external frameworks. The framework uses a mandatory configuration-driven architecture where ALL components are created through the `from_config()` pattern.
 
+## Recent additions (2026-05-18 — G124 settle_ms safe-floor + G125 process() ContextVar tag close cascade-drain race)
+
+A pair of fixes (G124 band-aid → G125 root cause, both shipped
+same day) closes a multi-week silent-failure shape where the
+manual `wf.process() + wf.wait_for_cascade(settle_ms=50)` pattern
+silently returned EMPTY downstream data units. The bug was caught
+by the codegen canary's real-LLM parity layer
+(`apecx-mcp-integration/tests/integration/test_codegen_canary_against_ollama.py`)
+after weeks of `nanobrain_*` pass rates being suspect.
+
+**G124** — `Workflow.wait_for_cascade` default `settle_ms` bumped
+from 50ms → 500ms with WARNING when callers pass below 500.
+Opt-out env var `NANOBRAIN_ALLOW_SHORT_SETTLE_MS=1`. Source:
+`nanobrain/core/workflow.py`, regression tests at
+`nanobrain/tests/unit/test_g124_settle_ms_safe_floor.py` (6 tests).
+This is a BAND-AID — it made the heuristic wait long enough that
+the cascade usually finished anyway. The underlying race was
+untouched.
+
+**G125** — `Workflow.run()` (line ~2528) sets the G115
+`_active_workflow_id` ContextVar via
+`_g115_cv.set(self._g115_workflow_id())` so listener tasks born
+during `run()` inherit the workflow's id. `Workflow.process()`
+did NOT do this — listener tasks born during `process()` lacked
+the `_nb_workflow_id` tag; `wait_for_cascade()`'s `_scoped` filter
+excluded them; drain returned True instantly while cascade was
+still in-flight. G125 hoists `process()`'s body to `_process_body()`
+and wraps with ContextVar set/reset symmetric with `run()` using
+reset-token semantics (composes cleanly with outer `run()` callers).
+Source: `nanobrain/core/workflow.py` commit `abc9e04`; regression
+tests at `nanobrain/tests/unit/test_g125_process_workflow_id_tag.py`
+(4 tests). Post-G125, `settle_ms=50` works correctly even for slow
+cascades.
+
+**Post-G125 status of the G124 floor**: defense-in-depth, not
+load-bearing. Code SHOULD still prefer `Workflow.run` over manual
+`process() + wait_for_cascade` because `Workflow.run` ALSO bundles
+`_collect_workflow_output_data_units` AFTER cascade drain (the
+only consistent read point for workflow-level outputs) and avoids
+the two-call ceremony. The apecx-mcp-integration pre-commit lint
+at `apecx-mcp-integration/scripts/checks/wait_for_cascade_use.py`
+rejects new manual callers as a code-review signal.
+
+**Downstream consumer note (G126 candidate, NOT yet shipped)**:
+`ConfigBase.model_config` declares `extra="allow"` at
+`nanobrain/core/config/config_base.py:676`. This violates the
+workspace-wide pydantic-extra-forbid rule and silently absorbs
+YAML typos at WorkflowConfig load time (concrete damage: the
+viral_immunology workflow YAML had `step_links:` instead of
+`links:` for 5 days; the workflow loaded with ZERO functional
+links). Flipping to `extra="forbid"` is a cross-repo breaking
+change — deferred pending audit + deprecation cycle. The
+apecx-mcp-integration repo ships an R4 lint
+(`scripts/lint_workflow_yamls.py`) that catches the typo class
+at pre-commit time as the lower-blast-radius mitigation.
+
+**Three SKILL files updated** (LLM-guidance for the cascade-drive
+primitive):
+`nanobrain-workflow-authoring`, `nanobrain-data-units-triggers-links`,
+`nanobrain-testing-debugging`, `nanobrain-from-config`,
+`nanobrain-lightweight` (5 of 9 skill files). Future Claude
+sessions loading any of these via the Skill tool see the
+post-G125 narrative + the lint+memory pointers.
+
+**Apecx-side artifacts** (cross-repo refs):
+- `apecx-mcp-integration/docs/CHECKPOINT_g124_wait_for_cascade_2026-05-18.md`
+  — parent chain narrative + smoke-confirmed pattern table.
+- `apecx-mcp-integration/docs/viral_immunology_repair_2026-05-18.md`
+  — concrete G126 damage case study.
+- `apecx-mcp-integration/docs/CASCADE_DRAIN_AUDIT_2026-05-18.md`
+  — repo-wide audit of cascade-drain patterns; post-G125
+  closure section confirms no production sites need migration.
+- `apecx-mcp-integration/docs/bench_recoverable_2026-05-18.md`
+  — JSONL checkpoint+resume bench infrastructure (also same
+  session); recoverable multi-hour sweeps for the N≥20
+  re-measurement that closed deferred follow-up #1.
+
+## Recent additions (2026-05-14 — WebSearchTool + DockerMCPWorker + RheaCodeUseAgent + multi-round agent tool-use)
+
+This chain adds a generic web-search capability, a Docker-hosted MCP
+worker lifecycle manager, and a multi-round tool-use Agent — plus
+three real `None`-content bug fixes in the agent LLM-call path.
+
+**`WebSearchTool`** at `nanobrain/library/tools/web_search.py`. A
+pluggable-backend `ToolBase` (`COMPONENT_TYPE="web_search_tool"`).
+`WebSearchBackend` ABC + a `_BACKENDS` registry; two backends ship:
+`duckduckgo` (default, keyless, via the `ddgs` package — lazy-imported,
+FAIL-LOUD if absent) and `tavily` (API-key, `$TAVILY_API_KEY`,
+FAIL-LOUD if unset). A query-hash on-disk result cache (opt-in via
+`parameters.cache_dir`; relative paths resolve against the workspace
+root via the G40 `locate_workflow_root` helper) makes re-runs
+reproducible + dodges rate limits. Honesty contract: a backend error
+FAILS LOUD; a search that succeeds-but-finds-nothing returns
+`results: []` (distinct from a failure). `get_schema()` returns the
+OpenAI tool-spec so it is a first-class Agent tool-calling citizen.
+16 unit tests + 2 gated integration tests (`$WEB_SEARCH_LIVE_DDG`,
+`$TAVILY_API_KEY`).
+
+**`DockerMCPWorker`** at `nanobrain/library/runtime/mcp_worker.py`. A
+generic lifecycle manager: `ensure_running()` reuses an MCP server
+already answering at the URL, else `docker run`s the configured image
+and blocks until an MCP `tools/list` round-trip actually succeeds;
+`stop()` tears down ONLY a container this manager spawned. FAIL-LOUD
+on: docker-not-installed, daemon-down, image-not-present (we do NOT
+auto-`docker pull` — multi-GB surprise), container-died-on-startup,
+or never-healthy-within-timeout (with the container's last logs
+attached). The motivating case is Rhea but nothing is Rhea-specific.
+
+**`RheaCodeUseAgent`** at `nanobrain/library/agents/rhea_code_use_agent.py`.
+A concrete `Agent` (`COMPONENT_TYPE="rhea_code_use_agent"`) with a
+**multi-round** tool-use loop — a framework-capacity expansion, since
+`SimpleAgent`/`ConversationalAgent` only do single-round. It holds a
+`WebSearchTool` (a `ToolBase` in `tool_registry`) AND the **live**
+Rhea MCP catalog (via `MCPTransport`, re-queried every round because
+Rhea's catalog is dynamic — `find_tools` populates tools at runtime).
+Built on the framework's existing `_call_llm` primitive; no LangChain
+dependency. A tool dispatch failure is fed back to the LLM as the
+tool result text (visible), never swallowed; the `max_tool_rounds`
+cap is explicitly reported, never silently truncated. 8 tests (7
+unconditional with a fake LLM + fake backend, 1 gated on
+`$RHEA_MCP_URL`).
+
+**Three `None`-content bug fixes** in the agent LLM-call/logging path
+(`core/agent.py`, `core/agent_logging.py`). A pure tool-call LLM
+message correctly carries `content: null`; three call sites did
+`len(content)` / `_truncate_for_logging(content, ...)` /
+`.get("content", "")` and crashed on `None`. Fixed: `None`-tolerant
+everywhere. These would hit ANY agent doing spec-correct tool-calling
+— surfaced by `RheaCodeUseAgent`'s fake-LLM tests.
+
+**Net regression status this chain**: 26 new framework-side tests
+(WebSearchTool 16+2, DockerMCPWorker covered via RheaCodeUseAgent
+tests, RheaCodeUseAgent 8); the 3 `None`-content fixes are pure
+tolerance additions (low regression risk).
+
+## Recent additions (2026-05-14 — Rhea components promoted into nanobrain + ToolExecutionStep envelope self-unwrap)
+
+This chain promotes the Rhea-facing components — first built apecx-side
+as workarounds — into nanobrain proper, and fixes a real
+`ToolExecutionStep` cascade bug. Triggered by the user authorizing
+nanobrain-repo modifications ("Use nanobrain's components whenever
+possible. You are free to make modifications to the nanobrain
+repository too").
+
+**`MCPTransport` — shared MCP streamable-HTTP wire helper** at
+`nanobrain/library/tools/_mcp_transport.py`. Single source of truth
+for the MCP wire protocol: `initialize` handshake,
+`notifications/initialized`, JSON-RPC `tools/call` / `tools/list`,
+`mcp-session-id` lifecycle (one-shot re-init on server restart), SSE
+`data:` parse. Before this, ~90 lines of MCP logic were duplicated
+across `RheaMCPDispatcher`, `RheaAdapter`, `RheaMCPDiscovery`; all
+three now delegate. `parse_tool_call_result` helper unwraps the
+`tools/call` result shape. `RheaMCPDispatcher` refactored to consume
+it (367→185 lines).
+
+**`RheaAdapter` — the `rhea` `ToolBackendAdapter`** at
+`nanobrain/library/tools/rhea_adapter.py`. `BACKEND_NAME="rhea"`; the
+third concrete adapter alongside `HTTPBackendAdapter` (G38) and
+`LocalParslAdapter` (G11-completion). An earlier CLAUDE.md claimed the
+Rhea adapter "ships from the Rhea fork (Track C T-RH-04)" — it never
+existed; this is its canonical home. `from_env()` reads `$RHEA_MCP_URL`
++ registers with `ToolBackendRegistry`. 13 unit tests
+(`tests/unit/test_rhea_adapter.py`) against an httpx `MockTransport`
+fake MCP server.
+
+**`RheaMCPDiscovery` — codegen-as-MCP-client** at
+`nanobrain/library/tools/rhea_discovery.py`. Connects to a Rhea MCP
+worker, calls `tools/list`, converts each tool to a UTD dict
+(sanitizes MCP names into the UTD `tool_id` grammar, preserves the
+original in `provenance_pin.mcp_support.rhea_tool_name`). FAIL-FAST on
+empty catalog. 10 unit tests (`tests/unit/test_rhea_discovery.py`).
+
+**`ToolExecutionStep` now self-unwraps the trigger envelope.** The
+step was designed for direct `process(utd_inputs)` calls — nanobrain's
+own tests only drove it that way. Inside a workflow cascade, the
+trigger system delivers `{<input_du_name>: payload}`; the step did NOT
+unwrap it, so the adapter received the wrong shape. Fix:
+`ToolExecutionStep._unwrap_trigger_envelope` uses a **UTD-aware
+discriminator** — a single-key dict whose key is NOT a declared UTD
+input name (and whose value is a dict) is the envelope (the key is the
+input-DU name); a single-key dict whose key DOES match a declared UTD
+input is a genuine 1-input call and passes through untouched. This
+resolves the ambiguous dict-valued-input case the prior apecx-side
+`RheaToolStep` heuristic could not. `RheaToolStep` is retired; the
+framework step is used directly. 5 new tests in
+`tests/unit/test_tool_execution_step.py` (25 total).
+
+**Net regression status this chain**: 28 new framework-side tests
+(`MCPTransport`/adapter/discovery: 23, envelope-unwrap: 5); full
+nanobrain unit suite **993 passed, 7 skipped, 0 regressions**;
+nanobrain Rhea + tool tests 59 passed, 1 skipped; apecx-mcp-integration
+OR-Rhea integration 4 passed, 1 gated-skip.
+
 ## Recent additions (2026-05-11 — eval_03 arc finalization: adversarial probes + G27 Option B + Rec 4 migration)
 
 This chain finalizes the eval_03 arc opened on 2026-05-09. The
