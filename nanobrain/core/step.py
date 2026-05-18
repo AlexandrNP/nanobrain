@@ -2666,26 +2666,49 @@ class BaseStep(FromConfigBase, ABC):
     # ============================================================================
 
     async def _register_automatic_input_triggers(self) -> None:
-        """Automatically register input data units and create triggers."""
+        """Automatically register input data units and create triggers.
+
+        G117 (2026-05-18): if the step has ANY manual trigger declared
+        in its YAML ``triggers:`` list, suppress ALL auto-input triggers
+        on this step. The user has explicitly authored the firing
+        semantics — adding extra triggers on OTHER input data units
+        causes premature firing (e.g., a 2-input step with a trigger
+        on the LAST-arriving input would otherwise also fire on the
+        FIRST input, with the second input still empty).
+
+        Per-unit suppression is the fallback when the user has no
+        manual triggers at all but the step still has input data
+        units (the original auto-trigger use case).
+        """
         if not hasattr(self, 'step_input_data_units'):
             return
+
+        # G117: any manual trigger -> suppress all auto-input.
+        # The check uses the same name-resolution as
+        # _has_manual_trigger_for_data_unit; if any input has a
+        # manual trigger declared, we conclude the user is driving
+        # firing manually for ALL inputs.
+        manual_configs = getattr(self, 'step_trigger_configs', None) or []
+        any_manual_trigger = len(manual_configs) > 0
 
         success_count = 0
         for unit_name, data_unit in self.step_input_data_units.items():
             if hasattr(data_unit, 'register_as_input_for_step'):
-                # Check if manual trigger already exists
-                if not self._has_manual_trigger_for_data_unit(unit_name):
-                    success = await data_unit.register_as_input_for_step(self)
-                    if success:
-                        success_count += 1
-
-                        if self.enable_logging and self.nb_logger:
-                            self.nb_logger.debug(
-                                f"✅ Auto-registered input trigger for {unit_name}")
-                else:
+                if any_manual_trigger:
                     if self.enable_logging and self.nb_logger:
                         self.nb_logger.debug(
-                            f"⏭️ Skipped auto-trigger for {unit_name} - manual trigger exists")
+                            f"⏭️ Skipped auto-trigger for {unit_name} "
+                            f"- step has {len(manual_configs)} manual trigger(s) "
+                            f"declared (G117: any-manual suppresses all-auto)"
+                        )
+                    continue
+                success = await data_unit.register_as_input_for_step(self)
+                if success:
+                    success_count += 1
+
+                    if self.enable_logging and self.nb_logger:
+                        self.nb_logger.debug(
+                            f"✅ Auto-registered input trigger for {unit_name}")
 
         if self.enable_logging and self.nb_logger:
             self.nb_logger.info(
@@ -2712,14 +2735,52 @@ class BaseStep(FromConfigBase, ABC):
                 f"✅ Registered {success_count} automatic output data units")
 
     def _has_manual_trigger_for_data_unit(self, data_unit_name: str) -> bool:
-        """Check if a manual trigger already exists for the specified data unit."""
-        if not hasattr(self, 'step_triggers'):
-            return False
+        """Check if a manual trigger already exists for the specified data unit.
 
-        for trigger in self.step_triggers.values():
-            if hasattr(trigger, 'data_unit') and hasattr(trigger.data_unit, 'name'):
-                if trigger.data_unit.name == data_unit_name:
+        G117 fix (2026-05-18): also inspects the raw
+        ``step_trigger_configs`` list (the YAML-declared trigger configs)
+        because ``_register_automatic_input_triggers`` runs in Phase 2 —
+        BEFORE the manual triggers from the YAML are resolved + populated
+        into ``self.step_triggers`` (Phase 3). Without this fix, the
+        framework auto-creates a duplicate ``auto_input_<step>_<unit>``
+        trigger on EVERY input data unit even when the user already
+        declared a ``DataUnitChangeTrigger`` for that unit in the YAML
+        — the resulting double-firing causes downstream step.process()
+        invocations 2x per single upstream data-unit set, which
+        deadlocks/breaks multi-step composite workflows (see
+        ``apecx-mcp-integration/docs/g117_multi_step_composition_double_firing_2026-05-18.md``).
+        """
+        # Phase 3 path: trigger already resolved + bound; check by
+        # the trigger's resolved data_unit instance.
+        if hasattr(self, 'step_triggers'):
+            for trigger in self.step_triggers.values():
+                if hasattr(trigger, 'data_unit') and hasattr(trigger.data_unit, 'name'):
+                    if trigger.data_unit.name == data_unit_name:
+                        return True
+
+        # G117 — Phase 2 path: the trigger config is still raw (dict
+        # OR Pydantic TriggerConfig); the ``data_unit`` field carries
+        # a string reference to the unit name (or a resolved DataUnit
+        # instance, or a dict with a ``name`` key). Cover all three.
+        configs = getattr(self, 'step_trigger_configs', None) or []
+        for trigger_cfg in configs:
+            ref = None
+            # Dict shape
+            if isinstance(trigger_cfg, dict):
+                ref = trigger_cfg.get('data_unit')
+            # Pydantic config / instantiated trigger
+            elif hasattr(trigger_cfg, 'data_unit'):
+                ref = trigger_cfg.data_unit
+            if ref is None:
+                continue
+            # Normalize: string name | DataUnit instance | dict with 'name'
+            if isinstance(ref, str):
+                if ref == data_unit_name:
                     return True
+            elif hasattr(ref, 'name') and getattr(ref, 'name', None) == data_unit_name:
+                return True
+            elif isinstance(ref, dict) and ref.get('name') == data_unit_name:
+                return True
         return False
 
     async def disable_automatic_triggers(self) -> None:

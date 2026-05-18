@@ -146,6 +146,22 @@ class RecursiveSubworkflowStepConfig(StepConfig):
         ),
     )
 
+    step_input_data_unit_name: Optional[str] = Field(
+        default=None,
+        description=(
+            "Name of THIS step's own input data unit (used for "
+            "trigger-envelope unwrap). When None (default), falls back "
+            "to ``input_data_unit_name`` — the historical behavior, "
+            "correct ONLY when this step's input data unit name happens "
+            "to match the inner workflow's first-step input name. "
+            "Set this explicitly when the names differ (typical for "
+            "multi-step HD-RSS-style YAMLs where this step is "
+            "``recurse_step`` with its own ``recurse_input`` while the "
+            "inner workflow's first step is ``atomicity_judge`` with "
+            "``judge_input``)."
+        ),
+    )
+
     output_data_unit_name: str = Field(
         ...,
         description=(
@@ -217,6 +233,7 @@ class RecursiveSubworkflowStep(BaseStep):
             "depth_field_name": config.depth_field_name,
             "terminal_marker_field": config.terminal_marker_field,
             "input_data_unit_name": config.input_data_unit_name,
+            "step_input_data_unit_name": config.step_input_data_unit_name,
             "output_data_unit_name": config.output_data_unit_name,
             "timeout_seconds": config.timeout_seconds,
         }
@@ -243,6 +260,12 @@ class RecursiveSubworkflowStep(BaseStep):
         self._depth_field: str = str(component_config["depth_field_name"])
         self._terminal_field: str = str(component_config["terminal_marker_field"])
         self._input_du_name: str = str(component_config["input_data_unit_name"])
+        # G117-companion fix (2026-05-18): step's OWN input DU name
+        # for trigger-envelope unwrap; falls back to ``input_data_unit_name``
+        # when the YAML doesn't disambiguate (preserves G110 behavior
+        # for fixtures where step input name == inner workflow input name).
+        step_in_name = component_config.get("step_input_data_unit_name")
+        self._step_input_du_name: str = str(step_in_name) if step_in_name else self._input_du_name
         self._output_du_name: str = str(component_config["output_data_unit_name"])
         self._timeout_seconds: float = float(component_config["timeout_seconds"])
 
@@ -320,10 +343,10 @@ class RecursiveSubworkflowStep(BaseStep):
         # Same silent-failure shape as G99's LoopController fix.
         if (
             len(input_data) == 1
-            and self._input_du_name in input_data
-            and isinstance(input_data[self._input_du_name], dict)
+            and self._step_input_du_name in input_data
+            and isinstance(input_data[self._step_input_du_name], dict)
         ):
-            input_data = input_data[self._input_du_name]
+            input_data = input_data[self._step_input_du_name]
 
         depth = int(input_data.get(self._depth_field, 0))
 
