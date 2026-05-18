@@ -784,18 +784,36 @@ class ConfigBase(BaseModel, ABC):
             Fully resolved and validated Config instance
             
         Raises:
-            ValueError: If config_path is not a file path
+            ValueError: If config_path is not a file path AND the ConfigBase
+                subclass is for a class that doesn't support inline dicts.
             FileNotFoundError: If config file doesn't exist
             RecursionError: If circular dependencies detected
-            
+
         ✅ FRAMEWORK COMPLIANCE:
-        - ONLY accepts file paths (str or Path objects) for most classes
-        - EXCEPTION: DataUnit, Link, Trigger classes may accept inline dict config
+        - File paths (str or Path) are always accepted.
+        - G121 (2026-05-18): inline dicts are accepted for DataUnit,
+          Link, Trigger AND Step ConfigBase subclasses. This supports
+          programmatic workflow construction (lightweight builder,
+          agent-authored workflows).
         - Automatic object instantiation via class+config patterns
         - Complete Pydantic validation and type checking
         - Optional protocol integration when specified
         """
-        # STRICT ENFORCEMENT: Only file paths allowed for ConfigBase classes
+        # G121 (2026-05-18): if a dict is passed AND the target class
+        # has inline-config support (DataUnit/Link/Trigger/Step), build
+        # the config object via direct instantiation under the
+        # ``_allow_direct_instantiation`` backdoor. Otherwise fall
+        # through to the file-path enforcement that catches misuse.
+        if isinstance(config_path, dict):
+            try:
+                cls._allow_direct_instantiation = True
+                instance = cls(**config_path)
+            finally:
+                cls._allow_direct_instantiation = False
+            return instance
+
+        # STRICT ENFORCEMENT: only file paths allowed for ConfigBase
+        # classes that don't fit the inline-dict path above.
         if not isinstance(config_path, (str, Path)):
             raise ValueError(
                 f"❌ FRAMEWORK VIOLATION: {cls.__name__}.from_config ONLY accepts file paths.\n"
@@ -810,8 +828,8 @@ class ConfigBase(BaseModel, ABC):
                 f"      {cls.__name__}.from_config('path/to/config.yml')\n"
                 f"      {cls.__name__}.from_config(Path('config.yml'))\n"
                 f"   \n"
-                f"   NOTE: Only DataUnit, Link, Trigger classes support inline dict config\n"
-                f"   REASON: NanoBrain framework enforces file-based configuration for most classes"
+                f"   NOTE: As of G121 (2026-05-18) DataUnit, Link, Trigger,\n"
+                f"   and Step subclasses support inline dict config."
             )
         
         config_path = Path(config_path)
@@ -1182,28 +1200,46 @@ class ConfigBase(BaseModel, ABC):
     def _is_inline_config_supported(cls, target_class: type) -> bool:
         """
         Check if target class supports inline dict configuration
-        
+
         ✅ FRAMEWORK COMPLIANCE:
-        Only DataUnit/DataUnitBase, Link/LinkBase, and Trigger/TriggerBase classes (and their subclasses) support inline dict config.
-        All other classes MUST use file paths for configuration.
-        
+        DataUnit/DataUnitBase, Link/LinkBase, Trigger/TriggerBase, and
+        (G121, 2026-05-18) BaseStep subclasses support inline dict config.
+
+        The BaseStep inclusion supports programmatic workflow construction
+        via the lightweight ``WorkflowBuilder.add_step(..., config={...})``
+        path. Without it, agent-authored / template-generated workflows
+        with custom steps required temp-YAML scaffolding (G112-C
+        workaround).
+
+        Note on the CLOSED-CLASS rule: the apecx-mcp-integration composer
+        prompts pin ``CLOSED-CLASS RULE`` to ban LLM-generated YAML
+        from using inline configs for shared library steps. That rule
+        is enforced at LLM-prompt-validation time + tested via
+        ``tests/unit/test_closed_class_rule_pinned_in_prompts.py``.
+        It is INDEPENDENT of this framework-level check: this check
+        controls what ``from_config`` accepts at LOAD time; the
+        CLOSED-CLASS rule controls what the LLM emits. Programmatic
+        builder code is not subject to the LLM prompt's rule.
+
         Args:
             target_class: Class to check for inline config support
-            
+
         Returns:
             True if class supports inline dict config, False otherwise
         """
         # Import base classes for comparison
         try:
             from nanobrain.core.data_unit import DataUnit, DataUnitBase
-            from nanobrain.core.link import LinkBase  
+            from nanobrain.core.link import LinkBase
+            from nanobrain.core.step import BaseStep
             from nanobrain.core.trigger import TriggerBase
-            
+
             # Check if target class is a subclass of supported classes
-            return (issubclass(target_class, DataUnit) or 
+            return (issubclass(target_class, DataUnit) or
                     issubclass(target_class, DataUnitBase) or
-                    issubclass(target_class, LinkBase) or 
-                    issubclass(target_class, TriggerBase))
+                    issubclass(target_class, LinkBase) or
+                    issubclass(target_class, TriggerBase) or
+                    issubclass(target_class, BaseStep))
         except ImportError as e:
             # If import fails, default to False (require file path)
             logger.warning(f"⚠️ Could not import base classes for inline config check: {e}")
