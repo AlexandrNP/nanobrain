@@ -45,16 +45,6 @@ def test_workflow_yaml_loads_without_recursion():
     )
 
 
-@pytest.mark.skip(
-    reason=(
-        "G115 — AsyncTriggerExecutor is a process-singleton; the outer "
-        "workflow.run()'s wait_for_cascade sees the outer's own (still-"
-        "awaiting inner.run) task and never drains. Inner.run() in turn "
-        "sees the same global background_tasks set. Each level cascade-"
-        "times-out at 60s; total = 60s × depth. Not a RecursiveSubworkflowStep "
-        "bug — needs per-workflow trigger executor scoping. Tracking issue."
-    )
-)
 def test_recursion_reaches_depth_cap_and_emits_terminal():
     """End-to-end: drive the workflow + verify it bottoms out at
     max_recursion_depth=3 with _recursion_terminated=true."""
@@ -94,7 +84,6 @@ def test_recursion_reaches_depth_cap_and_emits_terminal():
     )
 
 
-@pytest.mark.skip(reason="G115 — see test_recursion_reaches_depth_cap_and_emits_terminal")
 def test_recursion_with_explicit_initial_depth_caps_correctly():
     """If the caller supplies _recursion_depth=2, the workflow has
     only 1 more level before hitting the cap."""

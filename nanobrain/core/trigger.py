@@ -9,6 +9,7 @@ import asyncio
 import logging
 import time
 from abc import ABC, abstractmethod
+from contextvars import ContextVar
 from typing import Any, Dict, Literal, Optional, List, Callable, Set, Union
 from enum import Enum
 from pydantic import Field
@@ -23,6 +24,45 @@ from .config.config_base import ConfigBase
 from .event_types import DataUnitEventType, validate_event_type, DEFAULT_DATA_UNIT_EVENT
 
 logger = logging.getLogger(__name__)
+
+
+# G115 — workflow-scoped task tagging for nested Workflow.run() (2026-05-18)
+#
+# AsyncTriggerExecutor is a process-singleton with a shared
+# background_tasks set. Before G115, nested ``await inner_workflow.run(...)``
+# from inside an outer workflow's step.process() deadlocked: the inner
+# wait_for_cascade saw the outer's still-awaiting task in the same set
+# and never observed drain. Each level cascade-timed-out at 60s.
+#
+# Fix: every Workflow.run() pushes its workflow_id into this ContextVar
+# for the duration of the run. Tasks created during the run inherit the
+# value via the asyncio contextvar propagation. wait_for_all_tasks
+# accepts an optional workflow_id kwarg and filters background_tasks
+# by the ``_nb_workflow_id`` attribute set on each task.
+#
+# Backward compatibility: legacy callers that don't pass workflow_id
+# fall back to the original "wait for ALL tasks" behavior. Tasks not
+# tagged (e.g., from tests that create tasks directly) are matched by
+# the legacy path, never filtered out.
+_active_workflow_id: ContextVar[Optional[str]] = ContextVar(
+    "nb_active_workflow_id", default=None
+)
+
+
+def _current_workflow_id() -> Optional[str]:
+    """Return the workflow_id of the currently active Workflow.run scope,
+    or None if no run is active. Internal helper for G115."""
+    return _active_workflow_id.get()
+
+
+def _tag_task_with_workflow(task: "asyncio.Task") -> None:
+    """Stamp the currently-active workflow_id (if any) onto an asyncio
+    Task object. Called at task-creation sites so wait_for_all_tasks
+    can filter by scope. Idempotent: re-tagging with the same value
+    is a no-op."""
+    wf_id = _active_workflow_id.get()
+    if wf_id is not None:
+        task._nb_workflow_id = wf_id  # type: ignore[attr-defined]
 
 
 class AsyncTriggerExecutor:
@@ -87,6 +127,11 @@ class AsyncTriggerExecutor:
             task = asyncio.create_task(
                 self._run_trigger_in_background(trigger, data, trigger_id)
             )
+
+            # G115 — stamp the active workflow_id (if any) before
+            # adding to the shared set. wait_for_all_tasks(workflow_id=...)
+            # uses this tag to filter nested-workflow cascade drains.
+            _tag_task_with_workflow(task)
 
             # Add to background tasks for tracking
             self.background_tasks.add(task)
@@ -156,6 +201,8 @@ class AsyncTriggerExecutor:
         self,
         timeout: float = 30.0,
         settle_ms: int = 50,
+        *,
+        workflow_id: Optional[str] = None,
     ) -> bool:
         """Wait for all background tasks to complete.
 
@@ -177,47 +224,80 @@ class AsyncTriggerExecutor:
                 and re-check; only return ``True`` if it's still empty.
                 Catches the case where one trigger's done callback
                 spawns another trigger's task asynchronously.
+            workflow_id: G115 (2026-05-18). When set, only consider
+                tasks tagged with this workflow_id (via the
+                ``_active_workflow_id`` ContextVar at task-creation
+                time). Untagged tasks and tasks belonging to a
+                DIFFERENT workflow are EXCLUDED from this scope's
+                drain — they are some other caller's responsibility.
+                When None (legacy default), every task in the set is
+                considered (preserves pre-G115 behavior for callers
+                that don't pass workflow_id). Enables nested
+                ``Workflow.run()`` calls to drain only their own
+                cascade without deadlocking on the outer's still-
+                awaiting task.
 
         Returns:
             ``True`` if the cascade fully drained; ``False`` on timeout.
         """
         import time as _time
 
+        def _scoped(tasks: Set[asyncio.Task]) -> List[asyncio.Task]:
+            """Return the subset of tasks matching the scope. When
+            workflow_id is None, every task matches. When set, a task
+            matches if its ``_nb_workflow_id`` tag equals workflow_id.
+            Untagged tasks are treated as foreign-to-the-scope and
+            EXCLUDED — they belong to some other workflow's run (or
+            to a non-workflow caller) and are not this scope's
+            responsibility to drain."""
+            if workflow_id is None:
+                return list(tasks)
+            return [
+                t for t in tasks
+                if getattr(t, "_nb_workflow_id", None) == workflow_id
+            ]
+
         deadline = _time.monotonic() + timeout
 
         while True:
             remaining = deadline - _time.monotonic()
             if remaining <= 0:
-                if self.background_tasks:
+                scoped = _scoped(self.background_tasks)
+                if scoped:
                     self.logger.warning(
                         f"Timeout waiting for "
-                        f"{len(self.background_tasks)} background tasks"
+                        f"{len(scoped)} background tasks "
+                        f"(workflow_id={workflow_id!r})"
                     )
                     return False
                 return True
 
-            if not self.background_tasks:
+            scoped = _scoped(self.background_tasks)
+            if not scoped:
                 # Quiet — but a task may be about to fire from a
                 # done-callback chain. Sleep briefly and re-check;
                 # only return success if the set stays empty.
                 await asyncio.sleep(min(settle_ms / 1000.0, remaining))
-                if not self.background_tasks:
+                scoped = _scoped(self.background_tasks)
+                if not scoped:
                     return True
                 continue
 
-            # Snapshot the current task set and await it. Tasks added
-            # AFTER this snapshot are picked up on the next iteration.
-            snapshot = list(self.background_tasks)
+            # Snapshot the scoped tasks and await them. Tasks added
+            # AFTER this snapshot (in OR out of scope) are picked up
+            # on the next iteration.
+            snapshot = scoped
             try:
                 await asyncio.wait_for(
                     asyncio.gather(*snapshot, return_exceptions=True),
                     timeout=remaining,
                 )
             except asyncio.TimeoutError:
+                still_scoped = _scoped(self.background_tasks)
                 self.logger.warning(
                     f"Timeout waiting for "
-                    f"{len(self.background_tasks)} background tasks "
-                    f"(cascading drain)"
+                    f"{len(still_scoped)} background tasks "
+                    f"(workflow_id={workflow_id!r}, cascading drain)"
                 )
                 return False
 

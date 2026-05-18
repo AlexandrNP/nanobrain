@@ -2517,42 +2517,54 @@ class Workflow(Step):
                 **kwargs,
             )
 
-        process_result = await self.process(input_data, **kwargs)
+        # G115 — push this workflow's id into the task-scope ContextVar
+        # for the duration of the run. Every trigger task and listener
+        # task created during the run inherits this id via asyncio's
+        # contextvar propagation, so wait_for_cascade can filter to
+        # only this workflow's tasks. Restored on exit (try/finally)
+        # so nested runs cleanly pop back to the outer scope.
+        from .trigger import _active_workflow_id as _g115_cv
 
-        if not await_cascade:
-            # Caller explicitly opted out of waiting. Pass through
-            # process()'s return value (typically a status dict) and tag
-            # it so the consumer knows outputs may be stale.
+        _g115_token = _g115_cv.set(self._g115_workflow_id())
+        try:
+            process_result = await self.process(input_data, **kwargs)
+
+            if not await_cascade:
+                # Caller explicitly opted out of waiting. Pass through
+                # process()'s return value (typically a status dict) and tag
+                # it so the consumer knows outputs may be stale.
+                outputs = await self._collect_workflow_output_data_units()
+                outputs["status"] = "completed_no_await"
+                outputs["_process_return"] = process_result
+                return outputs
+
+            # Special-case the no-first-step shape from process(): no cascade
+            # to wait for, just echo the status and return empty outputs.
+            if isinstance(process_result, dict) and process_result.get("status") == "no_first_step":
+                outputs = {"status": "no_first_step", "workflow": self.name}
+                return outputs
+
+            cascade_drained = await self.wait_for_cascade(
+                timeout=timeout, settle_ms=settle_ms
+            )
+
             outputs = await self._collect_workflow_output_data_units()
-            outputs["status"] = "completed_no_await"
-            outputs["_process_return"] = process_result
+
+            if not cascade_drained:
+                if raise_on_cascade_timeout:
+                    raise TimeoutError(
+                        f"Workflow {self.name!r} cascade did not drain within "
+                        f"{timeout}s (settle_ms={settle_ms}). Partial outputs: "
+                        f"{list(outputs.keys())}"
+                    )
+                outputs["status"] = "cascade_timeout"
+                outputs["_timeout_seconds"] = timeout
+            else:
+                outputs["status"] = "completed"
+
             return outputs
-
-        # Special-case the no-first-step shape from process(): no cascade
-        # to wait for, just echo the status and return empty outputs.
-        if isinstance(process_result, dict) and process_result.get("status") == "no_first_step":
-            outputs = {"status": "no_first_step", "workflow": self.name}
-            return outputs
-
-        cascade_drained = await self.wait_for_cascade(
-            timeout=timeout, settle_ms=settle_ms
-        )
-
-        outputs = await self._collect_workflow_output_data_units()
-
-        if not cascade_drained:
-            if raise_on_cascade_timeout:
-                raise TimeoutError(
-                    f"Workflow {self.name!r} cascade did not drain within "
-                    f"{timeout}s (settle_ms={settle_ms}). Partial outputs: "
-                    f"{list(outputs.keys())}"
-                )
-            outputs["status"] = "cascade_timeout"
-            outputs["_timeout_seconds"] = timeout
-        else:
-            outputs["status"] = "completed"
-
-        return outputs
+        finally:
+            _g115_cv.reset(_g115_token)
 
     async def _run_with_nested_context(
         self,
@@ -2794,10 +2806,30 @@ class Workflow(Step):
         from .trigger import AsyncTriggerExecutor
 
         executor = await AsyncTriggerExecutor.get_instance()
+        # G115 — scope the drain to this workflow's own tasks via the
+        # workflow_id tagged on each task during its creation. Without
+        # the scope, nested Workflow.run() calls deadlock (outer awaits
+        # inner, inner's wait sees outer's still-awaiting task in the
+        # shared set, times out). See trigger.py:_active_workflow_id +
+        # docs/g115_nested_workflow_run_deadlock_2026-05-17.md.
         return await executor.wait_for_all_tasks(
             timeout=timeout,
             settle_ms=settle_ms,
+            workflow_id=self._g115_workflow_id(),
         )
+
+    def _g115_workflow_id(self) -> str:
+        """Per-instance stable identifier used for G115 task-scoping.
+        Combines the configured ``name`` (human-readable) with the
+        Python ``id()`` of this Workflow instance (uniqueness across
+        same-name reloads). Lazy: computed once and cached on the
+        instance."""
+        cached = getattr(self, "_g115_id_cache", None)
+        if cached is not None:
+            return cached
+        wf_id = f"{self.name}#{id(self):x}"
+        self._g115_id_cache = wf_id
+        return wf_id
 
     async def process(self, input_data: Dict[str, Any], **kwargs) -> Any:
         """

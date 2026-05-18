@@ -1040,6 +1040,14 @@ class DataUnitBase(FromConfigBase, ABC):
                                 listener, change_event)
                         )
 
+                        # G115 — tag the listener task with the active
+                        # workflow_id (if any) so wait_for_all_tasks
+                        # can scope the cascade drain to one workflow.
+                        # Lazy import to avoid circular import at module
+                        # load (trigger.py also imports core helpers).
+                        from .trigger import _tag_task_with_workflow
+                        _tag_task_with_workflow(task)
+
                         # Add to executor's background tasks for tracking
                         async_executor.background_tasks.add(task)
                         task.add_done_callback(
