@@ -2818,6 +2818,17 @@ class Workflow(Step):
         pure-compute test fixtures where the 500ms overhead is
         prohibitive).
 
+        **G125 update (2026-05-18)** — the underlying race that the
+        G124 safe-floor was masking is now CLOSED at the root by
+        ``Workflow.process()`` setting the ``_active_workflow_id``
+        ContextVar (matching ``Workflow.run()``). The G124 warning
+        is downgraded to a soft hint about the prior incident and
+        only fires when the env var is unset; the framework no
+        longer requires settle_ms>=500 to behave correctly. See
+        ``apecx-mcp-integration/docs/CHECKPOINT_g124_wait_for_cascade_2026-05-18.md``
+        for the full incident + ``tests/unit/test_g125_process_workflow_id_tag.py``
+        for the regression pin.
+
         Example::
 
             wf = Workflow.from_config('my_workflow.yml')
@@ -2832,14 +2843,17 @@ class Workflow(Step):
             settle_ms < self._SETTLE_MS_SAFE_FLOOR
             and _os.environ.get("NANOBRAIN_ALLOW_SHORT_SETTLE_MS") != "1"
         ):
+            # G125 (2026-05-18) — downgraded from "your output will be
+            # wrong" to "you're below the historical safe-floor; the
+            # race that motivated this floor is now fixed at the root
+            # (process() workflow_id tagging) but the floor stays as
+            # defense-in-depth for any new untracked-task code path".
             logger.warning(
                 "Workflow %r: wait_for_cascade(settle_ms=%d) is below the "
-                "safe-floor of %dms. Real-LLM workloads have intermittently "
-                "returned drained BEFORE the cascade propagated all "
-                "listener-task writes at settle_ms < 500. See "
-                "apecx-mcp-integration/docs/CODEGEN_CANARY_AND_PARITY.md. "
-                "Pass settle_ms>=500 OR set NANOBRAIN_ALLOW_SHORT_SETTLE_MS=1 "
-                "to suppress this warning.",
+                "G124 safe-floor of %dms. As of G125 (2026-05-18) the "
+                "underlying race is closed at the root; this warning is "
+                "now a defense-in-depth hint, not a load-bearing guard. "
+                "Set NANOBRAIN_ALLOW_SHORT_SETTLE_MS=1 to suppress.",
                 self.name,
                 settle_ms,
                 self._SETTLE_MS_SAFE_FLOOR,
@@ -2894,7 +2908,23 @@ class Workflow(Step):
         cascade. Real workflows with steps now Just Work without the
         operator having to know about the two-call protocol.
 
-        Source: 2026-05-12 trigger-binding investigation.
+        G125 (2026-05-18) — set the G115 ``_active_workflow_id``
+        ContextVar around ``process()`` so listener tasks born here
+        inherit the workflow's id via asyncio contextvar propagation.
+        Without this, a subsequent ``wait_for_cascade()`` call would
+        filter by this workflow's id and EXCLUDE the listener tasks
+        (which had no tag because ``_active_workflow_id`` was unset
+        when they were created) — producing the silent-failure shape
+        documented at
+        ``apecx-mcp-integration/docs/CHECKPOINT_g124_wait_for_cascade_2026-05-18.md``.
+        Previously only ``Workflow.run()`` set this contextvar, so
+        the two-call protocol ``wf.process() + wf.wait_for_cascade()``
+        was BROKEN BY DESIGN — drain saw empty scoped set + returned
+        True instantly regardless of the actual cascade state. G124's
+        safe-floor warning was masking this rather than fixing it.
+
+        Source: 2026-05-12 trigger-binding investigation +
+        2026-05-18 G124/G125 race-window root-cause.
         """
         if not getattr(self, "_is_initialized", False):
             if self._get_first_step() is not None:
@@ -2906,6 +2936,25 @@ class Workflow(Step):
                     )
                 await self.initialize()
 
+        # G125 (2026-05-18) — set the workflow_id ContextVar so listener
+        # tasks born during this process() call inherit it via asyncio
+        # contextvar propagation. wait_for_cascade() filters tasks by
+        # this id; without the tag, drain returns True instantly even
+        # while the cascade is still in flight. The ContextVar is
+        # tolerant of being already set by an outer caller (e.g.
+        # Workflow.run()) — we always set ours; the outer caller's
+        # restore-token semantics preserve the prior value.
+        from .trigger import _active_workflow_id as _g115_cv
+        _g125_token = _g115_cv.set(self._g115_workflow_id())
+        try:
+            return await self._process_body(input_data, **kwargs)
+        finally:
+            _g115_cv.reset(_g125_token)
+
+    async def _process_body(self, input_data: Dict[str, Any], **kwargs) -> Any:
+        """G125 (2026-05-18) — the original process() body, hoisted to a
+        helper so ``process()`` can wrap it in a ContextVar set/reset
+        without duplicating the data-driven / divergence branching."""
         # Check if divergence is enabled
         divergence_enabled = getattr(self.config, 'divergence_enabled', False)
 
