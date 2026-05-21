@@ -59,8 +59,10 @@ class _FakeTransferAPIError(Exception):
     we set only the attributes the step reads (``http_status``, ``code``)."""
 
 
-def _make_api_error(http_status: int, code: str = "ClientError.NotFound"):
+def _make_api_error(http_status: int, code: str = "ClientError.NotFound", message: str = ""):
     import globus_sdk
+
+    text = message or f"simulated {http_status}"
 
     class _Err(globus_sdk.TransferAPIError):
         def __init__(self):
@@ -70,7 +72,7 @@ def _make_api_error(http_status: int, code: str = "ClientError.NotFound"):
             self.code = code
 
         def __str__(self):
-            return f"{self.code}: simulated {self.http_status}"
+            return f"{self.code}: {text}"
 
     return _Err()
 
@@ -275,17 +277,38 @@ def test_process_404_parent_marks_all_missing(monkeypatch):
     assert "/p/gone/a.csv" in msg and "/p/gone/b.csv" in msg
 
 
-def test_process_non_404_error_surfaced_as_connectivity(monkeypatch):
-    """A 403 (path-restriction / auth) is NOT counted as 'file missing'."""
+def test_process_403_surfaced_as_authorization_with_group_hint(monkeypatch):
+    """A 403 (no effective ACL) is NOT 'file missing' — it's an authorization
+    error, and the hint must mention Globus Group membership (the exact wall an
+    operator hits for group-gated data)."""
     step = GlobusManifestVerifyStep.from_config(_write_step_yaml())
     items = [{"source_path": "/restricted/a.csv", "dest_path": "/d/a.csv"}]
     fake = _FakeTC(
         listings={},
-        errors={"/restricted": _make_api_error(403, code="EndpointPermissionDenied")},
+        errors={"/restricted": _make_api_error(403, code="PermissionDenied")},
     )
     _patch_globus(monkeypatch, fake)
     with pytest.raises(ComponentConfigurationError) as exc:
         asyncio.run(step.process({"items": items}))
     msg = str(exc.value)
-    assert "auth / connectivity / path-restriction" in msg
+    assert "Authorization error" in msg
+    assert "Globus Group" in msg
     assert "MISSING" not in msg  # not the missing-file message
+
+
+def test_process_path_not_allowed_surfaced_as_path_restriction(monkeypatch):
+    """A 500 'Path not allowed' must say the path is outside the collection's
+    namespace (a different collection serves it) — distinct from authorization
+    and from missing-file."""
+    step = GlobusManifestVerifyStep.from_config(_write_step_yaml())
+    items = [{"source_path": "/elsewhere/a.csv", "dest_path": "/d/a.csv"}]
+
+    err = _make_api_error(500, code="ExternalError", message="Path not allowed.")
+    fake = _FakeTC(listings={}, errors={"/elsewhere": err})
+    _patch_globus(monkeypatch, fake)
+    with pytest.raises(ComponentConfigurationError) as exc:
+        asyncio.run(step.process({"items": items}))
+    msg = str(exc.value)
+    assert "Path-restriction error" in msg
+    assert "DIFFERENT collection" in msg
+    assert "MISSING" not in msg

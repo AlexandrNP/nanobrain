@@ -221,6 +221,54 @@ class GlobusManifestVerifyStep(BaseStep):
             coerced.append(dict(item))
         return coerced
 
+    @staticmethod
+    def _classify_ls_error(exc: Any) -> str:
+        """Map a non-404 ``operation_ls`` Globus error to an actionable hint.
+
+        The raw Globus error is always appended by the caller; this adds the
+        "what do I DO about it" sentence so an operator isn't left decoding
+        GridFTP/HTTP codes. Distinguishes the common access-denied shapes:
+
+          * 401/403 (PermissionDenied / no effective ACL) — the transfer
+            identity is not authorized for this path. For Group-gated data the
+            identity must be a MEMBER of the granting Globus Group (ask the
+            data steward to add the confidential client's
+            ``<client_id>@clients.auth.globus.org`` identity).
+          * 500 "Path not allowed" — the path is OUTSIDE this collection's
+            allowed namespace (a different collection/guest-collection serves
+            it); using a different ``source_endpoint_id`` is required, not a
+            credential change.
+          * "not currently connected" — the source collection (often a Globus
+            Connect Personal endpoint) is offline; start it.
+        """
+        status = getattr(exc, "http_status", None)
+        text = f"{getattr(exc, 'code', '')} {exc}".lower()
+        if status in (401, 403) or "permissiondenied" in text or "no effective acl" in text:
+            return (
+                "Authorization error: the transfer identity is not authorized "
+                "for this path. If the data is gated by a Globus Group, the "
+                "identity must be ADDED as a member of that Group (an admin "
+                "action — ask the data steward); credentials alone are not "
+                "enough."
+            )
+        if "path not allowed" in text or "path_not_allowed" in text:
+            return (
+                "Path-restriction error: this path is outside the collection's "
+                "allowed namespace, so a DIFFERENT collection serves it. Point "
+                "source_endpoint_id at the collection that exposes this path "
+                "(a credential change will not help)."
+            )
+        if "not currently connected" in text or "endpoint is not active" in text:
+            return (
+                "The source collection is offline/inactive (e.g. a Globus "
+                "Connect Personal endpoint that isn't running). Start it and "
+                "retry."
+            )
+        return (
+            "Auth / connectivity error reaching the source collection. Verify "
+            "credentials, endpoint UUID, and network reachability."
+        )
+
     async def process(self, input_data: Any, **kwargs) -> Dict[str, Any]:
         """List each source parent dir once and assert every item is present.
 
@@ -292,12 +340,16 @@ class GlobusManifestVerifyStep(BaseStep):
                     # Parent dir absent -> every expected file under it missing.
                     missing.extend(f"{parent}/{n}" for n in expected_names)
                     continue
+                # Classify the non-404 error so the operator gets an ACTIONABLE
+                # message, not a generic "auth/connectivity" bucket. These are
+                # NOT missing-file conditions — the file may well exist but the
+                # transfer identity can't see it.
+                hint = self._classify_ls_error(exc)
                 raise ComponentConfigurationError(
-                    "FAIL-FAST: GlobusManifestVerifyStep failed to list source "
-                    f"directory {parent!r} on endpoint "
-                    f"{cfg.source_endpoint_id} (this is an auth / connectivity "
-                    "/ path-restriction error, NOT a missing-file condition): "
-                    f"{exc.code}: {exc}"
+                    "FAIL-FAST: GlobusManifestVerifyStep could not list source "
+                    f"directory {parent!r} on endpoint {cfg.source_endpoint_id} "
+                    "(NOT a missing-file condition). "
+                    f"{hint} Underlying Globus error: {exc.code}: {exc}"
                 ) from exc
             except globus_sdk.GlobusError as exc:
                 raise ComponentConfigurationError(
