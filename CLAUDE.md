@@ -6,6 +6,28 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Nanobrain is an event-driven AI agent framework for distributed workflows. It's currently in research preview and has dependencies on HPC systems and external frameworks. The framework uses a mandatory configuration-driven architecture where ALL components are created through the `from_config()` pattern.
 
+## Recent additions (2026-05-21 — G127 GlobusManifestVerifyStep)
+
+**`GlobusManifestVerifyStep`** at
+`nanobrain/library/steps/globus_manifest_verify_step.py` — a `BaseStep`
+(`COMPONENT_TYPE="globus_manifest_verify_step"`) that `operation_ls`-verifies
+every source path in a transfer manifest exists on the source Globus
+collection BEFORE a `GlobusTransferStep` submits. Turns the "transfer
+SUCCEEDED but moved zero files" and "cryptic late per-file failure" shapes into
+an early FAIL-LOUD error naming every missing path. Passes the validated
+manifest through under the `verified_manifest` output key, so a
+`verify → transfer` `DirectLink` (auto_transfer) hands the same items
+downstream. Groups source paths by parent dir → one `operation_ls` per dir; a
+404 on a parent = all items under it missing; non-404 Globus errors (auth /
+connectivity / path-restriction) are surfaced FAIL-LOUD, never miscounted as
+"file missing". Shares the source-side auth fields + `extra='forbid'` config
+discipline with `GlobusTransferStep`; reuses the G23 `build_globus_app` helper.
+18 unit tests (mocked `TransferClient`) + 2 gated live integration tests
+(`tests/integration/test_globus_manifest_verify_live.py`,
+`NANOBRAIN_GLOBUS_TEST_SOURCE_EP` / `_EXISTING_PATH`). The apecx-side consumer
+(verify→transfer workflow + driver) lives in apecx-mcp-integration; see
+`apecx-mcp-integration/docs/globus_default_migration_outcomes_2026-05-21.md`.
+
 ## Recent additions (2026-05-18 — G124 settle_ms safe-floor + G125 process() ContextVar tag close cascade-drain race)
 
 A pair of fixes (G124 band-aid → G125 root cause, both shipped
