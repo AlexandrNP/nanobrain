@@ -25,6 +25,7 @@ Coverage:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import tempfile
 from pathlib import Path
@@ -32,12 +33,27 @@ from typing import Any, Dict
 
 import pytest
 
+from nanobrain.core.step import BaseStep, StepConfig
 from nanobrain.core.workflow import WorkflowConfig
 from nanobrain.lightweight import WorkflowBuilder
 from nanobrain.lightweight.workflow_builder import (
     _FRAMEWORK_LINK_CLASS_PATHS,
     _FRAMEWORK_TRIGGER_CLASS_PATHS,
 )
+
+
+class _EchoStep(BaseStep):
+    """Module-level step so ``from_config`` can resolve it by dotted path
+    (``<this module>._EchoStep``) during the end-to-end load+run test."""
+
+    COMPONENT_TYPE = "test_builder_echo"
+
+    @classmethod
+    def _get_config_class(cls):
+        return StepConfig
+
+    async def process(self, input_data, **kw):
+        return {"echo_out": f"echoed:{input_data}"}
 
 
 # ---------------------------------------------------------------------------
@@ -360,3 +376,72 @@ class TestEndToEnd:
             assert "version" not in reloaded
             assert reloaded["links"]["link_0"]["class"] == \
                 "nanobrain.core.link.DirectLink"
+
+
+# ---------------------------------------------------------------------------
+# 7. End-to-end load() + run() — guards the "0 child steps, no_first_step"
+#    silent-failure shape (a flat step entry with no `config:` key is
+#    silently skipped at load; the workflow runs but does nothing).
+# ---------------------------------------------------------------------------
+class TestBuilderLoadAndRun:
+    def _build(self) -> WorkflowBuilder:
+        b = WorkflowBuilder("e2e_wf", "builder load+run regression")
+        b.add_input("wf_in", "DataUnitMemory")
+        b.add_output("wf_out", "DataUnitMemory")
+        b.add_step(
+            "echo",
+            f"{__name__}._EchoStep",
+            input_data_units={
+                "echo_in": {
+                    "class": "nanobrain.core.data_unit.DataUnitMemory",
+                    "name": "echo_in",
+                }
+            },
+            output_data_units={
+                "echo_out": {
+                    "class": "nanobrain.core.data_unit.DataUnitMemory",
+                    "name": "echo_out",
+                }
+            },
+            triggers=[
+                {
+                    "class": "nanobrain.core.trigger.DataUnitChangeTrigger",
+                    "data_unit": "echo_in",
+                }
+            ],
+        )
+        b.add_link("wf_in", "echo.echo_in", link_type="direct")
+        b.add_link("echo.echo_out", "wf_out", link_type="direct")
+        return b
+
+    def test_load_materializes_child_steps(self):
+        """The step's fields must survive load() — NOT be dropped because
+        the in-memory entry is flat (no `config:` key)."""
+        wf = self._build().load()
+        assert list(wf.child_steps.keys()) == ["echo"], (
+            "builder.load() produced a workflow with no child steps — the "
+            "flat step entry was silently skipped (regression)"
+        )
+        echo = wf.child_steps["echo"]
+        assert list(echo.step_input_data_units.keys()) == ["echo_in"]
+        assert list(echo.step_output_data_units.keys()) == ["echo_out"]
+
+    def test_run_drives_cascade_end_to_end(self):
+        """The composed workflow must actually move data — not return
+        {'status': 'no_first_step'}."""
+        wf = self._build().load()
+
+        async def _run():
+            return await wf.run(
+                {"wf_in": "hello"},
+                timeout=20.0,
+                settle_ms=500,
+                raise_on_cascade_timeout=False,
+            )
+
+        out = asyncio.run(_run())
+        assert isinstance(out, dict)
+        assert out.get("status") == "completed", f"cascade did not complete: {out}"
+        assert out.get("wf_out") == "echoed:{'echo_in': 'hello'}", (
+            f"workflow output did not propagate: {out}"
+        )

@@ -95,28 +95,35 @@ _m._SlowEcho = _SlowEcho
 
 
 def _build_workflow_yaml(tmp_path: Path) -> Path:
+    # Steps must reference their config by FILE PATH, not an inline dict —
+    # G121 inline-step-config support was reverted (see
+    # ConfigBase._is_inline_config_supported, which now excludes BaseStep).
+    echo_yml = tmp_path / "echo_step.yml"
+    echo_yml.write_text(textwrap.dedent("""
+        name: echo
+        input_data_units:
+          echo_in: {class: nanobrain.core.data_unit.DataUnitMemory, name: echo_in}
+        output_data_units:
+          echo_out: {class: nanobrain.core.data_unit.DataUnitMemory, name: echo_out}
+        triggers:
+          - {class: nanobrain.core.trigger.DataUnitChangeTrigger, data_unit: echo_in}
+    """).strip())
+
     wf_yml = tmp_path / "wf.yml"
-    wf_yml.write_text(textwrap.dedent("""
+    wf_yml.write_text(textwrap.dedent(f"""
         name: g125_test_wf
         config_version: 2
         input_data_units:
-          wf_in: {class: nanobrain.core.data_unit.DataUnitMemory, name: wf_in}
+          wf_in: {{class: nanobrain.core.data_unit.DataUnitMemory, name: wf_in}}
         output_data_units:
-          wf_out: {class: nanobrain.core.data_unit.DataUnitMemory, name: wf_out}
+          wf_out: {{class: nanobrain.core.data_unit.DataUnitMemory, name: wf_out}}
         steps:
           echo:
             class: __main__._SlowEcho
-            config:
-              name: echo
-              input_data_units:
-                echo_in: {class: nanobrain.core.data_unit.DataUnitMemory, name: echo_in}
-              output_data_units:
-                echo_out: {class: nanobrain.core.data_unit.DataUnitMemory, name: echo_out}
-              triggers:
-                - {class: nanobrain.core.trigger.DataUnitChangeTrigger, data_unit: echo_in}
+            config: {echo_yml}
         links:
-          inp: {class: nanobrain.core.link.DirectLink, config: {link_type: direct, source: wf_in, target: echo.echo_in, auto_transfer: true}}
-          out: {class: nanobrain.core.link.DirectLink, config: {link_type: direct, source: echo.echo_out, target: wf_out, auto_transfer: true}}
+          inp: {{class: nanobrain.core.link.DirectLink, config: {{link_type: direct, source: wf_in, target: echo.echo_in, auto_transfer: true}}}}
+          out: {{class: nanobrain.core.link.DirectLink, config: {{link_type: direct, source: echo.echo_out, target: wf_out, auto_transfer: true}}}}
     """).strip())
     return wf_yml
 

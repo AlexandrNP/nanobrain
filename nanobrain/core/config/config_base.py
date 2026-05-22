@@ -1202,24 +1202,27 @@ class ConfigBase(BaseModel, ABC):
         Check if target class supports inline dict configuration
 
         ✅ FRAMEWORK COMPLIANCE:
-        DataUnit/DataUnitBase, Link/LinkBase, Trigger/TriggerBase, and
-        (G121, 2026-05-18) BaseStep subclasses support inline dict config.
+        Only DataUnit/DataUnitBase, Link/LinkBase, and Trigger/TriggerBase
+        support inline dict config. **Steps, Workflows, and Agents are
+        file-path-only.**
 
-        The BaseStep inclusion supports programmatic workflow construction
-        via the lightweight ``WorkflowBuilder.add_step(..., config={...})``
-        path. Without it, agent-authored / template-generated workflows
-        with custom steps required temp-YAML scaffolding (G112-C
-        workaround).
+        G121 (2026-05-18) had extended this accept-list to include BaseStep
+        subclasses (to let the lightweight ``WorkflowBuilder`` and
+        agent-authored workflows pass ``steps[].config`` as an inline dict).
+        That was REVERTED 2026-05-22: a Step's config — which owns the
+        component's data units, triggers, and identity — must live in a
+        reviewable, diffable, path-referenced YAML, not an inline blob. The
+        inline-step relaxation also silently overrode downstream policy: the
+        apecx-mcp-integration composer validator's ``step_inline_config_forbidden``
+        rule delegates to THIS classifier, so G121 quietly disabled that
+        anti-hallucination guard (a real silent-failure shape). Programmatic
+        builders that need to construct steps without hand-written YAML write a
+        per-step temp YAML file and reference it by path (the WorkflowBuilder
+        does this) — same end result, but the file-only invariant holds.
 
-        Note on the CLOSED-CLASS rule: the apecx-mcp-integration composer
-        prompts pin ``CLOSED-CLASS RULE`` to ban LLM-generated YAML
-        from using inline configs for shared library steps. That rule
-        is enforced at LLM-prompt-validation time + tested via
-        ``tests/unit/test_closed_class_rule_pinned_in_prompts.py``.
-        It is INDEPENDENT of this framework-level check: this check
-        controls what ``from_config`` accepts at LOAD time; the
-        CLOSED-CLASS rule controls what the LLM emits. Programmatic
-        builder code is not subject to the LLM prompt's rule.
+        DataUnit/Link/Trigger remain inline-tolerant: they are small, leaf,
+        value-like configs with no ownership semantics, and nanobrain's nested
+        ``class:``+``config:`` resolution has always accepted them inline.
 
         Args:
             target_class: Class to check for inline config support
@@ -1227,19 +1230,20 @@ class ConfigBase(BaseModel, ABC):
         Returns:
             True if class supports inline dict config, False otherwise
         """
-        # Import base classes for comparison
+        # Import base classes for comparison. Note: BaseStep is intentionally
+        # NOT in this list (see docstring — Steps/Workflows/Agents are
+        # file-path-only). Workflow subclasses BaseStep, so excluding BaseStep
+        # also keeps Workflows file-only.
         try:
             from nanobrain.core.data_unit import DataUnit, DataUnitBase
             from nanobrain.core.link import LinkBase
-            from nanobrain.core.step import BaseStep
             from nanobrain.core.trigger import TriggerBase
 
             # Check if target class is a subclass of supported classes
             return (issubclass(target_class, DataUnit) or
                     issubclass(target_class, DataUnitBase) or
                     issubclass(target_class, LinkBase) or
-                    issubclass(target_class, TriggerBase) or
-                    issubclass(target_class, BaseStep))
+                    issubclass(target_class, TriggerBase))
         except ImportError as e:
             # If import fails, default to False (require file path)
             logger.warning(f"⚠️ Could not import base classes for inline config check: {e}")

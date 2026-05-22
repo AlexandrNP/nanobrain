@@ -19,13 +19,20 @@ Two ways to consume the builder's output:
    (auto_transfer-True, gate-aware propagation, path-reference
    rewriting), same FAIL-FAST surface.
 
+Step configs are file-backed at load time. ``add_step`` accumulates a
+step's fields flat (in memory); ``load()`` writes each step's config to
+its own temp YAML and references it by path. This is mandatory, not
+cosmetic: the framework refuses inline-dict construction for ``BaseStep``
+(``ConfigBase._is_inline_config_supported`` excludes it), and a flat step
+entry with no ``config:`` key is silently skipped at load (workflow has
+ZERO child steps, ``run()`` → ``{'status': 'no_first_step'}``, no
+exception). ``load()`` is the seam that turns the flat in-memory shape
+into resolvable ``{class, config: <path>}`` step refs. Links and triggers
+DO accept inline dicts (they are not excluded by
+``_is_inline_config_supported``), so those stay inline.
+
 What the builder does NOT do:
 
-- Recompose nested step / link / trigger configs from per-component
-  YAML files. The dict is in-memory inline; the framework's v2
-  path-reference rewriting (G7 Step 4) does not apply because there
-  are no path references to rewrite. This is fine — inline is the
-  preferred shape for programmatic construction.
 - Discover external workflow YAML directories. Use the canonical
   ``Workflow.from_config('path/to/workflow.yml')`` path for that.
 """
@@ -466,16 +473,30 @@ class WorkflowBuilder:
         """Build a real ``Workflow`` instance from the generated config.
 
         Convenience that closes the loop: the dict the builder
-        accumulated is materialized to a temporary YAML file and
-        passed through ``Workflow.from_config()``. This route is used
-        because ``WorkflowConfig`` deliberately refuses inline-dict
-        construction (only DataUnit/Link/Trigger classes accept that
-        shape — workflows must be file-backed for audit/diff/review).
+        accumulated is materialized to temporary YAML files and passed
+        through ``Workflow.from_config()``.
 
-        The temp file is created via ``tempfile.NamedTemporaryFile``
-        and deleted on success or exception. The file lifecycle is
-        bounded by this method — the loaded Workflow holds in-memory
-        state only, no path reference.
+        **Why per-step files (not one inline dict).** A step is resolved
+        by ``ConfigBase._resolve_nested_objects`` ONLY when its entry
+        carries BOTH a ``class`` and a ``config`` key (config_base.py
+        ~line 1048), AND ``ConfigBase._is_inline_config_supported``
+        excludes ``BaseStep`` — so a step's ``config`` must be a FILE
+        PATH, never an inline dict. The builder accumulates each step's
+        fields flat (``add_step`` kwargs); ``load()`` is where they
+        become a real step: every step's fields (minus the StepRef-level
+        ``class`` / ``executor``) are written to their own
+        ``<step_id>.yml`` and the step entry is rewritten to
+        ``{class, config: <abs path>, [executor]}``.
+
+        Skipping this and dumping flat step entries to one YAML is the
+        silent-failure shape this method exists to avoid: the workflow
+        loads with ZERO child steps (each unresolved flat dict is
+        skipped at ``workflow.py`` ~line 1720) and ``run()`` returns
+        ``{'status': 'no_first_step'}`` — no exception.
+
+        All temp files live under one temp directory deleted on return.
+        The loaded Workflow holds in-memory state only, no path
+        reference.
 
         Returns:
             A constructed ``Workflow`` ready to ``run()``.
@@ -486,26 +507,59 @@ class WorkflowBuilder:
             ``ValueError`` with a ``FAIL-FAST:`` prefix.
         """
         # Lazy imports to keep the lightweight builder light.
-        import os
+        import copy
+        import shutil
         import tempfile
+        from pathlib import Path
+
         import yaml
 
         from nanobrain.core.workflow import Workflow
 
-        # safe_dump produces canonical YAML compatible with
-        # Workflow.from_config's file loader. delete=False so we can
-        # close the handle on Windows-friendly platforms before
-        # passing the path; we clean up in the finally block.
-        fd, tmp_path = tempfile.mkstemp(suffix=".yml", prefix="nb_workflow_builder_")
+        # StepRef-level keys stay beside `class`; everything else is the
+        # step's own config and goes into its per-step file.
+        _STEPREF_LEVEL_KEYS = {"class", "config", "executor"}
+
+        tmp_dir = Path(tempfile.mkdtemp(prefix="nb_workflow_builder_"))
         try:
-            with os.fdopen(fd, "w", encoding="utf-8") as fh:
-                yaml.safe_dump(self.workflow_config, fh, sort_keys=False)
-            return Workflow.from_config(tmp_path)
+            wf_config = copy.deepcopy(self.workflow_config)
+
+            rewritten_steps: Dict[str, Any] = {}
+            for step_id, step_entry in (wf_config.get("steps") or {}).items():
+                if not isinstance(step_entry, dict) or "class" not in step_entry:
+                    # Leave anything we don't recognize untouched — the
+                    # framework will FAIL-FAST on it loudly rather than
+                    # us silently reshaping a malformed entry.
+                    rewritten_steps[step_id] = step_entry
+                    continue
+                if "config" in step_entry and isinstance(step_entry["config"], str):
+                    # Already a path reference — respect it as-is.
+                    rewritten_steps[step_id] = step_entry
+                    continue
+
+                step_config_body = {
+                    k: v for k, v in step_entry.items() if k not in _STEPREF_LEVEL_KEYS
+                }
+                step_config_body.setdefault("name", step_id)
+
+                step_file = tmp_dir / f"{step_id}.yml"
+                with step_file.open("w", encoding="utf-8") as fh:
+                    yaml.safe_dump(step_config_body, fh, sort_keys=False)
+
+                new_entry = {"class": step_entry["class"], "config": str(step_file)}
+                if "executor" in step_entry:
+                    new_entry["executor"] = step_entry["executor"]
+                rewritten_steps[step_id] = new_entry
+
+            wf_config["steps"] = rewritten_steps
+
+            wf_path = tmp_dir / "workflow.yml"
+            with wf_path.open("w", encoding="utf-8") as fh:
+                yaml.safe_dump(wf_config, fh, sort_keys=False)
+
+            return Workflow.from_config(str(wf_path))
         finally:
-            try:
-                os.unlink(tmp_path)
-            except OSError:
-                pass
+            shutil.rmtree(tmp_dir, ignore_errors=True)
     
     def get_config(self) -> Dict[str, Any]:
         """Get the generated workflow configuration."""
