@@ -6,6 +6,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Nanobrain is an event-driven AI agent framework for distributed workflows. It's currently in research preview and has dependencies on HPC systems and external frameworks. The framework uses a mandatory configuration-driven architecture where ALL components are created through the `from_config()` pattern.
 
+## Recent additions (2026-05-22 — build_globus_app native refresh tokens)
+
+`build_globus_app(auth_mode="native")` now constructs the `UserApp` with
+`config=GlobusAppConfig(request_refresh_tokens=True)` so persisted native tokens
+carry offline-refresh (without it the token is online-only, ~2-day expiry). This
+became load-bearing when apecx flipped its default Globus auth to native/web —
+a default install's tokens would otherwise die days after setup. Mirrors the
+apecx-side `apecx-globus-setup login` fix. Regression:
+`tests/unit/test_globus_auth.py::test_native_mode_requests_refresh_tokens` (+ an
+autouse keyring-isolation fixture that file gained, so the FAIL-LOUD
+missing-credential tests are deterministic on dev machines with stored creds).
+Source: commit `ae5262d`; apecx consumer in
+`apecx-mcp-integration/docs/globus_default_migration_outcomes_2026-05-21.md`
+(Follow-up #4).
+
 ## Recent additions (2026-05-21 — G127 GlobusManifestVerifyStep)
 
 **`GlobusManifestVerifyStep`** at
