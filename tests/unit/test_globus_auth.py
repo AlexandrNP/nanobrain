@@ -30,11 +30,23 @@ from nanobrain.core.distributed.globus_auth import (
     build_globus_app,
 )
 
-_COMPUTE_SCOPE = (
-    "https://auth.globus.org/scopes/"
-    "facd7ccc-c5f4-42aa-916b-a0e270e2c2a9/all"
-)
+_COMPUTE_SCOPE = "https://auth.globus.org/scopes/facd7ccc-c5f4-42aa-916b-a0e270e2c2a9/all"
 _TRANSFER_SCOPE = "urn:globus:auth:scope:transfer.api.globus.org:all"
+
+
+@pytest.fixture(autouse=True)
+def _isolate_keyring(monkeypatch):
+    """Isolate every test from the OS keyring (tier-3 credential source).
+
+    ``build_globus_app`` resolves credentials args -> env -> keyring. The
+    FAIL-LOUD "missing credentials" tests delete the env vars and expect a
+    raise — but on a developer machine that has real creds stored under the
+    ``nanobrain-globus`` keyring service, the tier-3 lookup would find them and
+    the expected raise never fires (the suite passes in CI's empty keyring but
+    fails locally). Stub the tier-3 loader to "nothing stored" so the tests
+    assert the contract deterministically regardless of the host keyring. A
+    test that specifically wants keyring creds can re-patch it."""
+    monkeypatch.setattr(globus_auth, "_load_keyring_credentials", lambda: (None, None))
 
 
 # ---------------------------------------------------------------------------
@@ -106,6 +118,17 @@ def test_native_mode_builds_user_app(monkeypatch):
     assert isinstance(app, globus_sdk.UserApp)
 
 
+def test_native_mode_requests_refresh_tokens(monkeypatch):
+    """Native UserApp MUST request refresh tokens (offline access) — otherwise
+    the persisted token is online-only and dies in ~2 days, breaking the
+    (now-default) interactive-login install path. Regression for the 2026-05-21
+    native-default flip."""
+    monkeypatch.delenv(ENV_CLIENT_ID, raising=False)
+
+    app = build_globus_app(auth_mode="native", client_id="native-client-id")
+    assert app.config.request_refresh_tokens is True
+
+
 def test_native_mode_client_id_from_env(monkeypatch):
     monkeypatch.setenv(ENV_CLIENT_ID, "native-env-id")
     import globus_sdk
@@ -162,14 +185,10 @@ def test_missing_globus_sdk_fails_loud(monkeypatch):
 # ---------------------------------------------------------------------------
 def test_scope_resource_server_extraction():
     # urn-form scope
-    assert (
-        globus_auth._scope_resource_server(_TRANSFER_SCOPE)
-        == "transfer.api.globus.org"
-    )
+    assert globus_auth._scope_resource_server(_TRANSFER_SCOPE) == "transfer.api.globus.org"
     # https-form scope
     assert (
-        globus_auth._scope_resource_server(_COMPUTE_SCOPE)
-        == "facd7ccc-c5f4-42aa-916b-a0e270e2c2a9"
+        globus_auth._scope_resource_server(_COMPUTE_SCOPE) == "facd7ccc-c5f4-42aa-916b-a0e270e2c2a9"
     )
 
 
@@ -177,9 +196,7 @@ def test_both_scopes_grouped_on_one_app(monkeypatch):
     """One ClientApp can carry BOTH Compute and Transfer scopes."""
     import globus_sdk
 
-    grouped = globus_auth._build_scope_requirements(
-        globus_sdk, [_COMPUTE_SCOPE, _TRANSFER_SCOPE]
-    )
+    grouped = globus_auth._build_scope_requirements(globus_sdk, [_COMPUTE_SCOPE, _TRANSFER_SCOPE])
     assert set(grouped.keys()) == {
         "facd7ccc-c5f4-42aa-916b-a0e270e2c2a9",
         "transfer.api.globus.org",

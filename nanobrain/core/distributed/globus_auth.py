@@ -141,7 +141,7 @@ def _scope_resource_server(scope: str) -> str:
     """
     s = scope.strip()
     if s.startswith("urn:globus:auth:scope:"):
-        rest = s[len("urn:globus:auth:scope:"):]
+        rest = s[len("urn:globus:auth:scope:") :]
         return rest.split(":", 1)[0]
     marker = "://auth.globus.org/scopes/"
     if marker in s:
@@ -259,6 +259,15 @@ def build_globus_app(
     kwargs: "dict[str, Any]" = {"app_name": app_name, "client_id": resolved_id}
     if scope_requirements:
         kwargs["scope_requirements"] = scope_requirements
+    # Request a REFRESH token (offline access). globus_sdk's default
+    # (request_refresh_tokens=False) persists an online-only access token that
+    # expires in ~2 days with no way to renew — fatal for an unattended /
+    # default install path whose tokens silently die days after setup. With a
+    # refresh token globus_sdk renews automatically while it stays valid. This
+    # mirrors the apecx-side ``apecx-globus-setup login`` fix; both the login
+    # flow AND the run-time app must request refresh tokens so persisted tokens
+    # keep working at transfer time.
+    kwargs["config"] = globus_sdk.GlobusAppConfig(request_refresh_tokens=True)
     return globus_sdk.UserApp(**kwargs)
 
 
