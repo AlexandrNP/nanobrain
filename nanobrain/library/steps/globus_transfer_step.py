@@ -220,12 +220,15 @@ class GlobusTransferStep(BaseStep):
         return value
 
     @staticmethod
-    def _coerce_items(payload: Dict[str, Any]) -> List[Dict[str, str]]:
-        """Extract + validate the list of ``{source_path, dest_path}`` items.
+    def _coerce_items(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Extract + validate the list of transfer items.
 
-        FAIL-LOUD on a missing / empty / malformed ``items`` list — a
-        transfer step with nothing to transfer is a configuration error,
-        not a no-op.
+        Each item is ``{source_path, dest_path}`` plus an optional
+        ``recursive: bool`` (default False). ``recursive: true`` transfers a
+        whole directory tree (Globus requires it for directory sources;
+        without it a directory source fails). FAIL-LOUD on a missing / empty
+        / malformed ``items`` list — a transfer step with nothing to transfer
+        is a configuration error, not a no-op.
         """
         items = payload.get("items")
         if not isinstance(items, list) or not items:
@@ -234,7 +237,7 @@ class GlobusTransferStep(BaseStep):
                 "'items' list of {source_path, dest_path} dicts; got "
                 f"{items!r}"
             )
-        coerced: List[Dict[str, str]] = []
+        coerced: List[Dict[str, Any]] = []
         for idx, item in enumerate(items):
             if not isinstance(item, dict):
                 raise ComponentConfigurationError(
@@ -253,7 +256,15 @@ class GlobusTransferStep(BaseStep):
                     f"FAIL-FAST: GlobusTransferStep items[{idx}] missing a "
                     "non-empty 'dest_path' string"
                 )
-            coerced.append({"source_path": src, "dest_path": dst})
+            recursive = item.get("recursive", False)
+            if not isinstance(recursive, bool):
+                raise ComponentConfigurationError(
+                    f"FAIL-FAST: GlobusTransferStep items[{idx}] 'recursive' "
+                    f"must be a bool, got {type(recursive).__name__}"
+                )
+            coerced.append(
+                {"source_path": src, "dest_path": dst, "recursive": recursive}
+            )
         return coerced
 
     async def process(self, input_data: Any, **kwargs) -> Dict[str, Any]:
@@ -318,7 +329,11 @@ class GlobusTransferStep(BaseStep):
             verify_checksum=cfg.verify_checksum,
         )
         for item in items:
-            transfer_data.add_item(item["source_path"], item["dest_path"])
+            transfer_data.add_item(
+                item["source_path"],
+                item["dest_path"],
+                recursive=item.get("recursive", False),
+            )
 
         self.nb_logger.info(
             "GlobusTransferStep %r: submitting transfer of %d item(s) "

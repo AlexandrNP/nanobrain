@@ -185,10 +185,31 @@ def test_coerce_items_valid_returns_normalized():
             ]
         }
     )
+    # recursive defaults to False and is always present in the normalized shape.
     assert items == [
-        {"source_path": "/a", "dest_path": "/b"},
-        {"source_path": "/c/", "dest_path": "/d/"},
+        {"source_path": "/a", "dest_path": "/b", "recursive": False},
+        {"source_path": "/c/", "dest_path": "/d/", "recursive": False},
     ]
+
+
+def test_coerce_items_preserves_recursive_flag():
+    items = GlobusTransferStep._coerce_items(
+        {
+            "items": [
+                {"source_path": "/dir/", "dest_path": "/out/", "recursive": True},
+                {"source_path": "/f", "dest_path": "/g", "recursive": False},
+            ]
+        }
+    )
+    assert items[0]["recursive"] is True
+    assert items[1]["recursive"] is False
+
+
+def test_coerce_items_non_bool_recursive_fails_loud():
+    with pytest.raises(ComponentConfigurationError, match="recursive"):
+        GlobusTransferStep._coerce_items(
+            {"items": [{"source_path": "/a", "dest_path": "/b", "recursive": "yes"}]}
+        )
 
 
 # ---------------------------------------------------------------------------
