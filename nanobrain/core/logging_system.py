@@ -22,6 +22,46 @@ from enum import Enum
 import sys
 
 
+class ResilientStreamHandler(logging.StreamHandler):
+    """A ``StreamHandler`` that drops records instead of raising when its
+    stream has been closed.
+
+    The default ``StreamHandler.emit`` writes to a stream reference captured
+    at handler-construction time. If that stream is later closed by something
+    *outside* the framework — pytest's per-test capture teardown, an MCP
+    server whose stdio pipe is torn down when the client disconnects, a CLI
+    that closed stdout — the next ``emit`` raises ``ValueError: I/O operation
+    on closed file`` and Python's logging machinery prints a ``--- Logging
+    error ---`` traceback to stderr for every record.
+
+    A background thread/task that is still running while the stream closes
+    can produce a flood of these. They are pure noise: a logging write
+    failing because the consumer went away must never surface as a traceback,
+    and must never mask the component's real work. Observability never breaks
+    correctness.
+
+    This handler guards the common case (stream already closed → skip) and
+    swallows the residual race (stream closed between the guard and the
+    write) in ``handleError``, while still delegating *other* handler errors
+    (e.g. a formatter bug) to the default machinery so real problems remain
+    visible.
+    """
+
+    def emit(self, record: logging.LogRecord) -> None:
+        stream = self.stream
+        if stream is None or getattr(stream, "closed", False):
+            return
+        super().emit(record)
+
+    def handleError(self, record: logging.LogRecord) -> None:
+        exc = sys.exc_info()[1]
+        if isinstance(exc, ValueError) and "closed" in str(exc).lower():
+            return
+        if isinstance(exc, OSError):
+            return
+        super().handleError(record)
+
+
 def _default_writable_log_dir() -> Path:
     """Return a writable default log directory.
 
@@ -76,7 +116,7 @@ def _configure_global_logging():
                 if console_enabled:
                     # Console logging enabled - set up console handler
                     console_format = console_config.get('format', '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-                    console_handler = logging.StreamHandler()
+                    console_handler = ResilientStreamHandler()
                     console_handler.setFormatter(logging.Formatter(console_format))
                     root_logger.addHandler(console_handler)
                     root_logger.setLevel(logging.INFO)
@@ -109,7 +149,7 @@ def _configure_global_logging():
         if console_enabled:
             # Console logging enabled - set up console handler
             console_format = console_config.get('format', '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-            console_handler = logging.StreamHandler()
+            console_handler = ResilientStreamHandler()
             console_handler.setFormatter(logging.Formatter(console_format))
             root_logger.addHandler(console_handler)
             root_logger.setLevel(logging.INFO)
@@ -263,7 +303,7 @@ def _configure_comprehensive_parsl_logging():
                 
                 # Add console handler only if console logging is enabled
                 if console_enabled:
-                    console_handler = logging.StreamHandler()
+                    console_handler = ResilientStreamHandler()
                     console_formatter = logging.Formatter(
                         'PARSL - %(name)s - %(levelname)s - %(message)s'
                     )
@@ -405,7 +445,7 @@ class NanoBrainLogger:
             
             # Console handler
             if self.enable_console:
-                console_handler = logging.StreamHandler()
+                console_handler = ResilientStreamHandler()
                 console_formatter = logging.Formatter(
                     '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
                 )

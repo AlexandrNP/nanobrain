@@ -6,6 +6,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Nanobrain is an event-driven AI agent framework for distributed workflows. It's currently in research preview and has dependencies on HPC systems and external frameworks. The framework uses a mandatory configuration-driven architecture where ALL components are created through the `from_config()` pattern.
 
+## Recent additions (2026-05-22 — ResilientStreamHandler: logging tolerates a closed stream)
+
+`nanobrain/core/logging_system.py` gains `ResilientStreamHandler`
+(`logging.StreamHandler` subclass), now used for all four console-handler
+sites. It drops records when its stream is `None`/closed instead of raising,
+and suppresses the closed-stream race in `handleError` while still delegating
+*other* handler errors to the default machinery. **Why:** a `StreamHandler`
+captures its stream at construction; when something outside the framework
+closes it (an MCP server whose stdio pipe is torn down on client disconnect, a
+CLI that closed stdout, pytest's per-test capture teardown) while a background
+thread/task is still logging, the next `emit` raises `ValueError: I/O
+operation on closed file` and Python prints a `--- Logging error ---`
+traceback per record — a flood of pure noise that buries real diagnostics and
+can never help. Observability must never break correctness. Regression:
+`tests/unit/test_resilient_stream_handler.py` (5 tests). Surfaced by an apecx
+clean-install run (138 such tracebacks from the `apecx-infra-orchestrator`
+daemon thread logging after teardown); apecx-side fixes (cancellable drive +
+probe-only pre-warm gate + test teardown) in
+`apecx-mcp-integration/docs/orchestrator_daemon_logging_investigation_2026-05-22.md`.
+
 ## Recent additions (2026-05-22 — G121 REVERTED: inline step configs forbidden again)
 
 `ConfigBase._is_inline_config_supported` no longer returns `True` for
