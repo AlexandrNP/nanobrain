@@ -6,6 +6,32 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Nanobrain is an event-driven AI agent framework for distributed workflows. It's currently in research preview and has dependencies on HPC systems and external frameworks. The framework uses a mandatory configuration-driven architecture where ALL components are created through the `from_config()` pattern.
 
+## Recent additions (2026-05-22 — G121 REVERTED: inline step configs forbidden again)
+
+`ConfigBase._is_inline_config_supported` no longer returns `True` for
+`BaseStep` subclasses. **Steps, Workflows, and Agents are file-path-only
+again**; DataUnit/Link/Trigger remain inline-tolerant. This unrolls G121
+(2026-05-18). Rationale: a Step's config owns its data units / triggers /
+identity and belongs in a reviewable, path-referenced YAML; and G121
+silently disabled the apecx composer validator's `step_inline_config_forbidden`
+guard (which delegates to this classifier). Blast radius was 4 tests
+(all in `test_g125_process_workflow_id_tag.py`'s shared fixture — fixed to
+use a path-referenced step config). Source: commit `2dd7d7b`.
+
+**WorkflowBuilder 0-step silent-failure fixed (same commit).** Reverting
+exposed a pre-existing latent bug: `WorkflowBuilder.load()` dumped FLAT
+step entries (no `config:` key) to one YAML, which `_resolve_nested_objects`
+never instantiates (it requires both `class`+`config`, config_base.py:1048),
+so each step was skipped at `workflow.py:~1720` → workflow loaded with ZERO
+child steps, no exception, `run()` → `{'status':'no_first_step'}`. `load()`
+now writes each step's config to its own temp YAML and references it by path
+(links/triggers stay inline). The builder had NO `load()`+`run()` test —
+only `get_config()` dict-shape asserts; added
+`tests/unit/test_workflow_builder.py::TestBuilderLoadAndRun` (real cascade,
+no mocks). Verified: nanobrain unit 1201 passed/9 skipped; apecx unit 1211
+passed/4 skipped. Apecx-side writeup:
+`apecx-mcp-integration/docs/g121_revert_inline_step_config_2026-05-22.md`.
+
 ## Recent additions (2026-05-22 — build_globus_app native refresh tokens)
 
 `build_globus_app(auth_mode="native")` now constructs the `UserApp` with
