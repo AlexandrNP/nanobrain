@@ -571,7 +571,6 @@ class DataUnitBase(FromConfigBase, ABC):
             data: Data to set
             operation: Type of operation being performed
         """
-        print(f"🔗 BRUTAL TRUTH: _set_internal_data ENTRY for {self.name}")  # Force print
         if not self.is_initialized:
             await self.initialize()
 
@@ -993,8 +992,6 @@ class DataUnitBase(FromConfigBase, ABC):
 
     async def _notify_change_listeners(self, change_event: Dict[str, Any]) -> None:
         """Notify all registered change listeners of data unit changes using async execution."""
-        print(f"🔗 BRUTAL TRUTH: _notify_change_listeners ENTRY for {self.name}")  # Force print to bypass logging
-
         if self.enable_logging and self.nb_logger:
             self.nb_logger.info(f"🔗 BRUTAL TRUTH: _notify_change_listeners called for {self.name} with {len(self._change_listeners)} listeners")
 
@@ -1475,20 +1472,11 @@ class DataUnitMemory(DataUnitBase):
         BRUTAL TRUTH: This now uses proper encapsulation methods instead of
         direct _data manipulation that was causing framework bugs.
         """
-        print(f"🔗 BRUTAL TRUTH: DataUnitMemory.set() ENTRY for {self.name}")  # Force print
-
-        # Validate data before setting
         if not self._validate_data(data):
             raise ValueError(f"Invalid data for {self.name}: {data}")
 
-        print(f"🔗 BRUTAL TRUTH: DataUnitMemory.set() validation passed for {self.name}")  # Force print
-
-        # Transform data if needed
         transformed_data = self._transform_data_on_set(data)
 
-        print(f"🔗 BRUTAL TRUTH: DataUnitMemory.set() about to call _set_internal_data for {self.name}")  # Force print
-
-        # Use proper encapsulated setter with enum-based event type
         await self._set_internal_data(transformed_data, DataUnitEventType.SET)
 
     async def clear(self) -> None:
