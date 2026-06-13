@@ -114,9 +114,11 @@ def test_discover_returns_parseable_utds():
     # The load-bearing assertion: every discovered dict parses as a UTD.
     parsed = [UnifiedToolDescriptor.from_dict(u) for u in utds]
     ids = {p.descriptor_id for p in parsed}
-    assert "rhea:sequence.analyze@1.0.0" in ids
+    # These sample tools carry NO apecx_provenance annotation, so they are
+    # honestly UNPINNED (@unpinned) — never a fabricated @1.0.0.
+    assert "rhea:sequence.analyze@unpinned" in ids
     # 'UniProt-Search' sanitized into the tool_id grammar.
-    assert "rhea:uniprot_search@1.0.0" in ids
+    assert "rhea:uniprot_search@unpinned" in ids
 
 
 def test_discover_preserves_original_mcp_name_for_dispatch():
@@ -125,7 +127,7 @@ def test_discover_preserves_original_mcp_name_for_dispatch():
     asyncio.run(disco.aclose())
     by_id = {u["descriptor_id"]: u for u in utds}
     # The sanitized one must keep the ORIGINAL name for RheaAdapter dispatch.
-    sanitized = by_id["rhea:uniprot_search@1.0.0"]
+    sanitized = by_id["rhea:uniprot_search@unpinned"]
     assert sanitized["provenance_pin"]["mcp_support"]["rhea_tool_name"] == "UniProt-Search"
 
 
@@ -134,7 +136,7 @@ def test_discover_maps_input_schema():
     utds = asyncio.run(disco.discover())
     asyncio.run(disco.aclose())
     by_id = {u["descriptor_id"]: u for u in utds}
-    uniprot = by_id["rhea:uniprot_search@1.0.0"]
+    uniprot = by_id["rhea:uniprot_search@unpinned"]
     input_names = {i["name"] for i in uniprot["inputs"]}
     assert input_names == {"query", "limit"}
     query_input = next(i for i in uniprot["inputs"] if i["name"] == "query")
@@ -203,3 +205,127 @@ def test_sanitize_tool_id_grammar():
     # leading non-alpha gets a 't_' prefix.
     assert RheaMCPDiscovery._sanitize_tool_id("3prime-utr") == "t_3prime_utr"
     assert RheaMCPDiscovery._sanitize_tool_id("Sequence.Analyze") == "sequence.analyze"
+
+
+# ---------------------------------------------------------------------------
+# E2-R Priority 2 — discovery reads the apecx_provenance determinism block.
+# ---------------------------------------------------------------------------
+
+def _tool_with_provenance(prov: dict, *, name="muscle", file_param=True) -> dict:
+    """A tools/list entry carrying an apecx_provenance annotation block."""
+    props = {"input_seqs": {"type": "string"}} if file_param else {
+        "query": {"type": "string"}
+    }
+    return {
+        "name": name,
+        "title": name.upper(),
+        "description": f"{name} tool",
+        "inputSchema": {"type": "object", "properties": props, "required": []},
+        "annotations": {"title": name.upper(), "apecx_provenance": prov},
+    }
+
+
+_MUSCLE_PROV = {
+    "schema": 1,
+    "tool_version": "5.1.0",
+    "requirements": [{"type": "package", "name": "muscle", "version": "5.1"}],
+    "containers": [
+        {"type": "docker", "value": "quay.io/biocontainers/muscle:5.1--h99_0"}
+    ],
+    "version_command": "muscle -version",
+    "file_input_args": ["input_seqs"],
+    "stochastic": False,
+}
+
+
+def _discover_one(tool: dict) -> dict:
+    disco = _discovery_with_mock(_make_handler([tool]))
+    utds = asyncio.run(disco.discover())
+    asyncio.run(disco.aclose())
+    return utds[0]
+
+
+def test_discover_reads_real_version_into_descriptor_id():
+    """A worker-pinned version produces a REAL descriptor_id version —
+    the bug this task fixes (was blanket @1.0.0)."""
+    u = _discover_one(_tool_with_provenance(_MUSCLE_PROV))
+    assert u["descriptor_id"] == "rhea:muscle@5.1.0"
+    # And it round-trips through the UTD validator.
+    parsed = UnifiedToolDescriptor.from_dict(u)
+    assert parsed.descriptor_version == "5.1.0"
+
+
+def test_discover_versioned_containerized_tool_is_r2_filesystem():
+    """Versioned + containerized => honest R2 (not blanket R3) and
+    filesystem_write side-effects (not blanket network)."""
+    u = _discover_one(_tool_with_provenance(_MUSCLE_PROV))
+    assert u["determinism"] == "R2"
+    assert u["side_effects"] == "filesystem_write"
+    # The container is a TAG ref, not a digest — recorded as ref, NOT as
+    # a false digest.
+    assert "container_image_digest" not in u["provenance_pin"]
+    assert (
+        u["provenance_pin"]["mcp_support"]["container_image_ref"]
+        == "quay.io/biocontainers/muscle:5.1--h99_0"
+    )
+
+
+def test_discover_reads_oci_digest_as_digest():
+    """A real @sha256 digest IS pinned into container_image_digest."""
+    prov = dict(_MUSCLE_PROV)
+    prov["containers"] = [
+        {
+            "type": "docker",
+            "value": "quay.io/biocontainers/muscle@sha256:" + "a" * 64,
+        }
+    ]
+    u = _discover_one(_tool_with_provenance(prov))
+    assert u["provenance_pin"]["container_image_digest"] == (
+        "quay.io/biocontainers/muscle@sha256:" + "a" * 64
+    )
+    assert u["determinism"] == "R2"
+
+
+def test_discover_stochastic_tool_is_r3_even_when_containerized():
+    prov = dict(_MUSCLE_PROV)
+    prov["stochastic"] = True
+    u = _discover_one(_tool_with_provenance(prov))
+    assert u["determinism"] == "R3"
+
+
+def test_discover_file_input_args_surfaced_for_synthesizer():
+    u = _discover_one(_tool_with_provenance(_MUSCLE_PROV))
+    assert u["provenance_pin"]["mcp_support"]["file_input_args"] == ["input_seqs"]
+
+
+def test_discover_pure_json_tool_reports_empty_file_inputs():
+    prov = {
+        "schema": 1,
+        "tool_version": "2.0",
+        "requirements": [],
+        "containers": [],
+        "version_command": "",
+        "file_input_args": [],
+        "stochastic": False,
+    }
+    u = _discover_one(_tool_with_provenance(prov, name="search", file_param=False))
+    # Explicitly empty (a JSON tool), present so the synthesizer knows.
+    assert u["provenance_pin"]["mcp_support"]["file_input_args"] == []
+    # No container => network side-effects, and unversioned-by-container =>
+    # R3 (no reproducibility claim without a pinned binary).
+    assert u["side_effects"] == "network"
+    assert u["determinism"] == "R3"
+
+
+def test_discover_unpinned_when_provenance_absent():
+    """An old worker (no apecx_provenance) yields an honest @unpinned UTD,
+    R3, network — and NO file_input_args (synthesizer must FAIL LOUD)."""
+    tool = {
+        "name": "legacy_tool",
+        "description": "old worker tool",
+        "inputSchema": {"type": "object", "properties": {}, "required": []},
+    }
+    u = _discover_one(tool)
+    assert u["descriptor_id"] == "rhea:legacy_tool@unpinned"
+    assert u["determinism"] == "R3"
+    assert "file_input_args" not in u["provenance_pin"]["mcp_support"]

@@ -197,6 +197,47 @@ class WorkflowBuilder:
         
         return self
     
+    def add_rhea_step(
+        self, step_name: str, spec: Any, **overrides: Any
+    ) -> 'WorkflowBuilder':
+        """Add a Rhea tool Step synthesized by ``synthesize_rhea_step``.
+
+        The sync DAG-assembly seam for E2-R Priority 1. Discovery +
+        synthesis are async (network I/O against the Rhea worker) and live
+        in ``synthesize_rhea_step``; this method just drops the resulting
+        :class:`~nanobrain.library.tools.rhea_step_synthesizer.RheaStepSpec`
+        into the builder. Typical use::
+
+            from nanobrain.library.tools.rhea_step_synthesizer import (
+                synthesize_rhea_step,
+            )
+            spec = await synthesize_rhea_step("muscle", mcp_url=URL,
+                                              find_tools_query="align")
+            builder.add_rhea_step("align", spec)
+
+        The synthesized step carries the tool's HONEST determinism pins
+        (real version, container, R1/R2/R3) via its UTD — nothing is
+        fabricated here.
+
+        Args:
+            step_name: Name for this step in the workflow.
+            spec: A ``RheaStepSpec`` from ``synthesize_rhea_step``.
+            **overrides: Extra step-config fields (merged over the spec's
+                config — e.g. ``mcp_url=`` for a JSON/ToolExecutionStep
+                whose RheaAdapter targets a non-default endpoint).
+
+        Returns ``self`` for chaining.
+        """
+        if not hasattr(spec, "step_class") or not hasattr(spec, "step_config"):
+            raise ValueError(
+                "FAIL-FAST: add_rhea_step expects a RheaStepSpec (from "
+                "synthesize_rhea_step); got "
+                f"{type(spec).__name__}"
+            )
+        cfg = dict(spec.step_config)
+        cfg.update(overrides)
+        return self.add_step(step_name, spec.step_class, **cfg)
+
     def add_input(self, name: str, data_unit_type: str = "DataUnitMemory") -> 'WorkflowBuilder':
         """Add input data unit to workflow."""
         
