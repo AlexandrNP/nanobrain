@@ -1486,6 +1486,38 @@ class AllDataReceivedTrigger(TriggerBase):
             )
         self.gate_semantics: str = gs
 
+        # Re-arm state (2026-06-13) — make the fan-in RE-RUNNABLE on a cached
+        # workflow. The old event-driven path fired ONCE then deactivated +
+        # unregistered, so a cached workflow's 2nd+ run returned STALE run-1
+        # output (the fan-in step never re-fired). Now it re-fires whenever every
+        # input is present AND the value-tuple DIFFERS from the last fire (i.e. ANY
+        # input changed). "Any changed" — not "all changed" — is load-bearing: a
+        # same-query re-run that only changes a control input (e.g. adds an
+        # approval token) while the evidence input is unchanged must still re-fire;
+        # the unchanged evidence is still valid. Harmless intermediate fires on a
+        # different-query run (the early input changes before the late one arrives)
+        # are overwritten by the final fire before wait_for_cascade settles. The
+        # per-loop ``_fire_lock`` serializes concurrent change events so the first
+        # sets ``_last_fired_values`` and the others see no diff → no double-fire.
+        self._last_fired_values: Optional[List[Any]] = None
+        # The lock is created LAZILY per running event loop. A cached, long-lived
+        # workflow is driven across multiple event loops (each ``asyncio.run`` /
+        # ``run_workflow`` call is a fresh loop); an ``asyncio.Lock`` created here
+        # would bind to the FIRST loop and raise "bound to a different event loop"
+        # on every subsequent run. See ``_get_fire_lock``.
+        self._fire_lock: Optional[asyncio.Lock] = None
+        self._fire_lock_loop: Any = None
+        self._tagged_listeners: Dict[int, Callable] = {}
+
+    def _get_fire_lock(self) -> asyncio.Lock:
+        """Return a fire-lock bound to the CURRENT running loop, recreating it if
+        the loop changed (cached workflow re-run on a fresh loop)."""
+        loop = asyncio.get_running_loop()
+        if self._fire_lock is None or self._fire_lock_loop is not loop:
+            self._fire_lock = asyncio.Lock()
+            self._fire_lock_loop = loop
+        return self._fire_lock
+
     def bind_action(self, action_func: Callable) -> None:
         """Bind action to trigger for execution when all data received.
         Mirrors ``DataUnitChangeTrigger.bind_action`` so the framework's
@@ -1687,17 +1719,23 @@ class AllDataReceivedTrigger(TriggerBase):
             hasattr(du, "register_change_listener") for du in self.data_units
         )
         if all_event_capable and self.data_units:
-            for data_unit in self.data_units:
-                data_unit.register_change_listener(self._on_any_input_changed)
+            # Register a PER-INPUT tagged listener so check-and-fire knows which
+            # input changed (needed for the re-arm freshness tracking). The
+            # listeners persist across runs (NOT unregistered on fire) so the
+            # fan-in re-fires on a cached workflow's subsequent runs.
+            for idx, data_unit in enumerate(self.data_units):
+                listener = self._make_tagged_listener(idx)
+                self._tagged_listeners[idx] = listener
+                data_unit.register_change_listener(listener)
             logger.debug(
                 f"AllDataReceivedTrigger {self.name} started monitoring "
-                f"(event-driven, {len(self.data_units)} inputs)"
+                f"(event-driven re-armable, {len(self.data_units)} inputs)"
             )
-            # Also fire an immediate check: if all inputs already have
-            # data (e.g., units pre-populated before start_monitoring),
-            # we need to fire NOW because no future change events will
-            # come for already-populated units.
-            asyncio.create_task(self._on_any_input_changed(None))
+            # Immediate check: if all inputs already have data (units
+            # pre-populated before start_monitoring), fire NOW — no future
+            # change events will come for already-populated units. changed_idx
+            # is None → the lenient first-fire path.
+            asyncio.create_task(self._check_and_maybe_fire(None))
             return
 
         # Legacy polling fallback (for test-doubles + any data unit
@@ -1739,13 +1777,20 @@ class AllDataReceivedTrigger(TriggerBase):
     async def stop_monitoring(self) -> None:
         """Stop monitoring (event-driven path)."""
         self._is_active = False
-        # Unregister from each input data unit's listener chain.
-        for data_unit in self.data_units:
+        # Unregister the per-input tagged listeners.
+        for idx, data_unit in enumerate(self.data_units):
+            listener = self._tagged_listeners.get(idx)
+            if listener is None:
+                continue
             try:
                 if hasattr(data_unit, "remove_change_listener"):
-                    data_unit.remove_change_listener(self._on_any_input_changed)
+                    data_unit.remove_change_listener(listener)
             except Exception:
                 pass
+        self._tagged_listeners.clear()
+        # Reset fire-history so a fresh start_monitoring fires on the first
+        # complete set again (a stopped+restarted trigger is a new generation).
+        self._last_fired_values = None
 
         # Legacy: cancel the polling task if it's still running (e.g.,
         # tests that swap to polling mode).
@@ -1758,36 +1803,55 @@ class AllDataReceivedTrigger(TriggerBase):
 
         logger.debug(f"AllDataReceivedTrigger {self.name} stopped monitoring")
 
-    async def _on_any_input_changed(self, change_event: Any) -> None:
-        """G120 (2026-05-18) — event-driven check-and-fire.
+    def _make_tagged_listener(self, idx: int) -> Callable:
+        """Build a change-listener bound to input ``idx`` so check-and-fire knows
+        which input changed (the re-arm freshness tracking needs this)."""
 
-        Re-checks all data units; fires the trigger ONCE when every
-        input is satisfied (per ``_is_satisfied``). After firing,
-        deactivates so subsequent input changes don't re-fire (matches
-        the polling-mode semantics of ``break`` after the first fire).
+        async def _listener(change_event: Any) -> None:
+            await self._check_and_maybe_fire(idx)
+
+        return _listener
+
+    async def _check_and_maybe_fire(self, changed_idx: Optional[int]) -> None:
+        """Re-armable event-driven check-and-fire (2026-06-13).
+
+        ``changed_idx`` is the input index that just changed (None for the
+        immediate pre-populated check at start_monitoring); informational only.
+
+        Fires when every input is satisfied AND the value-tuple DIFFERS from the
+        last fire (first fire is unconditional). "Any input changed" — not "all" —
+        so a same-query re-run that only changes a control input still re-fires
+        with the unchanged-but-valid evidence input. The ``_fire_lock`` serializes
+        concurrent change events: the first fire records ``_last_fired_values`` and
+        a racing check sees no diff → no double-fire. We do NOT clear the inputs
+        (the step re-reads them at execution time; and clearing breaks cross-run
+        re-delivery when an upstream output is unchanged and its link suppresses
+        the no-op transfer).
         """
         if not self._is_active:
             return
         try:
-            data_dict: Dict[str, Any] = {}
-            for i, data_unit in enumerate(self.data_units):
-                data = await data_unit.get()
-                satisfied, include = self._is_satisfied(data)
-                if not satisfied:
-                    return  # not all inputs ready yet
-                if include:
-                    data_dict[f"input_{i}"] = data
+            async with self._get_fire_lock():
+                data_dict: Dict[str, Any] = {}
+                current: List[Any] = []
+                for i, data_unit in enumerate(self.data_units):
+                    data = await data_unit.get()
+                    satisfied, include = self._is_satisfied(data)
+                    if not satisfied:
+                        return  # not all inputs ready yet
+                    current.append(data)
+                    if include:
+                        data_dict[f"input_{i}"] = data
 
-            # All inputs ready — fire once + deactivate.
-            self._is_active = False
+                # Fire on the first complete set, or whenever ANY input value has
+                # changed since the last fire. Identical re-runs (no diff) do not
+                # re-fire — the prior output is already the correct answer.
+                if self._last_fired_values is not None and current == self._last_fired_values:
+                    return
+                self._last_fired_values = list(current)
+            # Fire OUTSIDE the lock: the downstream cascade can be long and may
+            # re-enter listeners; we don't hold the lock across the whole cascade.
             await self.trigger(data_dict)
-            # Best-effort unregister so we don't keep getting called.
-            for du in self.data_units:
-                try:
-                    if hasattr(du, "remove_change_listener"):
-                        du.remove_change_listener(self._on_any_input_changed)
-                except Exception:
-                    pass
         except Exception as e:
             logger.error(
                 f"Error in AllDataReceivedTrigger {self.name} event handler: {e}"

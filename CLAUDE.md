@@ -6,6 +6,56 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Nanobrain is an event-driven AI agent framework for distributed workflows. It's currently in research preview and has dependencies on HPC systems and external frameworks. The framework uses a mandatory configuration-driven architecture where ALL components are created through the `from_config()` pattern.
 
+## Recent additions (2026-06-13 — AllDataReceivedTrigger is RE-ARMABLE: cached fan-in workflows re-run correctly)
+
+`AllDataReceivedTrigger` (`nanobrain/core/trigger.py`) was a **one-shot**: the
+event-driven path fired once, set `_is_active=False`, and unregistered its
+listeners. On a **cached, re-runnable** workflow (the norm — `run_workflow`
+caches workflows per-process), the fan-in step therefore never re-fired on run
+2+, so the workflow returned **STALE run-1 output** with no error — a real
+product-reliability silent failure (a cached fan-in workflow would return the
+*previous* caller's result). Linear workflows were unaffected (their
+`DataUnitChangeTrigger`s re-fire on every change); only fan-in broke.
+
+**Fix (two load-bearing parts — value comparison, NOT input-clearing):**
+1. **`_last_fired_values` value comparison** — the trigger fires the FIRST time
+   every input is present (covers pre-populated + early-arrival), then re-fires
+   whenever the current input value-tuple DIFFERS from the last fire (i.e. ANY
+   input changed). **"Any changed" — not "all changed" — is load-bearing**: a
+   same-query re-run that only changes a *control* input (e.g. adds an approval
+   token) while the *evidence* input is unchanged must still re-fire; the
+   unchanged evidence is still valid. A byte-identical re-run does NOT re-fire —
+   the prior output is already the correct deterministic answer for those exact
+   inputs. A per-input tagged listener + the lock serialize concurrent change
+   events so the first records `_last_fired_values` and the rest see no diff.
+2. **Per-loop fire-lock** (`_get_fire_lock`) — a cached workflow is driven across
+   multiple event loops (each `run_workflow`/`asyncio.run` is a fresh loop); an
+   `asyncio.Lock` created at trigger construction binds to the FIRST loop and
+   raises "bound to a different event loop" on every later run. The lock is now
+   created lazily, rebound when the running loop changes.
+
+**Why NOT the earlier "clear inputs + `reset_for_run()`" design** (tried first,
+reverted): clearing each input to None at run START so the cascade rewrites it
+None→value seemed to guarantee an observable change. But the gate's *evidence*
+input arrives via a link that suppresses no-op transfers — when the upstream
+synthesis output is unchanged on a same-query re-run, the cleared `review_in` was
+NEVER re-delivered, leaving it None and the gate stuck at `needs_input`. **The
+trigger must NOT mutate the inputs it reads** — doing so fights the link layer's
+same-value suppression. Value comparison reads without mutating, so an unchanged
+input simply persists and a changed sibling alone re-fires the gate. There is no
+longer a `Workflow._reset_fanin_triggers_for_run` hook — the trigger
+self-determines re-fire from its own observable state.
+
+Regression: `tests/unit/test_alldatareceived_rearm.py` (6 tests incl.
+only-one-input-changed re-fire, no-refire-on-identical-values, early-arrival).
+Verified: trigger/gate/workflow-builder/cascade suites pass (363, 0 regressions);
+the apecx design-gate e2e (real LLM, cached re-run across separate event loops)
+RUN2 returns `status=ok` with `gate.review_in` preserved (was None under the
+clear-inputs design). **Source:** the apecx `viral_epitope_evidence_review`
+design-gate fan-in returned stale results on the 2nd cached run; root-caused via
+minimal LLM-free repros. The `nanobrain-data-units-triggers-links` skill carries
+the updated behavior.
+
 ## Recent additions (2026-05-22 — ResilientStreamHandler: logging tolerates a closed stream)
 
 `nanobrain/core/logging_system.py` gains `ResilientStreamHandler`
