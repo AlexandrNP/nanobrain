@@ -170,12 +170,18 @@ class RheaMCPDiscovery:
         required = set(input_schema.get("required") or [])
         inputs = []
         for prop_name, prop_spec in properties.items():
+            # ``has_default`` preserves whether the schema DECLARED a default
+            # at all — ``default`` alone cannot distinguish an absent default
+            # from an explicit ``default: null``. The step synthesizer needs
+            # this to tell a required-no-default param (FAIL LOUD) apart from
+            # a param whose declared default happens to be null.
             inputs.append(
                 {
                     "name": prop_name,
                     "type": _json_type_to_utd_type(prop_spec.get("type")),
                     "description": str(prop_spec.get("description", "")),
                     "required": prop_name in required,
+                    "has_default": "default" in prop_spec,
                     "default": prop_spec.get("default"),
                 }
             )

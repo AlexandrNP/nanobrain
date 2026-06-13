@@ -160,6 +160,60 @@ def _resolve_file_input_args(
     return list(file_args)
 
 
+def _map_value_args(
+    utd: dict[str, Any],
+    file_args: list[str],
+    overrides: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Build ``static_tool_args`` for a file step from the inputSchema.
+
+    GENERIC — derived from the discovered UTD's ``inputs`` (which mirror
+    the worker's ``tools/list`` inputSchema properties), NOT special-cased
+    to any one tool. For every NON-file value param:
+
+    - a caller ``override`` always wins (and satisfies any requirement);
+    - else the schema's declared DEFAULT is used (``has_default`` true);
+    - else a REQUIRED param with no default and no override is the current
+      silent-failure bug — it FAILS LOUD here rather than being omitted
+      (an omitted required param makes the worker's pydantic argument model
+      reject the call with ``<param> Field required [type=missing]``);
+    - else (optional, no default) the param is omitted.
+
+    File params are excluded entirely: they are staged into ProxyStore and
+    supplied at run time as the ``file_input_arg`` redis_key, so they must
+    never leak into ``static_tool_args`` (which would clobber the key).
+    Caller overrides that are not in the schema pass through verbatim.
+    """
+    supplied = dict(overrides or {})
+    file_set = set(file_args)
+    resolved: dict[str, Any] = {}
+    missing: list[str] = []
+    for inp in utd.get("inputs") or []:
+        name = inp.get("name")
+        if not name or name in file_set:
+            continue
+        if name in supplied:
+            # Overlaid below; an explicit override satisfies the requirement.
+            continue
+        if inp.get("has_default"):
+            resolved[name] = inp.get("default")
+        elif inp.get("required"):
+            missing.append(str(name))
+        # else: optional with no default → omit (the worker's model defaults it).
+    if missing:
+        raise ComponentConfigurationError(
+            f"FAIL-FAST: synthesize_rhea_step cannot map required value "
+            f"param(s) {sorted(missing)} for tool {utd.get('descriptor_id')!r}: "
+            f"they have NO schema default and no caller override. Omitting them "
+            f"is the silent-failure bug (the worker's argument model rejects the "
+            f"call with '<param> Field required [type=missing]'). Supply them via "
+            f"static_tool_args={{{sorted(missing)[0]!r}: <value>, ...}}."
+        )
+    # Caller overrides (schema or extra) win; never re-inject a file param.
+    resolved.update({k: v for k, v in supplied.items() if k not in file_set})
+    return resolved
+
+
 async def synthesize_rhea_step(
     tool_name: str,
     *,
@@ -187,8 +241,12 @@ async def synthesize_rhea_step(
             forces the file (RheaFileToolStep) path. When omitted, the
             worker's authoritative discriminator is used (FAIL LOUD if the
             worker did not surface it).
-        static_tool_args: Non-file tool arguments forwarded verbatim by a
-            file step (ignored for the JSON path).
+        static_tool_args: Caller overrides for the file step's non-file tool
+            arguments (ignored for the JSON path). The synthesizer ALSO
+            auto-populates ``static_tool_args`` from the inputSchema's
+            declared defaults for every non-file value param; an entry here
+            overrides the schema default and supplies any REQUIRED param that
+            has no schema default (without which synthesis FAILS LOUD).
         output_file_args: Output file names a file step fetches back
             (empty/None = all). Ignored for the JSON path.
         timeout_seconds: Per-MCP-call timeout for discovery.
@@ -198,7 +256,9 @@ async def synthesize_rhea_step(
 
     Raises:
         ComponentConfigurationError: tool not found, file-vs-JSON
-            undeterminable, or a multi-file tool (file-step v1 limit).
+            undeterminable, a multi-file tool (file-step v1 limit), or a
+            REQUIRED non-file value param with no schema default and no
+            caller override (un-mappable — see ``static_tool_args``).
     """
     if mcp_url:
         disco = RheaMCPDiscovery(mcp_url=mcp_url, timeout_seconds=timeout_seconds)
@@ -243,11 +303,18 @@ async def synthesize_rhea_step(
             f"or pass file_input_args=[<one>] to pick the primary input."
         )
 
+    # Map the inputSchema's NON-file value params into static_tool_args:
+    # schema defaults + caller overrides, FAIL LOUD on a required-no-default
+    # param the caller did not supply. This is the fix for the muscle
+    # "muscleArguments: diags Field required [type=missing]" bug — the worker
+    # declares required non-file params the synthesizer previously dropped.
+    resolved_static_args = _map_value_args(utd, resolved_file_args, static_tool_args)
+
     file_step_config: dict[str, Any] = {
         "tool_name": str(rhea_tool_name),
         "find_tools_query": find_tools_query or utd.get("summary") or str(rhea_tool_name),
         "file_input_arg": resolved_file_args[0],
-        "static_tool_args": dict(static_tool_args or {}),
+        "static_tool_args": resolved_static_args,
         "output_file_args": list(output_file_args or []),
     }
     if mcp_url:

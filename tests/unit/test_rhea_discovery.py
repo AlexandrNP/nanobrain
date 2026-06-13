@@ -144,6 +144,9 @@ def test_discover_maps_input_schema():
     limit_input = next(i for i in uniprot["inputs"] if i["name"] == "limit")
     assert limit_input["required"] is False  # not in 'required' array
     assert limit_input["default"] == 5
+    assert limit_input["has_default"] is True  # schema declared a default
+    # 'query' has no default key → has_default False (distinct from default: null)
+    assert query_input["has_default"] is False
 
 
 def test_discover_provenance_pin_points_at_rhea_adapter():

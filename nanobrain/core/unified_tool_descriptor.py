@@ -94,6 +94,13 @@ class UTDInputSpec(ConfigBase):
     description: str = ""
     required: bool = True
     default: Any = None
+    has_default: bool = Field(
+        default=False,
+        description="Whether the source schema DECLARED a default for this "
+                    "input. Distinguishes a required-no-default param (must be "
+                    "supplied) from one whose declared default happens to be "
+                    "null — 'default' alone cannot tell them apart.",
+    )
 
 
 class UTDOutputSpec(ConfigBase):

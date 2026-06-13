@@ -47,6 +47,33 @@ tool needs a staged redis_key, or vice-versa). So the discriminator is the worke
 via the determinism wire below. When the worker did not surface it (an old worker) and the
 caller gave no explicit `file_input_args=` override, synthesis **FAILS LOUD** — it never guesses.
 
+### Mapping the NON-file required params (E3-R-followup)
+
+A Galaxy tool's `inputSchema` declares the file param AND every value param (`diags`,
+`cluster`, `run`, …) with its type / default / required flag. For a `RheaFileToolStep`
+the synthesizer now derives `static_tool_args` **generically from the inputSchema** (not
+special-cased to any one tool):
+
+- a file param (in `file_input_args`) is excluded — it is staged into ProxyStore and
+  supplied at run time as the `file_input_arg` redis_key (it must never leak into
+  `static_tool_args`, which would clobber the key);
+- a non-file value param with a **schema default** → that default is used;
+- a non-file value param that is **required with no default** and not supplied by the
+  caller → synthesis **FAILS LOUD** (`cannot map required value param(s) …`). Omitting it
+  is the bug that made the worker's pydantic argument model reject the call with
+  `<param> Field required [type=missing]` (e.g. muscle's `diags`);
+- a caller `static_tool_args={…}` override always wins (and satisfies a required-no-default
+  param); overrides not in the schema pass through verbatim;
+- an optional param with no default is omitted (the worker's model defaults it).
+
+To distinguish a required-no-default param from one whose declared default is `null`, the
+discovered UTD input carries `has_default: bool` (`UTDInputSpec.has_default`) — `default`
+alone (which is `None` in both cases) cannot tell them apart. Verified live 2026-06-13:
+`synthesize_rhea_step("muscle", static_tool_args={"diags": false})` →
+`static_tool_args={cluster: upgmb, outputFormat: fasta, run: "16", iterations: 16,
+diags: false}` → a real MUSCLE alignment RUNS end-to-end (3-record FASTA, equal-length
+aligned columns).
+
 ## The determinism wire (Priority 2)
 
 ### Rhea side (`rhea` repo)

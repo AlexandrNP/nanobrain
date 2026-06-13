@@ -28,6 +28,7 @@ unpinned, only the run path is asserted, and the pin state is reported.
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 
 import pytest
@@ -43,7 +44,17 @@ _RHEA_URL = os.environ.get("RHEA_MCP_URL")
 _rhea_skip = pytest.mark.skipif(_RHEA_URL is None, reason="RHEA_MCP_URL not set")
 
 _TOOL_NAME = os.environ.get("RHEA_SYNTH_TOOL_NAME", "muscle")
-_FIND_QUERY = os.environ.get("RHEA_SYNTH_FIND_QUERY", "sequence alignment")
+_FIND_QUERY = os.environ.get(
+    "RHEA_SYNTH_FIND_QUERY", "muscle multiple sequence alignment"
+)
+# Caller overrides for the tool's REQUIRED non-file params that carry no
+# schema default (the synthesizer now FAILS LOUD on these rather than
+# silently dropping them). Defaults to muscle's required ``diags`` since the
+# default tool is muscle; override via $RHEA_SYNTH_STATIC_ARGS (JSON) when
+# pointing RHEA_SYNTH_TOOL_NAME at a different file tool.
+_STATIC_ARGS = json.loads(
+    os.environ.get("RHEA_SYNTH_STATIC_ARGS", '{"diags": false}')
+)
 
 
 @_rhea_skip
@@ -53,7 +64,10 @@ def test_synthesize_real_tool_carries_determinism_pins():
     apecx_provenance wire reached discovery."""
     spec = asyncio.run(
         synthesize_rhea_step(
-            _TOOL_NAME, mcp_url=_RHEA_URL, find_tools_query=_FIND_QUERY
+            _TOOL_NAME,
+            mcp_url=_RHEA_URL,
+            find_tools_query=_FIND_QUERY,
+            static_tool_args=_STATIC_ARGS,
         )
     )
     utd = spec.utd
@@ -83,7 +97,10 @@ def test_synthesized_file_tool_runs_end_to_end():
     assert a concrete output value (G127 — never trust status)."""
     spec = asyncio.run(
         synthesize_rhea_step(
-            _TOOL_NAME, mcp_url=_RHEA_URL, find_tools_query=_FIND_QUERY
+            _TOOL_NAME,
+            mcp_url=_RHEA_URL,
+            find_tools_query=_FIND_QUERY,
+            static_tool_args=_STATIC_ARGS,
         )
     )
 

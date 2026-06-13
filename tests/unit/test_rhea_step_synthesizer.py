@@ -168,6 +168,90 @@ def test_synthesize_json_tool_makes_tool_execution_step(monkeypatch):
     assert spec.is_pinned is True
 
 
+def _muscle_like_tool(name="muscle"):
+    """A file tool that ALSO declares required + optional non-file params.
+
+    Mirrors the live muscle inputSchema: ``input_seqs`` is the file param;
+    ``diags`` is REQUIRED with NO default (the param the synthesizer used to
+    drop, causing ``muscleArguments: diags Field required``); ``cluster`` /
+    ``run`` are non-file params WITH schema defaults; ``extra`` is optional
+    with no default.
+    """
+    return {
+        "name": name,
+        "title": name.upper(),
+        "description": "Multiple sequence alignment",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "input_seqs": {"type": "string"},
+                "diags": {"type": "boolean"},
+                "cluster": {"type": "string", "default": "upgmb"},
+                "run": {"type": "string", "default": "16"},
+                "extra": {"type": "string"},
+            },
+            "required": ["input_seqs", "diags"],
+        },
+        "annotations": {
+            "apecx_provenance": {
+                "schema": 1,
+                "tool_version": "3.8.1551+galaxy0",
+                "requirements": [],
+                "containers": [{"type": "docker", "value": "muscle:3.8"}],
+                "version_command": "muscle -version",
+                "file_input_args": ["input_seqs"],
+                "stochastic": False,
+            }
+        },
+    }
+
+
+def test_value_params_populated_from_schema_defaults(monkeypatch):
+    """Non-file params WITH defaults land in static_tool_args; the required-
+    no-default param is supplied via override → no FAIL LOUD."""
+    _patch_discovery(monkeypatch, [_muscle_like_tool()])
+    spec = asyncio.run(
+        synthesize_rhea_step(
+            "muscle",
+            mcp_url="http://fake/mcp/",
+            static_tool_args={"diags": False},
+        )
+    )
+    args = spec.step_config["static_tool_args"]
+    assert args["cluster"] == "upgmb"  # schema default
+    assert args["run"] == "16"  # schema default
+    assert args["diags"] is False  # caller override (required, no default)
+    assert "extra" not in args  # optional, no default → omitted
+    assert "input_seqs" not in args  # file param → staged, never in static args
+
+
+def test_required_no_default_param_fails_loud(monkeypatch):
+    """A required non-file param with no default and no override is the bug
+    this fix targets — it must FAIL LOUD, never be silently omitted."""
+    _patch_discovery(monkeypatch, [_muscle_like_tool()])
+    with pytest.raises(
+        ComponentConfigurationError, match="cannot map required value param"
+    ) as exc:
+        asyncio.run(synthesize_rhea_step("muscle", mcp_url="http://fake/mcp/"))
+    assert "diags" in str(exc.value)
+
+
+def test_caller_override_beats_schema_default(monkeypatch):
+    """An override for a defaulted param wins over the schema default."""
+    _patch_discovery(monkeypatch, [_muscle_like_tool()])
+    spec = asyncio.run(
+        synthesize_rhea_step(
+            "muscle",
+            mcp_url="http://fake/mcp/",
+            static_tool_args={"diags": True, "cluster": "neighborjoining"},
+        )
+    )
+    args = spec.step_config["static_tool_args"]
+    assert args["cluster"] == "neighborjoining"  # override beat default "upgmb"
+    assert args["diags"] is True
+    assert args["run"] == "16"  # untouched default
+
+
 def test_synthesize_file_tool_makes_rhea_file_tool_step(monkeypatch):
     _patch_discovery(monkeypatch, [_file_tool()])
     spec = asyncio.run(
