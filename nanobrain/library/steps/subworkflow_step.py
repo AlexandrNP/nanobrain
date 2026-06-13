@@ -88,7 +88,25 @@ class SubworkflowStepConfig(StepConfig):
             "preferred; relative paths are resolved via "
             "nanobrain.library.runtime.workspace_root.locate_workflow_root. "
             "Concrete subclasses may omit this and override "
-            "_default_inner_workflow_path() instead."
+            "_default_inner_workflow_path() instead. Mutually exclusive "
+            "with inner_workflow_builder."
+        ),
+    )
+
+    inner_workflow_builder: Optional[str] = Field(
+        default=None,
+        description=(
+            "Dotted-path string ('pkg.mod.func' or 'pkg.mod:func') to a "
+            "NO-ARG callable that returns a fully-loaded Workflow "
+            "instance. This is the seam for embedding a workflow that "
+            "exists only as a programmatic builder (e.g. the lightweight "
+            "WorkflowBuilder's `build_*` catalog entry-points) rather "
+            "than as a static YAML on disk. The callable is resolved + "
+            "invoked ONCE at step init and the resulting Workflow is "
+            "cached for the step's lifetime — identical lifecycle to the "
+            "inner_workflow_path branch. Mutually exclusive with "
+            "inner_workflow_path. Concrete subclasses may omit this and "
+            "override _default_inner_workflow_builder() instead."
         ),
     )
 
@@ -205,6 +223,16 @@ class SubworkflowStep(BaseStep):
         """
         return None
 
+    @classmethod
+    def _default_inner_workflow_builder(cls) -> Optional[str]:
+        """Override in concrete subclasses to hardcode a builder dotted-path.
+
+        Return None (default) to require the builder via config field
+        (or to use the path branch instead). Symmetric with
+        ``_default_inner_workflow_path``.
+        """
+        return None
+
     def _init_from_config(
         self,
         config: SubworkflowStepConfig,
@@ -217,24 +245,65 @@ class SubworkflowStep(BaseStep):
             config.inner_workflow_path
             or self.__class__._default_inner_workflow_path()
         )
-        if path_str is None:
+        builder_str = (
+            config.inner_workflow_builder
+            or self.__class__._default_inner_workflow_builder()
+        )
+
+        if path_str is not None and builder_str is not None:
+            raise ComponentConfigurationError(
+                f"FAIL-FAST: SubworkflowStep {self.name!r} declares BOTH "
+                f"inner_workflow_path ({path_str!r}) and "
+                f"inner_workflow_builder ({builder_str!r}). They are "
+                f"mutually exclusive — the inner workflow comes from "
+                f"exactly one source. Pick one."
+            )
+        if path_str is None and builder_str is None:
             raise ComponentConfigurationError(
                 f"FAIL-FAST: SubworkflowStep {self.name!r} requires an "
-                f"inner_workflow_path. Either set it in the step's "
-                f"config YAML, or subclass and override "
-                f"_default_inner_workflow_path()."
+                f"inner_workflow_path OR an inner_workflow_builder. "
+                f"Either set one in the step's config YAML, or subclass "
+                f"and override _default_inner_workflow_path() / "
+                f"_default_inner_workflow_builder()."
             )
+
+        if builder_str is not None:
+            self._inner_workflow: Workflow = self._build_inner_workflow(builder_str)
+            self._inner_workflow_path_resolved: Optional[Path] = None
+            logger.info(
+                "SubworkflowStep %r: built inner workflow %r via builder %s",
+                self.name,
+                getattr(self._inner_workflow, "name", "<unnamed>"),
+                builder_str,
+            )
+            self._init_runtime_knobs(config)
+            return
 
         resolved = self._resolve_inner_workflow_path(path_str)
         try:
-            self._inner_workflow: Workflow = Workflow.from_config(str(resolved))
+            self._inner_workflow = Workflow.from_config(str(resolved))
         except Exception as e:
             raise ComponentConfigurationError(
                 f"FAIL-FAST: SubworkflowStep {self.name!r} failed to "
                 f"load inner workflow from {resolved}: {e}"
             ) from e
 
-        self._inner_workflow_path_resolved: Path = resolved
+        self._inner_workflow_path_resolved = resolved
+        logger.info(
+            "SubworkflowStep %r: loaded inner workflow %r from %s",
+            self.name,
+            getattr(self._inner_workflow, "name", "<unnamed>"),
+            resolved,
+        )
+        self._init_runtime_knobs(config)
+
+    def _init_runtime_knobs(self, config: SubworkflowStepConfig) -> None:
+        """Bind the run()-passthrough + silent-failure-gate knobs.
+
+        Shared by both the path and builder init branches so the
+        EMPTY-OUTPUT / status / await-cascade discipline is byte-for-byte
+        identical regardless of where the inner workflow came from.
+        """
         self._timeout_seconds: float = float(config.timeout_seconds)
         self._settle_ms: int = int(config.settle_ms)
         self._await_cascade: bool = bool(config.await_cascade)
@@ -242,12 +311,88 @@ class SubworkflowStep(BaseStep):
         self._allow_empty_inner_output: bool = bool(config.allow_empty_inner_output)
         self._nest_under_active_context: bool = bool(config.nest_under_active_context)
 
-        logger.info(
-            "SubworkflowStep %r: loaded inner workflow %r from %s",
-            self.name,
-            getattr(self._inner_workflow, "name", "<unnamed>"),
-            resolved,
-        )
+    def _build_inner_workflow(self, builder_spec: str) -> Workflow:
+        """Resolve a dotted-path no-arg builder callable + invoke it.
+
+        Mirrors the framework's existing dotted-path resolution
+        convention (G22 ``target_workflow`` in
+        ``library/runtime/entry_triggers.py``). The callable MUST take
+        no required arguments and return a ``Workflow`` instance — the
+        same object ``Workflow.from_config`` would yield, so every
+        downstream silent-failure gate is preserved unchanged.
+
+        FAIL-FAST on: non-dotted spec, unimportable module, missing
+        attribute, a class (from_config discipline forbids ad-hoc class
+        construction here), a non-callable, a builder that raises, or a
+        builder that returns something other than a Workflow.
+        """
+        import importlib
+
+        if not isinstance(builder_spec, str) or "." not in builder_spec:
+            raise ComponentConfigurationError(
+                f"FAIL-FAST: SubworkflowStep {self.name!r} "
+                f"inner_workflow_builder must be a dotted-path string "
+                f"like 'pkg.mod.build_func' or 'pkg.mod:build_func'; got "
+                f"{builder_spec!r}"
+            )
+        module_path, _, attr_path = builder_spec.partition(":")
+        if not attr_path:
+            module_path, _, attr_path = builder_spec.rpartition(".")
+        try:
+            mod = importlib.import_module(module_path)
+        except ModuleNotFoundError as exc:
+            raise ComponentConfigurationError(
+                f"FAIL-FAST: SubworkflowStep {self.name!r} "
+                f"inner_workflow_builder module {module_path!r} not "
+                f"importable: {exc}"
+            ) from exc
+        obj: Any = mod
+        for part in attr_path.split("."):
+            try:
+                obj = getattr(obj, part)
+            except AttributeError as exc:
+                raise ComponentConfigurationError(
+                    f"FAIL-FAST: SubworkflowStep {self.name!r} "
+                    f"inner_workflow_builder attribute {attr_path!r} not "
+                    f"found on module {module_path!r}: {exc}"
+                ) from exc
+
+        if isinstance(obj, type):
+            raise ComponentConfigurationError(
+                f"FAIL-FAST: SubworkflowStep {self.name!r} "
+                f"inner_workflow_builder {builder_spec!r} resolved to a "
+                f"class ({obj.__name__}); expected a no-arg callable that "
+                f"RETURNS a Workflow instance, not a class. The "
+                f"from_config discipline forbids ad-hoc class "
+                f"instantiation here."
+            )
+        if not callable(obj):
+            raise ComponentConfigurationError(
+                f"FAIL-FAST: SubworkflowStep {self.name!r} "
+                f"inner_workflow_builder {builder_spec!r} resolved to "
+                f"{type(obj).__name__}, which is not callable. Expected a "
+                f"no-arg callable returning a Workflow."
+            )
+
+        try:
+            inner = obj()
+        except Exception as exc:
+            raise ComponentConfigurationError(
+                f"FAIL-FAST: SubworkflowStep {self.name!r} "
+                f"inner_workflow_builder {builder_spec!r} raised when "
+                f"invoked: {exc}"
+            ) from exc
+
+        if not isinstance(inner, Workflow):
+            raise ComponentConfigurationError(
+                f"FAIL-FAST: SubworkflowStep {self.name!r} "
+                f"inner_workflow_builder {builder_spec!r} returned "
+                f"{type(inner).__name__}, expected a Workflow instance. "
+                f"A lightweight builder must return `builder.load()` (a "
+                f"Workflow), not the WorkflowBuilder itself or a config "
+                f"dict."
+            )
+        return inner
 
     @staticmethod
     def _resolve_inner_workflow_path(path_str: str) -> Path:
@@ -297,8 +442,12 @@ class SubworkflowStep(BaseStep):
         return self._inner_workflow
 
     @property
-    def inner_workflow_path(self) -> Path:
-        """The resolved absolute path to the inner workflow's YAML."""
+    def inner_workflow_path(self) -> Optional[Path]:
+        """The resolved absolute path to the inner workflow's YAML.
+
+        ``None`` when the inner workflow came from an
+        ``inner_workflow_builder`` callable rather than a YAML path.
+        """
         return self._inner_workflow_path_resolved
 
     async def process(
