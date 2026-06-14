@@ -6,6 +6,36 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Nanobrain is an event-driven AI agent framework for distributed workflows. It's currently in research preview and has dependencies on HPC systems and external frameworks. The framework uses a mandatory configuration-driven architecture where ALL components are created through the `from_config()` pattern.
 
+## Recent additions (2026-06-13 — SubworkflowStep detects inner step failure FAST via G37 step_failed events)
+
+`SubworkflowStep` (`nanobrain/library/steps/subworkflow_step.py`) used to wait the
+FULL `timeout_seconds` whenever an inner step RAISED. The cause is the G127 design
+contract: when an inner step's `process()` raises, the trigger executor SWALLOWS the
+exception (`Workflow.run` does not propagate it), so the inner workflow's output data
+unit never populates — and the step's poll loop had no signal other than the deadline.
+For a degrade-loud OUTER step with a multi-minute budget (apecx's sequence-conservation
+leg: 480s) this turned a sub-second inner failure (e.g. BV-BRC returning <2 alignable
+sequences) into an 8-minute hang surfaced only as a generic `TimeoutError`.
+
+**Fix:** `process()` subscribes to the inner cascade's G37 `step_failed` events via
+`subscribe_to_step_events`. The inner step tasks are `create_task`-spawned transitively
+within `process()`'s task context, so they inherit the contextvar-based subscriber and
+`BaseStep._execute_process`'s `publish_step_event(step_failed)` reaches the capture. The
+poll loop checks the capture each iteration (plus once after the `process()` settle and
+after each sleep) and re-raises the inner step's REAL exception immediately via
+`_raise_if_inner_step_failed` — `"inner workflow step 'fetch' failed (ValueError: <real
+reason>)"` — instead of stalling to the deadline. Genuine inner stalls (no step raised)
+still hit the `TimeoutError` deadline path. General nested-failure robustness win.
+
+Regression: `tests/unit/test_subworkflow_fast_fail.py` (2 tests — inner raise surfaced
+in <<timeout with the real message; not a `TimeoutError`). Full subworkflow +
+adversarial-probe suites: 43 passed, 0 regressions. Cross-repo: apecx's
+`SequenceConservationSubworkflowStep` now degrades in 0.2s with the real reason (was
+480s); the dengue happy path is unaffected. The `nanobrain-workflow-authoring` skill
+carries the updated SubworkflowStep silent-failure discipline. **Source:** a real
+multi-taxon probe found dengue stranding the conserved-sites run for 480s before
+degrading.
+
 ## Recent additions (2026-06-13 — AllDataReceivedTrigger is RE-ARMABLE: cached fan-in workflows re-run correctly)
 
 `AllDataReceivedTrigger` (`nanobrain/core/trigger.py`) was a **one-shot**: the
