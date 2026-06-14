@@ -63,6 +63,7 @@ from pydantic import Field
 
 from nanobrain.core.component_base import ComponentConfigurationError
 from nanobrain.core.step import BaseStep, StepConfig
+from nanobrain.core.step_events import StepEvent, subscribe_to_step_events
 from nanobrain.core.workflow import Workflow
 
 logger = logging.getLogger(__name__)
@@ -499,35 +500,64 @@ class SubworkflowStep(BaseStep):
 
         routed = self._route_input_to_first_step_du(input_data)
 
-        # Use wf.process + wf.wait_for_cascade — that's the pattern
-        # the framework actually wires up (Workflow.run with workflow-
-        # level data unit keys is currently a documentation-only
-        # surface; the runtime routes by first-step DU name).
-        init_status = await self._inner_workflow.process(routed)
-        if not isinstance(init_status, dict):
-            raise RuntimeError(
-                f"SubworkflowStep {self.name!r}: inner workflow process() "
-                f"returned non-dict {type(init_status).__name__}"
-            )
+        # FAST inner-failure detection (G37). When an inner step RAISES, the
+        # trigger executor SWALLOWS the exception (G127 — Workflow.run does not
+        # propagate it), so the inner output data unit never populates and the
+        # poll loop below would otherwise wait the FULL timeout_seconds before
+        # giving up — an N-minute hang for a failure that happened in seconds.
+        # Instead, subscribe to the inner cascade's step_failed events: the
+        # inner step tasks are create_task-spawned transitively within THIS
+        # task's context, so they inherit the contextvar-based subscriber and
+        # publish_step_event reaches `_capture_inner_failure`. The poll loop
+        # checks the capture each iteration and re-raises the inner step's REAL
+        # exception immediately, so the caller (e.g. a degrade-loud outer step)
+        # sees "inner step X failed: <real reason>" in seconds, not a generic
+        # timeout. This is a general nested-failure robustness win, not specific
+        # to any one inner workflow. Source: 2026-06-13 BUG A.
+        inner_step_names = set(self._inner_workflow.child_steps.keys())
+        inner_failures: list[StepEvent] = []
 
-        if self._await_cascade:
-            # Cannot use inner_workflow.wait_for_cascade here when this
-            # step is itself running inside another cascade: the
-            # framework's AsyncTriggerExecutor is a process-wide
-            # singleton (see workflow.py:wait_for_cascade), so the
-            # inner drain-detection sees our OWN task in the queue
-            # and waits indefinitely for itself to finish. Classic
-            # shared-executor re-entrance deadlock.
-            #
-            # Workaround: poll the inner workflow's last step's output
-            # data units until they're populated. The asyncio.sleep
-            # yields control so the inner cascade's tasks can actually
-            # run. When fan-out lands (inner cascade with multiple last
-            # steps), this loop needs the polling-of-each-output
-            # extension; for the linear case this is sufficient.
-            #
-            # Source: 2026-05-12 nested-cascade deadlock investigation.
-            await self._poll_inner_workflow_until_drained()
+        def _capture_inner_failure(event: StepEvent) -> None:
+            if (
+                event.event_type == "step_failed"
+                and event.step_name in inner_step_names
+            ):
+                inner_failures.append(event)
+
+        with subscribe_to_step_events(_capture_inner_failure):
+            # Use wf.process + wf.wait_for_cascade — that's the pattern
+            # the framework actually wires up (Workflow.run with workflow-
+            # level data unit keys is currently a documentation-only
+            # surface; the runtime routes by first-step DU name).
+            init_status = await self._inner_workflow.process(routed)
+            if not isinstance(init_status, dict):
+                raise RuntimeError(
+                    f"SubworkflowStep {self.name!r}: inner workflow process() "
+                    f"returned non-dict {type(init_status).__name__}"
+                )
+
+            # A first step that already failed during process()'s settle is
+            # surfaced immediately (before we even enter the poll loop).
+            self._raise_if_inner_step_failed(inner_failures)
+
+            if self._await_cascade:
+                # Cannot use inner_workflow.wait_for_cascade here when this
+                # step is itself running inside another cascade: the
+                # framework's AsyncTriggerExecutor is a process-wide
+                # singleton (see workflow.py:wait_for_cascade), so the
+                # inner drain-detection sees our OWN task in the queue
+                # and waits indefinitely for itself to finish. Classic
+                # shared-executor re-entrance deadlock.
+                #
+                # Workaround: poll the inner workflow's last step's output
+                # data units until they're populated. The asyncio.sleep
+                # yields control so the inner cascade's tasks can actually
+                # run. When fan-out lands (inner cascade with multiple last
+                # steps), this loop needs the polling-of-each-output
+                # extension; for the linear case this is sufficient.
+                #
+                # Source: 2026-05-12 nested-cascade deadlock investigation.
+                await self._poll_inner_workflow_until_drained(inner_failures)
 
         # Collect outputs from the LAST step's output data units.
         # This is the working pattern (see test_rag_e2e_workflow_yaml).
@@ -636,13 +666,43 @@ class SubworkflowStep(BaseStep):
             return input_data
         return {only_du_name: input_data}
 
-    async def _poll_inner_workflow_until_drained(self) -> None:
+    def _raise_if_inner_step_failed(
+        self, inner_failures: Optional[list[StepEvent]]
+    ) -> None:
+        """Re-raise the inner cascade's FIRST captured step failure, fast.
+
+        When an inner step raised, the trigger executor swallowed the
+        exception (G127), so the only signal is the ``step_failed`` event
+        captured by ``process()``'s subscriber. Surface it as a
+        ``RuntimeError`` carrying the inner step's real type + message so the
+        caller degrades with the actual reason instead of a generic timeout.
+        """
+        if not inner_failures:
+            return
+        ev = inner_failures[0]
+        exc = ev.payload.get("exception", {}) if isinstance(ev.payload, dict) else {}
+        raise RuntimeError(
+            f"SubworkflowStep {self.name!r}: inner workflow step "
+            f"{ev.step_name!r} failed "
+            f"({exc.get('type', 'Exception')}: {exc.get('message', '')}). "
+            f"Surfaced via step_failed event without waiting the "
+            f"{self._timeout_seconds}s inner-cascade timeout."
+        )
+
+    async def _poll_inner_workflow_until_drained(
+        self, inner_failures: Optional[list[StepEvent]] = None
+    ) -> None:
         """Poll the inner workflow's last step's output data units
         until they're populated, OR raise TimeoutError.
 
         See the comment in ``process()`` for why this can't use
         ``wait_for_cascade`` (singleton-executor deadlock under
         nested cascades).
+
+        ``inner_failures`` is the live list populated by ``process()``'s
+        step-event subscriber; each iteration checks it FIRST so a raising
+        inner step short-circuits the wait (BUG A — fast inner-failure
+        detection) instead of stalling until ``timeout_seconds``.
         """
         if not self._inner_workflow.child_steps:
             return  # Nothing to wait on; let collect step return {}.
@@ -656,6 +716,8 @@ class SubworkflowStep(BaseStep):
         poll_interval = max(self._settle_ms / 1000.0, 0.05)
         last_du = next(iter(output_dus.values()))
         while True:
+            # FAST-FAIL: an inner step raised → surface it now, don't wait.
+            self._raise_if_inner_step_failed(inner_failures)
             try:
                 value = await last_du.get()
             except Exception:
@@ -674,6 +736,9 @@ class SubworkflowStep(BaseStep):
                     f"swallowed by the trigger executor."
                 )
             await asyncio.sleep(poll_interval)
+            # Re-check after the yield: the inner step task may have raised
+            # while we slept; surface it before looping back to poll the DU.
+            self._raise_if_inner_step_failed(inner_failures)
 
     async def _collect_last_step_outputs(self) -> Dict[str, Any]:
         """Collect the inner workflow's RESULT — preferring workflow-
