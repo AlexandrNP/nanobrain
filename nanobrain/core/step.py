@@ -329,6 +329,16 @@ class StepConfig(ConfigBase):
     enable_logging: bool = True
     log_data_transfers: bool = True
     log_executions: bool = True
+    # Per-step wall-clock ceiling enforced by ``BaseStep.execute`` (asyncio.wait_for).
+    # Exceeding it raises a FAIL-FAST ``ComponentConfigurationError``. Declared (not a
+    # bare ``getattr`` default) so steps — including ``extra='forbid'`` subclasses and
+    # a step whose inner work legitimately needs >300s (e.g. a SubworkflowStep nesting
+    # a slow MAFFT/PyMOL cascade) — can RAISE it; otherwise the framework kills the
+    # step at 300s before its inner budget OR its own degrade-loud path can run.
+    execution_timeout: float = Field(
+        default=300.0, gt=0,
+        description="Per-step wall-clock timeout (seconds) for process(); FAIL-FAST on exceed.",
+    )
 
     # NEW: Step-level tool configuration
     tools: Optional[Dict[str, Dict[str, Any]]] = Field(default_factory=dict)
