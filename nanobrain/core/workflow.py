@@ -2428,6 +2428,31 @@ class Workflow(Step):
             execution_strategy='data_driven'
         )
 
+    def _get_run_lock(self) -> "asyncio.Lock":
+        """Return a per-instance run-lock bound to the CURRENT running loop,
+        recreating it if the loop changed (a cached Workflow is re-run across fresh
+        event loops — each ``asyncio.run`` is a new loop).
+
+        Why this exists (2026-06-14): a Workflow owns MUTABLE data units, so two
+        concurrent ``run()`` calls on the SAME instance clobber each other's
+        workflow-level inputs/outputs (the G122 deposit) and silently
+        cross-contaminate results — a 3-way concurrent repro had every caller get one
+        query's document, all ``status: completed``. The lock serializes overlapping
+        runs on one instance; within a single event loop (the realistic concurrency
+        case — an MCP server's persistent loop) all overlapping runs share it. The
+        loop-rebound shape mirrors the G117 ``AllDataReceivedTrigger._get_fire_lock``.
+        ``_get_run_lock`` is synchronous (no await) so it executes atomically per call
+        — no race creating the lock.
+        """
+        loop = asyncio.get_running_loop()
+        if (
+            getattr(self, "_run_lock", None) is None
+            or getattr(self, "_run_lock_loop", None) is not loop
+        ):
+            self._run_lock = asyncio.Lock()
+            self._run_lock_loop = loop
+        return self._run_lock
+
     async def run(
         self,
         input_data: Optional[Dict[str, Any]] = None,
@@ -2525,46 +2550,53 @@ class Workflow(Step):
         # so nested runs cleanly pop back to the outer scope.
         from .trigger import _active_workflow_id as _g115_cv
 
-        _g115_token = _g115_cv.set(self._g115_workflow_id())
-        try:
-            process_result = await self.process(input_data, **kwargs)
+        # Per-instance serialization (2026-06-14): acquired AFTER the
+        # nest_under_active_context dispatch above, so the nested path (which
+        # re-enters run(nest=False)) takes this lock exactly once and does not
+        # self-deadlock; a SubworkflowStep in the cascade runs a DIFFERENT instance
+        # with a DIFFERENT lock. Overlapping run() calls on this same instance
+        # serialize instead of clobbering shared data units. See _get_run_lock.
+        async with self._get_run_lock():
+            _g115_token = _g115_cv.set(self._g115_workflow_id())
+            try:
+                process_result = await self.process(input_data, **kwargs)
 
-            if not await_cascade:
-                # Caller explicitly opted out of waiting. Pass through
-                # process()'s return value (typically a status dict) and tag
-                # it so the consumer knows outputs may be stale.
+                if not await_cascade:
+                    # Caller explicitly opted out of waiting. Pass through
+                    # process()'s return value (typically a status dict) and tag
+                    # it so the consumer knows outputs may be stale.
+                    outputs = await self._collect_workflow_output_data_units()
+                    outputs["status"] = "completed_no_await"
+                    outputs["_process_return"] = process_result
+                    return outputs
+
+                # Special-case the no-first-step shape from process(): no cascade
+                # to wait for, just echo the status and return empty outputs.
+                if isinstance(process_result, dict) and process_result.get("status") == "no_first_step":
+                    outputs = {"status": "no_first_step", "workflow": self.name}
+                    return outputs
+
+                cascade_drained = await self.wait_for_cascade(
+                    timeout=timeout, settle_ms=settle_ms
+                )
+
                 outputs = await self._collect_workflow_output_data_units()
-                outputs["status"] = "completed_no_await"
-                outputs["_process_return"] = process_result
+
+                if not cascade_drained:
+                    if raise_on_cascade_timeout:
+                        raise TimeoutError(
+                            f"Workflow {self.name!r} cascade did not drain within "
+                            f"{timeout}s (settle_ms={settle_ms}). Partial outputs: "
+                            f"{list(outputs.keys())}"
+                        )
+                    outputs["status"] = "cascade_timeout"
+                    outputs["_timeout_seconds"] = timeout
+                else:
+                    outputs["status"] = "completed"
+
                 return outputs
-
-            # Special-case the no-first-step shape from process(): no cascade
-            # to wait for, just echo the status and return empty outputs.
-            if isinstance(process_result, dict) and process_result.get("status") == "no_first_step":
-                outputs = {"status": "no_first_step", "workflow": self.name}
-                return outputs
-
-            cascade_drained = await self.wait_for_cascade(
-                timeout=timeout, settle_ms=settle_ms
-            )
-
-            outputs = await self._collect_workflow_output_data_units()
-
-            if not cascade_drained:
-                if raise_on_cascade_timeout:
-                    raise TimeoutError(
-                        f"Workflow {self.name!r} cascade did not drain within "
-                        f"{timeout}s (settle_ms={settle_ms}). Partial outputs: "
-                        f"{list(outputs.keys())}"
-                    )
-                outputs["status"] = "cascade_timeout"
-                outputs["_timeout_seconds"] = timeout
-            else:
-                outputs["status"] = "completed"
-
-            return outputs
-        finally:
-            _g115_cv.reset(_g115_token)
+            finally:
+                _g115_cv.reset(_g115_token)
 
     async def _run_with_nested_context(
         self,
