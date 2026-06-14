@@ -64,6 +64,11 @@ class _InnerMarkStep(BaseStep):
         return StepConfig
 
     async def process(self, input_data, **kw):
+        # A small delay so the inner cascade has NOT re-populated its output DU by the
+        # time the SubworkflowStep's poll loop does its first read — this is what makes
+        # the cached-re-run staleness observable (a real inner workflow's fetch+MAFFT is
+        # slow; an instant step would re-run before the poll and hide the bug).
+        await asyncio.sleep(0.3)
         return {"marked": True, "seen": input_data}
 
 
@@ -260,3 +265,28 @@ def test_outer_run_flows_inner_builder_output_through():
     assert wf_out.get("marked") is True, (
         f"inner workflow marker lost in transit; wf_out={wf_out!r}"
     )
+
+
+def test_process_rerun_is_not_stale(tmp_path):
+    """CACHED-RE-RUN STALENESS regression (2026-06-13): the inner workflow is built ONCE +
+    reused across process() calls. A 2nd process() with a DIFFERENT input MUST return the
+    2nd input's result, not the 1st run's stale output (the poll loop used to read the
+    last-step output DU which still held run 1's value). In a long-lived process (MCP
+    server) this silently returned the previous query's result for a different input."""
+    import json
+
+    yml = _write_step_yaml(
+        tmp_path,
+        f"name: rerun_step\ninner_workflow_builder: {__name__}._build_inner_test_workflow\n",
+    )
+    step = SubworkflowStep.from_config(yml)
+
+    async def _run():
+        a = await step.process({"inner_in": {"v": "AAA"}})
+        b = await step.process({"inner_in": {"v": "BBB"}})
+        return a, b
+
+    out_a, out_b = asyncio.run(_run())
+    assert "AAA" in json.dumps(out_a, default=str), f"run 1 wrong: {out_a}"
+    assert "BBB" in json.dumps(out_b, default=str), f"STALE re-run: run 2 did not reflect BBB: {out_b}"
+    assert "AAA" not in json.dumps(out_b, default=str), f"STALE: run 2 leaked run 1's data: {out_b}"

@@ -498,6 +498,18 @@ class SubworkflowStep(BaseStep):
                 f"must be a dict; got {type(input_data).__name__}"
             )
 
+        # CACHED-RE-RUN STALENESS FIX (2026-06-13). The inner workflow is built ONCE
+        # and reused across process() calls. The poll loop below waits until the last
+        # step's output DU is "populated" — but on a RE-RUN that DU still holds the
+        # PRIOR run's output, so the poll returns INSTANTLY with stale data before the
+        # new cascade re-populates it. In a long-lived process (e.g. the MCP server,
+        # which caches workflows per-process), the 2nd+ call therefore silently returns
+        # the FIRST call's result for a DIFFERENT input — a severe silent correctness
+        # bug. Clear the last-step output DUs first so "populated" means THIS run.
+        # (Detected: viral_epitope_evidence_review returned influenza's sequence
+        # conservation for a subsequent HIV query in the same process.)
+        await self._clear_inner_last_step_outputs()
+
         routed = self._route_input_to_first_step_du(input_data)
 
         # FAST inner-failure detection (G37). When an inner step RAISES, the
@@ -688,6 +700,23 @@ class SubworkflowStep(BaseStep):
             f"Surfaced via step_failed event without waiting the "
             f"{self._timeout_seconds}s inner-cascade timeout."
         )
+
+    async def _clear_inner_last_step_outputs(self) -> None:
+        """Reset the inner workflow's last-step output data units to None before a
+        (re-)run, so the poll loop waits for the NEW cascade to populate them rather
+        than reading the PRIOR run's stale value. Idempotent + best-effort (a clear
+        failure must not break the run). See the cached-re-run note in ``process()``."""
+        if not self._inner_workflow.child_steps:
+            return
+        last_step = list(self._inner_workflow.child_steps.values())[-1]
+        for du in (getattr(last_step, "step_output_data_units", None) or {}).values():
+            try:
+                if hasattr(du, "clear"):
+                    await du.clear()
+                elif hasattr(du, "set"):
+                    await du.set(None)
+            except Exception:
+                pass
 
     async def _poll_inner_workflow_until_drained(
         self, inner_failures: Optional[list[StepEvent]] = None
