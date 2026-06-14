@@ -6,6 +6,38 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Nanobrain is an event-driven AI agent framework for distributed workflows. It's currently in research preview and has dependencies on HPC systems and external frameworks. The framework uses a mandatory configuration-driven architecture where ALL components are created through the `from_config()` pattern.
 
+## Recent additions (2026-06-14 — Workflow.run serializes concurrent runs on one instance)
+
+`Workflow.run` (`nanobrain/core/workflow.py`) silently CROSS-CONTAMINATED when one
+instance was run concurrently from two callers. A `Workflow` owns MUTABLE data units,
+so two overlapping `run()` calls clobbered each other's workflow-level inputs/outputs
+(the G122 deposit) and each returned ANOTHER call's result — all with
+`status: completed`. This bites any long-lived consumer that caches a workflow per
+process (an MCP server) and fields overlapping requests. Reproduced with a trivial echo
+workflow (no LLM): three concurrent `run()` calls with distinct inputs returned
+cross-contaminated values (`sent=AAA got=BBB`); an apecx 3-virus concurrent probe had
+every caller receive one query's full document.
+
+**Fix:** `Workflow.run` acquires a per-instance, loop-rebound `asyncio.Lock`
+(`_get_run_lock`, mirroring the G117 `AllDataReceivedTrigger._get_fire_lock`) around the
+`process → wait_for_cascade → collect` body. Placed AFTER the
+`nest_under_active_context` dispatch so the nested path (which re-enters
+`run(nest=False)`) takes it exactly once and does not self-deadlock; a `SubworkflowStep`
+in the cascade drives a DIFFERENT instance with a DIFFERENT lock. Overlapping runs on
+one instance serialize (correctness over throughput); distinct instances still run fully
+in parallel. Within one event loop (the realistic concurrency case) all overlapping runs
+share the lock; the loop-rebound shape tolerates the cached-workflow re-run-across-fresh-
+loops pattern. Direct `Workflow.process()` (the low-level fire-and-forget primitive) is
+NOT locked — concurrent `process()` remains the caller's responsibility; use `run()`.
+
+Regression: `tests/unit/test_workflow_concurrent_run_isolation.py` (2 tests — 3 concurrent
+runs isolate; lock stable within a loop, rebinds across loops). Full nanobrain unit suite:
+1254 passed, 9 skipped, 0 regressions (incl. G31 nested-workflow ×2, all subworkflow,
+G115/G125 — the deadlock-risk paths). The `nanobrain-workflow-authoring` skill carries the
+updated concurrency silent-failure shape. **Source:** a real apecx multi-virus concurrent
+probe; this is the 3rd bug in the Workflow mutable-data-unit-reuse lineage (cf. the
+AllDataReceivedTrigger re-arm staleness + SubworkflowStep cached-re-run staleness).
+
 ## Recent additions (2026-06-13 — SubworkflowStep detects inner step failure FAST via G37 step_failed events)
 
 `SubworkflowStep` (`nanobrain/library/steps/subworkflow_step.py`) used to wait the
