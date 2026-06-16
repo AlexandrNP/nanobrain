@@ -41,3 +41,17 @@ repos:
     hooks:
       - id: ruff
         args: [--fix]
+
+  - repo: local
+    hooks:
+      # Hard review gate (commit-msg): BLOCKS a non-trivial commit lacking a Reviewed:
+      # trailer. Shared script at the workspace level (../ resolves from this repo + any
+      # wt-* worktree). python3 (review_gate.py is stdlib-only; nanobrain has no .venv).
+      # Install once: pre-commit install --hook-type commit-msg
+      - id: review-gate
+        name: "Non-trivial commits carry a Reviewed: trailer (review gate)"
+        entry: python3 ../.claude/scripts/review_gate.py
+        language: system
+        stages: [commit-msg]
+        always_run: true
+        pass_filenames: true
