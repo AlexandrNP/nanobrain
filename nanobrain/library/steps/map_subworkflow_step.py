@@ -192,7 +192,9 @@ class MapSubworkflowStep(SubworkflowStep):
             len(items),
             len(errors),
         )
-        return {self._output_list_key: results, "_map_errors": errors}
+        # Pass the input through (chainable like a normal step), then overlay the
+        # collected results + error map. The output keys win on collision.
+        return {**input_data, self._output_list_key: results, "_map_errors": errors}
 
 
 __all__ = ["MapSubworkflowStep", "MapSubworkflowStepConfig"]
