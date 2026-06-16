@@ -497,7 +497,16 @@ class SubworkflowStep(BaseStep):
                 f"FAIL-FAST: SubworkflowStep {self.name!r} input_data "
                 f"must be a dict; got {type(input_data).__name__}"
             )
+        return await self._drive_inner(self._inner_workflow, input_data)
 
+    async def _drive_inner(
+        self, workflow: Workflow, input_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Drive ONE inner ``workflow`` instance on ``input_data`` and return its
+        cleaned outputs. Parameterized by the workflow instance so subclasses
+        (e.g. ``MapSubworkflowStep``) can drive FRESH per-item instances through
+        the exact same clear→route→process→poll→collect→gate path (with the G37
+        fast-fail + cached-re-run clear) rather than reimplementing it."""
         # CACHED-RE-RUN STALENESS FIX (2026-06-13). The inner workflow is built ONCE
         # and reused across process() calls. The poll loop below waits until the last
         # step's output DU is "populated" — but on a RE-RUN that DU still holds the
@@ -508,9 +517,9 @@ class SubworkflowStep(BaseStep):
         # bug. Clear the last-step output DUs first so "populated" means THIS run.
         # (Detected: viral_epitope_evidence_review returned influenza's sequence
         # conservation for a subsequent HIV query in the same process.)
-        await self._clear_inner_last_step_outputs()
+        await self._clear_last_step_outputs(workflow)
 
-        routed = self._route_input_to_first_step_du(input_data)
+        routed = self._route_input_to_first_step_du(workflow, input_data)
 
         # FAST inner-failure detection (G37). When an inner step RAISES, the
         # trigger executor SWALLOWS the exception (G127 — Workflow.run does not
@@ -526,7 +535,7 @@ class SubworkflowStep(BaseStep):
         # sees "inner step X failed: <real reason>" in seconds, not a generic
         # timeout. This is a general nested-failure robustness win, not specific
         # to any one inner workflow. Source: 2026-06-13 BUG A.
-        inner_step_names = set(self._inner_workflow.child_steps.keys())
+        inner_step_names = set(workflow.child_steps.keys())
         inner_failures: list[StepEvent] = []
 
         def _capture_inner_failure(event: StepEvent) -> None:
@@ -541,7 +550,7 @@ class SubworkflowStep(BaseStep):
             # the framework actually wires up (Workflow.run with workflow-
             # level data unit keys is currently a documentation-only
             # surface; the runtime routes by first-step DU name).
-            init_status = await self._inner_workflow.process(routed)
+            init_status = await workflow.process(routed)
             if not isinstance(init_status, dict):
                 raise RuntimeError(
                     f"SubworkflowStep {self.name!r}: inner workflow process() "
@@ -569,11 +578,11 @@ class SubworkflowStep(BaseStep):
                 # extension; for the linear case this is sufficient.
                 #
                 # Source: 2026-05-12 nested-cascade deadlock investigation.
-                await self._poll_inner_workflow_until_drained(inner_failures)
+                await self._poll_inner_workflow_until_drained(workflow, inner_failures)
 
         # Collect outputs from the LAST step's output data units.
         # This is the working pattern (see test_rag_e2e_workflow_yaml).
-        result = await self._collect_last_step_outputs()
+        result = await self._collect_last_step_outputs(workflow)
         # Synthesize a status field for the post-run gate below.
         result.setdefault(
             "status",
@@ -630,7 +639,7 @@ class SubworkflowStep(BaseStep):
         return clean_result
 
     def _route_input_to_first_step_du(
-        self, input_data: Dict[str, Any]
+        self, workflow: Workflow, input_data: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Auto-wrap input_data under the first step's input data unit.
 
@@ -667,7 +676,7 @@ class SubworkflowStep(BaseStep):
 
         # Step (b): wrap for the inner's first-step input DU.
         try:
-            first_step = next(iter(self._inner_workflow.child_steps.values()))
+            first_step = next(iter(workflow.child_steps.values()))
         except StopIteration:
             return input_data
         first_dus = getattr(first_step, "step_input_data_units", None) or {}
@@ -701,14 +710,14 @@ class SubworkflowStep(BaseStep):
             f"{self._timeout_seconds}s inner-cascade timeout."
         )
 
-    async def _clear_inner_last_step_outputs(self) -> None:
+    async def _clear_last_step_outputs(self, workflow: Workflow) -> None:
         """Reset the inner workflow's last-step output data units to None before a
         (re-)run, so the poll loop waits for the NEW cascade to populate them rather
         than reading the PRIOR run's stale value. Idempotent + best-effort (a clear
         failure must not break the run). See the cached-re-run note in ``process()``."""
-        if not self._inner_workflow.child_steps:
+        if not workflow.child_steps:
             return
-        last_step = list(self._inner_workflow.child_steps.values())[-1]
+        last_step = list(workflow.child_steps.values())[-1]
         for du in (getattr(last_step, "step_output_data_units", None) or {}).values():
             try:
                 if hasattr(du, "clear"):
@@ -719,7 +728,7 @@ class SubworkflowStep(BaseStep):
                 pass
 
     async def _poll_inner_workflow_until_drained(
-        self, inner_failures: Optional[list[StepEvent]] = None
+        self, workflow: Workflow, inner_failures: Optional[list[StepEvent]] = None
     ) -> None:
         """Poll the inner workflow's last step's output data units
         until they're populated, OR raise TimeoutError.
@@ -733,10 +742,10 @@ class SubworkflowStep(BaseStep):
         inner step short-circuits the wait (BUG A — fast inner-failure
         detection) instead of stalling until ``timeout_seconds``.
         """
-        if not self._inner_workflow.child_steps:
+        if not workflow.child_steps:
             return  # Nothing to wait on; let collect step return {}.
 
-        last_step = list(self._inner_workflow.child_steps.values())[-1]
+        last_step = list(workflow.child_steps.values())[-1]
         output_dus = getattr(last_step, "step_output_data_units", None) or {}
         if not output_dus:
             return
@@ -769,7 +778,7 @@ class SubworkflowStep(BaseStep):
             # while we slept; surface it before looping back to poll the DU.
             self._raise_if_inner_step_failed(inner_failures)
 
-    async def _collect_last_step_outputs(self) -> Dict[str, Any]:
+    async def _collect_last_step_outputs(self, workflow: Workflow) -> Dict[str, Any]:
         """Collect the inner workflow's RESULT — preferring workflow-
         level output data units, falling back to the last step's
         outputs.
@@ -799,7 +808,7 @@ class SubworkflowStep(BaseStep):
         intermediate adapter step.
         """
         # Prefer workflow-level outputs.
-        wf_outputs = getattr(self._inner_workflow, "step_output_data_units", None)
+        wf_outputs = getattr(workflow, "step_output_data_units", None)
         if wf_outputs:
             collected: Dict[str, Any] = {}
             for name, du in wf_outputs.items():
@@ -818,9 +827,9 @@ class SubworkflowStep(BaseStep):
                     return sole_value
             return collected
 
-        if not self._inner_workflow.child_steps:
+        if not workflow.child_steps:
             return {}
-        last_step = list(self._inner_workflow.child_steps.values())[-1]
+        last_step = list(workflow.child_steps.values())[-1]
         output_dus = getattr(last_step, "step_output_data_units", None) or {}
         collected = {}
         for name, du in output_dus.items():

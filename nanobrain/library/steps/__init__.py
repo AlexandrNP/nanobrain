@@ -28,6 +28,10 @@ from .recursive_subworkflow_step import (
     RecursiveSubworkflowStep,
     RecursiveSubworkflowStepConfig,
 )
+from .map_subworkflow_step import (
+    MapSubworkflowStep,
+    MapSubworkflowStepConfig,
+)
 from .globus_transfer_step import (
     GlobusTransferStep,
     GlobusTransferStepConfig,
@@ -53,6 +57,8 @@ __all__ = [
     'SubworkflowStepConfig',
     'RecursiveSubworkflowStep',
     'RecursiveSubworkflowStepConfig',
+    'MapSubworkflowStep',
+    'MapSubworkflowStepConfig',
     'GlobusTransferStep',
     'GlobusTransferStepConfig',
 ]
