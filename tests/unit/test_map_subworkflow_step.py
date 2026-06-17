@@ -126,6 +126,19 @@ def test_empty_list_returns_empty(tmp_path):
     assert out["items"] == [] and out["_map_errors"] == {}
 
 
+def test_empty_list_still_passes_input_through(tmp_path):
+    """Regression: an empty item list must STILL pass the input bundle through (chainable like a
+    normal step), not just return {items, _map_errors}. Omitting the passthrough silently dropped
+    the whole bundle when a mid-cascade map got an empty list (e.g. a per-clade map on homogeneous
+    strains) — stranding every downstream step that reads a passthrough key like ``query``."""
+    out = asyncio.run(
+        _map_step(tmp_path).process({"numbers": [], "base": 5, "query": "keep me", "extra": 42})
+    )
+    assert out["items"] == [] and out["_map_errors"] == {}
+    # the non-list bundle keys survive (this is what the non-empty path already does)
+    assert out["query"] == "keep me" and out["extra"] == 42 and out["base"] == 5
+
+
 def test_trigger_envelope_unwrap(tmp_path):
     step = _map_step(tmp_path)
     out = asyncio.run(step.process({"map_step_in": {"numbers": [4], "base": 1}}))

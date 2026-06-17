@@ -172,7 +172,12 @@ class MapSubworkflowStep(SubworkflowStep):
         statics = {k: input_data[k] for k in self._static_params_keys if k in input_data}
 
         if not items:
-            return {self._output_list_key: [], "_map_errors": {}}
+            # Empty item list: still PASS THE INPUT THROUGH (chainable like a normal step), with
+            # an empty result list — mirroring the non-empty return below. Omitting ``**input_data``
+            # here silently DROPPED the whole bundle when a mid-cascade map got an empty list (e.g.
+            # a per-clade map on homogeneous strains), stranding every downstream step that reads a
+            # passthrough key (``query`` etc.) — a green-tests / broken-product silent failure.
+            return {**input_data, self._output_list_key: [], "_map_errors": {}}
 
         sem = asyncio.Semaphore(self._max_concurrency)
         total = len(items)
