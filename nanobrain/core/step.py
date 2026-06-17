@@ -2111,6 +2111,58 @@ class BaseStep(FromConfigBase, ABC):
 
         return result
 
+    def emit_progress(
+        self,
+        message: str,
+        *,
+        data: Optional[Dict[str, Any]] = None,
+        fraction: Optional[float] = None,
+    ) -> None:
+        """Emit an incremental ``step_progress`` event from inside ``process()``.
+
+        A long-running step calls this to report progress between ``step_start`` and
+        ``step_complete`` so subscribers (and the desktop client) are not left in silence.
+        Flows through the SAME G37 subscriber stack as the lifecycle events — nested
+        subworkflow steps reach a top-level subscriber for free. No-ops when there is no
+        subscriber. Safe to call from any step; never raises (publish swallows subscriber
+        errors). Pair with :meth:`run_blocking` for sync I/O so the loop stays responsive
+        and these events actually flush.
+        """
+        try:
+            from .step_events import _make_step_progress_event, publish_step_event
+
+            publish_step_event(
+                _make_step_progress_event(
+                    step_name=self.name,
+                    run_id=self._g37_resolve_run_id(),
+                    message=message,
+                    data=data,
+                    fraction=fraction,
+                )
+            )
+        except Exception:
+            # Observability must never break the step's actual work. publish_step_event
+            # already swallows+logs SUBSCRIBER errors; this guard only catches a framework
+            # programming error (bad import/kwarg/fraction) — log it at debug so it doesn't
+            # vanish silently, but never propagate.
+            logger.debug("emit_progress failed for step %r", self.name, exc_info=True)
+
+    async def run_blocking(self, fn, /, *args, **kwargs):
+        """Run a SYNC callable off the event loop via ``asyncio.to_thread``.
+
+        Use for blocking SDK / I/O calls (``globus_sdk``, ``requests``, ``subprocess.run``)
+        so the event loop stays free — progress events + any keepalive keep flowing while the
+        blocking work runs. ``to_thread`` copies the current context, so contextvar-based
+        machinery (run ids, subscribers) is preserved.
+
+        WARNING: do NOT call ``self.emit_progress`` (or otherwise touch the event loop) from
+        inside ``fn`` — it runs on a worker thread, so ``publish_step_event`` would invoke
+        subscribers off-loop and a loop-bound subscriber (e.g. one feeding an asyncio.Queue)
+        is not thread-safe. Emit progress from the async ``process()`` BETWEEN run_blocking
+        calls instead.
+        """
+        return await asyncio.to_thread(fn, *args, **kwargs)
+
     def _g37_resolve_run_id(self) -> Optional[str]:
         """G37 helper — resolve the active WorkflowRunContext's run_id
         for step-event tagging. Returns None when no context is active.

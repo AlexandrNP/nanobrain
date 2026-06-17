@@ -66,7 +66,11 @@ logger = logging.getLogger(__name__)
 
 
 EVENT_SCHEMA_VERSION = 1
-StepEventType = Literal["step_start", "step_complete", "step_failed"]
+# step_progress is ADDITIVE to the frozen v1 schema: the StepEvent FIELDS are unchanged, so
+# event_schema_version stays 1. A subscriber that switches on event_type and doesn't handle
+# step_progress simply ignores it (backward-compatible). It carries incremental, mid-process()
+# progress so a long step is not silent between step_start and step_complete.
+StepEventType = Literal["step_start", "step_complete", "step_failed", "step_progress"]
 
 
 @dataclass(frozen=True)
@@ -222,6 +226,33 @@ def _make_step_failed_event(
     )
 
 
+def _make_step_progress_event(
+    *,
+    step_name: str,
+    run_id: Optional[str],
+    message: str,
+    data: Optional[Dict[str, Any]] = None,
+    fraction: Optional[float] = None,
+) -> StepEvent:
+    """Build an incremental progress event emitted mid-process() via BaseStep.emit_progress.
+
+    ``message`` is a short human line ("fetched 5000/13000 records"); ``data`` is optional
+    structured detail; ``fraction`` (clamped to [0,1]) is optional completion.
+    """
+    payload: Dict[str, Any] = {"message": message}
+    if data is not None:
+        payload["data"] = data
+    if fraction is not None:
+        payload["fraction"] = max(0.0, min(1.0, float(fraction)))
+    return StepEvent(
+        event_type="step_progress",
+        step_name=step_name,
+        run_id=run_id,
+        timestamp_iso=_now_iso(),
+        payload=payload,
+    )
+
+
 __all__ = [
     "EVENT_SCHEMA_VERSION",
     "StepEvent",
@@ -229,6 +260,7 @@ __all__ = [
     "StepEventType",
     "_make_step_complete_event",
     "_make_step_failed_event",
+    "_make_step_progress_event",
     "_make_step_start_event",
     "publish_step_event",
     "subscribe_to_step_events",

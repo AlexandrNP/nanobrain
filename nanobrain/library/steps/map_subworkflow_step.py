@@ -175,11 +175,20 @@ class MapSubworkflowStep(SubworkflowStep):
             return {self._output_list_key: [], "_map_errors": {}}
 
         sem = asyncio.Semaphore(self._max_concurrency)
+        total = len(items)
+        done = 0  # incremented on the event loop only (no lock needed)
 
         async def _guarded(i: int, it: Any) -> Dict[str, Any]:
+            nonlocal done
             async with sem:
-                return await self._run_one(i, it, statics)
+                out = await self._run_one(i, it, statics)
+            done += 1
+            # One progress line per completed item — the high-value signal for a fan-out
+            # (e.g. 9 Globus indices) instead of N× inner step-event spam.
+            self.emit_progress(f"{done}/{total} items complete", fraction=done / total)
+            return out
 
+        self.emit_progress(f"mapping {total} item(s)", fraction=0.0)
         results = await asyncio.gather(*(_guarded(i, it) for i, it in enumerate(items)))
         errors = {
             r["_item_index"]: r["_map_item_error"]

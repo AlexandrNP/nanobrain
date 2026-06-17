@@ -93,6 +93,23 @@ def test_maps_over_list_collects_results_in_order(tmp_path):
     assert out["_map_errors"] == {}
 
 
+def test_emits_per_item_progress(tmp_path):
+    """The fan-out emits one step_progress per completed item (the high-value signal for a
+    map over N indices) plus an initial 'mapping N' line, with increasing fraction."""
+    from nanobrain.core.step_events import subscribe_to_step_events
+
+    step = _map_step(tmp_path)
+    events: list = []
+    with subscribe_to_step_events(events.append):
+        asyncio.run(step.process({"numbers": [1, 2, 3], "base": 10}))
+    progs = [e for e in events if e.event_type == "step_progress"]
+    msgs = [p.payload["message"] for p in progs]
+    assert "mapping 3 item(s)" in msgs
+    assert "3/3 items complete" in msgs  # final completion line present
+    completes = [p.payload["fraction"] for p in progs if "complete" in p.payload["message"]]
+    assert completes == sorted(completes) and completes[-1] == 1.0
+
+
 def test_per_item_failure_is_named_note_not_whole_step_failure(tmp_path):
     step = _map_step(tmp_path)
     out = asyncio.run(step.process({"numbers": [1, -1, 2], "base": 0}))
