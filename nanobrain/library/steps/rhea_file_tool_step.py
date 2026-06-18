@@ -339,6 +339,12 @@ class RheaFileToolStep(BaseStep):
             rhea_output = parse_tool_call_result(raw_result, cfg.tool_name)
         finally:
             await transport.aclose()
+            # Per-execution teardown: the tool has consumed the staged input, so evict its
+            # ProxyStore Redis entry + release the input Store. The rhea SERVER stays online;
+            # only the per-call ephemera are torn down, so Redis does not grow run-over-run.
+            # Best-effort — a teardown failure must never fail the tool call.
+            self._evict_rhea_keys(redis_client, [redis_key])
+            self._close_rhea_store(input_store)
 
         if isinstance(rhea_output, str):
             # parse_tool_call_result returns a str when the text content
@@ -380,6 +386,7 @@ class RheaFileToolStep(BaseStep):
         )
         wanted = set(cfg.output_file_args)
         output_files: Dict[str, str] = {}
+        out_keys: list[str] = []  # per-call output ProxyStore keys, evicted before return
         for file_entry in files:
             if not isinstance(file_entry, dict):
                 continue
@@ -394,6 +401,7 @@ class RheaFileToolStep(BaseStep):
             )
             if not out_redis_key:
                 continue
+            out_keys.append(out_redis_key)
             out_proxy = RheaFileProxy.from_proxy(
                 RedisKey(redis_key=out_redis_key), output_store
             )
@@ -419,6 +427,10 @@ class RheaFileToolStep(BaseStep):
             len(output_files),
             sorted(output_files),
         )
+        # Per-execution teardown: the output files are now decoded into memory, so evict their
+        # ProxyStore Redis entries + release the output Store (the server stays online).
+        self._evict_rhea_keys(redis_client, out_keys)
+        self._close_rhea_store(output_store)
         return {
             "tool_name": cfg.tool_name,
             "return_code": return_code,
@@ -426,6 +438,32 @@ class RheaFileToolStep(BaseStep):
             "stderr": stderr,
             "output_files": output_files,
         }
+
+    def _evict_rhea_keys(self, redis_client: Any, keys: list[str]) -> None:
+        """Best-effort delete of per-call ProxyStore Redis keys. NEVER raises (teardown is
+        observability, not correctness — a failed evict must not fail the tool call)."""
+        for key in keys:
+            if not key:
+                continue
+            try:
+                redis_client.delete(key)
+            except Exception as exc:  # noqa: BLE001
+                self.nb_logger.warning(
+                    "RheaFileToolStep %r: failed to evict ProxyStore key %r: %s",
+                    self.name,
+                    key,
+                    exc,
+                )
+
+    @staticmethod
+    def _close_rhea_store(store: Any) -> None:
+        """Best-effort release of a ProxyStore Store's connector/connection-pool refs."""
+        close = getattr(store, "close", None)
+        if callable(close):
+            try:
+                close()
+            except Exception:  # noqa: BLE001 — teardown must never fail the call
+                pass
 
 
 __all__ = ["RheaFileToolStep", "RheaFileToolStepConfig"]
