@@ -340,10 +340,15 @@ class RheaFileToolStep(BaseStep):
         finally:
             await transport.aclose()
             # Per-execution teardown: the tool has consumed the staged input, so evict its
-            # ProxyStore Redis entry + release the input Store. The rhea SERVER stays online;
-            # only the per-call ephemera are torn down, so Redis does not grow run-over-run.
+            # per-call ProxyStore ephemera + release the input Store. The rhea SERVER stays
+            # online; only the per-call ephemera are torn down, so Redis does not grow
+            # run-over-run. TWO Redis keys are staged per file and BOTH must go:
+            #   * ``redis_key``     — the serialized RheaFileProxy object (Store.to_proxy);
+            #   * ``proxy.file_key``— the actual file BYTES (``file:<uuid>``, RheaFileHandle).
+            # Evicting only the proxy object (the original bug) leaked the file-byte key every
+            # call — the LARGE payload — so Redis grew unbounded run-over-run.
             # Best-effort — a teardown failure must never fail the tool call.
-            self._evict_rhea_keys(redis_client, [redis_key])
+            self._evict_rhea_keys(redis_client, [redis_key, proxy.file_key])
             self._close_rhea_store(input_store)
 
         if isinstance(rhea_output, str):
@@ -386,7 +391,10 @@ class RheaFileToolStep(BaseStep):
         )
         wanted = set(cfg.output_file_args)
         output_files: Dict[str, str] = {}
-        out_keys: list[str] = []  # per-call output ProxyStore keys, evicted before return
+        # Per-call output ephemera, evicted before return — BOTH the ProxyStore object key
+        # and the file-byte key (file:<uuid>) for each output, mirroring the input teardown.
+        out_keys: list[str] = []
+        out_file_keys: list[str] = []
         for file_entry in files:
             if not isinstance(file_entry, dict):
                 continue
@@ -405,6 +413,7 @@ class RheaFileToolStep(BaseStep):
             out_proxy = RheaFileProxy.from_proxy(
                 RedisKey(redis_key=out_redis_key), output_store
             )
+            out_file_keys.append(out_proxy.file_key)
             handle = out_proxy.open(redis_client)
             data = handle.read()
             output_files[str(file_name)] = data.decode("utf-8", "ignore")
@@ -428,8 +437,10 @@ class RheaFileToolStep(BaseStep):
             sorted(output_files),
         )
         # Per-execution teardown: the output files are now decoded into memory, so evict their
-        # ProxyStore Redis entries + release the output Store (the server stays online).
-        self._evict_rhea_keys(redis_client, out_keys)
+        # per-call ephemera + release the output Store (the server stays online). BOTH the
+        # ProxyStore object keys AND the file-byte keys (file:<uuid>) go — evicting only the
+        # former leaked the byte payload of every output per call.
+        self._evict_rhea_keys(redis_client, out_keys + out_file_keys)
         self._close_rhea_store(output_store)
         return {
             "tool_name": cfg.tool_name,
