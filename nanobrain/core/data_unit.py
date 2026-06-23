@@ -87,6 +87,17 @@ class DataUnitConfig(ConfigBase):
                     "Not enforced — purely informational for downstream consumers."
     )
 
+    # Project A Step 1 — optional gradual-typed I/O contract. See
+    # ``nanobrain.core.data_contract`` for the kind lattice + compatibility
+    # relation. Undeclared = untyped (gradual; existing workflows unaffected).
+    # Step 1 is WARN-only at workflow load on a producer→consumer mismatch;
+    # the runtime set() guard + config_version:3 FAIL-flip are a later step.
+    contract: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Optional I/O contract: {kind: text|file|record|collection|handle, + optional "
+                    "refinement (file extensions / record required[_keys] / collection element)}.",
+    )
+
     # Allowlisted class-path prefixes for DataUnit subclasses. Originally
     # restricted to `nanobrain.core.data_unit.*` only; widened 2026-05-09
     # to admit framework-shipped library data units (e.g.

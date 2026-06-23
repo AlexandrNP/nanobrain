@@ -1897,6 +1897,13 @@ class Workflow(Step):
                         link_instance.source = source_data_unit
                         link_instance.target = target_data_unit
 
+                        # Project A Step 1 — WARN-only data-unit contract check. Both
+                        # endpoints are now resolved to objects, so their declared
+                        # contracts are reachable here (they are NOT at the string-ref
+                        # add_link stage). Non-binding: warns, never raises.
+                        self._check_link_contracts(
+                            link_id, source_data_unit, target_data_unit)
+
                         # Add to workflow structures
                         self.step_links[link_id] = link_instance
 
@@ -1947,6 +1954,41 @@ class Workflow(Step):
 
         logger.info(f"✅ Workflow integration complete: "
                     f"{len(self.child_steps)} steps, {len(self.step_links)} links")
+
+    def _check_link_contracts(self, link_id: str, source_du: Any, target_du: Any) -> Optional[str]:
+        """Project A Step 1 (WARN-only): if BOTH endpoints of a link declare an I/O
+        contract, warn when the producer's is incompatible with the consumer's.
+
+        Gradual: an undeclared side is skipped (existing untyped workflows unaffected).
+        NON-BINDING — never raises in Step 1 (a malformed/incompatible contract degrades
+        to a warning so it cannot break workflow load). The config_version:3 FAIL-flip +
+        the runtime set() guard are a later step. See ``nanobrain.core.data_contract``.
+
+        Returns the warning string (which it also logs) or None when compatible/skipped-
+        clean — the return value exists for deterministic testing; the call site invokes
+        this purely for the side-effect warning and ignores the return.
+        """
+        try:
+            src_spec = getattr(getattr(source_du, "config", None), "contract", None)
+            tgt_spec = getattr(getattr(target_du, "config", None), "contract", None)
+            if not src_spec or not tgt_spec:
+                return None  # gradual: at least one side is untyped -> no check
+            from nanobrain.core.data_contract import compatible, parse_contract
+            ok, reason = compatible(parse_contract(src_spec), parse_contract(tgt_spec))
+            if ok:
+                return None
+            msg = (
+                f"⚠️ DATA CONTRACT MISMATCH on link {link_id!r}: producer "
+                f"{getattr(source_du, 'name', '?')!r} -> consumer "
+                f"{getattr(target_du, 'name', '?')!r} is incompatible ({reason}). "
+                "Non-binding in this config_version (Project A Step 1); align the contracts."
+            )
+            logger.warning(msg)
+            return msg
+        except Exception as e:  # WARN-only: a contract quirk must NOT break load in Step 1
+            msg = f"⚠️ contract check skipped for link {link_id!r}: {e}"
+            logger.warning(msg)
+            return msg
 
     def _resolve_data_unit_reference(self, reference: str) -> Any:
         """
