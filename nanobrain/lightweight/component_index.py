@@ -242,6 +242,36 @@ class ComponentIndex:
         )
         return obj
 
+    def is_stale(
+        self,
+        manifest_paths: list[Path],
+        *,
+        library_version: str | None = None,
+    ) -> bool:
+        """Return True if rebuilding from *manifest_paths* would yield a
+        DIFFERENT index than this one — i.e. the corpus (component
+        descriptions / examples / set) or the library_version changed since
+        this index was built.
+
+        Cheap: parses the manifests + recomputes the content hash; does NOT
+        load the embedding model or embed anything. Use it before trusting a
+        loaded index — a stale index silently retrieves over the OLD corpus
+        (missing newly-added components), so a caller should rebuild or
+        degrade to a non-embedding retrieval path rather than serve stale hits.
+
+        ``library_version`` defaults to this index's stored value (so only a
+        corpus change triggers staleness); pass the CURRENT library_version to
+        also detect a version bump.
+        """
+        lv = self._library_version if library_version is None else library_version
+        records = tuple(self._collect_records([Path(p) for p in manifest_paths]))
+        expected = self._compute_hash(
+            records=records,
+            library_version=lv,
+            model_name=self._model_name,
+        )
+        return expected != self._index_hash
+
     # ------------------------------------------------------------------
     # Query
     # ------------------------------------------------------------------
