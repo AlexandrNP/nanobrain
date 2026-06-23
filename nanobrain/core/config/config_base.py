@@ -80,6 +80,11 @@ class ConfigLoadingContext:
     loading_timestamp: datetime
     workflow_directory: Optional[Path] = None
     additional_context: Dict[str, Any] = None
+    # Extra directories to resolve a relative ``config:`` reference against
+    # when every in-tree strategy misses (e.g. a composed workflow staged to a
+    # temp dir reusing wrappers from multiple catalog dirs). Consulted LAST and
+    # FAIL-LOUD on multi-root ambiguity — see ``_resolve_config_path`` Strategy 7.
+    config_search_paths: Optional[List[str]] = None
 
 
 class ConfigBase(BaseModel, ABC):
@@ -849,7 +854,11 @@ class ConfigBase(BaseModel, ABC):
                 resolution_stack=set(),
                 loading_timestamp=datetime.now(),
                 workflow_directory=context.get('workflow_directory'),
-                additional_context=context
+                additional_context=context,
+                # Propagates to nested loads: nested from_config calls pass
+                # **context.additional_context, and additional_context IS this
+                # kwargs dict, so config_search_paths threads down for free.
+                config_search_paths=context.get('config_search_paths'),
             )
             
             # Load raw YAML data
@@ -1075,7 +1084,11 @@ class ConfigBase(BaseModel, ABC):
                                 # Resolve executor config path and create instance
                                 if isinstance(executor_config_value, str):
                                     executor_config_path = cls._resolve_config_path(executor_config_value, context)
-                                    executor_instance = executor_class.from_config(executor_config_path)
+                                    # Thread context (incl. config_search_paths) so an executor's
+                                    # OWN nested config refs resolve symmetrically with steps/agents/tools.
+                                    executor_instance = executor_class.from_config(
+                                        executor_config_path, **context.additional_context
+                                    )
                                     kwargs['executor'] = executor_instance
                                     logger.debug(f"✅ Resolved executor override for '{key}': {executor_class_name}")
 
@@ -1365,7 +1378,36 @@ class ConfigBase(BaseModel, ABC):
                         return str(reduced_resolved)
         except Exception:
             pass
-        
+
+        # Strategy 7: explicit config_search_paths (LAST). Extra roots the
+        # caller injected (e.g. an executor staging a composed workflow that
+        # reuses wrappers from multiple catalog dirs). Placed AFTER every
+        # in-tree strategy so it can only turn a prior FAILURE into a success —
+        # it never changes an already-successful resolution (an empty/None list
+        # is a no-op for every existing load). A reference that matches under
+        # >=2 DISTINCT roots is FAIL-LOUD ambiguous; never silently pick one.
+        search_roots = context.config_search_paths or []
+        if search_roots:
+            unique_matches: Set[str] = set()
+            for root in search_roots:
+                try:
+                    candidate = (Path(root) / path).resolve()
+                    if candidate.is_file():
+                        unique_matches.add(str(candidate))
+                except Exception:
+                    continue
+            if len(unique_matches) == 1:
+                return next(iter(unique_matches))
+            if len(unique_matches) >= 2:
+                raise ValueError(
+                    f"❌ AMBIGUOUS CONFIG RESOLUTION: {config_path}\n"
+                    f"   matched {len(unique_matches)} distinct files across "
+                    f"config_search_paths:\n"
+                    + "\n".join(f"      - {p}" for p in sorted(unique_matches))
+                    + "\n   Resolution must be unambiguous — rename or scope the "
+                    "reference so it resolves under exactly one search root."
+                )
+
         # If all strategies fail, provide comprehensive error
         searched_paths = []
         
