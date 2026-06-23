@@ -127,6 +127,22 @@ def test_dir_without_workflow_yaml_fails_loud(tmp_path):
     assert "config.yml" in str(exc.value)
 
 
+# --- default search-paths classmethod (application supplies its own) --------
+
+def test_default_workflow_search_paths_contract():
+    # Base is application-agnostic ([]); a subclass supplies its own dirs.
+    assert SubworkflowStep._default_workflow_search_paths() == []
+
+    class _Sub(SubworkflowStep):
+        COMPONENT_TYPE = "test_dsp_step"
+
+        @classmethod
+        def _default_workflow_search_paths(cls):
+            return ["/some/app/workflows"]
+
+    assert _Sub._default_workflow_search_paths() == ["/some/app/workflows"]
+
+
 # --- 3-way mutual exclusion (real from_config) ------------------------------
 
 def _excl_step_yaml(tmp_path, body: str):

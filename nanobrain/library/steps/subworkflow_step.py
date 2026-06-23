@@ -277,6 +277,19 @@ class SubworkflowStep(BaseStep):
         """
         return None
 
+    @classmethod
+    def _default_workflow_search_paths(cls) -> list[str]:
+        """Override in concrete subclasses to supply the search dirs for
+        ``inner_workflow_name`` resolution when the config does not set
+        ``workflow_search_paths``.
+
+        Return ``[]`` (default). nanobrain stays application-agnostic; an
+        application subclasses and returns its own ``composition/workflows``
+        dir here so name-bound wrapper YAMLs need only ``inner_workflow_name``
+        (no environment-specific absolute path baked into committed config).
+        """
+        return []
+
     def _init_from_config(
         self,
         config: SubworkflowStepConfig,
@@ -330,10 +343,12 @@ class SubworkflowStep(BaseStep):
         # branch below — reusing the entire load + cache + logging path so the
         # name-bound and path-bound lifecycles are byte-for-byte identical.
         if name_str is not None:
+            search_paths = (
+                config.workflow_search_paths
+                or self.__class__._default_workflow_search_paths()
+            )
             path_str = str(
-                self._resolve_inner_workflow_name(
-                    name_str, config.workflow_search_paths
-                )
+                self._resolve_inner_workflow_name(name_str, search_paths)
             )
 
         if builder_str is not None:
