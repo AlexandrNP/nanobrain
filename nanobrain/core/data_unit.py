@@ -1476,6 +1476,48 @@ class DataUnitMemory(DataUnitBase):
             await self.initialize()
         return self._get_internal_data()
 
+    def _enforce_contract(self, data: Any) -> None:
+        """Project A Step 2 — runtime data-unit contract guard.
+
+        When this DU declares an output ``contract`` and ``data`` is real (not a None /
+        gated-off control write), validate the ACTUAL value against the contract. RAISE
+        ``ContractViolationError`` when the active workflow's config_version >= 3 (binding);
+        otherwise log a warning (non-binding). Fast-paths to a no-op when no contract is
+        declared, so existing untyped workflows pay nothing. A malformed contract degrades
+        to a warning (cannot validate) rather than crashing the write.
+        """
+        contract_spec = getattr(self.config, "contract", None)
+        if not contract_spec:
+            return  # fast path: the overwhelming common case (no contract declared)
+        # Skip framework control writes (cleared DU / G10 gated-off sentinel) — not data.
+        if data is None:
+            return
+        try:
+            from .link import ConditionalLink
+            if data == ConditionalLink.GATED_OFF_SENTINEL:
+                return
+        except Exception:
+            pass
+        from .data_contract import (
+            ContractViolationError,
+            _active_config_version,
+            parse_contract,
+            validate_value,
+        )
+        binding = _active_config_version.get() >= 3
+        try:
+            ok, reason = validate_value(parse_contract(contract_spec), data)
+        except Exception as e:  # malformed contract — cannot validate; warn, never crash
+            logger.warning(
+                "⚠️ contract on data unit %r could not be evaluated: %s", self.name, e)
+            return
+        if ok:
+            return
+        msg = f"contract violation on data unit {self.name!r}: {reason}"
+        if binding:
+            raise ContractViolationError(msg)
+        logger.warning("⚠️ %s (non-binding; config_version<3)", msg)
+
     async def set(self, data: Any) -> None:
         """
         Set data in memory with proper encapsulation.
@@ -1483,6 +1525,8 @@ class DataUnitMemory(DataUnitBase):
         BRUTAL TRUTH: This now uses proper encapsulation methods instead of
         direct _data manipulation that was causing framework bugs.
         """
+        self._enforce_contract(data)  # Project A Step 2 — runtime contract guard
+
         if not self._validate_data(data):
             raise ValueError(f"Invalid data for {self.name}: {data}")
 

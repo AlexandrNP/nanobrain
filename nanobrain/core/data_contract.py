@@ -27,10 +27,25 @@ Kind lattice + refinement:
 
 from __future__ import annotations
 
+import os
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Any
 
 KINDS = ("text", "file", "record", "collection", "handle")
+
+# Project A Step 2 — the active workflow's config_version, set by Workflow.run()/process()
+# (mirrors the G115 `_active_workflow_id` ContextVar). The runtime set() guard reads it to
+# decide RAISE (>=3, binding) vs WARN (<3, non-binding). Lives here, in the pure leaf module,
+# so both workflow.py (sets it) and data_unit.py (reads it) import without a cycle.
+# NOTE: binding enforcement applies only INSIDE Workflow.run()/process(); a direct set() on a
+# contract-bearing DU outside a run sees the default (1) and downgrades to WARN.
+_active_config_version: ContextVar[int] = ContextVar("_active_config_version", default=1)
+
+
+class ContractViolationError(Exception):
+    """A data unit's ACTUAL value violated its declared contract at runtime. Raised by the
+    set() guard only under config_version>=3 (binding); under <3 the guard warns instead."""
 
 
 @dataclass(frozen=True)
@@ -133,4 +148,66 @@ def compatible(producer: Contract, consumer: Contract) -> tuple[bool, str]:
     return True, ""
 
 
-__all__ = ["Contract", "KINDS", "compatible", "parse_contract"]
+def validate_value(contract: Contract, value: Any) -> tuple[bool, str]:
+    """Does an ACTUAL value satisfy ``contract``? The RUNTIME complement to ``compatible``
+    (which is declaration-vs-declaration). Returns (ok, reason); reason '' when ok. Pure.
+
+    Open-world like ``compatible``: a record may carry EXTRA keys; an undeclared value-kind on
+    a required key is `any` (not checked). Caller decides None/sentinel handling before calling.
+
+    By-design edges: `collection` is list/tuple ONLY (a set/generator/str is rejected — a set is
+    unordered and a generator is single-pass, neither a safe data-unit payload); `file` extension
+    matches the LAST dotted segment only (``a.tar.gz`` → ``gz``); dict/str subclasses + namedtuple
+    + pathlib.Path are accepted (isinstance).
+    """
+    k = contract.kind
+    if k == "text":
+        return (True, "") if isinstance(value, str) else (
+            False, f"expected text (str), got {type(value).__name__}")
+
+    if k == "file":
+        if not isinstance(value, (str, os.PathLike)):
+            return False, f"expected file path (str/PathLike), got {type(value).__name__}"
+        if contract.extensions:
+            ext = str(value).lower().rsplit(".", 1)
+            ext = ext[-1] if len(ext) == 2 else ""
+            if ext not in contract.extensions:
+                return False, f"file extension {ext!r} not in {list(contract.extensions)}"
+        return True, ""
+
+    if k == "record":
+        if not isinstance(value, dict):
+            return False, f"expected record (dict), got {type(value).__name__}"
+        for key, sub in contract.required.items():
+            if key not in value:
+                return False, f"missing required key {key!r}"
+            if sub is not None:  # declared value-kind -> recurse; None = any -> skip
+                ok, why = validate_value(sub, value[key])
+                if not ok:
+                    return False, f"key {key!r}: {why}"
+        return True, ""
+
+    if k == "collection":
+        if not isinstance(value, (list, tuple)) or isinstance(value, (str, bytes)):
+            return False, f"expected collection (list/tuple), got {type(value).__name__}"
+        if contract.element is not None:
+            for i, item in enumerate(value):
+                ok, why = validate_value(contract.element, item)
+                if not ok:
+                    return False, f"element[{i}]: {why}"
+        return True, ""
+
+    if k == "handle":
+        return (True, "") if value is not None else (False, "expected a handle (non-None)")
+
+    return True, ""
+
+
+__all__ = [
+    "Contract",
+    "ContractViolationError",
+    "KINDS",
+    "compatible",
+    "parse_contract",
+    "validate_value",
+]

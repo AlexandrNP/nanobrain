@@ -375,9 +375,11 @@ class WorkflowConfig(StepConfig):
     # also redundant under the new field default (Pydantic supplies
     # True for omitted keys before our warning runs); kept for
     # documentation purposes.
-    config_version: Literal[1, 2] = Field(
+    config_version: Literal[1, 2, 3] = Field(
         default=2,
-        description="Workflow config schema version. As of G7 Step 5, "
+        description="Workflow config schema version. v3 (Project A Step 2) opts into BINDING "
+                    "data-unit contract enforcement (load-checker + runtime set() guard RAISE "
+                    "instead of WARN); v3 inherits v2's auto_transfer defaults. As of G7 Step 5, "
                     "BOTH v1 and v2 produce auto_transfer=True by default "
                     "(the field-level default was flipped). v2 also "
                     "rewrites path-reference link configs in-memory and "
@@ -1937,6 +1939,11 @@ class Workflow(Step):
                     self.step_links[link_id] = link_instance
 
             except Exception as e:
+                # Project A Step 2: a BINDING (config_version>=3) contract violation must
+                # fail the load — let it propagate instead of being swallowed as a link.
+                from nanobrain.core.data_contract import ContractViolationError
+                if isinstance(e, ContractViolationError):
+                    raise
                 logger.error(
                     f"❌ Failed to resolve link {link_id}: {e}", exc_info=True)
                 # Still add the link even if resolution fails
@@ -1956,17 +1963,14 @@ class Workflow(Step):
                     f"{len(self.child_steps)} steps, {len(self.step_links)} links")
 
     def _check_link_contracts(self, link_id: str, source_du: Any, target_du: Any) -> Optional[str]:
-        """Project A Step 1 (WARN-only): if BOTH endpoints of a link declare an I/O
-        contract, warn when the producer's is incompatible with the consumer's.
+        """Project A Steps 1+2: if BOTH endpoints of a link declare an I/O contract, the
+        producer's must be compatible with the consumer's. WARN under config_version<3
+        (non-binding, Step 1); RAISE ``ContractViolationError`` under >=3 (binding, Step 2).
 
-        Gradual: an undeclared side is skipped (existing untyped workflows unaffected).
-        NON-BINDING — never raises in Step 1 (a malformed/incompatible contract degrades
-        to a warning so it cannot break workflow load). The config_version:3 FAIL-flip +
-        the runtime set() guard are a later step. See ``nanobrain.core.data_contract``.
-
-        Returns the warning string (which it also logs) or None when compatible/skipped-
-        clean — the return value exists for deterministic testing; the call site invokes
-        this purely for the side-effect warning and ignores the return.
+        Gradual: an undeclared side is skipped (existing untyped workflows unaffected). A
+        malformed contract degrades to a warning (cannot evaluate), never a raise. Returns
+        the warning string (also logged) or None — the return exists for deterministic
+        testing; the call site invokes this for the side effect and ignores the return.
         """
         try:
             src_spec = getattr(getattr(source_du, "config", None), "contract", None)
@@ -1975,20 +1979,24 @@ class Workflow(Step):
                 return None  # gradual: at least one side is untyped -> no check
             from nanobrain.core.data_contract import compatible, parse_contract
             ok, reason = compatible(parse_contract(src_spec), parse_contract(tgt_spec))
-            if ok:
-                return None
-            msg = (
-                f"⚠️ DATA CONTRACT MISMATCH on link {link_id!r}: producer "
-                f"{getattr(source_du, 'name', '?')!r} -> consumer "
-                f"{getattr(target_du, 'name', '?')!r} is incompatible ({reason}). "
-                "Non-binding in this config_version (Project A Step 1); align the contracts."
-            )
-            logger.warning(msg)
-            return msg
-        except Exception as e:  # WARN-only: a contract quirk must NOT break load in Step 1
+        except Exception as e:  # malformed contract -> cannot evaluate; warn, never raise
             msg = f"⚠️ contract check skipped for link {link_id!r}: {e}"
             logger.warning(msg)
             return msg
+        if ok:
+            return None
+        msg = (
+            f"DATA CONTRACT MISMATCH on link {link_id!r}: producer "
+            f"{getattr(source_du, 'name', '?')!r} -> consumer "
+            f"{getattr(target_du, 'name', '?')!r} is incompatible ({reason})."
+        )
+        # config_version>=3 -> BINDING: raise (the per-link handler re-raises this so load
+        # fails). Raised OUTSIDE the try above so it is not self-caught.
+        if getattr(getattr(self, "workflow_config", None), "config_version", 1) >= 3:
+            from nanobrain.core.data_contract import ContractViolationError
+            raise ContractViolationError(msg)
+        logger.warning("⚠️ %s Non-binding (config_version<3); align the contracts.", msg)
+        return msg
 
     def _resolve_data_unit_reference(self, reference: str) -> Any:
         """
@@ -2591,6 +2599,11 @@ class Workflow(Step):
         # only this workflow's tasks. Restored on exit (try/finally)
         # so nested runs cleanly pop back to the outer scope.
         from .trigger import _active_workflow_id as _g115_cv
+        # Project A Step 2 — push this workflow's config_version into a task-scope ContextVar
+        # so the runtime DataUnitMemory.set() guard knows whether contracts are BINDING (>=3)
+        # for the DUs written during this run. Mirrors _g115_cv; nests cleanly (a
+        # SubworkflowStep's inner run sets its own version for its own DUs).
+        from .data_contract import _active_config_version
 
         # Per-instance serialization (2026-06-14): acquired AFTER the
         # nest_under_active_context dispatch above, so the nested path (which
@@ -2600,6 +2613,8 @@ class Workflow(Step):
         # serialize instead of clobbering shared data units. See _get_run_lock.
         async with self._get_run_lock():
             _g115_token = _g115_cv.set(self._g115_workflow_id())
+            _cv_token = _active_config_version.set(
+                getattr(getattr(self, "workflow_config", None), "config_version", 1))
             try:
                 process_result = await self.process(input_data, **kwargs)
 
@@ -2639,6 +2654,7 @@ class Workflow(Step):
                 return outputs
             finally:
                 _g115_cv.reset(_g115_token)
+                _active_config_version.reset(_cv_token)
 
     async def _run_with_nested_context(
         self,
@@ -3019,11 +3035,15 @@ class Workflow(Step):
         # Workflow.run()) — we always set ours; the outer caller's
         # restore-token semantics preserve the prior value.
         from .trigger import _active_workflow_id as _g115_cv
+        from .data_contract import _active_config_version  # Project A Step 2 — see run()
         _g125_token = _g115_cv.set(self._g115_workflow_id())
+        _cv_token = _active_config_version.set(
+            getattr(getattr(self, "workflow_config", None), "config_version", 1))
         try:
             return await self._process_body(input_data, **kwargs)
         finally:
             _g115_cv.reset(_g125_token)
+            _active_config_version.reset(_cv_token)
 
     async def _process_body(self, input_data: Dict[str, Any], **kwargs) -> Any:
         """G125 (2026-05-18) — the original process() body, hoisted to a

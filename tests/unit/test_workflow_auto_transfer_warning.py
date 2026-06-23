@@ -60,9 +60,14 @@ class TestWorkflowConfigVersionField:
         cfg = self._build(name="test", config_version=2)
         assert cfg.config_version == 2
 
+    def test_explicit_v3_accepted(self):
+        # Project A Step 2 — v3 opts into binding contract enforcement.
+        cfg = self._build(name="test", config_version=3)
+        assert cfg.config_version == 3
+
     def test_unknown_version_rejected(self):
         with pytest.raises(Exception):
-            self._build(name="test", config_version=3)
+            self._build(name="test", config_version=4)
 
     def test_string_version_rejected(self):
         with pytest.raises(Exception):
