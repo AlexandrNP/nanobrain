@@ -131,7 +131,7 @@ def test_neither_path_nor_builder_fails_fast(tmp_path):
     yml = _write_step_yaml(tmp_path, "name: neither_step\n")
     with pytest.raises(
         ComponentConfigurationError,
-        match="inner_workflow_path OR an inner_workflow_builder",
+        match="requires an inner_workflow_path, inner_workflow_builder, OR inner_workflow_name",
     ):
         SubworkflowStep.from_config(yml)
 

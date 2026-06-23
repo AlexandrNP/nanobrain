@@ -111,6 +111,39 @@ class SubworkflowStepConfig(StepConfig):
         ),
     )
 
+    inner_workflow_name: Optional[str] = Field(
+        default=None,
+        description=(
+            "Logical name of a reusable inner workflow, resolved to a YAML "
+            "path against ``workflow_search_paths`` by this convention: "
+            "``<dir>/<name>/workflow.yml`` -> "
+            "``<dir>/<name>/<name>_workflow.yml`` -> a SINGLE "
+            "``<dir>/<name>/*_workflow.yml`` (multiple, with no canonical name, "
+            "FAIL-FAST as ambiguous). "
+            "This is the seam for referencing a reusable reasoning-pattern "
+            "workflow (e.g. 'tdr_loop', 'rag_e2e_synthesis') BY NAME without "
+            "hardcoding its on-disk path. Resolution folds into the same "
+            "load+cache path as inner_workflow_path, so every downstream "
+            "silent-failure gate is identical. FAIL-FAST (never silent) on an "
+            "unknown name, an ambiguous/empty workflow dir, or empty "
+            "workflow_search_paths. Mutually exclusive with inner_workflow_path "
+            "and inner_workflow_builder. Concrete subclasses may omit this and "
+            "override _default_inner_workflow_name() instead."
+        ),
+    )
+
+    workflow_search_paths: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Directories searched to resolve ``inner_workflow_name``. Each is "
+            "checked for a ``<name>/`` subdir containing a workflow YAML. "
+            "nanobrain stays generic — it does NOT know where any application "
+            "keeps its workflows; the application (e.g. apecx) supplies its "
+            "``composition/workflows`` dir here. Order is precedence "
+            "(first match wins). Ignored unless inner_workflow_name is set."
+        ),
+    )
+
     timeout_seconds: float = Field(
         default=60.0,
         description=(
@@ -234,6 +267,16 @@ class SubworkflowStep(BaseStep):
         """
         return None
 
+    @classmethod
+    def _default_inner_workflow_name(cls) -> Optional[str]:
+        """Override in concrete subclasses to hardcode the inner workflow name.
+
+        Return None (default) to require the name via config field (or to use
+        the path/builder branch instead). Symmetric with
+        ``_default_inner_workflow_path`` / ``_default_inner_workflow_builder``.
+        """
+        return None
+
     def _init_from_config(
         self,
         config: SubworkflowStepConfig,
@@ -250,22 +293,47 @@ class SubworkflowStep(BaseStep):
             config.inner_workflow_builder
             or self.__class__._default_inner_workflow_builder()
         )
+        name_str = (
+            config.inner_workflow_name
+            or self.__class__._default_inner_workflow_name()
+        )
 
-        if path_str is not None and builder_str is not None:
+        # Exactly ONE inner-workflow source. Three are now possible
+        # (path / builder / name); enforce mutual exclusion explicitly so a
+        # mis-config FAILS LOUD at init rather than silently preferring one.
+        _declared = [
+            ("inner_workflow_path", path_str),
+            ("inner_workflow_builder", builder_str),
+            ("inner_workflow_name", name_str),
+        ]
+        _set = [(n, v) for n, v in _declared if v is not None]
+        if len(_set) > 1:
             raise ComponentConfigurationError(
-                f"FAIL-FAST: SubworkflowStep {self.name!r} declares BOTH "
-                f"inner_workflow_path ({path_str!r}) and "
-                f"inner_workflow_builder ({builder_str!r}). They are "
-                f"mutually exclusive — the inner workflow comes from "
-                f"exactly one source. Pick one."
+                f"FAIL-FAST: SubworkflowStep {self.name!r} declares more than "
+                f"one inner-workflow source "
+                f"({', '.join(f'{n}={v!r}' for n, v in _set)}). They are "
+                f"mutually exclusive — the inner workflow comes from exactly "
+                f"one of inner_workflow_path / inner_workflow_builder / "
+                f"inner_workflow_name."
             )
-        if path_str is None and builder_str is None:
+        if not _set:
             raise ComponentConfigurationError(
                 f"FAIL-FAST: SubworkflowStep {self.name!r} requires an "
-                f"inner_workflow_path OR an inner_workflow_builder. "
-                f"Either set one in the step's config YAML, or subclass "
-                f"and override _default_inner_workflow_path() / "
-                f"_default_inner_workflow_builder()."
+                f"inner_workflow_path, inner_workflow_builder, OR "
+                f"inner_workflow_name. Set one in the step's config YAML, or "
+                f"subclass and override _default_inner_workflow_path() / "
+                f"_default_inner_workflow_builder() / "
+                f"_default_inner_workflow_name()."
+            )
+
+        # A name resolves to a concrete YAML path, then folds into the path
+        # branch below — reusing the entire load + cache + logging path so the
+        # name-bound and path-bound lifecycles are byte-for-byte identical.
+        if name_str is not None:
+            path_str = str(
+                self._resolve_inner_workflow_name(
+                    name_str, config.workflow_search_paths
+                )
             )
 
         if builder_str is not None:
@@ -435,6 +503,84 @@ class SubworkflowStep(BaseStep):
             f"could not be resolved. Tried: workspace_root via G40, cwd "
             f"({Path.cwd()}). Provide an absolute path or set "
             f"$NANOBRAIN_WORKSPACE_ROOT."
+        )
+
+    @staticmethod
+    def _resolve_inner_workflow_name(name: str, search_paths: list[str]) -> Path:
+        """Resolve a logical workflow ``name`` to its YAML path.
+
+        For each dir in ``search_paths`` (precedence order), look for a
+        ``<dir>/<name>/`` subdir and pick its workflow YAML by THIS step's own
+        convention (nanobrain stays application-agnostic — an application
+        enables name-binding by laying its workflows out to satisfy it):
+
+          1. ``workflow.yml`` (the unambiguous canonical name), else
+          2. ``<name>_workflow.yml`` (canonical for this name), else
+          3. a SINGLE ``*_workflow.yml`` file.
+
+        FAIL-FAST (never silent / never a wrong-file guess) on:
+          * empty ``search_paths`` (a name can't be resolved without them),
+          * a ``<name>/`` dir whose only candidates are MULTIPLE
+            ``*_workflow.yml`` with no canonical ``workflow.yml`` /
+            ``<name>_workflow.yml`` to break the tie (ambiguous — picking the
+            alphabetically-first would be a silent wrong-bind),
+          * a ``<name>/`` dir that exists but has no ``*_workflow.yml`` at all,
+          * a name not found under any search path (lists what IS available).
+
+        Note: matches ``*.yml`` only (not ``.yaml``) — a narrow, predictable
+        convention; an application using ``.yaml`` workflow files would not be
+        name-bindable here.
+        """
+        if not search_paths:
+            raise ComponentConfigurationError(
+                f"FAIL-FAST: SubworkflowStep inner_workflow_name {name!r} is "
+                f"set but workflow_search_paths is empty — there is nowhere to "
+                f"resolve the name. Supply workflow_search_paths (e.g. the "
+                f"application's composition/workflows dir)."
+            )
+        for d in search_paths:
+            wf_dir = Path(d) / name
+            if not wf_dir.is_dir():
+                continue
+            candidates = sorted(wf_dir.glob("*.yml"))
+            canonical = [p for p in candidates if p.name == "workflow.yml"]
+            named = [p for p in candidates if p.name == f"{name}_workflow.yml"]
+            star = [p for p in candidates if p.name.endswith("_workflow.yml")]
+            if canonical:
+                return canonical[0].resolve()
+            if named:
+                return named[0].resolve()
+            if len(star) == 1:
+                return star[0].resolve()
+            if len(star) > 1:
+                raise ComponentConfigurationError(
+                    f"FAIL-FAST: SubworkflowStep inner_workflow_name {name!r} "
+                    f"matched dir {wf_dir} with MULTIPLE candidate workflow "
+                    f"YAMLs {[p.name for p in star]} and none is the canonical "
+                    f"'workflow.yml' or '{name}_workflow.yml' to break the tie. "
+                    f"Picking one silently would be a wrong-bind. Add a "
+                    f"'workflow.yml' / '{name}_workflow.yml', or reference the "
+                    f"intended sub-workflow by a more specific name."
+                )
+            raise ComponentConfigurationError(
+                f"FAIL-FAST: SubworkflowStep inner_workflow_name {name!r} "
+                f"matched dir {wf_dir} but it contains no workflow YAML "
+                f"(expected workflow.yml / {name}_workflow.yml / *_workflow.yml). "
+                f"Found: {[c.name for c in candidates]}"
+            )
+        available = sorted(
+            {
+                p.name
+                for d in search_paths
+                if Path(d).is_dir()
+                for p in Path(d).iterdir()
+                if p.is_dir() and p.name != "__pycache__"
+            }
+        )
+        raise ComponentConfigurationError(
+            f"FAIL-FAST: SubworkflowStep inner_workflow_name {name!r} not found "
+            f"under workflow_search_paths {list(search_paths)}. Available "
+            f"names: {available}"
         )
 
     @property
