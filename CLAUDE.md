@@ -6,6 +6,28 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Nanobrain is an event-driven AI agent framework for distributed workflows. It's currently in research preview and has dependencies on HPC systems and external frameworks. The framework uses a mandatory configuration-driven architecture where ALL components are created through the `from_config()` pattern.
 
+## Recent additions (2026-06-23 — gradual-typed data-unit I/O contracts)
+
+New core module `nanobrain/core/data_contract.py`: optional, gradual-typed data-unit I/O
+contracts so producer→consumer interface drift is CAUGHT, not silently consumed (the dominant
+`auto_transfer=False`/G127 silent-failure class). `Contract` (kind lattice
+`text|file|record|collection|handle` + optional refinement), `parse_contract` (FAIL-LOUD on
+unknown kind), `compatible(producer, consumer)` (declaration-vs-declaration; record = width
+`consumer.required ⊆ producer.guaranteed` + covariant depth; undeclared = `any`), and
+`validate_value(contract, value)` (runtime actual-vs-declaration). `DataUnitConfig` gains an
+optional `contract` field (backward-compat via `extra='allow'`). `DataUnitMemory.set()` runs a
+guard: when the DU declares a contract and the active `config_version >= 3` (an `_active_config_version`
+ContextVar set by `Workflow.run`/`process`, mirroring the G115 `_active_workflow_id` pattern), an
+actual-value violation RAISES `ContractViolationError`; under `<3` it WARNs (non-binding —
+existing untyped workflows unaffected). `Workflow._check_link_contracts` does the same at load
+(WARN, or RAISE at v3) for any link whose both endpoints declare a contract. `config_version`
+widened to `Literal[1, 2, 3]` (v3 ⊇ v2). NOTE: the kind lattice has no scalar bool/int kind —
+declare such keys via record `required_keys` (presence), not typed. Regression: 14 new unit tests
+(`test_data_contract`, `test_validate_value`, `test_runtime_contract_guard`, `test_link_contract_warn`);
+full unit suite 1326 passed / 0 regressions (the guard fast-paths to a no-op when no contract is
+declared). The apecx-side authoring guide + ratchet + bug-detector live in
+`apecx-mcp-integration/docs/contract_authoring.md` + that repo's CLAUDE.md "Data-unit I/O contracts".
+
 ## Recent additions (2026-06-14 — Workflow.run serializes concurrent runs on one instance)
 
 `Workflow.run` (`nanobrain/core/workflow.py`) silently CROSS-CONTAMINATED when one
