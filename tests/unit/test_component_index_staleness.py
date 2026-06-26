@@ -18,7 +18,13 @@ from pathlib import Path
 import pytest
 import yaml
 
-from nanobrain.lightweight.component_index import ComponentIndex
+# pytest collection IS import: ComponentIndex module-scope-imports the optional 'rag' extras
+# (sentence_transformers + faiss). Skip this module when they're absent (clean-install / CI) rather
+# than aborting the WHOLE suite's collection — the documented clean-install anti-pattern.
+pytest.importorskip("sentence_transformers")
+pytest.importorskip("faiss")
+
+from nanobrain.lightweight.component_index import ComponentIndex  # noqa: E402
 
 
 def _write_manifest(path: Path, components: list[dict]) -> Path:
