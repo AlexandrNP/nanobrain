@@ -3,10 +3,10 @@
 This module is the single entry point for the question "I have a *need*;
 give me the tool(s) that satisfy it, as :class:`UnifiedToolDescriptor`
 records I can dispatch." A *source* is anything that can surface tools:
-a Rhea MCP worker today, a custom in-process backend (PyMOL, a local
-Python callable, an HTTP service) tomorrow. The seam is deliberately
-source-agnostic — **Rhea is one source, not THE source**; custom
-backends are first-class citizens of the same API.
+a Rhea MCP worker, or a custom in-process backend (PyMOL, a local Python
+callable, an HTTP service). The seam is deliberately source-agnostic —
+**Rhea is one source, not THE source**; custom backends are first-class
+citizens of the same API.
 
 Two paths, one return type
 ---------------------------
@@ -18,15 +18,13 @@ Two paths, one return type
   When the result shape can't be parsed into MCP tool dicts, fall back
   to a ``tools/list`` over the **same** (find_tools-populated) session.
 * **Custom path** (no ``rhea_transport``): resolve a registered
-  :class:`ToolBackendAdapter` from :class:`ToolBackendRegistry` and
-  build a minimal UTD pinned at that adapter's class path. Any
-  ``BACKEND_NAME``-registered adapter rides this path.
-
-**EXPERIMENTAL — the custom path has no production consumer yet.** It is the
-unified seam's second half: exercised by unit tests and ready for a future
-caller, but today PyMOL (the first custom backend) dispatches DIRECTLY through
-its adapter, NOT via this seam. Do not assume the custom path is exercised
-end-to-end in production until a caller adopts it.
+  :class:`ToolBackendAdapter` from :class:`ToolBackendRegistry`; if it is
+  :class:`Establishable`, ESTABLISH it (e.g. auto-build its docker image)
+  via ``ensure_established`` BEFORE returning its UTD. Any
+  ``BACKEND_NAME``-registered adapter rides this path; PyMOL is the first
+  (a docker source — it establishes by building ``apecx-pymol:3.1.0`` from
+  its Dockerfile). This is what makes docker a first-class establishment
+  source alongside Rhea, not a bare registry lookup.
 
 Honesty / FAIL-LOUD discipline (workspace CLAUDE.md):
 
@@ -34,14 +32,15 @@ Honesty / FAIL-LOUD discipline (workspace CLAUDE.md):
   unchanged — an unreachable Rhea worker FAILS LOUD, it is never
   swallowed into an empty list.
 * The custom path lets ``ToolBackendRegistry.get`` raise ``KeyError``
-  when the backend is not registered — a misnamed backend is a loud
-  configuration error, not a silent no-op.
+  when the backend is not registered, and lets ``ensure_established``
+  (e.g. a docker build failure) propagate — a misnamed backend or an
+  unbuildable source is a loud error, not a silent no-op.
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, Protocol, runtime_checkable
 
 from nanobrain.core.component_base import ComponentConfigurationError
 from nanobrain.core.unified_tool_descriptor import UnifiedToolDescriptor
@@ -60,11 +59,26 @@ logger = logging.getLogger(__name__)
 _TOOL_LIST_KEYS = ("tools", "results", "matches", "items", "found_tools")
 
 
+@runtime_checkable
+class Establishable(Protocol):
+    """A tool adapter that can ESTABLISH itself from its declared source.
+
+    Building its docker image, cloning+building a repo, conda-installing — any
+    one-time provisioning that must happen before the tool can run. The
+    find-and-establish seam's custom path calls ``ensure_established`` so a
+    source-backed tool is provisioned THROUGH the seam, the same way Rhea tools
+    are established via ``find_tools`` — not self-provisioned around it.
+    """
+
+    async def ensure_established(self, *, on_progress: Any = None) -> None: ...
+
+
 async def find_and_establish_tool(
     need: str,
     *,
     rhea_transport: MCPTransport | None = None,
     version: str = "0.0.0",
+    on_progress: Any = None,
 ) -> list[UnifiedToolDescriptor]:
     """Find and establish the tool(s) that satisfy ``need``.
 
@@ -79,6 +93,9 @@ async def find_and_establish_tool(
         version: The descriptor version token for the custom path's UTD
             (the Rhea path takes the version from the worker's
             provenance block). Ignored on the Rhea path.
+        on_progress: Optional callback forwarded to a custom backend's
+            ``ensure_established`` (e.g. the docker-build progress line).
+            Ignored on the Rhea path.
 
     Returns:
         A list of :class:`UnifiedToolDescriptor`. The Rhea path returns
@@ -93,7 +110,7 @@ async def find_and_establish_tool(
     """
     if rhea_transport is not None:
         return await _find_and_establish_rhea(need, rhea_transport)
-    return _establish_custom(need, version)
+    return await _establish_custom(need, version, on_progress)
 
 
 # ---------------------------------------------------------------------------
@@ -167,14 +184,19 @@ def _extract_tool_dicts(parsed: Any) -> list[dict[str, Any]]:
 # Custom-backend path
 # ---------------------------------------------------------------------------
 
-def _establish_custom(need: str, version: str) -> list[UnifiedToolDescriptor]:
-    """Build a minimal UTD for a registered custom backend tool.
+async def _establish_custom(
+    need: str, version: str, on_progress: Any = None
+) -> list[UnifiedToolDescriptor]:
+    """Establish (if the adapter supports it) and return a minimal UTD for a
+    registered custom backend tool.
 
-    ``need`` is ``"<backend>:<tool_id>"`` or a bare ``BACKEND_NAME``
-    (the backend name then doubles as the tool_id). The adapter is
-    resolved from :class:`ToolBackendRegistry` (``KeyError`` FAIL-LOUD
-    when absent); the UTD's ``provenance_pin.class_path`` pins the
-    adapter's importable class path so the tool can be re-materialized.
+    ``need`` is ``"<backend>:<tool_id>"`` or a bare ``BACKEND_NAME`` (the
+    backend name then doubles as the tool_id). The adapter is resolved from
+    :class:`ToolBackendRegistry` (``KeyError`` FAIL-LOUD when absent); if it is
+    :class:`Establishable` it is ESTABLISHED (e.g. its docker image is
+    auto-built) before the UTD is returned. The UTD's
+    ``provenance_pin.class_path`` pins the adapter's importable class path so
+    the tool can be re-materialized.
     """
     if ":" in need:
         backend, tool_id = need.split(":", 1)
@@ -191,6 +213,11 @@ def _establish_custom(need: str, version: str) -> list[UnifiedToolDescriptor]:
 
     # FAIL-LOUD KeyError when the backend is not registered.
     adapter = ToolBackendRegistry.get(backend)
+    # ESTABLISH from the adapter's own source (e.g. docker auto-build) BEFORE
+    # handing back the UTD — this is what makes the custom path a real
+    # find-AND-establish, not a bare lookup. Non-Establishable adapters skip it.
+    if isinstance(adapter, Establishable):
+        await adapter.ensure_established(on_progress=on_progress)
     adapter_cls = type(adapter)
     class_path = f"{adapter_cls.__module__}.{adapter_cls.__qualname__}"
 
@@ -207,4 +234,4 @@ def _establish_custom(need: str, version: str) -> list[UnifiedToolDescriptor]:
     return [utd]
 
 
-__all__ = ["find_and_establish_tool"]
+__all__ = ["Establishable", "find_and_establish_tool"]

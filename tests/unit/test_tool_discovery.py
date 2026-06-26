@@ -238,3 +238,44 @@ def test_custom_path_honors_passed_version(dummy_backend):
 def test_custom_path_unknown_backend_fails_loud():
     with pytest.raises(KeyError, match="no ToolBackendAdapter registered"):
         asyncio.run(find_and_establish_tool("nosuchbackend:thing"))
+
+
+class _EstablishableAdapter(ToolBackendAdapter):
+    """A custom backend that ESTABLISHES itself (the docker-source shape)."""
+
+    BACKEND_NAME = "establishtestbackend"
+
+    def __init__(self):
+        super().__init__()
+        self.established = 0
+        self.progress_seen = None
+
+    async def invoke(self, utd, inputs, *, run_context_namespace="", **kwargs):
+        return {"result": "ok"}
+
+    async def ensure_established(self, *, on_progress=None):
+        self.established += 1
+        self.progress_seen = on_progress
+
+
+@pytest.fixture
+def establishable_backend():
+    adapter = _EstablishableAdapter()
+    ToolBackendRegistry.register(adapter)
+    try:
+        yield adapter
+    finally:
+        ToolBackendRegistry.unregister("establishtestbackend")
+
+
+def test_custom_path_establishes_establishable_backend(establishable_backend):
+    """An Establishable adapter is ESTABLISHED (ensure_established awaited,
+    on_progress forwarded) before its UTD is returned — the custom path is a
+    real find-AND-establish (PyMOL's docker-source shape), not a bare lookup."""
+    sentinel = object()
+    utds = asyncio.run(
+        find_and_establish_tool("establishtestbackend:sasa", on_progress=sentinel)
+    )
+    assert establishable_backend.established == 1
+    assert establishable_backend.progress_seen is sentinel
+    assert utds[0].descriptor_id == "establishtestbackend:sasa@0.0.0"
