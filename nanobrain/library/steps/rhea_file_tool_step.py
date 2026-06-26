@@ -51,10 +51,13 @@ from pydantic import ConfigDict, Field, model_validator
 
 from nanobrain.core.component_base import ComponentConfigurationError
 from nanobrain.core.step import BaseStep, StepConfig
+from nanobrain.core.unified_tool_descriptor import UnifiedToolDescriptor
 from nanobrain.library.tools._mcp_transport import (
     MCPTransport,
     parse_tool_call_result,
 )
+from nanobrain.library.tools.rhea_discovery import RheaMCPDiscovery
+from nanobrain.library.tools.tool_discovery import find_and_establish_tool
 
 logger = logging.getLogger(__name__)
 
@@ -311,15 +314,16 @@ class RheaFileToolStep(BaseStep):
             client_name="nanobrain-rhea-file-tool-step",
         )
         try:
-            # 2. find_tools so the Rhea server surfaces the tool into
-            #    the session-scoped catalog.
-            await transport.call(
-                "tools/call",
-                {
-                    "name": "find_tools",
-                    "arguments": {"query": cfg.find_tools_query},
-                },
+            # 2. find-and-establish: surface the matching tools into the
+            #    Rhea session-scoped catalog via the unified seam, then
+            #    VALIDATE the configured tool was actually surfaced. A
+            #    find_tools query that does NOT surface cfg.tool_name would
+            #    otherwise fail later with a confusing tools/call error;
+            #    failing loud HERE names the real problem.
+            surfaced = await find_and_establish_tool(
+                cfg.find_tools_query, rhea_transport=transport
             )
+            self._assert_tool_surfaced(surfaced, cfg.tool_name)
 
             # 3. tools/call the named tool with the staged file.
             tool_args: Dict[str, Any] = {cfg.file_input_arg: redis_key}
@@ -449,6 +453,39 @@ class RheaFileToolStep(BaseStep):
             "stderr": stderr,
             "output_files": output_files,
         }
+
+    def _assert_tool_surfaced(
+        self, surfaced: List[UnifiedToolDescriptor], tool_name: str
+    ) -> None:
+        """FAIL-LOUD when ``find_tools`` did not surface ``tool_name``.
+
+        ``find_and_establish_tool`` returns every tool the Rhea session
+        catalog now exposes for the query. ``cfg.tool_name`` is the raw
+        Rhea/Galaxy tool name; a surfaced UTD carries it as the
+        descriptor's ``tool_id`` (sanitized) AND verbatim under
+        ``provenance_pin.mcp_support['rhea_tool_name']``. Match against
+        the raw name, its sanitized form, and the descriptor ids so the
+        check is robust to the discovery sanitizer.
+        """
+        candidates: set[str] = set()
+        for utd in surfaced:
+            candidates.add(utd.descriptor_id)
+            candidates.add(utd.descriptor_tool_id)
+            pin = getattr(utd, "provenance_pin", None)
+            mcp_support = getattr(pin, "mcp_support", None) or {}
+            raw_name = mcp_support.get("rhea_tool_name")
+            if raw_name:
+                candidates.add(str(raw_name))
+        sanitized = RheaMCPDiscovery._sanitize_tool_id(tool_name)
+        if tool_name in candidates or sanitized in candidates:
+            return
+        raise ComponentConfigurationError(
+            f"FAIL-FAST: RheaFileToolStep {self.name!r}: find_tools query "
+            f"{self._rfts_config.find_tools_query!r} did NOT surface the "
+            f"configured tool {tool_name!r} into the Rhea session catalog. "
+            f"Surfaced tool ids: {sorted(candidates)}. Adjust find_tools_query "
+            f"so it matches the tool, or verify tool_name is correct."
+        )
 
     def _evict_rhea_keys(self, redis_client: Any, keys: list[str]) -> None:
         """Best-effort delete of per-call ProxyStore Redis keys. NEVER raises (teardown is
