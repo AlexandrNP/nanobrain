@@ -5,30 +5,36 @@ into a proper nanobrain ``BaseStep``. It drives the full Rhea file-input
 protocol for ANY Galaxy ``type="data"`` tool (MUSCLE is just one
 configuration of it):
 
-  1. Stage the input file bytes into Rhea's ``rhea-input`` ProxyStore
-     via ``RheaFileProxy.from_buffer(...).to_proxy(store)`` — this
-     returns a redis_key.
+  1. Stage the input file bytes into the Rhea server via its redis-direct
+     HTTP ``POST {base}/upload`` endpoint — this returns a ``key``
+     (a ``meta:<uuid>`` string) that names the staged file.
   2. ``find_tools`` over MCP with a semantic query so the Rhea server
      populates the session-scoped tool catalog.
-  3. ``tools/call`` the named tool with ``{file_input_arg: redis_key,
+  3. ``tools/call`` the named tool with ``{file_input_arg: key,
      **static_tool_args}``.
   4. Parse Rhea's ``RheaOutput`` JSON, fetch each requested output
-     file back out of the ``rhea-output`` ProxyStore, decode to text.
+     file back via ``GET {base}/download?key=<key>``, decode to text.
+  5. Best-effort ``POST {base}/delete?key=<key>`` for the input key and
+     every output key so the server's redis store does not grow
+     run-over-run.
+
+This is a THIN HTTP client: it imports no rhea-side, object-store, or
+pickle libraries. The rhea server owns the redis-backed file transport;
+this step only speaks HTTP + MCP to it. The base URL is derived from the
+MCP URL (strip the trailing ``/mcp/``) or set explicitly via
+``http_base_url``.
 
 Honesty / silent-failure discipline (workspace CLAUDE.md):
 
-  - ``RheaFileProxy`` is lazy-imported INSIDE ``process()`` and the
-    ``ImportError`` is re-raised FAIL-LOUD: this step is intentionally
-    Rhea-coupled and the runtime needs the ``rhea`` repo on PYTHONPATH.
-    The class is genuinely imported (not vendored) because cloudpickle
-    pickles by module reference — the rhea-server deserializes the
-    exact ``rhea.utils.proxy.RheaFileProxy`` class.
   - ``parse_tool_call_result`` raises ``ComponentConfigurationError``
     on the MCP ``isError=True`` envelope — that is the FAIL-LOUD path.
   - A non-zero ``return_code`` raises.
   - A "successful" call that produced ZERO usable output files raises:
     a green call with no output is the silent-failure shape this step
     exists to refuse.
+  - An HTTP upload/download failure raises (``raise_for_status``); only
+    the ``delete`` eviction is best-effort (teardown must never fail the
+    call).
 
 Framework-native packaging:
   - Subclasses ``BaseStep``; implements ``async def process``; never
@@ -47,6 +53,7 @@ import json
 import logging
 from typing import Any, Dict, List
 
+import httpx
 from pydantic import ConfigDict, Field, model_validator
 
 from nanobrain.core.component_base import ComponentConfigurationError
@@ -79,15 +86,14 @@ class RheaFileToolStepConfig(StepConfig):
         default="http://localhost:3001/mcp/",
         description="The Rhea MCP streamable-HTTP endpoint.",
     )
-    redis_host: str = Field(default="localhost")
-    redis_port: int = Field(default=6379)
-    input_store_name: str = Field(
-        default="rhea-input",
-        description="ProxyStore name the input file is staged into.",
-    )
-    output_store_name: str = Field(
-        default="rhea-output",
-        description="ProxyStore name the tool's output files are read from.",
+    http_base_url: str | None = Field(
+        default=None,
+        description=(
+            "Base URL for the Rhea server's redis-direct file HTTP "
+            "endpoints (/upload, /download, /delete). When None, it is "
+            "derived from mcp_url by stripping the trailing '/mcp/' "
+            "(e.g. 'http://localhost:3001/mcp/' -> 'http://localhost:3001')."
+        ),
     )
     tool_name: str = Field(
         ...,
@@ -104,7 +110,7 @@ class RheaFileToolStepConfig(StepConfig):
         ...,
         description=(
             "Name of the tool argument that receives the staged file's "
-            "redis_key (e.g. 'input_seqs' for MUSCLE)."
+            "key (e.g. 'input_seqs' for MUSCLE)."
         ),
     )
     static_tool_args: Dict[str, Any] = Field(
@@ -118,16 +124,16 @@ class RheaFileToolStepConfig(StepConfig):
     output_file_args: List[str] = Field(
         default_factory=list,
         description=(
-            "Names of output files to fetch back from the output "
-            "ProxyStore. Empty list = fetch all files in the result."
+            "Names of output files to fetch back from the server. "
+            "Empty list = fetch all files in the result."
         ),
     )
     timeout_seconds: float = Field(
         default=900.0,
         gt=0.0,
         description=(
-            "Per-call MCP timeout. Galaxy tools can be slow; 900s is a "
-            "safe default for an alignment-class tool."
+            "Per-call MCP + HTTP timeout. Galaxy tools can be slow; 900s "
+            "is a safe default for an alignment-class tool."
         ),
     )
 
@@ -188,15 +194,27 @@ class RheaFileToolStep(BaseStep):
     ) -> None:
         super()._init_from_config(config, component_config, dependencies)
         # Stash the typed config — process() reads every field off it.
-        # No network / Redis work at init: a malformed config should
-        # fail at config-load, but Rhea/Redis reachability is a runtime
-        # concern verified (and FAIL-LOUD) in process().
+        # No network work at init: a malformed config should fail at
+        # config-load, but Rhea server reachability is a runtime concern
+        # verified (and FAIL-LOUD) in process().
         self._rfts_config = config
 
     @property
     def rhea_config(self) -> RheaFileToolStepConfig:
         """The resolved RheaFileToolStepConfig this step dispatches with."""
         return self._rfts_config
+
+    @staticmethod
+    def _resolve_base_url(cfg: RheaFileToolStepConfig) -> str:
+        """Resolve the Rhea file-HTTP base URL from config.
+
+        Prefers an explicit ``http_base_url``; otherwise derives it from
+        ``mcp_url`` by stripping the trailing ``/mcp`` segment. Handles
+        both ``.../mcp/`` and ``.../mcp`` shapes.
+        """
+        if cfg.http_base_url:
+            return cfg.http_base_url.rstrip("/")
+        return cfg.mcp_url.rstrip("/").removesuffix("/mcp")
 
     def _unwrap_trigger_envelope(self, input_data: Any) -> Any:
         """Strip the ``{<input_du_name>: payload}`` trigger envelope.
@@ -268,191 +286,181 @@ class RheaFileToolStep(BaseStep):
             )
         fasta_name, fasta_bytes = self._coerce_file_bytes(payload)
 
-        # Lazy-import the Rhea-side classes. This step is intentionally
-        # Rhea-coupled: cloudpickle pickles by module reference, so the
-        # rhea-server can only deserialize the genuine
-        # rhea.utils.proxy.RheaFileProxy class — it MUST be importable
-        # here, not vendored.
-        try:
-            import cloudpickle
-            from proxystore.connectors.redis import RedisConnector, RedisKey
-            from proxystore.store import Store
-            from redis import Redis
-
-            from rhea.utils.proxy import RheaFileProxy
-        except ImportError as exc:  # noqa: PERF203 — single import block
-            raise ComponentConfigurationError(
-                "FAIL-FAST: RheaFileToolStep requires the 'rhea' repo on "
-                "PYTHONPATH plus proxystore/redis/cloudpickle installed. "
-                "This step is intentionally Rhea-coupled — cloudpickle "
-                "pickles RheaFileProxy by module reference, so the genuine "
-                f"class must be importable. Underlying error: {exc}"
-            ) from exc
-
-        redis_client = Redis(host=cfg.redis_host, port=cfg.redis_port)
-        input_store = Store(
-            name=cfg.input_store_name,
-            connector=RedisConnector(cfg.redis_host, cfg.redis_port),
-            serializer=cloudpickle.dumps,
-            deserializer=cloudpickle.loads,
-        )
-
-        # 1. Stage the file into the rhea-input ProxyStore.
-        proxy = RheaFileProxy.from_buffer(fasta_name, fasta_bytes, redis_client)
-        redis_key = proxy.to_proxy(input_store)
-        self.nb_logger.info(
-            "RheaFileToolStep %r: staged %d bytes as %r -> redis_key=%r",
-            self.name,
-            len(fasta_bytes),
-            fasta_name,
-            redis_key,
-        )
-
+        base = self._resolve_base_url(cfg)
         transport = MCPTransport(
             mcp_url=cfg.mcp_url,
             timeout_seconds=cfg.timeout_seconds,
             client_name="nanobrain-rhea-file-tool-step",
         )
-        try:
-            # 2. find-and-establish: surface the matching tools into the
-            #    Rhea session-scoped catalog via the unified seam, then
-            #    VALIDATE the configured tool was actually surfaced. A
-            #    find_tools query that does NOT surface cfg.tool_name would
-            #    otherwise fail later with a confusing tools/call error;
-            #    failing loud HERE names the real problem.
-            surfaced = await find_and_establish_tool(
-                cfg.find_tools_query, rhea_transport=transport
-            )
-            self._assert_tool_surfaced(surfaced, cfg.tool_name)
 
-            # 3. tools/call the named tool with the staged file.
-            tool_args: Dict[str, Any] = {cfg.file_input_arg: redis_key}
-            tool_args.update(cfg.static_tool_args)
-            self.nb_logger.info(
-                "RheaFileToolStep %r: calling tool %r with args %r",
-                self.name,
-                cfg.tool_name,
-                tool_args,
-            )
-            raw_result = await transport.call(
-                "tools/call",
-                {"name": cfg.tool_name, "arguments": tool_args},
-            )
-            # parse_tool_call_result raises ComponentConfigurationError
-            # on isError=True — that is the FAIL-LOUD we want.
-            rhea_output = parse_tool_call_result(raw_result, cfg.tool_name)
-        finally:
-            await transport.aclose()
-            # Per-execution teardown: the tool has consumed the staged input, so evict its
-            # per-call ProxyStore ephemera + release the input Store. The rhea SERVER stays
-            # online; only the per-call ephemera are torn down, so Redis does not grow
-            # run-over-run. TWO Redis keys are staged per file and BOTH must go:
-            #   * ``redis_key``     — the serialized RheaFileProxy object (Store.to_proxy);
-            #   * ``proxy.file_key``— the actual file BYTES (``file:<uuid>``, RheaFileHandle).
-            # Evicting only the proxy object (the original bug) leaked the file-byte key every
-            # call — the LARGE payload — so Redis grew unbounded run-over-run.
-            # Best-effort — a teardown failure must never fail the tool call.
-            self._evict_rhea_keys(redis_client, [redis_key, proxy.file_key])
-            self._close_rhea_store(input_store)
-
-        if isinstance(rhea_output, str):
-            # parse_tool_call_result returns a str when the text content
-            # was not JSON — Rhea always returns RheaOutput JSON, so a
-            # bare string is a contract violation worth FAIL-LOUDing.
+        # Per-call keys staged on the rhea server, evicted in finally so the
+        # server's redis store does not grow run-over-run (the rhea SERVER
+        # stays online; only the per-call ephemera are torn down).
+        input_key: str | None = None
+        output_keys: List[str] = []
+        async with httpx.AsyncClient() as http:
             try:
-                rhea_output = json.loads(rhea_output)
-            except json.JSONDecodeError as exc:
-                raise ComponentConfigurationError(
-                    f"FAIL-FAST: RheaFileToolStep {self.name!r} got a "
-                    f"non-JSON tool result for {cfg.tool_name!r}: "
-                    f"{rhea_output[:300]!r}"
-                ) from exc
-        if not isinstance(rhea_output, dict):
-            raise ComponentConfigurationError(
-                f"FAIL-FAST: RheaFileToolStep {self.name!r} expected a "
-                f"RheaOutput JSON object, got {type(rhea_output).__name__}"
-            )
+                # 1. Stage the file via the server's redis-direct upload
+                #    endpoint. The returned "key" (a meta:<uuid> string)
+                #    is what the tool receives as its file argument.
+                upload_resp = await http.post(
+                    f"{base}/upload",
+                    content=fasta_bytes,
+                    headers={"x-filename": fasta_name},
+                    timeout=cfg.timeout_seconds,
+                )
+                upload_resp.raise_for_status()
+                input_key = upload_resp.json()["key"]
+                self.nb_logger.info(
+                    "RheaFileToolStep %r: staged %d bytes as %r -> key=%r",
+                    self.name,
+                    len(fasta_bytes),
+                    fasta_name,
+                    input_key,
+                )
 
-        return_code = rhea_output.get("return_code")
-        stdout = rhea_output.get("stdout", "") or ""
-        stderr = rhea_output.get("stderr", "") or ""
-        files = rhea_output.get("files") or []
+                # 2. find-and-establish: surface the matching tools into the
+                #    Rhea session-scoped catalog via the unified seam, then
+                #    VALIDATE the configured tool was actually surfaced. A
+                #    find_tools query that does NOT surface cfg.tool_name would
+                #    otherwise fail later with a confusing tools/call error;
+                #    failing loud HERE names the real problem.
+                surfaced = await find_and_establish_tool(
+                    cfg.find_tools_query, rhea_transport=transport
+                )
+                self._assert_tool_surfaced(surfaced, cfg.tool_name)
 
-        if return_code != 0:
-            raise ComponentConfigurationError(
-                f"FAIL-FAST: RheaFileToolStep {self.name!r}: tool "
-                f"{cfg.tool_name!r} returned non-zero return_code="
-                f"{return_code!r}. stderr head: {stderr[:600]!r}"
-            )
+                # 3. tools/call the named tool with the staged file.
+                tool_args: Dict[str, Any] = {cfg.file_input_arg: input_key}
+                tool_args.update(cfg.static_tool_args)
+                self.nb_logger.info(
+                    "RheaFileToolStep %r: calling tool %r with args %r",
+                    self.name,
+                    cfg.tool_name,
+                    tool_args,
+                )
+                raw_result = await transport.call(
+                    "tools/call",
+                    {"name": cfg.tool_name, "arguments": tool_args},
+                )
+                # parse_tool_call_result raises ComponentConfigurationError
+                # on isError=True — that is the FAIL-LOUD we want.
+                rhea_output = parse_tool_call_result(raw_result, cfg.tool_name)
 
-        # 4. Fetch the requested output files back out of the
-        #    rhea-output ProxyStore and decode them to text.
-        output_store = Store(
-            name=cfg.output_store_name,
-            connector=RedisConnector(cfg.redis_host, cfg.redis_port),
-            serializer=cloudpickle.dumps,
-            deserializer=cloudpickle.loads,
-        )
-        wanted = set(cfg.output_file_args)
-        output_files: Dict[str, str] = {}
-        # Per-call output ephemera, evicted before return — BOTH the ProxyStore object key
-        # and the file-byte key (file:<uuid>) for each output, mirroring the input teardown.
-        out_keys: list[str] = []
-        out_file_keys: list[str] = []
-        for file_entry in files:
-            if not isinstance(file_entry, dict):
-                continue
-            file_name = file_entry.get("name")
-            if wanted and file_name not in wanted:
-                continue
-            key_field = file_entry.get("key")
-            out_redis_key = (
-                key_field["redis_key"]
-                if isinstance(key_field, dict)
-                else key_field
-            )
-            if not out_redis_key:
-                continue
-            out_keys.append(out_redis_key)
-            out_proxy = RheaFileProxy.from_proxy(
-                RedisKey(redis_key=out_redis_key), output_store
-            )
-            out_file_keys.append(out_proxy.file_key)
-            handle = out_proxy.open(redis_client)
-            data = handle.read()
-            output_files[str(file_name)] = data.decode("utf-8", "ignore")
+                if isinstance(rhea_output, str):
+                    # parse_tool_call_result returns a str when the text
+                    # content was not JSON — Rhea always returns RheaOutput
+                    # JSON, so a bare string is a contract violation worth
+                    # FAIL-LOUDing.
+                    try:
+                        rhea_output = json.loads(rhea_output)
+                    except json.JSONDecodeError as exc:
+                        raise ComponentConfigurationError(
+                            f"FAIL-FAST: RheaFileToolStep {self.name!r} got a "
+                            f"non-JSON tool result for {cfg.tool_name!r}: "
+                            f"{rhea_output[:300]!r}"
+                        ) from exc
+                if not isinstance(rhea_output, dict):
+                    raise ComponentConfigurationError(
+                        f"FAIL-FAST: RheaFileToolStep {self.name!r} expected a "
+                        f"RheaOutput JSON object, got {type(rhea_output).__name__}"
+                    )
 
-        if not output_files:
-            # A green call with no usable output is the silent-failure
-            # shape this step exists to refuse.
-            raise ComponentConfigurationError(
-                f"FAIL-FAST: RheaFileToolStep {self.name!r}: tool "
-                f"{cfg.tool_name!r} reported return_code=0 but produced no "
-                f"usable output files (requested={sorted(wanted) or 'ALL'}, "
-                f"result files={[f.get('name') for f in files if isinstance(f, dict)]}). "
-                f"A successful call with no output is a silent failure."
-            )
+                return_code = rhea_output.get("return_code")
+                stdout = rhea_output.get("stdout", "") or ""
+                stderr = rhea_output.get("stderr", "") or ""
+                files = rhea_output.get("files") or []
 
-        self.nb_logger.info(
-            "RheaFileToolStep %r: tool %r succeeded, %d output file(s): %s",
-            self.name,
-            cfg.tool_name,
-            len(output_files),
-            sorted(output_files),
-        )
-        # Per-execution teardown: the output files are now decoded into memory, so evict their
-        # per-call ephemera + release the output Store (the server stays online). BOTH the
-        # ProxyStore object keys AND the file-byte keys (file:<uuid>) go — evicting only the
-        # former leaked the byte payload of every output per call.
-        self._evict_rhea_keys(redis_client, out_keys + out_file_keys)
-        self._close_rhea_store(output_store)
-        return {
-            "tool_name": cfg.tool_name,
-            "return_code": return_code,
-            "stdout": stdout,
-            "stderr": stderr,
-            "output_files": output_files,
-        }
+                if return_code != 0:
+                    raise ComponentConfigurationError(
+                        f"FAIL-FAST: RheaFileToolStep {self.name!r}: tool "
+                        f"{cfg.tool_name!r} returned non-zero return_code="
+                        f"{return_code!r}. stderr head: {stderr[:600]!r}"
+                    )
+
+                # 4. Fetch the requested output files back from the server's
+                #    redis-direct download endpoint and decode them to text.
+                wanted = set(cfg.output_file_args)
+                output_files: Dict[str, str] = {}
+                for file_entry in files:
+                    if not isinstance(file_entry, dict):
+                        continue
+                    file_name = file_entry.get("name")
+                    if wanted and file_name not in wanted:
+                        continue
+                    key_field = file_entry.get("key")
+                    # New redis-direct shape: "key" is a plain string. Handle
+                    # the legacy {"redis_key": ...} dict shape defensively.
+                    out_key = (
+                        key_field["redis_key"]
+                        if isinstance(key_field, dict)
+                        else key_field
+                    )
+                    if not out_key:
+                        continue
+                    output_keys.append(out_key)
+                    download_resp = await http.get(
+                        f"{base}/download",
+                        params={"key": out_key},
+                        timeout=cfg.timeout_seconds,
+                    )
+                    download_resp.raise_for_status()
+                    output_files[str(file_name)] = download_resp.content.decode(
+                        "utf-8", "ignore"
+                    )
+
+                if not output_files:
+                    # A green call with no usable output is the silent-failure
+                    # shape this step exists to refuse.
+                    raise ComponentConfigurationError(
+                        f"FAIL-FAST: RheaFileToolStep {self.name!r}: tool "
+                        f"{cfg.tool_name!r} reported return_code=0 but produced no "
+                        f"usable output files (requested={sorted(wanted) or 'ALL'}, "
+                        f"result files={[f.get('name') for f in files if isinstance(f, dict)]}). "
+                        f"A successful call with no output is a silent failure."
+                    )
+
+                self.nb_logger.info(
+                    "RheaFileToolStep %r: tool %r succeeded, %d output file(s): %s",
+                    self.name,
+                    cfg.tool_name,
+                    len(output_files),
+                    sorted(output_files),
+                )
+                return {
+                    "tool_name": cfg.tool_name,
+                    "return_code": return_code,
+                    "stdout": stdout,
+                    "stderr": stderr,
+                    "output_files": output_files,
+                }
+            finally:
+                # Close the MCP transport, but never let that skip key eviction
+                # (the more fragile teardown) — the server keys would leak.
+                try:
+                    await transport.aclose()
+                except Exception as exc:  # noqa: BLE001 — transport close must not skip eviction
+                    self.nb_logger.warning(
+                        "RheaFileToolStep %r: MCP transport close failed: %s", self.name, exc
+                    )
+                # Per-execution teardown: evict the input key + every output
+                # key from the server's redis store (idempotent server-side).
+                # Best-effort — a delete failure must NEVER fail the tool call.
+                evict_keys = ([input_key] if input_key else []) + output_keys
+                for key in evict_keys:
+                    try:
+                        await http.post(
+                            f"{base}/delete",
+                            params={"key": key},
+                            timeout=cfg.timeout_seconds,
+                        )
+                    except Exception as exc:  # noqa: BLE001 — teardown never fails the call
+                        self.nb_logger.warning(
+                            "RheaFileToolStep %r: failed to evict server key %r: %s",
+                            self.name,
+                            key,
+                            exc,
+                        )
 
     def _assert_tool_surfaced(
         self, surfaced: List[UnifiedToolDescriptor], tool_name: str
@@ -488,8 +496,14 @@ class RheaFileToolStep(BaseStep):
         )
 
     def _evict_rhea_keys(self, redis_client: Any, keys: list[str]) -> None:
-        """Best-effort delete of per-call ProxyStore Redis keys. NEVER raises (teardown is
-        observability, not correctness — a failed evict must not fail the tool call)."""
+        """Best-effort delete of Redis keys via a redis client. NEVER raises
+        (teardown is observability, not correctness — a failed evict must not
+        fail the tool call).
+
+        Retained for the isolated teardown unit test; ``process()`` now evicts
+        via the server's HTTP ``/delete`` endpoint (this step no longer holds a
+        redis client of its own).
+        """
         for key in keys:
             if not key:
                 continue
@@ -497,7 +511,7 @@ class RheaFileToolStep(BaseStep):
                 redis_client.delete(key)
             except Exception as exc:  # noqa: BLE001
                 self.nb_logger.warning(
-                    "RheaFileToolStep %r: failed to evict ProxyStore key %r: %s",
+                    "RheaFileToolStep %r: failed to evict Redis key %r: %s",
                     self.name,
                     key,
                     exc,
@@ -505,7 +519,11 @@ class RheaFileToolStep(BaseStep):
 
     @staticmethod
     def _close_rhea_store(store: Any) -> None:
-        """Best-effort release of a ProxyStore Store's connector/connection-pool refs."""
+        """Best-effort release of a store object's connection resources.
+
+        Retained for the isolated teardown unit test; ``process()`` no longer
+        holds a ProxyStore Store of its own.
+        """
         close = getattr(store, "close", None)
         if callable(close):
             try:

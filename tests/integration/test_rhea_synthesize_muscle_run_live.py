@@ -25,7 +25,6 @@ Run it with:
 from __future__ import annotations
 
 import asyncio
-import importlib.util
 import os
 
 import pytest
@@ -36,12 +35,14 @@ from nanobrain.lightweight.workflow_builder import WorkflowBuilder
 pytestmark = pytest.mark.integration
 
 _RHEA_URL = os.environ.get("RHEA_MCP_URL")
-_HAS_RHEA = importlib.util.find_spec("rhea") is not None
 
 _skip = pytest.mark.skipif(
-    _RHEA_URL is None or not _HAS_RHEA,
-    reason="needs $RHEA_MCP_URL set AND the 'rhea' package importable client-side",
+    _RHEA_URL is None,
+    reason="needs $RHEA_MCP_URL set (a reachable Rhea MCP worker with MUSCLE ingested)",
 )
+# NOTE: the client no longer needs the 'rhea' package importable — RheaFileToolStep is now a
+# thin HTTP client (POST /upload, MCP tools/call, GET /download, POST /delete). The old
+# `find_spec('rhea')` gate was removed with the redis-direct HTTP transport migration.
 
 # Three short, near-identical globin N-termini — a real MSA the worker can
 # align in seconds.
