@@ -65,6 +65,29 @@ def _tag_task_with_workflow(task: "asyncio.Task") -> None:
         task._nb_workflow_id = wf_id  # type: ignore[attr-defined]
 
 
+async def _track_cascade_task(task: "asyncio.Task") -> None:
+    """Tag + register a fan-in trigger's CASCADE-DRIVING task with the AsyncTriggerExecutor so
+    ``wait_for_all_tasks`` (the ``Workflow.wait_for_cascade`` drain) sees it and cannot declare the
+    cascade drained while it is still in-flight — the G127 fan-in silent-halt.
+
+    The debounce task (``TriggerBase.trigger``) and the immediate pre-populated check
+    (``AllDataReceivedTrigger.start_monitoring``) each ``asyncio.sleep`` before firing their
+    downstream callbacks. Untracked, they are invisible to ``_scoped(background_tasks)`` during that
+    sleep, so if one is the only in-flight cascade work at a settle checkpoint the drain returns True
+    prematurely and ``Workflow.run`` reports ``completed`` with an empty terminal output DU. Tracking
+    them here mirrors the DU-change-listener path (``data_unit.py``) and the legacy trigger path
+    (``AsyncTriggerExecutor._execute_trigger_async``).
+
+    NOT for the long-lived polling monitor (``AllDataReceivedTrigger._monitor_all_data``): that task
+    is deliberately kept untracked (G119) — it is an infinite loop and waiting on it would hang the
+    drain.
+    """
+    _tag_task_with_workflow(task)
+    executor = await AsyncTriggerExecutor.get_instance()
+    executor.background_tasks.add(task)
+    task.add_done_callback(executor.background_tasks.discard)
+
+
 class AsyncTriggerExecutor:
     """
     Async Trigger Executor - Non-blocking trigger execution system.
@@ -960,6 +983,9 @@ class TriggerBase(FromConfigBase, ABC):
             self._debounce_task = asyncio.create_task(
                 self._debounced_execute(data)
             )
+            # The debounce task sleeps before firing downstream callbacks; register it so the
+            # cascade drain waits for it (else the fan-in silently halts — G127). See _track_cascade_task.
+            await _track_cascade_task(self._debounce_task)
         else:
             await self._execute_callbacks(data)
 
@@ -1735,7 +1761,10 @@ class AllDataReceivedTrigger(TriggerBase):
             # pre-populated before start_monitoring), fire NOW — no future
             # change events will come for already-populated units. changed_idx
             # is None → the lenient first-fire path.
-            asyncio.create_task(self._check_and_maybe_fire(None))
+            check_task = asyncio.create_task(self._check_and_maybe_fire(None))
+            # Register the immediate pre-populated check so the cascade drain waits for it to fire
+            # (else a fan-in whose inputs are all present at start_monitoring silently halts — G127).
+            await _track_cascade_task(check_task)
             return
 
         # Legacy polling fallback (for test-doubles + any data unit
